@@ -57,7 +57,7 @@ bash _verify/run-all.sh
 七步，期望结果：
 
 ```
-11733 + 19408 + 98 + 53 + 49 = 31341 项断言全绿
+11733 + 19408 + 98 + 53 + 63 = 31355 项断言全绿
 ```
 
 第 7 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -71,7 +71,7 @@ bash _verify/run-all.sh
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 四维转动一致性 |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 53 | 界面桩环境 |
-| `node _verify/browser-check.mjs` | 49 | 真实浏览器（GLSL 编译、布局几何、控制台报错） |
+| `node _verify/browser-check.mjs` | 63 | 真实浏览器（GLSL 编译、布局几何、控制台报错） |
 
 ### 关于"冻结的向量"
 

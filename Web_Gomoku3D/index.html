@@ -40,19 +40,22 @@
     /* 棋子描边色。淡底上白子和底色只有 1.3:1，光靠填充色是看不见的，
        必须靠这圈深色轮廓才能读出来 —— 二维面板和三维着色器用的是同一个颜色。 */
     --stone-edge: #4a4034;
-  }
-  * { box-sizing: border-box; }
-  /* 宣纸质感：全部用 CSS 渐变叠出来，不引任何外部图片 —— 这是 file:// 单文件的前提。
-     两个大半径 radial 当晕染，两组 1px 交叉细纹当纸纤维（alpha 只有 0.03，
-     是"能感觉到"的量级，再高就变成条纹布了）。 */
-  .paper {
-    background-color: var(--bg);
-    background-image:
+    /* 宣纸质感：全部用 CSS 渐变叠出来，不引任何外部图片 —— 这是 file:// 单文件的前提。
+       两个大半径 radial 当晕染，两组 1px 交叉细纹当纸纤维（alpha 只有 0.03，
+       是"能感觉到"的量级，再高就变成条纹布了）。
+
+       【为什么它是变量而不是直接写在 .paper 里】：三维画布也要用同一份 ——
+       见下面的 `#stage.preview #view`。两边各抄一份的话，改了这里忘了那里，
+       起始界面左右之间就会重新裂出一条缝，而且那种缝看起来像"显示器问题"，
+       不像代码问题。 */
+    --paper-img:
       radial-gradient(circle at 16% 18%, rgba(255,255,255,.60), transparent 44%),
       radial-gradient(circle at 84% 82%, rgba(150,126,86,.11), transparent 50%),
       repeating-linear-gradient(0deg,  rgba(122,102,70,.030) 0 1px, transparent 1px 4px),
       repeating-linear-gradient(90deg, rgba(122,102,70,.030) 0 1px, transparent 1px 4px);
   }
+  * { box-sizing: border-box; }
+  .paper { background-color: var(--bg); background-image: var(--paper-img); }
   html, body {
     margin: 0; padding: 0; height: 100%; overflow: hidden;
     color: var(--text);
@@ -76,6 +79,33 @@
      的 42% 跟着变宽、左侧画布尺寸跳一下。visibility:hidden 保留布局，只是不画。 */
   #stage.preview #panel { visibility: hidden; }
   #stage.preview #gl { cursor: default; }
+
+  /* 起始界面：把左边的三维画布也铺上一层纸纹，让左右真的是同一张纸。
+
+     缝的真正成因不是色差（画布清屏色和页面底色都是 --bg，本来就同色），而是
+     **纸纹只画在 <body> 上，被画布盖住了左边 42%** —— 左边是平色、右边有纸纹
+     （那个 rgba(255,255,255,.60) 的白色径向在 16% 18% 处，强度不低），
+     于是在 42% 那条线上断掉。
+
+     关键是 `background-attachment: fixed`：它让渐变的【定位基准是整个视口】，
+     而不是 #view 自己那个 42% 宽的盒子。没有它，同一个 "16% 18%" 在 #view 里
+     会落在 16% × 0.42 ≈ 视口 6.7% 处，右边却是 16%，两边对不上、缝还在。
+
+     background-color 是不透明的 --bg：把底下 <body> 的纸纹挡住，
+     否则这一层会和 body 那一层叠起来，左上角那个白色径向被叠加两次、明显偏亮。 */
+  #stage.preview #view {
+    background-color: var(--bg);
+    background-image: var(--paper-img);
+    background-attachment: fixed;
+  }
+  /* 演示棋盘整体压淡。**这里刻意用 CSS opacity，不去改调色板或着色器** ——
+     演示盘和对局盘共用同一个 draw3D() 和同一批着色器，改调色板等于把真棋盘也改淡，
+     而 README 里写着"淡底上白子和底色只有 1.3:1，全靠 --stone-edge 那圈描边才看得见"。
+     规则限定在 .preview 上，对局视图一个像素都不受影响。
+
+     画布的清屏色就是 --bg，所以压到 30% 之后自然叠成"淡墨画在纸上"，
+     而不是"深色棋盘的半透明残影"。 */
+  #stage.preview #gl { opacity: .3; }
 
   /* ---------- 左侧：三维视图 ---------- */
   #view { flex: 0 0 42%; position: relative; overflow: hidden; }
@@ -173,18 +203,29 @@
   /* ---------- 起始界面 ----------
      左边 42% 刻意【不盖住】—— 那一块留给 #view 里那张自动缓慢旋转的演示棋盘，
      所以这里用 left:42% 而不是 inset:0。42% 必须和上面 #view 的 flex-basis 是同一个数，
-     改一个就得改另一个，否则中间会裂出一条缝（或压掉半个棋盘）。 */
+     改一个就得改另一个，否则中间会裂出一条缝（或压掉半个棋盘）。
+
+     【这里刻意什么都不画】。原来它是一块 --panel 色的不透明盖板，外加一条
+     border-left 和一片向左的 box-shadow —— 那三样加起来就是"左右割裂感"的全部来源，
+     不是色差本身：三维画布的清屏色本来就是 --bg（见 Renderer.init 里的 clearColor），
+     和页面底色是同一个色。所以只要这边不画东西、左侧的纸纹补上（见下面
+     `#stage.preview #view` 那一条），左右就是同一张纸，中间没有缝。
+
+     透明会不会让底下的字透上来？不会 —— 底下是 #panel，而起始界面打开时它是
+     visibility:hidden（见 #stage.preview #panel），一个字都不画。
+     这条依赖是硬性的：那个 hidden 一旦被去掉，这里就会透出面板的文字。
+     browser-check.mjs 里有一条断言同时守着这两件事。 */
   #setup {
     position: fixed; left: 42%; right: 0; top: 0; bottom: 0; z-index: 50;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    display: flex; flex-direction: column; align-items: center;
     gap: 18px; padding: 26px 30px; overflow-y: auto;
-    background-color: var(--panel);   /* 不透明。半透明盖板会让底下的字透上来 */
-    background-image:
-      radial-gradient(circle at 78% 14%, rgba(255,255,255,.7), transparent 46%),
-      repeating-linear-gradient(0deg,  rgba(122,102,70,.028) 0 1px, transparent 1px 4px),
-      repeating-linear-gradient(90deg, rgba(122,102,70,.028) 0 1px, transparent 1px 4px);
-    border-left: 1px solid var(--border);
-    box-shadow: -18px 0 40px rgba(90,72,44,.13);
+    /* 居中，但溢出时改为从顶部开始 —— 这是 safe 关键字的全部作用。
+       没有它的话（也就是今天的行为），内容一旦高过视口，flex 的居中溢出会朝两头走，
+       而滚动区只从内容起点算 → **顶部那段永远滚不到**，表现为"最上面几行看不见了"。
+       第一行是给不认识 safe 的浏览器兜底的：它们会沿用 center，行为与改动前一致，
+       不是回归。 */
+    justify-content: center;
+    justify-content: safe center;
   }
   #setup.off { display: none; }
   /* 演示棋盘角落的铭牌。少了它，从对局里点「设置」进来的人会以为自己的棋局还在 ——
@@ -208,8 +249,36 @@
   #setup h1 { font-size: 38px; margin: 0; font-weight: 600; letter-spacing: 2px; }
   #setup .sub { color: var(--dim); font-size: 14.5px; margin-top: 4px; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
-  /* 模式相关的行：用 hide 而不是 style.display，免得和 .row 的 flex 打架 */
-  #setup .row.hide { display: none; }
+  /* 每一行占一个固定高度的槽位。三种模式相关的行（三维尺寸 / 四维尺寸 / 转动冷却）
+     高度都一样，所以"显示哪几行"不影响总高。 */
+  #setup .row { min-height: 40px; }
+  /* 模式相关的行：【保留槽位地藏起来】，不是 display:none。
+     三维和四维显示的行数不一样（四维多一个"转动冷却"行），用 display:none 的话
+     内容总高就变了，而父级是居中的 —— 于是整列重新居中，所有行一起上下跳。
+     保留槽位之后两种模式的总高**恒等**，按钮一个像素都不动。
+
+     .row 保持 flex-wrap: wrap（窗口窄的时候能换行），这本来会造成"换行的那一行更高、
+     槽位不等高"，但两条尺寸行被 #dimsSlot 叠进了同一个格子 ——
+     格子高度取两者的 max，而**两条永远都在格子里**（只是其中一条不可见），
+     所以无论窗口多窄、哪一条换了行，格子高度都和"显示哪一条"无关。
+     换成 nowrap 反而更糟：实测 900px 宽的窗口下三维尺寸行要 539px 而只有 462px 可用，
+     会横向溢出 —— 那就把"按钮跳动"换成了"内容被截掉"，更难发现。 */
+  #setup .row.hide { visibility: hidden; }
+  /* 三维尺寸行和四维尺寸行**叠在同一个网格单元格里**：两条都 40px，叠起来还是 40px，
+     而隐藏的那条（visibility:hidden）不额外占位。于是"显示哪一条"完全不改变总高，
+     两种模式下都是零空白 —— 留空槽位的话两种模式各会多出一条 58px 的空当。
+     副作用是好的：单元格宽度取两条里较宽的那条（三维行），所以两种模式下
+     "棋盘尺寸"这个标签的横坐标**也**是同一个；不叠的话它会随各自行的宽度左右挪。 */
+  #dimsSlot { display: grid; }
+  #dimsSlot > .row { grid-area: 1 / 1; }
+  /* 起始界面里每一行的按钮**始终**是粗体，选中态只改底色和字色。
+     起因是一个只有真实排版引擎才能发现的 3px 位移：button.sel 带 font-weight:600，
+     所以按钮一被取消选中，字变细、按钮跟着变窄（实测 94 → 91px），
+     而同一行是居中的 —— 邻居跟着挪。点一下"四维"结果"三维"跑偏了 3px，
+     正是这一版要消掉的那类干扰。
+     固定成粗体之后，按钮宽度只由文字内容决定，和选没选中无关。
+     （#startBtn 不在任何 .row 里，所以它保留 .sel 的粗体，主按钮的分量不受影响。） */
+  #setup .row button { font-weight: 600; }
   .rowLabel { color: var(--dim); width: 96px; text-align: right; flex: 0 0 auto; }
 
   /* 尺寸输入。原来是两排固定尺寸按钮（三维 15/20/25/30/40/50、四维 5/6/8/10/15/20），
@@ -223,10 +292,23 @@
   .dimInput.bad { border-color: var(--danger); color: var(--danger); }
   .dimTimes { color: var(--dim); font-size: 15px; }
   #dimCube { min-width: 92px; }
-  #dimNote { color: var(--dim); font-size: 12px; }
+  /* 行尾的补充说明（尺寸范围、转动冷却的注释）。文字全部由 JS 生成，不写死在 HTML 里 ——
+     写死的话它会和内核的实际约束各自漂移，而"范围"这种东西漂移了没人会发现，
+     只会表现为"填进去了但开不了局"。 */
+  .hint { color: var(--dim); font-size: 12.5px; white-space: nowrap; flex: 0 0 auto; }
+  /* 转动冷却行的说明。**宽度写死**：它的文字在两种模式下不一样长（三维 6 字、
+     四维 9 字），不写死的话这一行的总宽会变，而 .row 是居中的 ——
+     "转动冷却"四个字会跟着左右挪。写死了，两种模式下它一个像素都不动。 */
+  #coolNote { width: 11em; }
 
+  /* 固定高度。【这是按钮跳动的第二个根因，比行数变化更隐蔽】：
+     这段文案的长度在两种模式下差一倍以上 —— 三维 15³ 是 2 行，四维 8³ 因为有实测数据
+     会加到 4 行，15³ 再加"一层里常常只有一两颗子"那条能到 5~6 行。
+     不钉住它，下面的规则摘要和「开始游戏」按钮照样跟着上下跳。
+     写不下时在这块内部滚动，不影响外部布局。 */
   #sizeSummary { color: var(--dim); font-size: 13.5px; text-align: center; max-width: 640px;
-                 line-height: 1.7; white-space: pre-line; }
+                 line-height: 1.7; white-space: pre-line;
+                 height: 92px; overflow-y: auto; }
   #ruleNote { color: var(--dim); font-size: 12.5px; text-align: center; max-width: 660px;
               line-height: 1.8; border-top: 1px solid var(--border); padding-top: 14px; }
   #startBtn { font-size: 18px; font-weight: 600; padding: 13px 48px; letter-spacing: 3px; }
@@ -661,6 +743,12 @@
     <button id="firstWhite" data-first="2">白棋先手</button>
   </div>
 
+  <!-- 三维和四维的尺寸行**共用同一个槽位**（网格叠放，见 CSS 里的 #dimsSlot）。
+       两条都是 40px 高，所以叠起来还是 40px；隐藏的那条 visibility:hidden 不额外占位。
+       这样"三维显示哪条、四维显示哪条"完全不改变总高 —— 槽位重叠是这里唯一能做到
+       "零空白 + 零位移"的办法：留空槽位会在两种模式各留一条 58px 的空当，
+       看起来像没渲染完。 -->
+  <div id="dimsSlot">
   <!-- 三维模式：三个轴各填一个数，8..50。默认三轴联动（cubeOn），想下长方体就点掉它。
        长方体是【网页版独有】的扩展，没有测试向量覆盖，见 README 的说明。 -->
   <div class="row" id="dimsRow3d">
@@ -671,6 +759,10 @@
     <span class="dimTimes">×</span>
     <input id="dimZ" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
     <button id="dimCube" class="mini sel">三轴联动</button>
+    <!-- 可填范围。**内容是空的**：文字由 syncSetupInputs() 从内核的 BoardLimits 现算，
+         一个字都不写死在这里 —— 写死的话它会和内核约束各自漂移，而"范围"这种东西
+         漂移了没人会发现，只表现为"填进去了但开不了局"。 -->
+    <span id="dimRange" class="hint"></span>
   </div>
 
   <!-- 四维模式：只能立方。不是"没做"，是数学上不成立 —— 绕某轴转一层要求
@@ -679,15 +771,28 @@
     <div class="rowLabel">棋盘尺寸</div>
     <input id="dimN" class="dimInput" type="number" min="8" max="50" step="1" value="8" inputmode="numeric">
     <span class="dimTimes">³</span>
-    <span id="dimNote">四维模式必须立方 —— 转层要求两个自由轴等长</span>
+    <!-- 原来这里还有一条 <span id="dimNote">，文本同下（"必须立方…"），但它是个独立的
+         长句子。删掉它的理由：那一行本来就长，而它正是四维/三维尺寸行唯一会换行的地方 ——
+         一旦换行，两个模式的槽位就不等高，按钮又开始跳。
+         现在这句话并进了紧跟其后的范围标注（由 syncSetupInputs 生成），
+         那一行有富余的宽度，不需要再单开一个元素。 -->
+    <span id="dimRange4d" class="hint"></span>
+  </div>
   </div>
 
-  <div class="row hide" id="coolRow">
+  <!-- 转动冷却。**这一行在三维模式下也占着槽位**（只是按钮禁用），不是藏起来 ——
+       藏起来的话四维就比三维多一行，居中的整列会重新排，所有按钮一起上下跳。
+       禁用而不是隐藏还有一个好处：三维下这块不会留下一片说不清是什么的空白，
+       而且"四维还有个转动冷却可以选"这件事变得可见。
+       HTML 里先写死 disabled：默认就是三维，JS 还没跑起来之前状态也得是对的。
+       #coolNote 的宽度在 CSS 里写死，理由见那条规则。 -->
+  <div class="row" id="coolRow">
     <div class="rowLabel">转动冷却</div>
-    <button class="coolBtn" data-cool="3">3 手</button>
-    <button class="coolBtn sel" data-cool="5">5 手</button>
-    <button class="coolBtn" data-cool="8">8 手</button>
-    <button class="coolBtn" data-cool="10">10 手</button>
+    <button class="coolBtn" data-cool="3" disabled>3 手</button>
+    <button class="coolBtn sel" data-cool="5" disabled>5 手</button>
+    <button class="coolBtn" data-cool="8" disabled>8 手</button>
+    <button class="coolBtn" data-cool="10" disabled>10 手</button>
+    <span id="coolNote" class="hint"></span>
   </div>
 
   <div id="sizeSummary"></div>
@@ -2219,6 +2324,7 @@ const Game = {
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
       "rulesBtn","rulesPanel","rulesClose","rulesBody","rulesSrc",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
+      "dimRange","dimRange4d","coolNote",
       "rotPanel","rotStatus","rotLayerDown","rotLayerUp","rotLayerLabel",
       "rotCW","rotCCW","rotGo","rotRestore","rotHint"];
     for (const id of ids) this.el[id] = document.getElementById(id);
@@ -2733,6 +2839,7 @@ const Game = {
     this.el.stage.classList.add("preview");
     this.setHover(null);
     this.syncSetupInputs();
+    this.syncCoolRow();
     this.refreshSetupSummary();
     this.ensurePreview();
     this.uploadPreviewInstances();
@@ -3600,6 +3707,16 @@ const Game = {
       if (this.el[id]) this.el[id].classList.remove("bad");
     }
     if (this.el.dimCube) this.el.dimCube.classList.toggle("sel", this.setupCube);
+    // 可填范围。**从 BoardLimits 现算，不写死在 HTML 里** ——
+    // 输入框上已经有一份 min/max（浏览器自带的上下箭头和校验用它），
+    // 那一份由 dom-smoke 断言和 BoardLimits 相等。显示文本这里直接生成，
+    // 连"第二份"都不存在，所以它不可能和实际会被夹取的范围不一致。
+    const range = "可填 " + BoardLimits.Min + " – " + BoardLimits.Max;
+    if (this.el.dimRange) this.el.dimRange.textContent = range;
+    // 四维那句"必须立方"的说明并进这里（原来是个独立的 <span id="dimNote">）。
+    // 短横线后面那句是**原因**：绕某轴转一层要求另外两个自由轴等长，
+    // 三个轴都能转就只能 nx = ny = nz。不是"没做"，是数学上不成立。
+    if (this.el.dimRange4d) this.el.dimRange4d.textContent = range + " · 必须立方（转层要求另两轴等长）";
   },
 
   /**
@@ -3647,7 +3764,9 @@ const Game = {
     this.el.mode4d.classList.toggle("sel", fourD);
     this.el.dimsRow3d.classList.toggle("hide", fourD);
     this.el.dimsRow4d.classList.toggle("hide", !fourD);
-    this.el.coolRow.classList.toggle("hide", !fourD);
+    // 转动冷却行**始终占着槽位**，只切按钮的禁用态和结尾那句说明 ——
+    // 藏起来的话四维会比三维多一行，居中的整列重新排、按钮全跳。见 #coolRow 的注释。
+    this.syncCoolRow();
     // 换模式时把尺寸重置成本模式的默认值（三维 15、四维 8）。
     // 不这么做就会出现"切到四维、输入框里还留着三维的数"这类对不上的状态。
     if (fourD) {
@@ -3658,6 +3777,26 @@ const Game = {
     }
     this.syncSetupInputs();
     this.refreshSetupSummary();
+  },
+
+  /**
+   * 转动冷却行的两种状态：三维 = 按钮禁用 + "四维模式才有"，四维 = 可用 + 一句提示。
+   *
+   * 为什么不切换显隐：见 #coolRow 的 HTML 注释 —— 隐藏会让四维比三维多一行，
+   * 而 #setup 是居中的，多一行就整列重排、按钮全跳。
+   *
+   * 这里用 document.querySelectorAll(".coolBtn") 而不是 this.el.coolRow.querySelectorAll(...)：
+   * dom-smoke 的桩元素上**没有** querySelectorAll 这个方法（只有 document 上有，
+   * 而且只认 ".rotAxis" / ".rotTurns" / ".coolBtn" 三个选择器字符串）。
+   * 写成后者会在桩里直接抛 TypeError —— 而那个报错看起来和"冷却行"毫无关系，很难查。
+   * 与 bindUi 里保持同一种写法。
+   */
+  syncCoolRow() {
+    const on = this.fourD;
+    document.querySelectorAll(".coolBtn").forEach(b => { b.disabled = !on; });
+    if (this.el.coolNote) {
+      this.el.coolNote.textContent = on ? "转动会占掉一个回合" : "四维模式才有";
+    }
   },
 
   setSetupCool(c) {

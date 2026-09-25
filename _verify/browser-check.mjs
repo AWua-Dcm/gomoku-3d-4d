@@ -170,6 +170,9 @@ try {
       setup: r(setupEl), view: r(viewEl), panel: r(panelEl),
       panelVisibility: getComputedStyle(panelEl).visibility,
       setupBg: getComputedStyle(setupEl).backgroundColor,
+      viewBgImg: getComputedStyle(viewEl).backgroundImage,
+      viewBgAttach: getComputedStyle(viewEl).backgroundAttachment,
+      glOpacity: getComputedStyle(document.getElementById("gl")).opacity,
       ruleNote: getComputedStyle(document.getElementById("ruleNote")).display === "none"
         ? "" : document.getElementById("ruleNote").textContent.replace(/\\s+/g, " ").trim(),
       bg: getComputedStyle(document.body).backgroundColor,
@@ -197,9 +200,75 @@ try {
     "起始界面打开时对局面板必须不可见（半透明盖板会让底下的字透上来）",
     "visibility=" + setup.panelVisibility);
 
+  // ---- 2b. "缝没了"的机制本身
+  //
+  // 【这一条取代的是原来的"起始界面盖板必须是不透明的面板色"。那个要求属于旧设计：
+  //   当时 #setup 是一块 --panel 色的不透明盖板，不透明是为了挡住底下 #panel 的字。
+  //   现在 #setup 完全不画背景了（左右才会是同一张纸），"不透明"这条自然不再成立 ——
+  //   但**它保护的东西一个字都没变**，只是换了守的位置：真正的前提是 #panel 必须隐藏
+  //   （就是上面那条断言）。两条必须一起看：任何一条单独都不足以说明"不会透出字"，
+  //   而 #setup 一旦不是透明，下面这条会立刻红。】
+  check(setup.setupBg === "rgba(0, 0, 0, 0)", "起始界面自己不画任何背景",
+    "实际 " + setup.setupBg + " —— 一旦有底色，它就和左边的三维画布不同色，中间重新出现一条竖线");
+
+  // 缝的成因不是色差（画布清屏色和页面底色本来就都是 --bg），而是**纸纹只画在 <body> 上、
+  // 被画布盖住了左边 42%**。所以修法是给 #view 补上同一份纸纹。
+  // 关键是 background-attachment: fixed —— 它让渐变的定位基准是**整个视口**，
+  // 而不是 #view 自己那个 42% 宽的盒子。没有它，同一个 "16% 18%" 会落在
+  // 16% × 0.42 ≈ 视口 6.7% 处，而右边是真 16%，两边对不上、缝原样还在。
+  // 这两条查的是"缝为什么没了"的机制，不是观感 —— 观感只能靠截图人眼看。
+  check(setup.viewBgImg && setup.viewBgImg !== "none",
+    "#view 在起始界面下带上了纸纹", "background-image = " + setup.viewBgImg);
+  // 注意 background-attachment 是**逐层**返回的：纸纹是 4 个渐变叠出来的，
+  // 所以计算值形如 "fixed, fixed, fixed, fixed"，不是单个 "fixed"。
+  // 只认第一层是不够的 —— 只要有一层漏成 scroll，那一层的径向就会按 #view 的盒子定位，
+  // 在 42% 处露出来。
+  const attachLayers = String(setup.viewBgAttach).split(",").map((s) => s.trim());
+  check(attachLayers.length > 0 && attachLayers.every((a) => a === "fixed"),
+    "#view 的纸纹每一层都以视口为定位基准（background-attachment: fixed）",
+    "实际 " + setup.viewBgAttach + "；不是 fixed 的话左右纸纹对不上，42% 处会重新裂出一条缝");
+
+  // 演示棋盘压淡。**必须是 CSS opacity，不能是改调色板或着色器** ——
+  // 演示盘和对局盘共用同一个 draw3D() 和同一批着色器，改调色板等于把真棋盘也改淡，
+  // 而淡底上白子和底色只有 1.3:1，全靠 --stone-edge 那圈描边才读得出来。
+  check(parseFloat(setup.glOpacity) > 0 && parseFloat(setup.glOpacity) < 0.5,
+    "起始界面的演示棋盘被压淡（0 < opacity < 0.5）",
+    "实际 opacity = " + setup.glOpacity + "（=1 说明淡化没生效；=0 说明棋盘被藏没了）");
+
+  // ---- 2c. 按钮位置在三维/四维之间必须一个像素都不动
+  //
+  // 【这条只能在真实排版引擎里验】：DOM 桩的 getBoundingClientRect 对所有元素
+  // 一律返回 800×600，在桩里这个测试恒真、等于没测。
+  //
+  // 跳动的两个来源都要被它盖住：
+  //   ① 模式相关的三行原来用 display:none 切换，行数一变、居中重排，整列一起跳；
+  //   ② #sizeSummary 的文案长度在两种模式间差一倍以上，它下面的东西跟着跳。
+  // 切换模式时 setSetupMode 还会把尺寸重置成 15³ / 8³，所以 ② 一定会被触发 ——
+  // 这条断言跑的就是它。
+  const stable = await ev(`(() => {
+    const ids = ["startBtn", "dimCube", "firstBlack", "mode3d", "setup"];
+    const snap = () => ids.map(id => {
+      const b = document.getElementById(id).getBoundingClientRect();
+      return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)];
+    });
+    Game.setSetupMode(false); const a = snap();
+    Game.setSetupMode(true);  const b = snap();
+    Game.setSetupMode(false);
+    return { ids: ids, a: a, b: b };
+  })()`);
+  for (let i = 0; i < stable.ids.length; i++) {
+    const ra = stable.a[i].join(","), rb = stable.b[i].join(",");
+    check(ra === rb, "「" + stable.ids[i] + "」切到四维再切回来，位置和尺寸完全不变",
+      "三维 [l,t,w,h]=" + stable.a[i] + "  四维=" + stable.b[i] +
+      "（差 = " + stable.a[i].map((v, k) => stable.b[i][k] - v).join(",") + "）");
+  }
+  // 留一张四维状态的截图。上面那几条只说"没动"，看不出四维到底长什么样 ——
+  // 而"四维那一版有没有多出一行、有没有留空槽位"正是这一版最容易出错的地方。
+  await ev(`Game.setSetupMode(true)`);
+  await shot("5-起始界面-四维模式");
+  await ev(`Game.setSetupMode(false)`);
+
   // 配色真的生效了（CSS 是唯一事实源，但得确认浏览器读到的就是它）
-  check(setup.setupBg === "rgb(247, 242, 232)", "起始界面盖板是不透明的面板色",
-    "实际 " + setup.setupBg + "（带 alpha 就会透出底下的字）");
   check(setup.cssBg === "#efe8db", "CSS 变量 --bg 是古风宣纸色", "实际 " + setup.cssBg);
   const rgb = setup.bg.match(/\d+/g).map(Number);
   check(setup.bg === "rgb(239, 232, 219)", "页面底色解析出来就是 #efe8db",
@@ -233,10 +302,19 @@ try {
     const b = Game.session.board;
     return { dims: b.dims.join("x"), nx: b.nx, ny: b.ny, nz: b.nz,
              setupOpen: Game.setupOpen, panelVisibility: getComputedStyle(document.getElementById("panel")).visibility,
-             opq: Game.opqCount, gh: Game.ghCount, grid: Game.staticGridCount };
+             opq: Game.opqCount, gh: Game.ghCount, grid: Game.staticGridCount,
+             glOpacity: getComputedStyle(document.getElementById("gl")).opacity,
+             viewBgImg: getComputedStyle(document.getElementById("view")).backgroundImage };
   })()`);
   check(inGame.setupOpen === false, "点了开始游戏之后起始界面关闭");
   check(inGame.panelVisibility === "visible", "进入对局后右侧面板重新可见");
+  // 反向断言：演示态那两条样式必须**完全撤掉**。少了这两条，一个写成
+  // `#view { opacity: .3 }`（漏掉 .preview 前缀）的错法就永远不会被发现 ——
+  // 它会让**真棋盘**也是淡的，而起始界面那边一切正常，看起来像"对局模式配色就这样"。
+  check(inGame.glOpacity === "1", "进入对局后三维视图的不透明度恢复成 1",
+    "实际 opacity = " + inGame.glOpacity + "（演示用的压淡漏进对局视图了）");
+  check(inGame.viewBgImg === "none", "进入对局后 #view 不再带纸纹",
+    "实际 background-image = " + inGame.viewBgImg);
   check(inGame.dims === "8x12x30", "长方体棋盘开起来了", "实际 " + inGame.dims);
   const wantBoxGrid = (8 * 12 + 12 * 30 + 30 * 8 + 12) * 12;
   check(inGame.grid === wantBoxGrid, "8×12×30 的格线顶点数按三条边各算一份",
@@ -307,6 +385,45 @@ try {
   await ev(`(() => { Game.el.toast.classList.remove("on"); Game.toastTimer = 0; Game.drawPreview(0.016); return true; })()`);
   await sleep(300);
   await shot("3-起始界面-转到另一面");
+
+  // ---- 5. 窄屏：换行是对的，但不能横向溢出，也不能让按钮又动起来
+  //
+  // 这一版靠"两条尺寸行叠在同一个网格格子里"来保证高度恒定，前提是
+  // **无论哪一条换行、格子高度都取两者的 max**。这个前提只有在窄窗口下才会被检验到 ——
+  // 1600×900 下两条尺寸行都不换行，等于没测。所以这里真的把视口压窄。
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 900, height: 700, deviceScaleFactor: 1, mobile: false });
+  const narrow = await ev(`(() => {
+    const s = document.getElementById("setup");
+    const h = (id) => Math.round(document.getElementById(id).getBoundingClientRect().height);
+    const snap = () => {
+      const b = document.getElementById("startBtn").getBoundingClientRect();
+      return [Math.round(b.left), Math.round(b.top)];
+    };
+    Game.setSetupMode(false); const a = snap(); const h3 = h("dimsRow3d");
+    Game.setSetupMode(true);  const c = snap(); const h4 = h("dimsRow4d");
+    Game.setSetupMode(false);
+    return { docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+             setupOver: s.scrollWidth - s.clientWidth,
+             a: a, c: c, h3: h3, h4: h4 };
+  })()`);
+  check(narrow.docOver <= 1, "窄屏（900×700）下整个页面没有横向滚动",
+    "溢出 " + narrow.docOver + "px —— .row 是 wrap 的，溢出只可能来自别处");
+  check(narrow.setupOver <= 1, "窄屏下起始界面本身没有横向滚动", "溢出 " + narrow.setupOver + "px");
+  // 【反空洞】下面那条断言的全部价值，在于"尺寸行真的换了行、格子高度真的取了 max"。
+  // 如果 900px 下根本没换行，那条断言就只是在重复 1600×900 下已经验过的东西 ——
+  // 一条永远为真的断言等于没写。这个工程踩过两次假测试的坑，所以这里显式钉住前提。
+  check(narrow.h3 > 60, "窄屏（900×700）下三维尺寸行确实换行了（否则下面那条是空断言）",
+    "实际高度 " + narrow.h3 + "px。若不再换行，说明窗口不够窄或布局变了，" +
+    "需要重新挑一个更窄的宽度来测");
+  // 这条才是重点：窄屏下尺寸行会换行，但格子高度取两条的 max，
+  // 所以换行的发生与否不能影响"开始游戏"按钮的位置。
+  check(narrow.a.join(",") === narrow.c.join(","),
+    "窄屏下切到四维，开始游戏按钮的横纵坐标仍然完全不变",
+    "三维 [l,t]=" + narrow.a + " 四维=" + narrow.c +
+    "（尺寸行高度：三维 " + narrow.h3 + "px / 四维 " + narrow.h4 + "px —— " +
+    "这就是换行发生了但按钮没动）");
+  await send("Emulation.clearDeviceMetricsOverride");
 } catch (e) {
   check(false, "浏览器检查整体跑通", String(e && e.stack || e));
 } finally {

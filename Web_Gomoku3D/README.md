@@ -321,7 +321,7 @@ node Web_Gomoku3D/tests/rules.test.mjs     # 11733 项断言（三维模式基�
 node Web_Gomoku3D/tests/rotation.test.mjs  # 19408 项断言（四维转动一致性）
 node Web_Gomoku3D/tests/dims.test.mjs      #   98 项断言（长方体 + 尺寸约束）
 node Web_Gomoku3D/tests/dom-smoke.test.mjs #   53 项断言
-node _verify/browser-check.mjs             #   49 项断言（真实浏览器：GLSL 编译 + 布局几何 + 截图）
+node _verify/browser-check.mjs             #   63 项断言（真实浏览器：GLSL 编译 + 布局几何 + 截图）
 bash _verify/run-all.sh                    # 以上全部 + 向量冻结锁（C# 侧已删除，不再有 C# 检查）
 ```
 
@@ -413,9 +413,10 @@ bash _verify/run-all.sh                    # 以上全部 + 向量冻结锁（C#
   短边只有一小截。几何是对的（相机取景半径 7.25 > 最坏轮廓半宽 7.07，测试钉住了），
   但"好不好看、看不看得清"要你看。
 - **起始界面的演示盘在真实浏览器里什么样**。它的几何（10³、确定性、不画对局才有的东西、
-  相机字段原样还回）都有断言，但旋转速度是不是"缓慢得刚好"、演示盘会不会和右侧设置卡片
-  在窄屏上打架（`#setup` 固定 `left:42%`，与 `#view` 的 `flex-basis` 是同一个数，
-  窄屏下没有响应式处理），只能你看。
+  相机字段原样还回）、压淡后还看不看得清都有断言（`browser-check.mjs` 里那几条：
+  `#view` 的纸纹每一层是不是 `background-attachment: fixed`、`#gl` 的 opacity、
+  以及切模式时按钮的几何有没有变），900×700 也验过（不横向溢出、按钮仍不动），
+  但旋转速度是不是"缓慢得刚好"、比 900 更窄的窗口是什么样，只能你看。
 
 ## 与已删除的 Unity 版的结构对应（历史）
 
