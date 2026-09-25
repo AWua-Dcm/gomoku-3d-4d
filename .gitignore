@@ -1,0 +1,19 @@
+# 本工程刻意【零依赖】—— index.html 单文件、服务端只用 node: 内置模块。
+# 这个目录正常情况下永远不会出现；留着是为了万一有人 npm install 了什么，
+# 不要把它提交进来（提交了就等于破了"零依赖"这个前提）。
+node_modules/
+
+# 日志和临时文件
+*.log
+npm-debug.log*
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 真实浏览器检查（_verify/browser-check.mjs）会在系统临时目录里建 Chrome profile，
+# 不会落在这里。但万一有人手动跑出残留，别提交。
+_verify/.chrome-profile/

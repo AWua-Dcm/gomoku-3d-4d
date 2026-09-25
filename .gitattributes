@@ -1,0 +1,17 @@
+# 换行符统一成 LF，**在签出时也强制 LF**（eol=lf 而不是 text=auto）。
+#
+# 为什么这条是必须的：本工程有 _verify/run-all.sh 这个 bash 脚本。
+# 如果它在 Windows 上被签出成 CRLF，shebang 会变成 "#!/usr/bin/env bash\r"，
+# 在 Linux/macOS 上执行时 bash 会去找一个叫 "bash\r" 的解释器，报
+#     /usr/bin/env: 'bash\r': No such file or directory
+# 而报错信息完全指不到"换行符"这件事上，很难查。
+* text=auto eol=lf
+
+# 二进制：禁止任何转换（binary 隐含 -text -diff）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

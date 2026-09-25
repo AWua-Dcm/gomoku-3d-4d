@@ -1,0 +1,3771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>三维五子棋</title>
+<style>
+  /* 【配色：古风·宣纸】单一事实源就是这一块。
+     网页版原来是"冷灰 + 五处硬编码颜色"（CSS 一套、gl.clearColor 一套、着色器 STONE_EDGE
+     一套、两块 canvas 各一套），换主题必须五处同时改，漏一处就出现"三维视图和面板不同色"。
+     现在 JS 侧统一走 Palette（见下面的 "调色板读取"），从这些 CSS 变量里解析出来，
+     并由 tests/dims.test.mjs 断言"JS 兜底表 == CSS 实际值"，两边不可能再悄悄漂移。
+
+     浅底有一个必须一起处理的后果：原来的格线/幽灵子是【加性混合】画的，
+     加性混合在浅底上只会越加越白、直接糊掉，所以这一版把这三处都改成了标准 alpha 混合
+     （见 draw3D 里的 blendFunc）。
+
+     "偏淡"的代价必须说清楚：底色越淡，白子（--white）和底色的对比度越低。
+     这一版的白子刻意不用纯白（纯白压在暖白宣纸上会发亮），靠的仍然是 --stone-edge
+     那圈暖褐描边 —— 二维面板和三维着色器共用同一个描边色，两个视图的边界感才一致。 */
+  :root {
+    --bg:        #efe8db;   /* 宣纸（页面底色，也是三维视图的清屏色） */
+    --panel:     #f7f2e8;   /* 面板比底色更亮一档，才分得出层次 */
+    --panel-hi:  #e6dcc8;
+    --cell:      #e9e1d1;   /* 二维板面 */
+    --cell-hint: #cec0a4;
+    --border:    #b7a98f;   /* 也是三维静态格线的颜色 */
+    --text:      #2f2a23;   /* 墨 */
+    --dim:       #6d6353;
+    --black:     #1c1a16;
+    --white:     #fdfaf2;   /* 暖白，不是 #fff */
+    --accent:    #2f5d7c;   /* 黛青：当前层 / 最后一手 / 悬停框 */
+    --gold:      #9c6b1f;   /* 赭石金：获胜连线 */
+    --danger:    #9c3428;   /* 朱砂暗：长连犯规 */
+    --ok:        #4a6b45;   /* 竹青：待转层绿框 / 占用条 */
+    --hover-line:#c8452e;   /* 悬停校准线：必须比 --danger 亮，两者含义不同 */
+    --line2d:    #3a332a;   /* 二维面板的格线 / 星位 */
+    --well:      #ddd3bd;   /* 棋盘/缩略条的凹槽底（比面板暗一档） */
+    --overlay:   rgba(247,242,232,.94);   /* 浮层（模式条/提示框/横幅）的底 */
+    /* 棋子描边色。淡底上白子和底色只有 1.3:1，光靠填充色是看不见的，
+       必须靠这圈深色轮廓才能读出来 —— 二维面板和三维着色器用的是同一个颜色。 */
+    --stone-edge: #4a4034;
+  }
+  * { box-sizing: border-box; }
+  /* 宣纸质感：全部用 CSS 渐变叠出来，不引任何外部图片 —— 这是 file:// 单文件的前提。
+     两个大半径 radial 当晕染，两组 1px 交叉细纹当纸纤维（alpha 只有 0.03，
+     是"能感觉到"的量级，再高就变成条纹布了）。 */
+  .paper {
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(circle at 16% 18%, rgba(255,255,255,.60), transparent 44%),
+      radial-gradient(circle at 84% 82%, rgba(150,126,86,.11), transparent 50%),
+      repeating-linear-gradient(0deg,  rgba(122,102,70,.030) 0 1px, transparent 1px 4px),
+      repeating-linear-gradient(90deg, rgba(122,102,70,.030) 0 1px, transparent 1px 4px);
+  }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    color: var(--text);
+    font-family: "Microsoft YaHei", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+    font-size: 14px; user-select: none;
+  }
+  /* 衬线/楷体只用在标题和铭牌上。正文保持无衬线 —— 小字号下楷体在屏幕上很难读。 */
+  .serif {
+    font-family: "KaiTi", "STKaiti", "Kaiti SC", "Songti SC", "SimSun", serif;
+  }
+  #stage { display: flex; height: 100vh; width: 100vw; }
+  /* 起始界面打开时，三维视图正在当"演示棋盘"用：那三个浮层（模式条、提示框、结束横幅）
+     都属于对局，压在演示画面上既挡视线又自相矛盾，整个藏掉。
+     #panel（右侧对局面板）也要藏：它被 #setup 完整盖住，但盖板只要有一点透明，
+     底下的字就会以极低的对比度透上来 —— 在浅色主题下表现为标题区一层若隐若现的灰字，
+     很难判断是"没画好"还是"显示器脏了"。（实测截图里确认过，不是猜的。） */
+  #stage.preview #modebar,
+  #stage.preview #hintbox,
+  #stage.preview #banner { display: none; }
+  /* #panel 单独用 visibility：它是 #stage 的 flex 子项，display:none 会让 #view
+     的 42% 跟着变宽、左侧画布尺寸跳一下。visibility:hidden 保留布局，只是不画。 */
+  #stage.preview #panel { visibility: hidden; }
+  #stage.preview #gl { cursor: default; }
+
+  /* ---------- 左侧：三维视图 ---------- */
+  #view { flex: 0 0 42%; position: relative; overflow: hidden; }
+  #gl { display: block; width: 100%; height: 100%; cursor: grab; }
+  #gl.dragging { cursor: grabbing; }
+
+  #modebar {
+    position: absolute; left: 14px; top: 14px;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--overlay); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px;
+  }
+  #sliceGroup { display: none; align-items: center; gap: 6px; }
+  #sliceGroup.on { display: flex; }
+  #sliceLabel { color: var(--dim); font-size: 13px; min-width: 128px; text-align: center; }
+
+  #hintbox {
+    position: absolute; left: 14px; bottom: 14px;
+    background: var(--overlay); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 13px; line-height: 1.75; max-width: 560px;
+  }
+  #coords { color: var(--accent); font-size: 15px; margin-bottom: 5px; }
+  #hint { color: var(--dim); font-size: 12.5px; }
+
+  #banner {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    background: rgba(252,249,241,.97); border: 1px solid var(--border); border-radius: 8px;
+    padding: 26px 34px; text-align: center; min-width: 300px; display: none;
+  }
+  #banner.on { display: block; }
+  #bannerTitle { font-size: 27px; font-weight: 600; margin-bottom: 6px; white-space: pre-line; }
+  #bannerSub { color: var(--dim); font-size: 13px; margin-bottom: 18px; }
+
+  #toast {
+    position: absolute; left: 50%; top: calc(50% + 128px); transform: translateX(-50%);
+    color: var(--danger); font-size: 16px; opacity: 0; transition: opacity .18s;
+    pointer-events: none; text-shadow: 0 2px 8px #000;
+  }
+  #toast.on { opacity: 1; }
+
+  /* ---------- 右侧：操作面板 ---------- */
+  #panel { flex: 1 1 auto; background: var(--panel); display: flex; flex-direction: column;
+           padding: 16px 18px 14px; gap: 12px; min-width: 0; }
+
+  #statusRow { display: flex; align-items: center; gap: 10px; min-height: 34px; }
+  #chip { width: 20px; height: 20px; border-radius: 50%; background: var(--black);
+          border: 1px solid var(--stone-edge); flex: 0 0 auto; }
+  #status { font-size: 22px; font-weight: 600; flex: 1 1 auto; }
+  #rule { color: var(--dim); font-size: 12.5px; line-height: 1.5; }
+  #info { color: var(--dim); font-size: 12.5px; }
+
+  #boardWrap { position: relative; flex: 1 1 auto; background: var(--well);
+               border: 1px solid var(--border); border-radius: 4px; min-height: 0; }
+  #layerBase, #layerOverlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #layerOverlay { pointer-events: none; }
+
+  #navRow { display: flex; align-items: center; gap: 8px; }
+  #layerLabel { flex: 1 1 auto; text-align: center; font-size: 14px; }
+
+  #stripWrap { height: 132px; background: var(--well); border: 1px solid var(--border);
+               border-radius: 4px; flex: 0 0 auto; }
+  #strip { display: block; width: 100%; height: 100%; cursor: pointer; }
+
+  #buttons { display: flex; gap: 8px; flex: 0 0 auto; }
+  #buttons button { flex: 1 1 0; }
+
+  button {
+    background: var(--panel-hi); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 9px 12px; font-size: 13.5px; cursor: pointer;
+    font-family: inherit; transition: background .12s, color .12s;
+  }
+  button:hover { background: #d9cdb4; }
+  button:active { background: #cbbda0; }
+  button.sel { background: var(--accent); color: #fdfaf2; border-color: var(--accent); font-weight: 600; }
+  button.mini { padding: 6px 11px; font-size: 13px; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  /* ---------- 四维转动面板 ---------- */
+  /* 只在四维模式显示。三维模式下 #rotPanel 带 off 类，完全不占位。 */
+  #rotPanel { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto;
+              border-top: 1px solid var(--border); padding-top: 10px; }
+  #rotPanel.off { display: none; }
+  #rotHead { display: flex; align-items: baseline; gap: 10px; }
+  #rotTitle { font-size: 15px; font-weight: 600; }
+  #rotStatus { color: var(--dim); font-size: 12.5px; flex: 1 1 auto; text-align: right; }
+  .rotRow { display: flex; align-items: center; gap: 6px; }
+  .rotRow button { flex: 1 1 0; padding: 6px 8px; font-size: 13px; }
+  .rotRow button.mini { flex: 0 0 auto; padding: 6px 12px; }
+  .rotLabel { color: var(--dim); font-size: 12.5px; width: 34px; flex: 0 0 auto; text-align: right; }
+  #rotLayerLabel { flex: 1 1 auto; text-align: center; font-size: 13.5px; }
+  #rotHint { color: var(--dim); font-size: 11.5px; line-height: 1.5; }
+  /* 四维模式下把缩略条让出来给转动面板，否则棋盘区会被挤得看不清 */
+  #stripWrap.compact { height: 84px; }
+
+  /* ---------- 起始界面 ----------
+     左边 42% 刻意【不盖住】—— 那一块留给 #view 里那张自动缓慢旋转的演示棋盘，
+     所以这里用 left:42% 而不是 inset:0。42% 必须和上面 #view 的 flex-basis 是同一个数，
+     改一个就得改另一个，否则中间会裂出一条缝（或压掉半个棋盘）。 */
+  #setup {
+    position: fixed; left: 42%; right: 0; top: 0; bottom: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; padding: 26px 30px; overflow-y: auto;
+    background-color: var(--panel);   /* 不透明。半透明盖板会让底下的字透上来 */
+    background-image:
+      radial-gradient(circle at 78% 14%, rgba(255,255,255,.7), transparent 46%),
+      repeating-linear-gradient(0deg,  rgba(122,102,70,.028) 0 1px, transparent 1px 4px),
+      repeating-linear-gradient(90deg, rgba(122,102,70,.028) 0 1px, transparent 1px 4px);
+    border-left: 1px solid var(--border);
+    box-shadow: -18px 0 40px rgba(90,72,44,.13);
+  }
+  #setup.off { display: none; }
+  /* 演示棋盘角落的铭牌。少了它，从对局里点「设置」进来的人会以为自己的棋局还在 ——
+     左边明明还摆着一盘棋。 */
+  #previewTag {
+    position: absolute; left: 14px; bottom: 14px; display: none;
+    background: rgba(247,242,232,.88); border: 1px solid var(--border); border-radius: 3px;
+    padding: 6px 11px; color: var(--dim); font-size: 12.5px; line-height: 1.6;
+  }
+  #stage.preview #previewTag { display: block; }
+
+  .titleRow { display: flex; align-items: center; gap: 14px; }
+  /* 印章：朱砂底 + 楷体字。用字体而不是画一个图形，是为了不引任何外部资源。 */
+  .seal {
+    width: 46px; height: 46px; flex: 0 0 auto; border-radius: 4px;
+    background: var(--danger); color: #f7f2e8;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 27px; line-height: 1; padding-bottom: 3px;
+    box-shadow: inset 0 0 0 1px rgba(247,242,232,.55);
+  }
+  #setup h1 { font-size: 38px; margin: 0; font-weight: 600; letter-spacing: 2px; }
+  #setup .sub { color: var(--dim); font-size: 14.5px; margin-top: 4px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  /* 模式相关的行：用 hide 而不是 style.display，免得和 .row 的 flex 打架 */
+  #setup .row.hide { display: none; }
+  .rowLabel { color: var(--dim); width: 96px; text-align: right; flex: 0 0 auto; }
+
+  /* 尺寸输入。原来是两排固定尺寸按钮（三维 15/20/25/30/40/50、四维 5/6/8/10/15/20），
+     现在改成直接填数字：范围由 BoardLimits 统一约束，越界在失焦时夹回来并给一行提示。 */
+  .dimInput {
+    width: 62px; padding: 8px 6px; text-align: center;
+    font-family: inherit; font-size: 15px; color: var(--text);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 3px;
+  }
+  .dimInput:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .dimInput.bad { border-color: var(--danger); color: var(--danger); }
+  .dimTimes { color: var(--dim); font-size: 15px; }
+  #dimCube { min-width: 92px; }
+  #dimNote { color: var(--dim); font-size: 12px; }
+
+  #sizeSummary { color: var(--dim); font-size: 13.5px; text-align: center; max-width: 640px;
+                 line-height: 1.7; white-space: pre-line; }
+  #ruleNote { color: var(--dim); font-size: 12.5px; text-align: center; max-width: 660px;
+              line-height: 1.8; border-top: 1px solid var(--border); padding-top: 14px; }
+  #startBtn { font-size: 18px; font-weight: 600; padding: 13px 48px; letter-spacing: 3px; }
+
+  /* ---------- 右上角的「具体规则」与规则浮层 ---------- */
+  /* 按钮放在 #stage 外面、用 fixed：起始界面（#setup，z-index:50）和对局界面都要点得到。
+     放进任何一侧的容器里，另一侧就会看不到它。 */
+  #rulesBtn {
+    position: fixed; top: 14px; right: 14px; z-index: 60;
+    font-size: 13px; padding: 7px 13px;
+    background: var(--panel-hi); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    box-shadow: 0 1px 6px rgba(90,72,44,.12);
+  }
+  /* 对局时把状态行的右边留出来 —— 不然按钮会压在"黑棋落子（第 N 手）"上面。
+     状态文字是左对齐的，右边本来就是空的，留白不影响观感。 */
+  #statusRow { padding-right: 104px; }
+
+  #rulesPanel {
+    position: fixed; inset: 0; z-index: 70;
+    background: rgba(60,50,34,.42);
+    display: flex; align-items: center; justify-content: center; padding: 28px;
+  }
+  #rulesPanel.off { display: none; }
+  #rulesCard {
+    display: flex; flex-direction: column; width: min(940px, 100%); height: 100%;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 20px 60px rgba(60,44,22,.30); overflow: hidden;
+  }
+  #rulesHead {
+    display: flex; align-items: baseline; gap: 12px; flex: 0 0 auto;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    background: var(--panel-hi);
+  }
+  #rulesTitle { font-size: 19px; font-weight: 600; letter-spacing: 2px; }
+  #rulesSrcName { color: var(--dim); font-size: 12.5px; flex: 1 1 auto; }
+  #rulesBody { flex: 1 1 auto; overflow-y: auto; padding: 6px 26px 30px;
+               line-height: 1.85; font-size: 14px; }
+  /* 渲染出来的正文。字号偏小、行距偏大：这份文档是要"读"的，
+     而且里面大量用行内 code，密排会糊。 */
+  #rulesBody h2 { font-size: 20px; margin: 26px 0 10px; padding-bottom: 6px;
+                  border-bottom: 1px solid var(--border); }
+  #rulesBody h3 { font-size: 16.5px; margin: 22px 0 8px; color: var(--accent); }
+  #rulesBody h4 { font-size: 15px; margin: 18px 0 6px; }
+  #rulesBody p  { margin: 9px 0; }
+  #rulesBody ul { margin: 8px 0; padding-left: 22px; }
+  #rulesBody li { margin: 4px 0; }
+  #rulesBody code {
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
+    background: var(--cell); border: 1px solid var(--border); border-radius: 3px;
+    padding: 1px 5px;
+  }
+  #rulesBody blockquote {
+    margin: 10px 0; padding: 8px 14px; border-left: 3px solid var(--accent);
+    background: var(--cell); color: var(--text);
+  }
+  #rulesBody hr { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
+  #rulesBody table { border-collapse: collapse; margin: 12px 0; width: 100%; font-size: 13.5px; }
+  #rulesBody th, #rulesBody td {
+    border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top;
+  }
+  #rulesBody th { background: var(--panel-hi); font-weight: 600; }
+  #rulesBody tr:nth-child(even) td { background: rgba(230,220,200,.35); }
+</style>
+</head>
+<body class="paper">
+
+<!-- RULES-EMBED-BEGIN -->
+<!-- 由 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.md 生成，不要手改。
+     改了 RULES_SPEC.md 之后跑：node _verify/embed-rules.mjs -->
+<script type="text/plain" id="rulesSrc">
+# 三维五子棋 · 规则
+
+在 N×N×N 的立体棋盘上下五子棋：**先在一整条直线上连成 5 颗同色棋子的一方获胜**。
+
+和平面的五子棋相比，最大的不同是"直线"变多了 —— 一共 **13 个方向**。
+所以光堵住正面是没用的：斜着穿、竖着穿、甚至穿过好几层，都可能是杀招。
+
+棋盘上没有重力，**棋子可以悬空**，不需要任何支撑，任意空格都能落子。
+
+---
+
+## 1. 棋盘
+
+| 项目 | 规定 |
+|---|---|
+| 形状 | 立方体棋盘，N × N × N 个可落子的位置 |
+| 尺寸 | 可选 8 ≤ N ≤ 50，默认 15 |
+| 坐标 | `(x, y, z)`，三个轴都从 0 数到 N−1 |
+| 层 | `z` 相同的那些位置叫"一层"，"第 k 层"就是 `z = k` 的那一层 |
+| 位置状态 | 空 / 黑子 / 白子 |
+
+三个轴的方向：
+
+- `x`：向右递增
+- `y`：向上递增
+- `z`：向屏幕里递增
+
+所以从默认视角看，**第 0 层离你最近、最不容易被挡住**，开局也是停在第 0 层。
+
+三维模式下三个轴的长度可以不一样（比如 8×12×30 的长方体棋盘）：
+把「三轴联动」关掉就能分别填。
+
+## 2. 落子
+
+- 任意**空格**都能落子。没有重力，也没有"底下必须有子撑住"这类要求，棋子可以悬在半空。
+- 一次落一子，落完立刻轮到对方。
+- 落下的子不能取消，但可以悔棋。
+
+## 3. 谁先手
+
+- 开局前选「黑棋先手」或「白棋先手」，选定之后**本局不再改变**。
+- **"先手"指本局第一步由谁走**，不是专指黑棋。
+- 对局中想换先手，点「换先手」会按新的先手**重开一局** —— 不是把当前这盘棋换边。
+
+## 4. 获胜方向：13 个
+
+每个位置最多同时参与 13 个方向的连线：
+
+| 类别 | 数量 | 方向 |
+|---|---|---|
+| 轴向 | 3 | 沿 x / y / z 三个轴各一条 |
+| 面对角 | 6 | 每个坐标平面里的斜线（`(1,1,0)`、`(1,-1,0)` 这一类） |
+| 体对角 | 4 | 同时穿过三个轴的斜线（`(±1,±1,±1)`） |
+
+3 个轴向 + 6 个面对角 + 4 个体对角 = 13。
+
+判定时只看向**刚落下那一颗棋子**穿过的那 13 个方向，而且每个方向**正反两边都要数**：
+一整条直线的长度 = 1 + 一边连续同色数 + 另一边连续同色数。
+只数一边会漏掉"一手把两段分开的线接起来"的情况。
+
+## 5. 胜负
+
+### 5.1 后手方：5 连及以上即胜
+
+穿过刚落下的那颗子，任意一条直线上有 5 颗及以上同色棋子，立即获胜。
+
+### 5.2 先手方：必须恰好 5 连
+
+先手方**连多了反而输**：
+
+- 任意一条直线**恰好 5 连** → 获胜。
+- 任意一条直线**6 连及以上**（长连）→ **立即判负**，对手获胜。
+
+**长连判负永远跟着"先手"这个身份走**：选黑棋先手就由黑棋承担，选白棋先手就由白棋承担，
+此时黑棋反而自由（连成 5 颗及以上即胜）。
+
+### 5.3 一手同时连成 5 颗和 6 颗
+
+立体棋盘上一手同时踩中两种连线很常见，这种情况下**长连优先**：判长连负。
+
+### 5.4 一条会有用的推论
+
+先手方沿一条直线一颗一颗连下去时，**连到第 5 颗就已经获胜、棋局当场结束**，
+根本走不到第 6 颗。所以：
+
+> 长连犯规只可能由"一手把两段接起来"造成 —— 例如已经有 `0,1,2` 和 `4,5`，
+> 落在 `3` 上接成 6 颗。慢慢摆是摆不出长连的。
+
+## 6. 悔棋
+
+- 可以一直悔到开局前。
+- 悔棋之后胜负状态一并清除，棋局回到"进行中"，轮到被撤掉那一手的一方。
+- 快捷键 `Z`，也可以点面板上的「悔棋 Z」。
+
+## 7. 和局
+
+棋盘被填满且没有任何一方获胜 → 和局。
+15×15×15 有 3375 个位置，实战里几乎不会出现，但规则上存在这种结局。
+
+## 8. 为什么先手要受限
+
+立体棋盘的连线比平面多得多。15×15×15 的棋盘上，长度正好是 5 的直线一共有 **23639 条**，
+是同样边长的平面棋盘的 **41 倍**。方向一多，"一手同时做出两个威胁、对手只能堵一个"
+就比平面容易得多 —— 如果双方规则完全一样，先手的优势会大到后手没法玩。
+
+所以先手背上"必须恰好 5 连"的限制。这是这个游戏和平面的五子棋最本质的区别。
+
+## 9. 右侧面板：按层看棋盘
+
+右侧面板画的是**从正面看第 k 层**的样子：
+
+- 横着是 `x`，向右递增
+- 竖着是 `y`，向上递增
+- 层号 `z` 是深度，用 `＜` `＞` 切换，也可以点下面的层条
+
+面板和立体视图的方位完全一致，不需要在脑子里做旋转，两边永远显示同一层。
+
+## 10. 四维模式：可以转动一层
+
+这是可选的玩法，开局时选「四维 · 可转层」开启：**像魔方一样把某一层转 90°**，
+那一层里已经落下的棋子会跟着被搬走。"四维"指的是时间 —— 棋盘本身会变，
+坐标仍然是三个轴，位置总数也仍然是 N×N×N。
+
+模式在开局时选定，**一局之内不能更改**。没有选它的话，这一节全部不适用，
+第 1 到 9 节的规则也不受它影响。
+
+### 10.1 怎么转
+
+| 参数 | 取值 |
+|---|---|
+| 轴 | x / y / z |
+| 层 | 第几层（0 到 N−1） |
+| 方向 | 顺时针 / 逆时针 |
+| 次数 | 1 / 2 / 3 圈，也就是 90° / 180° / 270° |
+
+**"顺时针"的观察方向是：从该轴的负方向朝原点看。**
+对 `z` 轴来说，这就是你在屏幕上看到的方向，不需要额外换算；
+`x` 轴和 `y` 轴的观察点分别在棋盘的左侧和下方。
+
+逆时针转 1 圈等于顺时针转 3 圈。转 4 圈等于没转，所以**不提供**这个选项。
+
+### 10.2 转动的效果
+
+只有被转的那一层里，位置在变；层外的一切都不动。
+层内每个位置都有唯一去向，不会有两颗棋子撞到一起，所以**棋子总数永远不变**。
+
+### 10.3 什么样的转动会被拒绝
+
+按顺序检查，任何一条不满足，整件事就作废：棋盘不动、不算一步、不留记录。
+
+| 检查 | 不通过时 |
+|---|---|
+| 必须处在四维模式 | 拒绝 |
+| 棋局必须还在进行中 | 拒绝 |
+| 层号必须存在 | 拒绝 |
+| 冷却已经好了 | 拒绝 |
+| 转完的棋盘必须和转之前**不一样** | 提示"没有变化"，不算一步 |
+| 转完之后盘面上**不能出现 5 连** | 整件事回滚 |
+
+"转完必须不一样"这一条，看的是**棋盘的样子**，不是"转了几圈"：
+这一层本来就是空的，或者上面的图案恰好转回原样，都会被判成"没有变化"。
+这两种情况界面会分别告诉你原因，不然按钮看起来就像是坏的。
+
+最后一条意味着 **转动永远分不出胜负**：转动不能当进攻手段用，
+只能用来拆掉对手的线，或者调整自己的结构。
+
+### 10.4 转动冷却
+
+> 两次转动之间，至少要**落** 5 个子。
+
+- **只有落子算数**，转动本身不算 —— 否则就变成"每 5 手里只准有一手是转动"，太难算了。
+- 可以调成 3 / 5 / 8 / 10，默认 5。
+- 第一次转动同样受这条约束：开局之后落满 5 个子才能转。
+- 悔棋会把冷却一起退回去，不会出现"计数器和棋盘对不上"。
+
+### 10.5 转动的代价
+
+转动**占掉一整个回合**：转完立刻轮到对手，不能"转完再落子"。
+也就是每一手都是"落子或转动，二选一"。
+
+转动不算"第 N 手"，第 N 手始终指第 N 次落子（界面上会另外报转动次数）。
+
+### 10.6 撤销转动
+
+| 操作 | 效果 |
+|---|---|
+| 悔棋 `Z` | 最后一步是转动就撤转动，是落子就撤落子，可以一直悔到开局前 |
+| 恢复本次转动 `Y` | 只在"最后一步恰好是转动"时可用 |
+
+一旦有人落了子，那次转动就算落地了，不能再单独撤回 —— 否则它会变成一台横跨很多手的时光机。
+
+撤销之后，冷却也一起回到转动之前。
+
+### 10.7 尺寸
+
+| 模式 | 可选尺寸 | 默认 |
+|---|---|---|
+| 三维 | 8 ≤ N ≤ 50，三个轴可以不等 | 15 |
+| 四维 | 8 ≤ N ≤ 50，**必须立方** | 8 |
+
+四维模式必须立方不是偷懒：转动一层要求这一层的两条边长相等，
+三个轴都要能转，就只能三轴等长。
+
+四维的默认尺寸取 8 而不是 15，是因为**棋盘越大，一层里的棋子越少，转动就越看不出来** ——
+15×15×15 的棋盘上，一层里平均还不到一颗子，多数转动都会撞上"没有变化"。
+
+## 11. 本作没有做的事
+
+- **没有双三、双四禁手。** 传统连珠（Renju）里，先手还有"一手同时形成两个活三 / 两个四"
+  这类禁手，本作只实现了长连判负这一条。判罚发生在落子之后，不存在"这个点不能落"。
+- **没有电脑对手。** 只能两个人轮流在同一台设备上走。
+- **转动没有动画**，是瞬间到位，只会高亮一下被转的那一层。
+- **转动只能用面板上的按钮完成**，不能在立体视图里直接拖动。
+</script>
+<!-- RULES-EMBED-END -->
+
+<div id="stage">
+
+  <div id="view">
+    <canvas id="gl"></canvas>
+
+    <!-- 起始界面打开时，左边这块画布就变成演示棋盘（自动缓慢旋转的 10×10×10）。
+         铭牌是必须的：从对局里点「设置」进来时，左边仍然摆着一盘棋，
+         不说明的话看起来像是自己的棋局还在。 -->
+    <div id="previewTag">演示棋盘 · 10 × 10 × 10<br>与左侧设置无关，也不参与对局</div>
+
+    <div id="modebar">
+      <button id="modeGhost" class="mini sel">幽灵层</button>
+      <button id="modeSlice" class="mini">切片</button>
+      <div id="sliceGroup">
+        <button id="sliceDown" class="mini">-</button>
+        <div id="sliceLabel"></div>
+        <button id="sliceUp" class="mini">+</button>
+      </div>
+    </div>
+
+    <div id="hintbox">
+      <div id="coords">把鼠标移到棋盘上以选择落点</div>
+      <div id="hint">左键拖拽旋转 · 滚轮缩放 · 单击当前层落子<br>
+        Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · T 转动 · Y 恢复本次转动<br>
+        绿框 = 待转的那一层 · 蓝框 = 当前层（四维模式下才有绿框）</div>
+    </div>
+
+    <div id="banner">
+      <div id="bannerTitle">黑棋胜</div>
+      <div id="bannerSub"></div>
+      <button id="bannerUndo">悔棋</button>
+      <button id="bannerRestart">再来一局</button>
+    </div>
+
+    <div id="toast"></div>
+  </div>
+
+
+  <!-- 右上角的「具体规则」。刻意放在 #stage 外面、用 position:fixed：
+     起始界面（#setup 是 fixed 且 z-index:50）和对局界面都要能点到它，
+     放在任何一侧的容器里都会在另一侧消失。 -->
+<button id="rulesBtn" title="查看完整规则">具体规则</button>
+
+<!-- 规则浮层。内容由 openRules() 从 #rulesSrc 现场渲染 —— 页面上没有第二份规则文本。 -->
+<div id="rulesPanel" class="off">
+  <div id="rulesCard">
+    <div id="rulesHead">
+      <div id="rulesTitle">规则全文</div>
+      <!-- 这个 div 是空的，而且【不能删】：它是 #rulesHead 里唯一带 flex:1 的那一项，
+           少了它「关闭」按钮会贴到标题右边而不是靠右。原先里面写着文件名
+           RULES_SPEC.md —— 那是工程侧的叫法，玩家看到的规则页不该出现，
+           改成玩家向之后就没有要写的东西了。 -->
+      <div id="rulesSrcName"></div>
+      <button id="rulesClose" class="mini">关闭 Esc</button>
+    </div>
+    <div id="rulesBody"></div>
+  </div>
+</div>
+
+<aside id="panel">
+    <div id="statusRow"><div id="chip"></div><div id="status">黑棋落子</div></div>
+    <div id="rule"></div>
+    <div id="info"></div>
+
+    <div id="boardWrap">
+      <canvas id="layerBase"></canvas>
+      <canvas id="layerOverlay"></canvas>
+    </div>
+
+    <div id="navRow">
+      <button id="prevLayer" class="mini">＜</button>
+      <div id="layerLabel"></div>
+      <button id="nextLayer" class="mini">＞</button>
+      <button id="topLayer" class="mini">顶层</button>
+    </div>
+
+    <div id="stripWrap"><canvas id="strip"></canvas></div>
+
+    <!-- 四维转动面板。三维模式下带 off 类，完全不占位。
+         层的选择刻意和"当前层"activeLayer 相互独立：三维视图里会同时出现两个高亮，
+         颜色不同（当前层蓝、待转层绿），不会混。之所以不做同步，是因为 x/y 轴的层
+         和"当前层"根本不是同一个概念，单向同步会在用户手选之后又被盖回去。 -->
+    <div id="rotPanel" class="off">
+      <div id="rotHead">
+        <div id="rotTitle">转动一层</div>
+        <div id="rotStatus"></div>
+      </div>
+      <div class="rotRow">
+        <div class="rotLabel">轴</div>
+        <button class="rotAxis" data-axis="0">x</button>
+        <button class="rotAxis" data-axis="1">y</button>
+        <button class="rotAxis sel" data-axis="2">z</button>
+      </div>
+      <div class="rotRow">
+        <div class="rotLabel">层</div>
+        <button id="rotLayerDown" class="mini">−</button>
+        <div id="rotLayerLabel"></div>
+        <button id="rotLayerUp" class="mini">+</button>
+      </div>
+      <div class="rotRow">
+        <div class="rotLabel">方向</div>
+        <button id="rotCW" class="sel">顺时针</button>
+        <button id="rotCCW">逆时针</button>
+      </div>
+      <div class="rotRow">
+        <div class="rotLabel">次数</div>
+        <button class="rotTurns sel" data-turns="1">1 · 90°</button>
+        <button class="rotTurns" data-turns="2">2 · 180°</button>
+        <button class="rotTurns" data-turns="3">3 · 270°</button>
+      </div>
+      <div class="rotRow">
+        <button id="rotGo">执行转动</button>
+        <button id="rotRestore" disabled>恢复本次转动</button>
+      </div>
+      <div id="rotHint"></div>
+    </div>
+
+    <div id="buttons">
+      <button id="undoBtn">悔棋 Z</button>
+      <button id="restartBtn">重开 R</button>
+      <button id="swapBtn">换先手</button>
+      <button id="setupBtn">设置</button>
+    </div>
+  </aside>
+</div>
+
+<div id="setup">
+  <div class="titleRow">
+    <div class="seal serif">弈</div>
+    <div>
+      <h1 class="serif">三维五子棋</h1>
+      <div class="sub serif">十三向连五 —— 立体棋盘上，光堵正面是没用的</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="rowLabel">对局模式</div>
+    <button id="mode3d" class="sel">三维 · 经典</button>
+    <button id="mode4d">四维 · 可转层</button>
+  </div>
+
+  <div class="row">
+    <div class="rowLabel">谁先手</div>
+    <button id="firstBlack" class="sel" data-first="1">黑棋先手</button>
+    <button id="firstWhite" data-first="2">白棋先手</button>
+  </div>
+
+  <!-- 三维模式：三个轴各填一个数，8..50。默认三轴联动（cubeOn），想下长方体就点掉它。
+       长方体是【网页版独有】的扩展，没有测试向量覆盖，见 README 的说明。 -->
+  <div class="row" id="dimsRow3d">
+    <div class="rowLabel">棋盘尺寸</div>
+    <input id="dimX" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
+    <span class="dimTimes">×</span>
+    <input id="dimY" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
+    <span class="dimTimes">×</span>
+    <input id="dimZ" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
+    <button id="dimCube" class="mini sel">三轴联动</button>
+  </div>
+
+  <!-- 四维模式：只能立方。不是"没做"，是数学上不成立 —— 绕某轴转一层要求
+       另外两个自由轴等长，三个轴都能转就只能 nx = ny = nz。见 README。 -->
+  <div class="row hide" id="dimsRow4d">
+    <div class="rowLabel">棋盘尺寸</div>
+    <input id="dimN" class="dimInput" type="number" min="8" max="50" step="1" value="8" inputmode="numeric">
+    <span class="dimTimes">³</span>
+    <span id="dimNote">四维模式必须立方 —— 转层要求两个自由轴等长</span>
+  </div>
+
+  <div class="row hide" id="coolRow">
+    <div class="rowLabel">转动冷却</div>
+    <button class="coolBtn" data-cool="3">3 手</button>
+    <button class="coolBtn sel" data-cool="5">5 手</button>
+    <button class="coolBtn" data-cool="8">8 手</button>
+    <button class="coolBtn" data-cool="10">10 手</button>
+  </div>
+
+  <div id="sizeSummary"></div>
+
+  <div id="ruleNote">
+    规则：任意空格可落子，无重力约束。先手必须【恰好 5 连】，连成 6 个及以上判长连负；后手 ≥5 连即胜。<br>
+    获胜方向为 13 个：3 轴向 + 6 面对角 + 4 体对角。右侧面板可以逐层查看与落子。
+  </div>
+
+  <button id="startBtn" class="sel">开始游戏</button>
+</div>
+
+<script>
+"use strict";
+
+/* ==========================================================================
+   纯规则内核 —— 原先与 Assets/_Gomoku3D/Core 下的 C# 实现逐条对应（那套实现已删除）。
+   这一段被 tests/rules.test.mjs 原样抽出来在 node 里跑，回放 vectors.json 校验。
+   所以这里【不能】引用任何 DOM / WebGL / 浏览器 API。
+   ========================================================================== */
+/* GOMOKU-CORE-BEGIN */
+
+const EMPTY = 0, BLACK = 1, WHITE = 2;
+
+/** 转动轴。取值就是坐标分量下标，索引棋盘坐标时可以直接用。 */
+const AXIS_X = 0, AXIS_Y = 1, AXIS_Z = 2;
+
+/** 13 个方向：(3^3-1)/2 = 3 轴向 + 6 面对角 + 4 体对角。 */
+const DIRS13 = [
+  [1, 0, 0], [0, 1, 0], [0, 0, 1],
+  [1, 1, 0], [1, -1, 0], [1, 0, 1], [1, 0, -1], [0, 1, 1], [0, 1, -1],
+  [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1],
+];
+
+const MoveStatus = {
+  Rejected: "Rejected",
+  Placed: "Placed",
+  Win: "Win",
+  LoseByOverline: "LoseByOverline",
+  Draw: "Draw",
+};
+
+const RestrictionTarget = { None: 0, FirstPlayer: 1, Black: 2 };
+
+function opponentOf(s) { return s === BLACK ? WHITE : (s === WHITE ? BLACK : EMPTY); }
+function cnOf(s) { return s === BLACK ? "黑" : (s === WHITE ? "白" : "空"); }
+
+/** 走子记录 */
+function MoveRecord(x, y, z, player, moveNumber) {
+  return { x: x, y: y, z: z, player: player, moveNumber: moveNumber };
+}
+MoveRecord.prototype.toString = function () {
+  return "#" + this.moveNumber + " " + cnOf(this.player) + "(" + this.x + "," + this.y + "," + this.z + ")";
+};
+
+/** 棋盘尺寸上下限。**UI 只有这一处定义**，输入框的 min/max、夹取、提示文案都从它取。 */
+const BoardLimits = { Min: 8, Max: 50 };
+
+/**
+ * 把"尺寸"归一成 [nx, ny, nz]。两种写法都收：
+ *
+ *   数字       → 立方，与 C#（`Board3D(int size)` / `GameSession.Create(size,...)`）逐条对应
+ *   [x, y, z]  → 长方体，**网页版独有的扩展**，C# 侧没有对应实现，tests/vectors.json 也不覆盖
+ *
+ * 立方路径刻意走"数字"这一支：向量回放全部用数字构造，所以那条路径的行为一个字节都没变。
+ * 非立方是在它旁边新开的一条路，而不是把原来的路改宽 —— 这样"两份实现一致"的既有证据
+ * 依然原样成立，新路径的证据由 tests/dims.test.mjs 单独负责。
+ */
+function normalizeDims(dims) {
+  if (typeof dims === "number") {
+    if (!Number.isInteger(dims) || dims < 1) {
+      throw new Error("棋盘尺寸必须是 >= 1 的整数，收到 " + dims);
+    }
+    return [dims, dims, dims];
+  }
+  if (Array.isArray(dims) && dims.length === 3) {
+    for (let i = 0; i < 3; i++) {
+      if (!Number.isInteger(dims[i]) || dims[i] < 1) {
+        throw new Error("棋盘尺寸必须是 >= 1 的整数，收到 [" + dims.join(",") + "]");
+      }
+    }
+    return [dims[0], dims[1], dims[2]];
+  }
+  throw new Error("棋盘尺寸只能是数字（立方）或 [x,y,z]（长方体），收到 " + JSON.stringify(dims));
+}
+
+/**
+ * 棋盘。扁平 Uint8Array，索引 index = x + nx*(y + ny*z)。
+ * x 是最快维 → 一层（固定 z）在内存里是连续的一段，右侧面板逐层取用很方便。
+ *
+ * 立方时（nx == ny == nz）与 C# 的 Board3D 逐条对应；长方体是网页版扩展，
+ * 只有三维模式用得上 —— 四维模式的转层要求两个自由轴等长，绕三个轴都能转就只能是立方，
+ * 这一条由 isCube 守卫在代码里强制，不靠约定（见 layerIndex / rotateLayer）。
+ */
+class Board3D {
+  constructor(nx, ny, nz) {
+    if (ny === undefined) { ny = nx; nz = nx; }   // new Board3D(15) → 立方
+    if (nz === undefined) { nz = ny; }
+    if (nx < 1 || ny < 1 || nz < 1) throw new Error("棋盘尺寸必须 >= 1");
+    this.nx = nx; this.ny = ny; this.nz = nz;
+    this.cells = new Uint8Array(nx * ny * nz);
+    this.stoneCount = 0;
+  }
+  /** 三维尺寸 [x,y,z]。**长方体下这是唯一的尺寸来源** —— size 会抛。 */
+  get dims() { return [this.nx, this.ny, this.nz]; }
+  get isCube() { return this.nx === this.ny && this.ny === this.nz; }
+  /**
+   * 立方边长。长方体下刻意【抛异常】而不是返回 nx：
+   * 返回 nx 会让"只改了三个轴里的一个"这类漏改静默地用一个错误的数继续跑，
+   * 而抛异常会让它在第一次执行时就暴露出来。需要尺寸的地方请用 dims。
+   */
+  get size() {
+    if (!this.isCube) {
+      throw new Error("长方体棋盘没有单一 size（" + this.nx + "×" + this.ny + "×" + this.nz +
+                      "），请用 dims / nx / ny / nz");
+    }
+    return this.nx;
+  }
+  inBounds(x, y, z) {
+    return x >= 0 && y >= 0 && z >= 0 && x < this.nx && y < this.ny && z < this.nz;
+  }
+  index(x, y, z) { return x + this.nx * (y + this.ny * z); }
+  /** 越界返回 EMPTY 而不是抛异常 —— 这是"沿方向数连续子"能自然终止的关键。 */
+  getOrDefault(x, y, z) {
+    if (!this.inBounds(x, y, z)) return EMPTY;
+    return this.cells[x + this.nx * (y + this.ny * z)];
+  }
+  get(x, y, z) {
+    if (!this.inBounds(x, y, z)) throw new Error("坐标越界 " + x + "," + y + "," + z);
+    return this.cells[x + this.nx * (y + this.ny * z)];
+  }
+  isEmpty(x, y, z) { return this.getOrDefault(x, y, z) === EMPTY; }
+  set(x, y, z, v) {
+    if (!this.inBounds(x, y, z)) throw new Error("坐标越界 " + x + "," + y + "," + z);
+    const i = x + this.nx * (y + this.ny * z);
+    const old = this.cells[i];
+    if (old === v) return;
+    if (old === EMPTY) this.stoneCount++;
+    else if (v === EMPTY) this.stoneCount--;
+    this.cells[i] = v;
+  }
+  get cellCount() { return this.nx * this.ny * this.nz; }
+  get isFull() { return this.stoneCount >= this.cellCount; }
+  clear() { this.cells.fill(0); this.stoneCount = 0; }
+  forEachStone(fn) {
+    const nx = this.nx, ny = this.ny, nz = this.nz;
+    for (let z = 0; z < nz; z++) {
+      for (let y = 0; y < ny; y++) {
+        const base = nx * (y + ny * z);
+        for (let x = 0; x < nx; x++) {
+          const v = this.cells[base + x];
+          if (v !== 0) fn(x, y, z, v);
+        }
+      }
+    }
+  }
+  /** 统计每一列（固定 x,y，沿 z 所有层）的棋子总数，写进 dst，下标 x + nx*y，长度 nx*ny。 */
+  countColumnStones(dst) {
+    const nx = this.nx, ny = this.ny, nz = this.nz;
+    dst.fill(0);
+    for (let z = 0; z < nz; z++) {
+      const layerBase = z * nx * ny;
+      for (let y = 0; y < ny; y++) {
+        const rowBase = layerBase + nx * y;
+        const row = nx * y;
+        for (let x = 0; x < nx; x++) {
+          if (this.cells[rowBase + x] !== 0) dst[row + x]++;
+        }
+      }
+    }
+  }
+
+  // =====================================================================
+  // 以下为"四维模式"新增。上面那些面板/缩略图用的方法一行没动。
+  // 和原 Assets/_Gomoku3D/Core/Board3D.cs 逐条对应（该文件已删除）。
+  //
+  // **这一整段都要求立方棋盘**，而且必须要求，不是"暂时没实现"：
+  // 绕 x 轴转一次把 (y,z) 映到 (z, nx-1-y)，要让结果还在原来的盒子里，
+  // 就需要 nz ≥ ny（z 分量）且 ny ≥ nz（y 分量），即 ny == nz。三个轴都要能转就只能是立方。
+  // 所以长方体棋盘上的转层不是"还没做"，是根本不存在这个操作。
+  // =====================================================================
+
+  /** 上面那条约束的执行点。所有四维方法的第一步都是它。 */
+  requireCube(what) {
+    if (!this.isCube) {
+      throw new Error(what + " 需要立方棋盘，当前是 " +
+                      this.nx + "×" + this.ny + "×" + this.nz + "（两个自由轴必须等长）");
+    }
+  }
+
+  /** 层内平面坐标 (u, v) 对应的棋盘下标。
+   *  自由轴的顺序必须和 RotationOps.mapCoord 里的完全一致，否则会转到"另一条轴"上。 */
+  layerIndex(axis, layer, u, v) {
+    this.requireCube("layerIndex");
+    if (axis === AXIS_X) return this.index(layer, u, v);   // (u,v) = (y,z)
+    if (axis === AXIS_Y) return this.index(v, layer, u);   // (u,v) = (z,x)
+    return this.index(u, v, layer);                        // (u,v) = (x,y)
+  }
+
+  /** 该层（固定 axis 坐标 = layer）里的棋子数。UI 用它提示"转这一层到底会不会动"。 */
+  countLayerStones(axis, layer) {
+    this.requireCube("countLayerStones");
+    if (layer < 0 || layer >= this.size) throw new Error("层号越界 " + layer + " (Size=" + this.size + ")");
+    let count = 0;
+    const n = this.size;
+    for (let u = 0; u < n; u++)
+      for (let v = 0; v < n; v++)
+        if (this.cells[this.layerIndex(axis, layer, u, v)] !== 0) count++;
+    return count;
+  }
+
+  /**
+   * 把一整层绕该轴顺时针转 cwTurns 次（1..3）。返回"盘面是否真的变了"。
+   *
+   * 调用方要区分两种"转了等于没转"：空层、或者本层的图案恰好在这个旋转下不变
+   * （例如一颗子落在旋转不动点上）。这两种都必须报给玩家，否则按钮看起来就是坏的。
+   *
+   * stoneCount 不用动：转动是格子的置换，棋子总数是置换不变量。这里直接读写 cells
+   * 而不是走 set()，正是因为 set() 会去加减 stoneCount。
+   *
+   * 只动本层：50³ 下整盘是 125,000 格，本层只有 2,500 格，差 50 倍。
+   */
+  rotateLayer(axis, layer, cwTurns) {
+    this.requireCube("rotateLayer");
+    if (layer < 0 || layer >= this.size) throw new Error("层号越界 " + layer + " (Size=" + this.size + ")");
+    const t = cwTurns & 3;
+    if (t === 0) return false;   // 转 0 次 / 转 4 次 = 不动
+
+    const n = this.size, m = n - 1, size2 = n * n;
+
+    // 把本层读成一张 (u,v) 平面的快照
+    let cur = new Uint8Array(size2);
+    for (let u = 0; u < n; u++)
+      for (let v = 0; v < n; v++)
+        cur[u * n + v] = this.cells[this.layerIndex(axis, layer, u, v)];
+
+    // 顺时针一次： (u,v) -> (v, m-u)。转几次就迭代几次。
+    let next = new Uint8Array(size2);
+    for (let k = 0; k < t; k++) {
+      for (let u = 0; u < n; u++)
+        for (let v = 0; v < n; v++)
+          next[v * n + (m - u)] = cur[u * n + v];
+      const swap = cur; cur = next; next = swap;
+    }
+
+    // 写回。比较必须在写之前做 —— cells 此刻还是转动前的状态，正好当原图用。
+    let changed = false;
+    for (let u = 0; u < n; u++) {
+      for (let v = 0; v < n; v++) {
+        const idx = this.layerIndex(axis, layer, u, v);
+        const after = cur[u * n + v];
+        if (this.cells[idx] !== after) changed = true;
+        this.cells[idx] = after;
+      }
+    }
+    return changed;
+  }
+}
+
+/** 规则配置。GameSession 开局时会 clone 一份快照，中途改这里不影响进行中的对局。 */
+class RuleSet {
+  constructor() {
+    this.winLength = 5;
+    this.overlineLoses = true;
+    this.restricted = RestrictionTarget.FirstPlayer;
+    this.overlineTakesPrecedence = true;
+
+    // 四维模式（"像魔方一样转层"）。三维模式下恒为 false / 不被读取，
+    // 三维模式的任何行为都不受它们影响。
+    this.allowRotation = false;
+    this.rotationCooldownPlacements = 5;
+  }
+  clone() {
+    const r = new RuleSet();
+    r.winLength = this.winLength;
+    r.overlineLoses = this.overlineLoses;
+    r.restricted = this.restricted;
+    r.overlineTakesPrecedence = this.overlineTakesPrecedence;
+    r.allowRotation = this.allowRotation;
+    r.rotationCooldownPlacements = this.rotationCooldownPlacements;
+    return r;
+  }
+  /** 四维模式的棋盘尺寸下限。棋盘至少要装得下一条 winLength 连，否则永远分不出胜负。 */
+  get minSizeFourD() { return this.winLength < 2 ? 2 : this.winLength; }
+  /** 维度名，UI 里区分"三维 / 四维"。 */
+  get modeName() { return this.allowRotation ? "四维" : "三维"; }
+  isRestricted(player, firstPlayer) {
+    if (!this.overlineLoses) return false;
+    if (this.restricted === RestrictionTarget.None) return false;
+    if (this.restricted === RestrictionTarget.Black) return player === BLACK;
+    return player === firstPlayer;
+  }
+  describe(firstPlayer) {
+    let s = cnOf(firstPlayer) + "先手 · ";
+    if (!this.overlineLoses || this.restricted === RestrictionTarget.None) {
+      return s + "双方 ≥" + this.winLength + " 连即胜（自由规则）" + this._rotationSuffix();
+    }
+    const who = this.restricted === RestrictionTarget.Black ? "黑棋" : "先手(" + cnOf(firstPlayer) + ")";
+    s += who + "须恰好 " + this.winLength + " 连，" + (this.winLength + 1) + " 连及以上判负";
+    s += " · 后手 ≥" + this.winLength + " 连胜";
+    if (!this.overlineTakesPrecedence) s += " · 同手命中恰好" + this.winLength + "连时判胜";
+    return s + this._rotationSuffix();
+  }
+  /** 四维模式追加的一行规则描述。三维模式返回空串，描述文本一字不变。 */
+  _rotationSuffix() {
+    if (!this.allowRotation) return "";
+    return " · 四维：每落 " + this.rotationCooldownPlacements + " 子可转动一层";
+  }
+}
+
+const RuleEngine = {
+  /** 从 c 出发沿 d 方向，连续同色子的个数（不含 c 本身）。 */
+  countRun(board, c, d, player) {
+    let n = 0;
+    let x = c.x + d[0], y = c.y + d[1], z = c.z + d[2];
+    while (board.getOrDefault(x, y, z) === player) {
+      n++; x += d[0]; y += d[1]; z += d[2];
+    }
+    return n;
+  },
+
+  buildLine(c, d, neg, pos) {
+    const line = [];
+    for (let i = 0; i < neg + pos + 1; i++) {
+      const k = i - neg;
+      line.push([c.x + k * d[0], c.y + k * d[1], c.z + k * d[2]]);
+    }
+    return line;
+  },
+
+  /**
+   * 判定一手棋。调用前该格必须已经放好 player 的子。
+   * 正反两个方向都要数 —— 只数一个方向是经典 bug：落子把两段接起来时会漏算。
+   */
+  judge(board, c, player, firstPlayer, rules) {
+    const restricted = rules.isRestricted(player, firstPlayer);
+    let longest = 0, longestLine = null;
+    let hasExactWin = false;
+    let hasOverline = false, longestOverline = 0, overlineLine = null;
+
+    for (let i = 0; i < DIRS13.length; i++) {
+      const d = DIRS13[i];
+      const neg = RuleEngine.countRun(board, c, [-d[0], -d[1], -d[2]], player);
+      const pos = RuleEngine.countRun(board, c, d, player);
+      const run = 1 + neg + pos;
+
+      if (run > longest) { longest = run; longestLine = RuleEngine.buildLine(c, d, neg, pos); }
+      if (run === rules.winLength) hasExactWin = true;
+      if (run > rules.winLength) {
+        hasOverline = true;
+        if (run > longestOverline) { longestOverline = run; overlineLine = RuleEngine.buildLine(c, d, neg, pos); }
+      }
+    }
+
+    if (restricted && hasOverline && (rules.overlineTakesPrecedence || !hasExactWin)) {
+      return { status: MoveStatus.LoseByOverline, winner: opponentOf(player),
+               longestRun: longestOverline, line: overlineLine, isOverlineFoul: true };
+    }
+    if (longest >= rules.winLength) {
+      return { status: MoveStatus.Win, winner: player,
+               longestRun: longest, line: longestLine, isOverlineFoul: false };
+    }
+    return { status: MoveStatus.Placed, winner: EMPTY, longestRun: longest, line: null, isOverlineFoul: false };
+  },
+
+  /**
+   * 全盘扫描：独立于 judge 的第二套实现。
+   * 用"起点守卫"（前一格不同色才算起点）保证每条极大连线只被记录一次。
+   */
+  fullScan(board, minLength) {
+    const out = [];
+    const nx = board.nx, ny = board.ny, nz = board.nz;
+    for (let z = 0; z < nz; z++) {
+      for (let y = 0; y < ny; y++) {
+        for (let x = 0; x < nx; x++) {
+          const s = board.get(x, y, z);
+          if (s === EMPTY) continue;
+          for (let i = 0; i < DIRS13.length; i++) {
+            const d = DIRS13[i];
+            if (board.getOrDefault(x - d[0], y - d[1], z - d[2]) === s) continue;
+            const len = 1 + RuleEngine.countRun(board, { x: x, y: y, z: z }, d, s);
+            if (len >= minLength) out.push({ player: s, length: len, dir: d, start: [x, y, z] });
+          }
+        }
+      }
+    }
+    return out;
+  },
+
+  lineCoords(run) {
+    const out = [];
+    for (let i = 0; i < run.length; i++) {
+      out.push([run.start[0] + i * run.dir[0], run.start[1] + i * run.dir[1], run.start[2] + i * run.dir[2]]);
+    }
+    return out;
+  },
+};
+
+/**
+ * 一局棋的完整状态与流程。事件用回调数组实现（对应 C# 侧的事件）。
+ */
+class GameSession {
+  constructor(dims, firstPlayer, rules) {
+    if (firstPlayer !== BLACK && firstPlayer !== WHITE) throw new Error("先手方不能是 EMPTY");
+    this.board = new Board3D(...normalizeDims(dims));
+    this.rules = rules.clone();
+    this.firstPlayer = firstPlayer;
+    this.currentPlayer = firstPlayer;
+    this.status = "Playing";
+    this.winner = EMPTY;
+    this.isDraw = false;
+    this.history = [];
+    this.lastOutcome = { status: MoveStatus.Placed, winner: EMPTY, longestRun: 0, line: null, isOverlineFoul: false };
+    this.onMoveApplied = [];
+    this.onMoveUndone = [];
+    this.onReset = [];
+  }
+
+  static create(dims, firstPlayer, rules) { return new GameSession(dims, firstPlayer, rules); }
+
+  get moveCount() { return this.history.length; }
+  /** 三维尺寸 [x,y,z]。长方体的唯一尺寸来源。 */
+  get dims() { return this.board.dims; }
+  /** 立方边长；长方体下抛异常（见 Board3D.size）。 */
+  get size() { return this.board.size; }
+
+  canPlace(x, y, z) { return this.status === "Playing" && this.board.isEmpty(x, y, z); }
+
+  place(x, y, z) {
+    if (this.status !== "Playing") return this._reject("棋局已结束，请先悔棋或重开");
+    if (!this.board.inBounds(x, y, z)) return this._reject("坐标越界 " + x + "," + y + "," + z);
+    if (!this.board.isEmpty(x, y, z)) return this._reject("该位置已有棋子 " + x + "," + y + "," + z);
+
+    const player = this.currentPlayer;
+    this.board.set(x, y, z, player);
+    let outcome = RuleEngine.judge(this.board, { x: x, y: y, z: z }, player, this.firstPlayer, this.rules);
+
+    if (outcome.status === MoveStatus.Rejected) {
+      this.board.set(x, y, z, EMPTY); // 理论上不会发生；真发生了就回滚以保证状态一致
+      return outcome;
+    }
+
+    const record = new MoveRecord(x, y, z, player, this.history.length + 1);
+    this.history.push(record);
+    this.lastOutcome = outcome;
+
+    if (outcome.status === MoveStatus.Win || outcome.status === MoveStatus.LoseByOverline) {
+      this.status = "Decided";
+      this.winner = outcome.winner;
+    } else if (this.board.isFull) {
+      outcome = { status: MoveStatus.Draw, winner: EMPTY, longestRun: 0, line: null, isOverlineFoul: false };
+      this.lastOutcome = outcome;
+      this.status = "Decided";
+      this.winner = EMPTY;
+      this.isDraw = true;
+    } else {
+      this.currentPlayer = opponentOf(player);
+    }
+
+    for (const fn of this.onMoveApplied) fn(this, record, outcome);
+    return outcome;
+  }
+
+  /**
+   * 悔棋。O(1)：只清掉那一格的子。
+   * 不需要重扫全盘 —— 棋局只可能在最后一步分出胜负（分出胜负后 place 会被拒绝），
+   * 所以撤掉最后一步之后的局面必定是未分出胜负的。和局同理。
+   */
+  undo() {
+    if (this.history.length === 0) return false;
+    const last = this.history.pop();
+    this.board.set(last.x, last.y, last.z, EMPTY);
+    this.status = "Playing";
+    this.winner = EMPTY;
+    this.isDraw = false;
+    this.lastOutcome = { status: MoveStatus.Placed, winner: EMPTY, longestRun: 0, line: null, isOverlineFoul: false };
+    this.currentPlayer = last.player;
+    for (const fn of this.onMoveUndone) fn(this, last);
+    return true;
+  }
+
+  reset(dims, firstPlayer, rules) {
+    // 沿用 C# GameSession.Reset 的语义：尺寸缺省（null / undefined / <= 0）表示"保持现在的棋盘"。
+    // 调用方常常只想换先手或换规则。**这一条必须留着**：它是两份实现逐条对应的一部分，
+    // 而且 tests/rules.test.mjs 直接钉着它（snap.reset(0, EMPTY, rules)）。
+    // 长方体的 [x,y,z] 给了就照用；只在它的某一维 <= 0 时才由 normalizeDims 报错 ——
+    // 那种情况是写错了，不是"保持"。
+    const keep = (dims === undefined || dims === null || (typeof dims === "number" && dims <= 0));
+    const d = keep ? this.board.dims : normalizeDims(dims);
+    if (!rules) rules = this.rules;
+    if (firstPlayer !== BLACK && firstPlayer !== WHITE) firstPlayer = this.firstPlayer;
+
+    this.board = new Board3D(d[0], d[1], d[2]);
+    this.rules = rules.clone();
+    this.firstPlayer = firstPlayer;
+    this.currentPlayer = firstPlayer;
+    this.status = "Playing";
+    this.winner = EMPTY;
+    this.isDraw = false;
+    this.history = [];
+    this.lastOutcome = { status: MoveStatus.Placed, winner: EMPTY, longestRun: 0, line: null, isOverlineFoul: false };
+    for (const fn of this.onReset) fn(this);
+  }
+
+  restart() { this.reset(this.board.dims, this.firstPlayer, this.rules); }
+
+  /**
+   * 【四维模式专用】只把出子权交给对手，不落子、不动棋盘、不推历史、不触发任何事件。
+   * 存在的唯一理由：转动要占掉一个回合，而 currentPlayer 是"约定私有"的。
+   * 这是四维模式往这个类上开的唯一一个口子 —— 三维模式没有任何路径会调到它。
+   */
+  passTurnForRotation() {
+    if (this.status !== "Playing") return;
+    this.currentPlayer = opponentOf(this.currentPlayer);
+  }
+
+  _reject(reason) {
+    return { status: MoveStatus.Rejected, winner: EMPTY, longestRun: 0, line: null, isOverlineFoul: false, reason: reason };
+  }
+
+  describeStatus() {
+    if (this.status === "Decided") {
+      if (this.isDraw) return "和局：棋盘已满";
+      if (this.lastOutcome.status === MoveStatus.LoseByOverline) return "长连犯规！" + cnOf(this.winner) + "棋胜";
+      return cnOf(this.winner) + "棋胜";
+    }
+    return cnOf(this.currentPlayer) + "棋落子（第 " + (this.history.length + 1) + " 手）";
+  }
+}
+
+/* --------------------------------------------------------------------------
+   四维模式：像魔方一样转动一层。
+   和原 Assets/_Gomoku3D/Core/Rotation.cs + FourDSession.cs 逐条对应（均已删除）。
+   -------------------------------------------------------------------------- */
+
+/** 用户看到的转动方向。落进 RotationMove 时会归一化成"顺时针次数"。 */
+const RotationDirection = { Clockwise: 0, CounterClockwise: 1 };
+
+/** 一次转动的结果分类。 */
+const RotateStatus = {
+  /** 参数/冷却/棋局状态不允许。棋盘不动。 */
+  Rejected: "Rejected",
+  /** 转了，但盘面没变（空层，或本层图案在这个转动下不变）。棋盘本来就没变。 */
+  NoRotation: "NoRotation",
+  /** 转完会让盘面出现 ≥winLength 的连线，已整体回滚。棋盘不动。 */
+  CreatesLine: "CreatesLine",
+  /** 转动成功。 */
+  Rotated: "Rotated",
+};
+
+/**
+ * 转动置换的纯几何部分。**刻意独立成一个对象**，和 Game.hoverLineSegments / MeshFactory
+ * 是同一个理由：写反一个坐标分量在屏幕上只表现为"转错方向 / 转歪了一点"，和"本来就这样"
+ * 肉眼分不开，但整个功能已经废了。独立出来测试才能直接钉住。
+ *
+ * 三条轴可以写成同一个公式，不需要分三套下标 —— 取该轴之外的两个自由轴
+ * (u, v) = ((轴+1) % 3, (轴+2) % 3)，则：
+ *
+ *     顺时针一次： (u, v) -> (v, (n-1) - u)
+ *
+ * 这个顺序不是随便定的：按 (轴+1, 轴+2) 取自由轴，恰好使得绕 +轴 的右手旋转
+ * 表现为"从负方向看是顺时针"。三轴各写一遍很容易在其中一条上把 u/v 写反，
+ * 而那条轴只会在你转到它的时候才暴露出来。
+ *
+ * "顺时针"的观察方向定为**该轴的负方向朝原点看**，这样 z 轴就和玩家的默认视点一致
+ * （棋盘约定 z 向屏幕内递增，视点在 -z 侧），所见即所得，不需要在脑子里翻。
+ */
+const RotationOps = {
+  /**
+   * 把坐标映射到转动后的位置。cwTurns 取 0..3（0 表示不动）。
+   *
+   * **不在该层里的坐标原样返回。** 这一点不能省：绕某轴转"整个棋盘"和转"某一层"是两个
+   * 不同的操作，前者会把别的层也搅乱。少了这个判断，实现看着一样能在小棋盘上通过若干
+   * 自洽性检查，但语义是错的 —— 而 UI 和测试都依赖这个函数来描述"什么被动了"。
+   */
+  mapCoord(axis, layer, size, c, cwTurns) {
+    const onAxis = axis === AXIS_X ? c.x : (axis === AXIS_Y ? c.y : c.z);
+    if (onAxis !== layer) return { x: c.x, y: c.y, z: c.z };
+
+    let x = c.x, y = c.y, z = c.z;
+    const m = size - 1;
+    const t = cwTurns & 3;
+
+    // 每个分支里 u 是"自由轴 1"、v 是"自由轴 2"；整体做 (u,v) -> (v, m-u)。
+    // 刻意展开成三条而不是走一个临时数组：50³ 上这是 2500 格的循环。
+    for (let k = 0; k < t; k++) {
+      if (axis === AXIS_X) { const u = y, v = z; y = v; z = m - u; }
+      else if (axis === AXIS_Y) { const u = z, v = x; z = v; x = m - u; }
+      else { const u = x, v = y; x = v; y = m - u; }
+    }
+    return { x: x, y: y, z: z };
+  },
+
+  /** 轴之外的两个自由轴，按 (轴+1, 轴+2) % 3 的顺序。渲染层要高亮"我要转的那一层"时用得到。 */
+  freeAxes(axis) { return [(axis + 1) % 3, (axis + 2) % 3]; },
+};
+
+/**
+ * 一次"像魔方一样转一层"。内部只存"顺时针次数"，取值恒为 1..3。
+ * 逆时针转 t 次 == 顺时针转 (4-t) 次；4 次 = 0 次 = 不动，在构造时就拒掉 ——
+ * 留着一个恒等于不动的选项只会让人困惑。
+ */
+class RotationMove {
+  constructor(axis, layer, turns) {
+    this.axis = axis; this.layer = layer; this.turns = turns;
+  }
+  /** 从用户输入构造。turns 必须是 1..3；逆时针会被换算成 (4-turns) 次顺时针。 */
+  static create(axis, layer, direction, turns) {
+    if (turns < 1 || turns > 3) throw new Error("转动次数必须是 1..3（4 次等于不动）");
+    if (layer < 0) throw new Error("层号不能为负：" + layer);
+    const cw = direction === RotationDirection.Clockwise ? turns : 4 - turns;
+    return RotationMove.fromClockwiseTurns(axis, layer, cw);
+  }
+  /** 直接用"顺时针次数"构造。向量回放走这条路，绕开方向换算。 */
+  static fromClockwiseTurns(axis, layer, cwTurns) {
+    if (cwTurns < 1 || cwTurns > 3) throw new Error("顺时针次数必须是 1..3");
+    if (layer < 0) throw new Error("层号不能为负：" + layer);
+    return new RotationMove(axis, layer, cwTurns);
+  }
+  toString() { return axisName(this.axis) + "=" + this.layer + " 顺时针" + this.turns + "次"; }
+}
+
+function axisName(a) { return a === AXIS_X ? "x" : (a === AXIS_Y ? "y" : "z"); }
+
+/**
+ * 把归一化后的顺时针次数说成人话。
+ * 3 次顺时针 == 1 次逆时针，所以 3 次要报"逆时针 90°"而不是"顺时针 270°" ——
+ * 用户选的是逆时针，提示却说顺时针，等于在惩罚用户没记住归一化规则。
+ * 180° 不分顺逆，单独一档。
+ */
+function describeRotationMove(m) {
+  if (m.turns === 2) return "180°";
+  return m.turns === 1 ? "顺时针 90°" : "逆时针 90°";
+}
+
+/** 一次转动的判定结果。 */
+class RotateOutcome {
+  constructor(status, move, layerStones, reason) {
+    this.status = status;
+    this.move = move;
+    /** 转动前该层有几颗子。UI 靠它告诉玩家"转这一层到底会不会动"。 */
+    this.layerStones = layerStones;
+    this.reason = reason || null;
+  }
+  get accepted() { return this.status === RotateStatus.Rotated; }
+  describe() {
+    if (this.status === RotateStatus.Rotated) return "已转动 " + this.move.toString();
+    if (this.status === RotateStatus.NoRotation) return "转不动：" + this.reason;
+    if (this.status === RotateStatus.CreatesLine) return "已撤销：" + this.reason;
+    return "不能转动：" + this.reason;
+  }
+}
+
+/** 一次转动的历史记录。"第几手"用的是落子数，不是历史长度。 */
+class RotationRecord {
+  constructor(move, player, placementsBefore, layerStones) {
+    this.move = move;
+    /** 执行这次转动的一方。 */
+    this.player = player;
+    /**
+     * 执行这次转动时，已经落了多少子。
+     * 这个数是整个悔棋顺序的支点：转动恰好插在"第 placementsBefore 手"和"第 placementsBefore+1 手"
+     * 之间，所以"最后一步是不是转动"等价于 placementsBefore === 当前落子数。
+     */
+    this.placementsBefore = placementsBefore;
+    this.layerStones = layerStones;
+  }
+  toString() {
+    return "#" + this.placementsBefore + "后 " + cnOf(this.player) + " " + this.move.toString() +
+      "（本层 " + this.layerStones + " 子）";
+  }
+}
+
+/**
+ * 【四维模式】在 GameSession 外面包一层，加上"像魔方一样转层"。
+ *
+ * 【为什么是包装而不是改 GameSession】本工程的 C#/JS 两份实现靠 tests/vectors.json 保证一致，
+ * 而那份向量是**从 C# 内核导出**的，覆盖落子/判胜/长连/悔棋的全部语义。往 GameSession 里塞转动，
+ * 等于让那套证据的适用范围变得含糊。包一层则可以把话说死：
+ *
+ *     GameSession 的落子语义一个字都没变，既有向量原样继续有效。
+ *
+ * 对 GameSession 只开了一个口子（passTurnForRotation），因为转动要占回合。
+ *
+ * 【转动规则的完整定义】见 Web_Gomoku3D/RULES_SPEC.md 第 10 节。
+ */
+class FourDSession {
+  constructor(session) {
+    this.inner = session;
+    this.rotations = [];
+    /** 转动成功 / 被撤销时的回调，和 GameSession 的事件数组同一套写法。 */
+    this.onRotationApplied = [];
+    this.onRotationUndone = [];
+
+    // 订阅内部的 reset：即使有人绕过包装层直接 reset 内部会话，转动时间线也会跟着清空，
+    // 不会留下"棋局已经重开、转动记录还在"这种对不上的状态。
+    // 这个回调是在构造函数里 push 的，所以它会排在 UI 后面 push 的那些之前 —— 顺序正好。
+    session.onReset.push(() => { this.rotations = []; });
+  }
+
+  static create(size, firstPlayer, rules) {
+    return new FourDSession(GameSession.create(size, firstPlayer, rules));
+  }
+  /** 包住一个已有的会话。转动记录从零开始。 */
+  static wrap(session) { return new FourDSession(session); }
+
+  // ---------------------------------------------------------------- 转发
+  // 事件数组直接指向内层会话的那一份，这样 UI 照旧写 session.onMoveApplied.push(...) 就行。
+  get onMoveApplied() { return this.inner.onMoveApplied; }
+  get onMoveUndone() { return this.inner.onMoveUndone; }
+  get onReset() { return this.inner.onReset; }
+
+  get board() { return this.inner.board; }
+  get rules() { return this.inner.rules; }
+  get size() { return this.inner.board.size; }        // 长方体下会抛 —— 四维只可能是立方
+  get dims() { return this.inner.board.dims; }
+  get firstPlayer() { return this.inner.firstPlayer; }
+  get currentPlayer() { return this.inner.currentPlayer; }
+  get status() { return this.inner.status; }
+  get winner() { return this.inner.winner; }
+  get isDraw() { return this.inner.isDraw; }
+  get lastOutcome() { return this.inner.lastOutcome; }
+  get history() { return this.inner.history; }
+
+  /** 落子数。转动**不计入**这里，因为冷却数的是落子。 */
+  get moveCount() { return this.inner.moveCount; }
+  get rotationCount() { return this.rotations.length; }
+  /** 历史总长度 = 落子数 + 转动数。UI 显示"共 N 手"用它。 */
+  get actionCount() { return this.inner.moveCount + this.rotations.length; }
+  get rotationEnabled() { return this.inner.rules.allowRotation; }
+
+  canPlace(x, y, z) { return this.inner.canPlace(x, y, z); }
+  place(x, y, z) { return this.inner.place(x, y, z); }
+  describeStatus() { return this.inner.describeStatus(); }
+
+  reset(dims, firstPlayer, rules) {
+    this.inner.reset(dims, firstPlayer, rules);   // 会触发 onReset，清空转动记录
+  }
+  restart() { this.reset(this.inner.board.dims, this.firstPlayer, this.rules); }
+
+  // ---------------------------------------------------------------- 冷却
+
+  /** 从上次转动到现在落了多少子。从没转过就是全部的落子数。 */
+  get placementsSinceLastRotation() {
+    const last = this.rotations.length > 0 ? this.rotations[this.rotations.length - 1].placementsBefore : 0;
+    return this.inner.moveCount - last;
+  }
+
+  get canRotate() {
+    if (!this.rotationEnabled) return false;
+    if (this.inner.status !== "Playing") return false;
+    return this.placementsSinceLastRotation >= this.inner.rules.rotationCooldownPlacements;
+  }
+
+  /** 还差几手才能转动。已经可以转时返回 0。 */
+  get placementsUntilRotation() {
+    if (!this.rotationEnabled) return 0;
+    const need = this.inner.rules.rotationCooldownPlacements - this.placementsSinceLastRotation;
+    return need > 0 ? need : 0;
+  }
+
+  /** 给 UI 用的一行转动状态。 */
+  describeRotationStatus() {
+    if (!this.rotationEnabled) return "";
+    if (this.inner.status !== "Playing") return "棋局已结束";
+    if (this.canRotate) return "可以转动（距上次转动已过 " + this.placementsSinceLastRotation + " 手）";
+    return "距下次转动还需 " + this.placementsUntilRotation + " 手（已过 " + this.placementsSinceLastRotation + " 手）";
+  }
+
+  // ---------------------------------------------------------------- 转动
+
+  /**
+   * 转一层。四种结果见 RotateStatus。
+   * **除了 Rotated，其它三种都不改变棋盘、不消耗回合、不留下任何痕迹** —— 这一条是这套实现的
+   * 全部要点：玩家可以放心地去试，试错的代价永远是零。
+   */
+  rotate(move) {
+    if (!this.rotationEnabled) return this._reject(move, "当前不是四维模式");
+    if (this.inner.status !== "Playing") return this._reject(move, "棋局已结束，请先悔棋或重开");
+
+    // 长方体棋盘上转层在数学上不存在（两个自由轴必须等长）。这是"拒绝"而不是抛异常 ——
+    // 和层号越界、冷却未到同类：棋盘不动、不消耗回合、留下一句能读懂的原因。
+    // 构造上走不到这里：UI 在四维模式下只给一个 N，但内核不依赖 UI 的约束来保证自己的前提。
+    if (!this.inner.board.isCube) {
+      const d = this.inner.board.dims;
+      return this._reject(move, "四维模式要求立方棋盘，当前是 " + d[0] + "×" + d[1] + "×" + d[2] +
+                                "（转层要求两个自由轴等长）");
+    }
+
+    const n = this.inner.board.size;
+    if (move.layer >= n) return this._reject(move, "层号越界 " + move.layer + "（棋盘 " + n + "³）");
+    if (move.layer < 0) return this._reject(move, "层号不能为负 " + move.layer);
+    if (!this.canRotate) return this._reject(move, "还要再落 " + this.placementsUntilRotation + " 子才能转动");
+
+    const board = this.inner.board;
+    const layerStones = board.countLayerStones(move.axis, move.layer);
+
+    // 真的转。changed === false 时棋盘逐格没变，所以直接返回就是"没留下痕迹"。
+    const changed = board.rotateLayer(move.axis, move.layer, move.turns);
+    if (!changed) {
+      const why = layerStones === 0
+        ? "该层是空的，转动不改变任何东西"
+        : "该层的图案在这个转动下不变，等于没转";
+      return new RotateOutcome(RotateStatus.NoRotation, move, layerStones, why);
+    }
+
+    // 转完不允许盘面上存在任何 ≥winLength 的连线。
+    //
+    // 这里可以直接用全盘扫描判断"是不是这次转动造出来的"，靠的是一条不变量：
+    // **棋局还在 Playing 时，盘面上必定不存在任何 ≥winLength 的极大连线** ——
+    // 因为一旦出现，上一手 place 就已经把棋局判成 Decided 了（判胜与长连判负都会）。
+    // 所以扫描结果非空 ⟺ 这次转动造出了连线。
+    const runs = RuleEngine.fullScan(board, this.inner.rules.winLength);
+    if (runs.length > 0) {
+      // 逆置换 = 顺时针再转 (4 - t) 次，不需要额外存原图
+      board.rotateLayer(move.axis, move.layer, 4 - move.turns);
+      return new RotateOutcome(RotateStatus.CreatesLine, move, layerStones,
+        "转动会让盘面上出现 " + this.inner.rules.winLength + " 连（" + runs.length + " 条），已整体撤销");
+    }
+
+    const player = this.inner.currentPlayer;
+    const record = new RotationRecord(move, player, this.inner.moveCount, layerStones);
+    this.rotations.push(record);
+
+    // 转动占掉整个回合：不能"转完再落子"。冷却数的是落子，所以这里不动落子计数。
+    this.inner.passTurnForRotation();
+
+    const outcome = new RotateOutcome(RotateStatus.Rotated, move, layerStones, null);
+    for (const fn of this.onRotationApplied) fn(this, record, outcome);
+    return outcome;
+  }
+
+  /** 按用户输入的"方向 + 次数"转一层。 */
+  rotateBy(axis, layer, direction, turns) {
+    return this.rotate(RotationMove.create(axis, layer, direction, turns));
+  }
+
+  _reject(move, reason) { return new RotateOutcome(RotateStatus.Rejected, move, 0, reason); }
+
+  // ---------------------------------------------------------------- 悔棋
+
+  /**
+   * 悔一步。最后一步是转动就撤转动，是落子就撤落子。
+   *
+   * 判断依据是 RotationRecord.placementsBefore：转动恰好在"第 placementsBefore 手"之后，
+   * 所以它等于当前落子数时，就说明它之后没有再落过子 —— 它就是最后一步。
+   * 这样不需要维护第二份"动作序列"，也就不会和 GameSession 的历史对不上。
+   */
+  undo() {
+    if (this.rotations.length > 0 &&
+        this.rotations[this.rotations.length - 1].placementsBefore === this.inner.moveCount) {
+      return this.undoLastRotation();
+    }
+    return this.inner.undo();
+  }
+
+  /**
+   * 撤销"本次转动"（UI 上的"恢复本次转动"按钮）。返回 false 表示当前最后一步不是转动。
+   * 后面一旦有人落子，这次转动就落地了，不能再单独撤回 —— 否则它会变成一台横跨多手的时光机。
+   */
+  undoLastRotation() {
+    if (this.rotations.length === 0) return false;
+    const rec = this.rotations[this.rotations.length - 1];
+    if (rec.placementsBefore !== this.inner.moveCount) return false;
+
+    this.inner.board.rotateLayer(rec.move.axis, rec.move.layer, 4 - rec.move.turns);
+    this.rotations.pop();
+    this.inner.passTurnForRotation();   // 出子权还回去
+
+    for (const fn of this.onRotationUndone) fn(this, rec);
+    return true;
+  }
+
+  /** 当前最后一步是不是转动 —— UI 用它决定"恢复本次转动"按钮亮不亮。 */
+  get canUndoLastRotation() {
+    return this.rotations.length > 0 &&
+      this.rotations[this.rotations.length - 1].placementsBefore === this.inner.moveCount;
+  }
+}
+
+/* GOMOKU-CORE-END */
+/* ========================================================================== */
+
+
+/* --------------------------------------------------------------------------
+   调色板。**放在内核区间之外**：它要读 getComputedStyle，而内核区间被测试抽出来
+   在纯 node 里跑，那段不能碰任何浏览器 API。
+
+   为什么要有这一层：颜色原来散在五个地方 —— CSS 变量一套、gl.clearColor 一套、
+   着色器常量 STONE_EDGE 一套、两块 canvas 各一套，而且大多是裸写的十六进制。
+   换主题时漏掉任何一处，就会出现"三维视图和面板不是同一个色"这种要靠肉眼发现的错。
+   现在唯一事实源是 CSS 的 :root，JS 只做一次解析；没有 getComputedStyle
+   （node 桩环境）时退回 FALLBACK，并【由测试断言 FALLBACK 与 CSS 实际值完全一致】。
+   -------------------------------------------------------------------------- */
+const FALLBACK_COLORS = {
+  "--bg": "#efe8db", "--panel": "#f7f2e8", "--panel-hi": "#e6dcc8",
+  "--cell": "#e9e1d1", "--cell-hint": "#cec0a4", "--border": "#b7a98f",
+  "--text": "#2f2a23", "--dim": "#6d6353", "--black": "#1c1a16", "--white": "#fdfaf2",
+  "--accent": "#2f5d7c", "--gold": "#9c6b1f", "--danger": "#9c3428", "--ok": "#4a6b45",
+  "--hover-line": "#c8452e", "--line2d": "#3a332a", "--well": "#ddd3bd",
+  "--stone-edge": "#4a4034",
+};
+
+const Palette = {
+  map: Object.assign({}, FALLBACK_COLORS),
+
+  /** 从 :root 读一遍。读不到就用 FALLBACK，绝不抛 —— 渲染配色不该有能力让页面白屏。 */
+  read() {
+    if (typeof getComputedStyle !== "function") return this.map;
+    let cs = null;
+    try {
+      cs = getComputedStyle(document.documentElement);
+    } catch (e) { cs = null; }
+    if (!cs || typeof cs.getPropertyValue !== "function") return this.map;
+    for (const k in FALLBACK_COLORS) {
+      const v = cs.getPropertyValue(k);
+      if (v && v.trim()) this.map[k] = v.trim();
+    }
+    return this.map;
+  },
+
+  hex(name) { return this.map[name] || FALLBACK_COLORS[name]; },
+
+  /** "#rrggbb" → [r,g,b]，0..1。给三维的 uniform 用（它们要浮点，不是字符串）。 */
+  rgb(name) {
+    const h = this.hex(name);
+    const m = /^#?([0-9a-f]{6})$/i.exec(h.trim());
+    if (!m) throw new Error("调色板里的颜色必须是 #rrggbb：" + name + " = " + h);
+    const v = parseInt(m[1], 16);
+    return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
+  },
+
+  /** [r,g,b,a]，a 由调用方给（同一个色在不同图元上的 alpha 是分开调的）。 */
+  rgba(name, alpha) { const c = this.rgb(name); return [c[0], c[1], c[2], alpha]; },
+};
+
+/**
+ * 三维视图的格距。以**最长边**为基准归一化到 10 个世界单位 ——
+ *   - 立方时就是原来的 10/n，一个数都没变；
+ *   - 长方体时三条边不再等价，而格距必须对三个轴取同一个值，否则棋子会被拉成椭球
+ *     （球体网格是各向同性缩放 aPos * w，x/y/z 用不同格距就只能是椭球）。
+ * 取最长边而不是最短边，是为了让长方体的长边也正好卡在原来的取景框里：
+ * 视线下轮廓的半宽最大是 √2·10/2 ≈ 7.07，而 frameBoard 的取景半径是 10·0.5·1.45 = 7.25，
+ * 所以任何形状都框得住，相机参数不用动。
+ */
+function cellSize(dims) { return 10 / Math.max(dims[0], dims[1], dims[2]); }
+
+/* 起始界面左侧那张演示棋盘的参数。 */
+/** 边长 10 —— 需求点名的大小。它和对局用的尺寸完全无关，改这里不影响任何规则。 */
+const PREVIEW_N = 10;
+/** 棋子数。64 颗读得出"这是个中盘"，又不至于糊成一片。 */
+const PREVIEW_STONES = 64;
+/**
+ * 中心聚拢强度：每个轴的坐标取这么多个独立均匀值的平均。
+ *
+ *  1 = 均匀铺满整盘（最初的样子）；数值越大越向中心收。实测（64 颗子、10³）：
+ *
+ *  | BIAS | 包围盒   | 三轴 sd |
+ *  |------|----------|---------|
+ *  | 1    | 10×10×10 | 2.61    |
+ *  | 2    | 8×9×8    | 1.78    |
+ *  | 3    | 7×7×8    | 1.48    |
+ *  | 5    | 6×7×7    | 1.40    |
+ *  | 6    | 6×6×6    | 1.37    |
+ *  | 8    | 6×6×6    | 1.41（且只剩 46 颗 —— 挤到互相撞位） |
+ *
+ * **5 之后基本到顶**：格坐标是整数，再平均下去只会被 Math.round 量化掉，
+ * 收紧的收益全被"撞位丢掉棋子"吃掉。所以有用区间是 1..7，8 以上纯亏。
+ *
+ * 用"平均 k 个均匀值"而不是"直接缩小取值范围"：后者会把棋子填满一个小立方体、
+ * 边界上出现一条明显的直边（看起来像整个棋盘被裁小了）；取平均得到的是中间密、
+ * 边缘疏的团，读起来才是"聚在中间"而不是"棋盘变小了"。
+ */
+const PREVIEW_BIAS = 5;
+/**
+ * 每个轴用的哈希种子表：**第 ai 行是第 ai 个轴，第 k 个元素是第 k 个采样用的种子**。
+ * 行内互不相同、行间也不相同，否则棋子会排成对角线或聚到某个角上。
+ *
+ * 行长度（8）就是 PREVIEW_BIAS 的上限，这个上限**必须显式检查**：
+ * 越界时 salts[k] 是 undefined，Math.imul(x, undefined) 得 0，
+ * 于是"取平均"变成"往 0 那一侧拽"—— 棋子在屏幕上表现为整团偏到某个角，
+ * 而默认值 3 正好在范围内，所以这个错法只有在你把旋钮调大之后才会露出来。
+ * （第一版就是这样：表里只有 3 个，BIAS=5 时棋子明显偏到下角。）
+ */
+const PREVIEW_SALTS = [
+  [2654435761, 40503, 1013904223, 668265263, 374761393, 2246822507, 1274126177, 1103515245],
+  [2246822519, 668265263, 374761393, 3266489917, 2654435761, 40503, 1013904223, 1103515245],
+  [3266489917, 1103515245, 2246822507, 2654435761, 2246822519, 374761393, 668265263, 40503],
+];
+/** 自转速度（度/秒）。360/6 = 一圈 60 秒 —— "缓慢"要的是看得出来在动、又不催人。 */
+const PREVIEW_DEG_PER_SEC = 6;
+/** 演示视角的俯仰。22° 略高于水平，三维结构读得最清楚。 */
+const PREVIEW_PITCH = 22;
+
+
+/* --------------------------------------------------------------------------
+   Markdown 子集渲染器 —— 只给"规则全文"用。
+   刻意不引第三方库：单文件零依赖是这个页面的全部前提（file:// 下连 <script type="module">
+   都会被 CORS 拦掉，见 README「为什么不引入 Three.js」）。
+   -------------------------------------------------------------------------- */
+
+/** 转义。渲染器【不假设输入可信】—— 规则文本是本地文件，但"先转义再插标签"
+ *  和"先插标签再祈祷输入干净"是两种东西，成本只差一行。 */
+function escapeHtml(t) {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+}
+
+/**
+ * 行内：`code` 与 **粗体**。
+ *
+ * 【两遍 replace 是错的】：先把 `x**y**z` 换成 <code>x**y**z</code>，第二遍的粗体规则
+ * 照样会命中 code 里的 **y** —— 换了标签并没有把里面的文字"保护"起来，
+ * 它还在同一个字符串里。正确做法是【按 code span 切开】，只对 code 之外的部分做行内替换。
+ * （第一版就是两遍 replace，被测试抓出来了：`a**b**c` 渲染成了 <code>a<b>b</b>c</code>。）
+ */
+function inlineMd(t) {
+  return t.split(/(`[^`]+`)/).map((seg) =>
+    /^`[^`]+`$/.test(seg)
+      ? "<code>" + seg.slice(1, -1) + "</code>"
+      : seg.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+  ).join("");
+}
+/** 表格的一段（连续的 | 行）。第二行是 |---|---| 分隔行时，第一行当表头。
+ *  传进来的是【未转义】的原始单元格文本，转义在 L() 里做。 */
+function rulesTableHtml(rows, L) {
+  const isSep = (l) => /^\|[\s:|-]+\|$/.test(l.trim());
+  const cells = (l) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => L(c.trim()));
+  let head = null, body = rows;
+  if (rows.length >= 2 && isSep(rows[1])) { head = rows[0]; body = rows.slice(2); }
+  let html = "<table>";
+  if (head) html += "<thead><tr>" + cells(head).map((c) => "<th>" + c + "</th>").join("") + "</tr></thead>";
+  html += "<tbody>" + body.map((r) => "<tr>" + cells(r).map((c) => "<td>" + c + "</td>").join("") + "</tr>").join("") + "</tbody>";
+  return html + "</table>";
+}
+
+/**
+ * 渲染 RULES_SPEC.md 里实际用到的那些构造：
+ * 标题 / 表格 / 无序列表 / 引用 / 分隔线 / 行内 code / 粗体。
+ * （有序列表和围栏代码块那份文档里一个都没有，所以没做 —— 需要时再加。）
+ *
+ * 【转义和结构判断的先后顺序是这里唯一的坑】。分块要靠行首的记号（# | - > ---），
+ * 而这些记号里有一个会被转义影响到：> 转义后变成 &gt;，于是
+ * "先整体转义、再按行首匹配" 的写法会让【引用块永远匹配不上】，全被当成普通段落。
+ * （第一版就是这么写的，被测试抓出来了。）所以顺序是：
+ *   用【未转义】的行判结构 → 取出内容 → L() 里先转义再插行内标签。
+ *
+ * 列表和引用还要处理**续行**：源文件里有 4 处 `- ` 条目是折行的，续行以缩进开头。
+ * 不处理的话它们会掉到列表外面变成独立段落，读起来是"每句话单独一段"。
+ */
+function renderRulesMarkdown(src) {
+  const rawLines = String(src).replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let para = [], list = null, quote = null, table = null;
+  // 行内渲染：先转义，再插 <code> / <b>。顺序反了的话源文件里的 < 会被当成标签。
+  const L = (t) => inlineMd(escapeHtml(t));
+
+  const flushAll = () => {
+    if (para.length) { out.push("<p>" + L(para.join(" ")) + "</p>"); para = []; }
+    if (list) { out.push("<ul>" + list.map((li) => "<li>" + L(li) + "</li>").join("") + "</ul>"); list = null; }
+    if (quote) { out.push("<blockquote>" + L(quote.join(" ")) + "</blockquote>"); quote = null; }
+    if (table) { out.push(rulesTableHtml(table, L)); table = null; }
+  };
+
+  for (const raw of rawLines) {
+    const line = raw.replace(/\s+$/, "");
+
+    if (/^\s*$/.test(line)) { flushAll(); continue; }
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      flushAll();
+      const lv = Math.min(6, h[1].length + 1);   // # → h2（浮层里最高一级）
+      out.push("<h" + lv + ">" + L(h[2]) + "</h" + lv + ">");
+      continue;
+    }
+    if (/^-{3,}$/.test(line.trim())) { flushAll(); out.push("<hr>"); continue; }
+
+    if (line.trim().startsWith("|")) {
+      if (para.length || list || quote) flushAll();
+      (table = table || []).push(line);
+      continue;
+    }
+
+    const li = line.match(/^\s*-\s+(.*)$/);
+    if (li) {
+      if (para.length || quote || table) flushAll();
+      (list = list || []).push(li[1]);
+      continue;
+    }
+    const bq = line.match(/^\s*>\s?(.*)$/);
+    if (bq) {
+      if (para.length || list || table) flushAll();
+      (quote = quote || []).push(bq[1]);
+      continue;
+    }
+
+    // 到这里是普通行：如果正开着列表/引用，它是【续行】，接到上一条里
+    if (list) { list[list.length - 1] += " " + line.trim(); continue; }
+    if (quote) { quote[quote.length - 1] += " " + line.trim(); continue; }
+    if (table) { flushAll(); }
+    para.push(line.trim());
+  }
+  flushAll();
+  return out.join("\n");
+}
+/* --------------------------------------------------------------------------
+   矩阵与相机。只需要足够用的几个函数 —— 不引入任何第三方库。
+   -------------------------------------------------------------------------- */
+const M4 = {
+  identity() { return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); },
+
+  perspective(fovy, aspect, near, far) {
+    const f = 1 / Math.tan(fovy / 2);
+    const nf = 1 / (near - far);
+    return new Float32Array([
+      f / aspect, 0, 0, 0,
+      0, f, 0, 0,
+      0, 0, (far + near) * nf, -1,
+      0, 0, 2 * far * near * nf, 0,
+    ]);
+  },
+
+  lookAt(eye, center, up) {
+    let zx = eye[0]-center[0], zy = eye[1]-center[1], zz = eye[2]-center[2];
+    let len = Math.hypot(zx, zy, zz) || 1;
+    zx/=len; zy/=len; zz/=len;
+
+    let xx = up[1]*zz - up[2]*zy, xy = up[2]*zx - up[0]*zz, xz = up[0]*zy - up[1]*zx;
+    len = Math.hypot(xx, xy, xz);
+    if (len < 1e-6) { xx = 1; xy = 0; xz = 0; } else { xx/=len; xy/=len; xz/=len; }
+
+    const yx = zy*xz - zz*xy, yy = zz*xx - zx*xz, yz = zx*xy - zy*xx;
+
+    return new Float32Array([
+      xx, yx, zx, 0,
+      xy, yy, zy, 0,
+      xz, yz, zz, 0,
+      -(xx*eye[0] + xy*eye[1] + xz*eye[2]),
+      -(yx*eye[0] + yy*eye[1] + yz*eye[2]),
+      -(zx*eye[0] + zy*eye[1] + zz*eye[2]),
+      1,
+    ]);
+  },
+
+  multiply(a, b) { // 返回 a*b
+    const o = new Float32Array(16);
+    for (let c = 0; c < 4; c++) {
+      for (let r = 0; r < 4; r++) {
+        o[c*4+r] = a[r]*b[c*4] + a[4+r]*b[c*4+1] + a[8+r]*b[c*4+2] + a[12+r]*b[c*4+3];
+      }
+    }
+    return o;
+  },
+
+  invert(m) {
+    const o = new Float32Array(16);
+    const a00=m[0],a01=m[1],a02=m[2],a03=m[3], a10=m[4],a11=m[5],a12=m[6],a13=m[7],
+          a20=m[8],a21=m[9],a22=m[10],a23=m[11], a30=m[12],a31=m[13],a32=m[14],a33=m[15];
+    const b00=a00*a11-a01*a10, b01=a00*a12-a02*a10, b02=a00*a13-a03*a10, b03=a01*a12-a02*a11,
+          b04=a01*a13-a03*a11, b05=a02*a13-a03*a12, b06=a20*a31-a21*a30, b07=a20*a32-a22*a30,
+          b08=a20*a33-a23*a30, b09=a21*a32-a22*a31, b10=a21*a33-a23*a31, b11=a22*a33-a23*a32;
+    let det = b00*b11 - b01*b10 + b02*b09 + b03*b08 - b04*b07 + b05*b06;
+    if (!det) return null;
+    det = 1 / det;
+    o[0]=(a11*b11-a12*b10+a13*b09)*det;  o[1]=(a02*b10-a01*b11-a03*b09)*det;
+    o[2]=(a31*b05-a32*b04+a33*b03)*det;  o[3]=(a22*b04-a21*b05-a23*b03)*det;
+    o[4]=(a12*b08-a10*b11-a13*b07)*det;  o[5]=(a00*b11-a02*b08+a03*b07)*det;
+    o[6]=(a32*b02-a30*b05-a33*b01)*det;  o[7]=(a20*b05-a22*b02+a23*b01)*det;
+    o[8]=(a10*b10-a11*b08+a13*b06)*det;  o[9]=(a01*b08-a00*b10-a03*b06)*det;
+    o[10]=(a30*b04-a31*b02+a33*b00)*det; o[11]=(a21*b02-a20*b04-a23*b00)*det;
+    o[12]=(a11*b07-a10*b09-a12*b06)*det; o[13]=(a00*b09-a01*b07+a02*b06)*det;
+    o[14]=(a31*b01-a30*b03-a32*b00)*det; o[15]=(a20*b03-a21*b01+a22*b00)*det;
+    return o;
+  },
+
+  transformPoint(m, p) {
+    const x = p[0], y = p[1], z = p[2];
+    const w = m[3]*x + m[7]*y + m[11]*z + m[15];
+    const iw = w ? 1 / w : 1;
+    return [
+      (m[0]*x + m[4]*y + m[8]*z + m[12]) * iw,
+      (m[1]*x + m[5]*y + m[9]*z + m[13]) * iw,
+      (m[2]*x + m[6]*y + m[10]*z + m[14]) * iw,
+    ];
+  },
+};
+
+/** 轨道相机。yaw=0 / pitch=0 时相机在 -z 侧，所以第 0 层离观察者最近。 */
+class OrbitCamera {
+  constructor() {
+    this.yaw = -32; this.pitch = 24; this.distance = 22;
+    this.minDistance = 6; this.maxDistance = 70;
+    this.fov = 42 * Math.PI / 180;
+    this.boardSpan = 10;
+  }
+  eye() {
+    const y = this.yaw * Math.PI / 180, p = this.pitch * Math.PI / 180;
+    const dir = [Math.cos(p) * Math.sin(y), Math.sin(p), -Math.cos(p) * Math.cos(y)];
+    return [dir[0]*this.distance, dir[1]*this.distance, dir[2]*this.distance];
+  }
+  frameBoard(aspect, resetDistance) {
+    const halfV = this.fov / 2;
+    const halfH = Math.atan(Math.tan(halfV) * Math.max(0.05, aspect));
+    const half = this.boardSpan * 0.5 * 1.45;
+    const need = half / Math.tan(Math.min(halfV, halfH));
+    this.minDistance = need * 0.40;
+    this.maxDistance = need * 3.0;
+    this.distance = Math.max(this.minDistance, Math.min(this.maxDistance, resetDistance ? need : this.distance));
+    return need;
+  }
+  reset() { this.yaw = -32; this.pitch = 24; }
+}
+
+/* --------------------------------------------------------------------------
+   WebGL2 渲染
+   -------------------------------------------------------------------------- */
+const VERT_STONE = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in vec4 iOffset;   // xyz = 世界坐标, w = 半径
+layout(location=3) in vec4 iColor;
+uniform mat4 uViewProj;
+out vec3 vNormal;
+out vec3 vViewDir;
+out vec4 vColor;
+void main() {
+  vec3 world = aPos * iOffset.w + iOffset.xyz;
+  vNormal = aNormal;                       // 球体只做平移缩放，法线方向不变
+  vViewDir = normalize(vec3(0.0) - world); // 相机固定在原点附近，用 -world 近似视线方向
+  vColor = iColor;
+  gl_Position = uViewProj * vec4(world, 1.0);
+}`;
+
+const FRAG_STONE = `#version 300 es
+precision highp float;
+in vec3 vNormal;
+in vec3 vViewDir;
+in vec4 vColor;
+uniform vec3 uKeyDir;
+uniform float uAmbient;
+uniform float uSpec;
+uniform float uRim;
+uniform float uBoost;
+uniform vec3 uEdge;      // 轮廓色
+uniform float uEdgeAmt;  // 轮廓强度
+out vec4 fragColor;
+void main() {
+  vec3 n = normalize(vNormal);
+  vec3 v = normalize(vViewDir);
+  vec3 l = normalize(uKeyDir);
+  float ndl = max(dot(n, l), 0.0);
+  vec3 h = normalize(l + v);
+  float spec = pow(max(dot(n, h), 0.0), 48.0) * uSpec;
+  // 这个程序关闭了背面剔除（程序化球的环绕方向不保证），正反两面都会进片元。
+  // 背面 dot(n,v) 为负；直接 max(...,0) 会让背面菲涅尔恒为最大值，幽灵子变成一团发亮的糊块。
+  // 用 abs 让两个半球得到同样处理：同一像素上正反两面法线关于视线镜像，|dot| 相同，
+  // 总贡献变成单半球的常数倍（2 倍），由 uBoost 补偿即可 —— 而且完全不依赖环绕方向。
+  float rim = pow(1.0 - abs(dot(n, v)), 3.0) * uRim;
+  vec3 rgb = vColor.rgb * (uAmbient + ndl * 0.85) + vec3(spec) + rim * vColor.rgb * 0.9;
+
+  // 轮廓加深：浅灰底上白子（#fff）和底色的对比度只有 1.4:1，只靠填充色是看不见的，
+  // 必须有一圈深色边界才能读出来，否则"白子"和"没下子"在缩略尺度上完全一样。
+  // 权重用菲涅尔的倒数：正视=0、越靠边缘越接近 1，正好落在棋子的轮廓上。
+  float edge = pow(1.0 - abs(dot(n, v)), 2.2);
+  rgb = mix(rgb, uEdge, clamp(edge * uEdgeAmt, 0.0, 1.0));
+
+  fragColor = vec4(rgb * uBoost, vColor.a);
+}`;
+
+/* 棋子描边色原来是这里的常量 STONE_EDGE（#3c414a）。现在取值改走 Palette.rgb("--stone-edge")，
+   唯一事实源是 CSS 的 :root —— 三维和二维必须一致，否则同一个子在两个视图里的"边界感"
+   对不上，看起来像两种不同的棋子，而那种不一致只能靠肉眼同时盯两个视图才看得出来。 */
+
+const VERT_LINE = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+uniform mat4 uViewProj;
+void main() { gl_Position = uViewProj * vec4(aPos, 1.0); }`;
+
+const FRAG_LINE = `#version 300 es
+precision highp float;
+uniform vec4 uColor;
+uniform float uBoost;
+out vec4 fragColor;
+void main() { fragColor = vec4(uColor.rgb * uBoost, uColor.a); }`;
+
+const Renderer = {
+  gl: null, canvas: null,
+  progStone: null, progLine: null,
+  vaoStone: null, vaoLine: null,
+  sphereVerts: null, lineBuffers: null,
+  opacityBuf: null, opacityCol: null,
+  ghostBuf: null, ghostCol: null,
+  staticGrid: null, activeGrid: null, winLine: null,
+  ok: false,
+
+  init(canvas) {
+    this.canvas = canvas;
+    const gl = canvas.getContext("webgl2", { antialias: true, alpha: false, depth: true });
+    if (!gl) {
+      this.ok = false;
+      return false;
+    }
+    this.gl = gl;
+
+    const ps = this.compile(VERT_STONE, FRAG_STONE);
+    const pl = this.compile(VERT_LINE, FRAG_LINE);
+    if (!ps || !pl) { this.ok = false; return false; }
+    this.progStone = ps;
+    this.progLine = pl;
+
+    // ---- 球体几何（非索引：球体很小，不值得为省内存换索引的复杂度）
+    this.sphereVerts = this.buildSphere(16, 10);
+    this.vaoStone = this.makeStoneVao();
+
+    this.opacityBuf = gl.createBuffer();
+    this.opacityCol = gl.createBuffer();
+    this.ghostBuf = gl.createBuffer();
+    this.ghostCol = gl.createBuffer();
+    this.opacityCount = 0;
+    this.ghostCount = 0;
+
+    // ---- 线网格
+    this.lineBuffers = {};
+    this.vaoLine = gl.createVertexArray();
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.disable(gl.CULL_FACE);       // 程序化生成的球面环绕方向不保证，两面都得画
+    // 清屏色跟着 CSS 的 --bg 走。原来是硬编码的 #dcdfe4 加一句注释"与 CSS 的 --bg 同一个颜色" ——
+    // 那句话就是问题本身：它靠人记着同步。现在两边同源，改主题不会再漏掉这一个。
+    const bg = Palette.rgb("--bg");
+    gl.clearColor(bg[0], bg[1], bg[2], 1);
+
+    this.ok = true;
+    return true;
+  },
+
+  compile(vsSrc, fsSrc) {
+    const gl = this.gl;
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, vsSrc); gl.compileShader(vs);
+    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+      console.error("顶点着色器编译失败: " + gl.getShaderInfoLog(vs));
+      return null;
+    }
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, fsSrc); gl.compileShader(fs);
+    if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+      console.error("片元着色器编译失败: " + gl.getShaderInfoLog(fs));
+      return null;
+    }
+    const p = gl.createProgram();
+    gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      console.error("着色器程序链接失败: " + gl.getProgramInfoLog(p));
+      return null;
+    }
+    return p;
+  },
+
+  buildSphere(lon, lat) {
+    const out = [];
+    const push = (a, b, c) => {
+      out.push(a[0],a[1],a[2], a[0],a[1],a[2], b[0],b[1],b[2], b[0],b[1],b[2], c[0],c[1],c[2], c[0],c[1],c[2]);
+    };
+    const pt = (ix, iy) => {
+      const v = iy / lat, phi = v * Math.PI;
+      const u = ix / lon, theta = u * Math.PI * 2;
+      const x = Math.sin(phi) * Math.cos(theta), y = Math.cos(phi), z = Math.sin(phi) * Math.sin(theta);
+      return [x * 0.5, y * 0.5, z * 0.5];
+    };
+    for (let iy = 0; iy < lat; iy++) {
+      for (let ix = 0; ix < lon; ix++) {
+        const a = pt(ix, iy), b = pt(ix, iy + 1), c = pt(ix + 1, iy), d = pt(ix + 1, iy + 1);
+        push(a, c, b);
+        push(c, d, b);
+      }
+    }
+    return new Float32Array(out);
+  },
+
+  makeStoneVao() {
+    const gl = this.gl;
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, this.sphereVerts, gl.STATIC_DRAW);
+    this.sphereVbo = vbo;   // 留一个强引用：规范允许回收"只被 VAO 引用"的 buffer，成本为零
+
+    // 球体顶点是"位置 + 法线"交错存的（见 buildSphere），每个顶点 6 个 float = 24 字节：
+    // 位置在偏移 0，法线在偏移 12。所以两个属性的 stride 都必须写 24。
+    //
+    // 这里曾经两个属性都写 stride=0。stride=0 的含义是"紧凑排列"，即按每顶点 3 个 float 读，
+    // 于是 GPU 读到的顶点流是 a,a,b,b,c,c —— 每个三角形都有两个顶点重合、面积为 0，
+    // 结果就是【一个棋子都画不出来】：不抛异常、gl.getError() 也是 0、实例数据也确实上传了，
+    // 只是光栅化阶段什么都不会产生。这是"静默失效"里最难受的一种，只能靠数像素发现。
+    //
+    // 球体是单位球且以原点为心，所以位置向量本身就是法线方向，
+    // 法线属性直接读同一组数值的第二份拷贝即可（buildSphere 把每个顶点写了两遍）。
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+
+    gl.bindVertexArray(null);
+    return vao;
+  },
+
+  /** 生成"有宽度的线段"网格：每条线由两个互相垂直的四边形组成，从任何角度看都有厚度。 */
+  buildLines(segments) {
+    const out = [];
+    const quad = (v0, v1, v2, v3) => {
+      out.push(v0[0],v0[1],v0[2], v1[0],v1[1],v1[2], v2[0],v2[1],v2[2]);
+      out.push(v0[0],v0[1],v0[2], v2[0],v2[1],v2[2], v3[0],v3[1],v3[2]);
+    };
+    for (const s of segments) {
+      const a = s[0], b = s[1], w = s[2];
+      let dx = b[0]-a[0], dy = b[1]-a[1], dz = b[2]-a[2];
+      const len = Math.hypot(dx, dy, dz);
+      if (len < 1e-6 || w <= 0) continue;
+      dx/=len; dy/=len; dz/=len;
+
+      // 选一个与线段不平行的参考轴，避免叉积退化成零向量
+      const up = Math.abs(dy) > 0.9 ? [1,0,0] : [0,1,0];
+      let s1 = [dy*up[2]-dz*up[1], dz*up[0]-dx*up[2], dx*up[1]-dy*up[0]];
+      let l1 = Math.hypot(s1[0],s1[1],s1[2]) || 1;
+      s1 = [s1[0]/l1*w/2, s1[1]/l1*w/2, s1[2]/l1*w/2];
+      let s2 = [dy*s1[2]-dz*s1[1], dz*s1[0]-dx*s1[2], dx*s1[1]-dy*s1[0]];
+      const l2 = Math.hypot(s2[0],s2[1],s2[2]) || 1;
+      s2 = [s2[0]/l2*w/2, s2[1]/l2*w/2, s2[2]/l2*w/2];
+
+      quad([a[0]-s1[0],a[1]-s1[1],a[2]-s1[2]], [b[0]-s1[0],b[1]-s1[1],b[2]-s1[2]],
+           [b[0]+s1[0],b[1]+s1[1],b[2]+s1[2]], [a[0]+s1[0],a[1]+s1[1],a[2]+s1[2]]);
+      quad([a[0]-s2[0],a[1]-s2[1],a[2]-s2[2]], [b[0]-s2[0],b[1]-s2[1],b[2]-s2[2]],
+           [b[0]+s2[0],b[1]+s2[1],b[2]+s2[2]], [a[0]+s2[0],a[1]+s2[1],a[2]+s2[2]]);
+    }
+    return new Float32Array(out);
+  },
+
+  uploadLines(key, segments) {
+    const gl = this.gl;
+    if (!this.lineBuffers[key]) this.lineBuffers[key] = gl.createBuffer();
+    const data = this.buildLines(segments);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.lineBuffers[key]);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    return data.length / 3;
+  },
+
+  drawLines(key, vertCount, viewProj, color, boost) {
+    if (!vertCount) return;
+    const gl = this.gl;
+    gl.useProgram(this.progLine);
+    gl.bindVertexArray(this.vaoLine);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.lineBuffers[key]);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.uniformMatrix4fv(gl.getUniformLocation(this.progLine, "uViewProj"), false, viewProj);
+    gl.uniform4fv(gl.getUniformLocation(this.progLine, "uColor"), color);
+    gl.uniform1f(gl.getUniformLocation(this.progLine, "uBoost"), boost);
+    gl.drawArrays(gl.TRIANGLES, 0, vertCount);
+  },
+};
+
+/* --------------------------------------------------------------------------
+   游戏控制器
+   -------------------------------------------------------------------------- */
+const Game = {
+  session: null,
+  camera: new OrbitCamera(),
+  activeLayer: 0,
+  ghostMode: true,
+  hover: null,          // {x, y}
+  // 起始界面的尺寸状态。**唯一事实源是 setupDims**；setupSize 是它的 getter/setter，
+  // 指的是"三轴联动时的那个 N"（也是四维模式的 N）。
+  // 原来只有一个 setupSize，改成三条边之后如果再留两个可写字段，迟早会出现
+  // "输入框写着 20×20×8、实际开的局是 8×8×8"这种对不上的状态。
+  setupDims: [15, 15, 15],
+  setupCube: true,       // 三维模式下三轴是否联动
+  setupFirst: BLACK,
+  // ---- 四维模式。fourD 为 false 时这一堆全都不参与，三维模式的行为一字不变。
+  fourD: false,
+  setupCool: 5,          // 设置页选的冷却（落子数）
+  rotAxis: AXIS_Z,
+  rotLayer: 0,
+  rotClockwise: true,
+  rotTurns: 1,
+  rotOutlineCount: 0,
+  colCounts: null,
+  layerCounts: null,
+  toastTimer: 0,
+  dragging: false,
+  dragMoved: 0,
+  lastMouse: [0, 0],
+  pressInView: false,
+  winLine: null,
+  // ---- 起始界面（演示棋盘）
+  previewBoard: null,
+  previewYaw: -28,       // 自转从这个角度起步，和对局相机的默认朝向错开一点
+  lastFrameT: 0,
+
+  el: {},
+  layout: { cell: 24, cols: 0, rows: 0 },
+
+  /** 起始界面尺寸的读写口。四维模式只给一个 N，三维模式就是三轴联动时的那个数。 */
+  get setupSize() { return this.setupDims[0]; },
+  set setupSize(v) { this.setupDims = [v, v, v]; },
+
+  /**
+   * 起始界面是不是开着。**刻意从 DOM 派生，不另存一个布尔标志** ——
+   * 页面上"哪个界面可见"的唯一事实源本来就是 #setup 有没有 off 这个类。
+   * 再存一个布尔值就必然出现"标志说关着、类还在"这种对不上的状态，
+   * 而那种不一致的表现是"点了落子没反应"，很难往状态不同步上想。
+   */
+  get setupOpen() {
+    return !!(this.el.setup && this.el.setup.classList &&
+              !this.el.setup.classList.contains("off"));
+  },
+
+  init() {
+    const ids = ["gl","modeGhost","modeSlice","sliceGroup","sliceDown","sliceUp","sliceLabel",
+      "coords","hint","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","toast",
+      "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
+      "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
+      "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
+      "rulesBtn","rulesPanel","rulesClose","rulesBody","rulesSrc",
+      "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
+      "rotPanel","rotStatus","rotLayerDown","rotLayerUp","rotLayerLabel",
+      "rotCW","rotCCW","rotGo","rotRestore","rotHint"];
+    for (const id of ids) this.el[id] = document.getElementById(id);
+
+    // 调色板必须在任何绘制之前读一次：三维的清屏色、格线、棋子描边都从这里取。
+    Palette.read();
+
+    this.ctxBase = this.el.layerBase.getContext("2d");
+    this.ctxOverlay = this.el.layerOverlay.getContext("2d");
+    this.ctxStrip = this.el.strip.getContext("2d");
+
+    if (!Renderer.init(this.el.gl)) {
+      this.el.hint.innerHTML = "<b style='color:#c0392b'>这个浏览器不支持 WebGL2，三维棋盘无法显示。</b><br>" +
+                               "右侧的分层面板仍然可以正常使用。";
+    }
+
+    this.bindInput();
+    this.bindUi();
+    this.newGame(this.setupDims, this.setupFirst);
+    // 起始页在 HTML 里本来就是"设置页打开着"（#setup 没有 off 类），所以启动时要做的
+    // 只是把输入框、说明行和演示盘准备好 —— 走 openSetup()，不把那几件事再抄一遍。
+    // **刻意不强制打开**：init 去改 DOM 的类，"初始显示哪个界面"就变成 JS 说了算，
+    // 而它其实是 HTML 说了算（node 桩里 #setup 是带 off 的，那种情况下不能把它扳回来）。
+    if (this.setupOpen) this.openSetup();
+    this.resize();
+    window.addEventListener("resize", () => this.resize());
+    requestAnimationFrame(() => this.loop());
+  },
+
+  // ------------------------------------------------------------------ 一局棋
+
+  /** 开一局。dims 收数字（立方）或 [x,y,z]（长方体）—— 与内核同一套约定。 */
+  newGame(dims, first) {
+    const d = normalizeDims(dims);
+    const rules = new RuleSet();
+    rules.allowRotation = this.fourD;
+    // 四维只可能是立方。UI 在四维模式下只给一个 N，这里再兜一次底：
+    // 万一有人（脚本、测试、控制台）拿长方体去开四维局，转动会全部被拒 —— 
+    // 那种"按钮点了没反应"的状态比直接报错更难查，所以在这里就说清楚。
+    if (this.fourD && (d[0] !== d[1] || d[1] !== d[2])) {
+      d[1] = d[2] = d[0];
+    }
+    rules.rotationCooldownPlacements = this.setupCool;
+
+    // 一律用 FourDSession 包一层。三维模式下它是个透明的转发壳（allowRotation 为 false，
+    // 转动一律被拒），这样界面只有一条代码路径，不用到处写 if (fourD)。
+    // 它和裸 GameSession 的等价性由 FourDCoreTests / rotation.test.mjs 逐格钉住。
+    if (!this.session) {
+      this.session = FourDSession.create(d, first, rules);
+      this.session.onMoveApplied.push((s, rec, o) => this.onMoveApplied(rec, o));
+      this.session.onMoveUndone.push((s, rec) => this.onMoveUndone(rec));
+      this.session.onReset.push(() => this.onReset());
+      this.session.onRotationApplied.push((s, rec, o) => this.onRotationApplied(rec, o));
+      this.session.onRotationUndone.push((s, rec) => this.onRotationUndone(rec));
+    } else {
+      this.session.reset(d, first, rules);
+    }
+    this.activeLayer = 0;
+    this.ghostMode = true;
+    this.hover = null;
+    // 换局时把转动面板复位：上一局的层号可能已经越界，方向/次数留着也会让人以为选好了。
+    this.rotAxis = AXIS_Z;
+    this.rotClockwise = true;
+    this.rotTurns = 1;
+    this.rotLayer = Math.max(0, Math.min(d[2] - 1, this.rotLayer));
+    this.onBoardChanged(true);
+  },
+
+  onMoveApplied(rec, outcome) {
+    this.onBoardChanged(false);
+    if (outcome.status === MoveStatus.Win || outcome.status === MoveStatus.LoseByOverline || outcome.status === MoveStatus.Draw) {
+      this.showBanner();
+    } else {
+      this.hideBanner();
+    }
+  },
+  onMoveUndone(rec) { this.hideBanner(); this.onBoardChanged(false); this.toast("已悔棋：" + rec.toString(), true); },
+  onReset() { this.hideBanner(); this.activeLayer = 0; this.onBoardChanged(true); },
+
+  // 转动成功时才走这里（三种"没转成"由 doRotate 自己提示，因为它们不留痕迹）
+  onRotationApplied(rec, outcome) {
+    this.hideBanner();
+    this.onBoardChanged(false);
+    this.toast(cnOf(rec.player) + "棋转动 " + axisName(rec.move.axis) + " = " + rec.move.layer +
+      " · " + describeRotationMove(rec.move) + " · 本层原有 " + rec.layerStones + " 颗子", true);
+  },
+  onRotationUndone(rec) {
+    this.onBoardChanged(false);
+    this.toast("已恢复转动前的样子（" + describeRotationMove(rec.move) + " 已撤销）", true);
+  },
+
+  onBoardChanged(full) {
+    const d = this.session.board.dims;
+    const plane = d[0] * d[1];
+    if (!this.colCounts || this.colCounts.length !== plane) this.colCounts = new Int32Array(plane);
+    if (!this.layerCounts || this.layerCounts.length !== d[2]) this.layerCounts = new Int32Array(d[2]);
+
+    this.session.board.countColumnStones(this.colCounts);
+    this.layerCounts.fill(0);
+    this.session.board.forEachStone((x, y, z, v) => { this.layerCounts[z]++; });
+
+    this.uploadInstances();
+    if (full) this.uploadGrid();
+    else this.uploadActiveGrid();
+
+    this.drawLayerBase();
+    this.drawLayerOverlay();
+    this.drawStrip();
+    this.refreshTexts();
+  },
+
+  // ------------------------------------------------------------------ 三维实例
+
+  /** 格点 (x,y,z) → 世界坐标。**三个视图共用这一条约定，而且只此一份** ——
+   *  原来 worldOf 和 worldOfLocal 是同一个公式的两份拷贝，改一处漏一处是迟早的事；
+   *  棋盘有三条不同边长之后这种重复直接变成错误来源（三个轴各要一个偏移）。
+   *  dims 是 [nx,ny,nz]，cs 见 cellSize()。 */
+  worldOf(x, y, z, dims, cs) {
+    return [(x - (dims[0] - 1) * 0.5) * cs,
+            (y - (dims[1] - 1) * 0.5) * cs,
+            (z - (dims[2] - 1) * 0.5) * cs];
+  },
+
+  /** 重建棋子的逐实例数据。每次落子/悔棋/换层都整体重算 —— O(n³) 但只有几百微秒，
+   *  比维护增量状态可靠得多（"棋盘改了但增量状态忘了改"是另一类 bug 的源头）。 */
+  uploadInstances() {
+    if (!Renderer.ok) return;
+    const gl = Renderer.gl;
+    const board = this.session.board;
+    const dims = board.dims;
+    const cs = cellSize(dims);
+    const opqPos = [], opqCol = [], ghPos = [], ghCol = [];
+
+    let win = null, foul = false;
+    if (this.session.status === "Decided" && this.session.lastOutcome.line) {
+      win = this.session.lastOutcome.line;
+      foul = this.session.lastOutcome.isOverlineFoul;
+    }
+    const winSet = new Set();
+    if (win) for (const p of win) winSet.add(p[0] + "," + p[1] + "," + p[2]);
+
+    const GHOST_ALPHA = 0.42;
+    // 球体网格是【直径】为 1 的，所以下面 push 进去的 w 就是世界空间里的直径，
+    // 数值和右侧面板的圆（半径 cs*0.34 → 直径 0.68）对齐，两个视图里子看起来一样大
+    board.forEachStone((x, y, z, s) => {
+      // 切片模式：z 大于当前层的棋子完全不画。
+      // 这是切片模式和幽灵层模式的本质区别 ——
+      // 幽灵层保留整盘信息，切片只保留需要看的那一半，最干净也最省。
+      if (!this.ghostMode && z > this.activeLayer) return;
+
+      // 颜色全部走调色板。白子原来是纯白 [1,1,1]，和二维面板的 --white 其实不是同一个色 ——
+      // 那种"三维和面板差一点点"的偏差肉眼几乎发现不了，但换主题时就会放大成两个色调。
+      let rgb;
+      if (winSet.has(x + "," + y + "," + z)) rgb = Palette.rgb(foul ? "--danger" : "--gold");
+      else rgb = (s === BLACK) ? Palette.rgb("--black") : Palette.rgb("--white");
+
+      const p = this.worldOf(x, y, z, dims, cs);
+      const ghost = this.ghostMode && z !== this.activeLayer;
+      if (ghost) {
+        ghPos.push(p[0], p[1], p[2], cs * 0.60);
+        ghCol.push(rgb[0], rgb[1], rgb[2], GHOST_ALPHA);
+      } else {
+        opqPos.push(p[0], p[1], p[2], cs * 0.68);
+        opqCol.push(rgb[0], rgb[1], rgb[2], 1.0);
+      }
+    });
+
+    // 最后一手的发光标记。
+    // 判据必须是"那一格还是落子方的子"，不能只判"那一格不空" —— 四维模式下转动会把棋子
+    // 搬走，原位置上可能是空格、也可能是被对手的子顶上。只判不空的话，标记就会挂在一颗
+    // 跟最后一手毫无关系的棋子上。
+    if (this.session.moveCount > 0) {
+      const last = this.session.history[this.session.moveCount - 1];
+      if (board.getOrDefault(last.x, last.y, last.z) === last.player) {
+        const p = this.worldOf(last.x, last.y, last.z, dims, cs);
+        ghPos.push(p[0], p[1], p[2], cs * 0.88);
+        const acc = Palette.rgb("--accent");
+        ghCol.push(acc[0], acc[1], acc[2], 0.35);
+      }
+    }
+
+    this.opqCount = opqPos.length / 4;
+    this.ghCount = ghPos.length / 4;
+
+    const upload = (buf, arr) => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.DYNAMIC_DRAW);
+    };
+    upload(Renderer.opacityBuf, opqPos); upload(Renderer.opacityCol, opqCol);
+    upload(Renderer.ghostBuf, ghPos);    upload(Renderer.ghostCol, ghCol);
+
+    // 光标（预览落点）
+    const cur = this.hover;
+    if (cur && this.session.status === "Playing") {
+      const p = this.worldOf(cur.x, cur.y, this.activeLayer, dims, cs);
+      const acc = Palette.rgb("--accent");
+      this.cursorData = new Float32Array([p[0], p[1], p[2], cs, acc[0], acc[1], acc[2], 0.75]);
+    } else {
+      this.cursorData = null;
+    }
+
+    // 悬停校准线跟着 hover 一起变，和 cursorData 是同一批输入（hover + activeLayer + status），
+    // 所以放在同一个方法里 —— 分开写迟早会有一边忘了跟着改。
+    this.uploadHoverLines();
+  },
+
+  /** 悬停校准线：即将落子的那个格点上，x / y / z 三个方向各一条贯穿全盘的直线。
+   *  返回 3 个线段 `[起点, 终点, 线宽]`；没得下（没悬停 / 已分胜负）时返回 null。
+   *
+   *  单独抽出来是为了让测试能直接查几何。这三个方向是各写一遍下标的，写反一个分量
+   *  （比如 x 向的线误用了 z 的坐标）在屏幕上只表现为"红线偏了一点"，肉眼和
+   *  "本来就这样"分不开 —— 但校准功能就废了，而那正是这个功能的全部意义。 */
+  hoverLineSegments() {
+    const cur = this.hover;
+    if (!cur || !this.session || this.session.status !== "Playing") return null;
+    const dims = this.session.board.dims;
+    const cs = cellSize(dims);
+    // 每条线只沿自己那条轴延伸，所以三段的半长【各不相同】—— 长方体下三条边不一样长，
+    // 用同一个 ext 会让其中两个方向的线戳出棋盘外。立方时三者相等，退化成原来的写法。
+    const ex = (dims[0] - 1) * 0.5 * cs;
+    const ey = (dims[1] - 1) * 0.5 * cs;
+    const ez = (dims[2] - 1) * 0.5 * cs;
+    const p = this.worldOf(cur.x, cur.y, this.activeLayer, dims, cs);
+    const tx = p[0], ty = p[1], tz = p[2];
+    // 比静态格线（cs*0.06）粗：红色要盖得住它压着的那三条灰线，
+    // 否则"改成红色"会变成"灰线上叠了一层红雾"
+    const w = cs * 0.09;
+    return [
+      [[-ex,  ty,  tz], [ ex,  ty,  tz], w],   // ∥ x：固定 y、z
+      [[  tx,-ey,  tz], [  tx, ey,  tz], w],   // ∥ y：固定 x、z
+      [[  tx,  ty,-ez], [  tx,  ty, ez], w],   // ∥ z：固定 x、y
+    ];
+  },
+
+  uploadHoverLines() {
+    if (!Renderer.ok) return;
+    const segs = this.hoverLineSegments();
+    this.hoverLineCount = segs ? Renderer.uploadLines("hover", segs) : 0;
+  },
+
+  /** 静态格线：完整的三维格，x / y / z 三个方向上每个格点都有一组贯穿线。
+   *  dims 可以显式给 —— 起始界面的演示棋盘（10³ 装饰盘）走的就是这条路，
+   *  它和对局棋盘是两个不同的尺寸，不能共用 this.session。 */
+  uploadGrid(dims) {
+    if (!Renderer.ok) return;
+    dims = dims || this.session.board.dims;
+    const cs = cellSize(dims);
+    const segs = this.gridSegments(dims, cs, cs * 0.06);
+    this.staticGridCount = Renderer.uploadLines("static", segs);
+    this.uploadActiveGrid();
+  },
+
+  /** 三维格线的几何：三个方向各按自己的边长铺，外加 12 条外框棱。
+   *  和 uploadGrid 拆开是为了让测试能直接数条数（立方时必须是 3n²+12，
+   *  少画一个方向或把某个循环的边界写错会立刻变成数字不符，不必等肉眼去看）。 */
+  gridSegments(dims, cs, w) {
+    const ex = (dims[0] - 1) * 0.5 * cs;
+    const ey = (dims[1] - 1) * 0.5 * cs;
+    const ez = (dims[2] - 1) * 0.5 * cs;
+    // 格点 i 的世界坐标 = (i - (边长-1)/2) * cs —— 三条边各有各的偏移
+    const wx = (i) => (i - (dims[0] - 1) * 0.5) * cs;
+    const wy = (i) => (i - (dims[1] - 1) * 0.5) * cs;
+    const wz = (i) => (i - (dims[2] - 1) * 0.5) * cs;
+
+    const segs = [];
+    // 完整内部三维格：x 向 ny*nz 条、y 向 nx*nz 条、z 向 nx*ny 条，共 nx*ny+ny*nz+nz*nx
+    //（立方时退化成 3n²：n=15 → 675，n=50 → 7500；长方体的条数由测试按同一个公式校验）。
+    //
+    // 这一段推翻了这个文件早先"不画完整格线"的决定，当时的理由是"摩尔纹灾难"。
+    // 那条理由不成立：线宽和间距的比是恒定的（w = cs*0.06），相机又总把整个立方体
+    // 框满，所以 n 变大只是"同样的密度里塞进更多条"，要到 n≈300 才会碰到像素间距。
+    //
+    // 真正的代价是【深度感】：视线穿过立方体时会依次叠上 n 层屏幕位置完全重合的
+    // 平行格线，而格线是 alpha 混合画的，累积剩余透过率是 0.45^n：
+    // n=10 是 3.4e-4、n=15 是 6.3e-6 —— 【从 15³ 起内部就已经叠到饱和了】，
+    // 不是"大棋盘才有"的问题。所以立方体内部会读成一片灰网，而不是"近处清楚、远处淡"；
+    // n 变大只是让这张网更密。这是 alpha 混合叠同位置图元的固有问题，
+    // 调 alpha 只能整体变淡、消不掉。想要深度感就把 draw3D 里的 depthMask(false)
+    // 改成 true（近处的线挡住远处的），但那会让视线正对轴向时几乎看不见内部，
+    // 是个取舍而不是修复。
+    // ∥ x 的线：由 (y,z) 两个下标决定，所以循环是 ny × nz，线沿 x 方向贯穿 ±ex
+    for (let j = 0; j < dims[1]; j++)
+      for (let k = 0; k < dims[2]; k++)
+        segs.push([[-ex, wy(j), wz(k)], [ex, wy(j), wz(k)], w]);
+    // ∥ y 的线：nx × nz，贯穿 ±ey
+    for (let i = 0; i < dims[0]; i++)
+      for (let k = 0; k < dims[2]; k++)
+        segs.push([[wx(i), -ey, wz(k)], [wx(i), ey, wz(k)], w]);
+    // ∥ z 的线：nx × ny，贯穿 ±ez
+    for (let i = 0; i < dims[0]; i++)
+      for (let j = 0; j < dims[1]; j++)
+        segs.push([[wx(i), wy(j), -ez], [wx(i), wy(j), ez], w]);
+
+    // 外框：三维格最外圈那 12 条棱再描粗一遍。不单独画一个更大的盒子 ——
+    // 那样外框和格线之间会差出半格，看着像套了个玻璃罩。重合才不会露馅。
+    const bx = [-ex, ex], by = [-ey, ey], bz = [-ez, ez];
+    for (const y of by) for (const z of bz) segs.push([[-ex, y, z], [ex, y, z], w * 2.5]);
+    for (const x of bx) for (const z of bz) segs.push([[x, -ey, z], [x, ey, z], w * 2.5]);
+    for (const x of bx) for (const y of by) segs.push([[x, y, -ez], [x, y, ez], w * 2.5]);
+
+    return segs;
+  },
+
+  /**
+   * 待转那一层的四条边。不画（返回 null）的三种情况：非四维模式、层号越界、渲染器没起来。
+   *
+   * 单独成方法是为了能被测试直接查几何 —— 和 hoverLineSegments 同一个理由：
+   * 三个轴的自由轴顺序是各写一遍下标的，写反一个分量在屏幕上只表现为"绿框跑到了另一个平面上"，
+   * 和"本来就这样"肉眼分不开，而这一层到底是哪一层就彻底错了。
+   */
+  rotationOutlineSegments(n, cs) {
+    if (!this.session || !this.session.rotationEnabled) return null;
+    // 四维只可能是立方，所以这里的 n 就是三条边长。长方体的守卫放在这里而不是让调用方判断：
+    // 少了它，三个轴会拿着同一个 ext 画出一个歪掉的框，而屏幕上只表现为"绿框不太对"。
+    if (!this.session.board.isCube) return null;
+    if (this.rotLayer < 0 || this.rotLayer >= n) return null;
+
+    const ext = (n - 1) * 0.5 * cs;
+    const off = (this.rotLayer - (n - 1) * 0.5) * cs;
+    const [i, j] = RotationOps.freeAxes(this.rotAxis);
+    const w = cs * 0.11;   // 比静态格线（cs*0.06）粗，压得住它盖住的那几条灰线
+
+    const corners = [];
+    for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const p = [0, 0, 0];
+      p[this.rotAxis] = off;
+      p[i] = a * ext;
+      p[j] = b * ext;
+      corners.push(p);
+    }
+    const segs = [];
+    for (let k = 0; k < 4; k++) segs.push([corners[k], corners[(k + 1) % 4], w]);
+    return segs;
+  },
+
+  uploadActiveGrid() {
+    if (!Renderer.ok) return;
+    const dims = this.session.board.dims;
+    const cs = cellSize(dims);
+    const ex = (dims[0] - 1) * 0.5 * cs;
+    const ey = (dims[1] - 1) * 0.5 * cs;
+    const ez = (dims[2] - 1) * 0.5 * cs;
+    const pz = (this.activeLayer - (dims[2] - 1) * 0.5) * cs;
+    const w = cs * 0.045;
+
+    const segs = [];
+    // 当前层是 z = activeLayer 这一层平面，所以：nx 条 ∥y 的线（固定 x）× ny 条 ∥x 的线（固定 y）。
+    // 常量角那块原来两个循环共用同一个 n、线段共用同一个 ext，长方体下会画出一个方阵
+    // 压在一个长方形平面上 —— 多出来的线正好戳在棋盘外面。
+    for (let i = 0; i < dims[0]; i++) {
+      const t = (i - (dims[0] - 1) * 0.5) * cs;
+      segs.push([[t,-ey,pz],[t,ey,pz], w]);
+    }
+    for (let j = 0; j < dims[1]; j++) {
+      const t = (j - (dims[1] - 1) * 0.5) * cs;
+      segs.push([[-ex,t,pz],[ex,t,pz], w]);
+    }
+    // 四条贯通整个盒子的深度导轨，标出当前层在深度方向的位置（放四角，不挡内部）。
+    // 它们和静态三维格里那四条 z 向格线位置重合 —— 这是有意的：蓝色的后画，
+    // 把那四条灰线染成蓝的，等于给当前层标了深度定位，而不是多画四根管子。
+    // 端头也收在 ±ez（不是盒子外沿），和格线、外框同一个范围。
+    segs.push([[-ex,-ey,-ez],[-ex,-ey,ez], w*0.8]);
+    segs.push([[ex,-ey,-ez],[ex,-ey,ez], w*0.8]);
+    segs.push([[ex,ey,-ez],[ex,ey,ez], w*0.8]);
+    segs.push([[-ex,ey,-ez],[-ex,ey,ez], w*0.8]);
+
+    this.activeGridCount = Renderer.uploadLines("active", segs);
+
+    // 待转的那一层：一圈绿色描边。只在四维模式下画。
+    // 颜色挑绿的，因为蓝色的"当前层"和红色的悬停线都已经占了，绿的在整个三维视图里没出现过。
+    const rotSegs = this.rotationOutlineSegments(dims[2], cs);
+    this.rotOutlineCount = rotSegs ? Renderer.uploadLines("rotLayer", rotSegs) : 0;
+
+    // 获胜连线
+    const line = this.session.lastOutcome.line;
+    if (line && line.length >= 2) {
+      const lseg = [];
+      for (let i = 0; i + 1 < line.length; i++) {
+        const a = this.worldOf(line[i][0], line[i][1], line[i][2], dims, cs);
+        const b = this.worldOf(line[i+1][0], line[i+1][1], line[i+1][2], dims, cs);
+        lseg.push([a, b, cs * 0.34]);
+      }
+      this.winLineCount = Renderer.uploadLines("win", lseg);
+    } else {
+      this.winLineCount = 0;
+    }
+  },
+
+  // ------------------------------------------------------------------ 起始界面的演示棋盘
+  //
+  // 需求：起始界面左侧要有一个自动缓慢旋转的 10×10×10 棋盘。三个刻意的决定：
+  //
+  // ① **不复用玩家那一局。** 设置页里改尺寸和模式时，玩家的棋局一个子都不该动，
+  //    所以演示盘是一块独立的 Board3D，只在下面这几个方法里被读。
+  // ② **只换相机的字段，不换相机对象。** OrbitCamera 是对局和演示共用的，
+  //    这里做的是"存 → 换成演示值 → 画 → 还原"，出栈即复原，自动旋转的角度
+  //    一点也不会漏进对局视图 —— README 里那句"松手之后棋盘完全静止、没有自动旋转"
+  //    是刻意的，这一条只对起始界面放开。
+  // ③ **绘制仍然走 draw3D() 本身**，没有第二套绘制代码。把逐实例数据换成演示盘的、
+  //    把光标 / 悬停线 / 待转层 / 获胜线全部清成 0，draw3D 是数据驱动的，画出来自然是对的。
+
+  /** 演示盘只建一次：它的内容不随任何状态变化，没有重建的理由。 */
+  ensurePreview() {
+    if (!this.previewBoard) this.previewBoard = this.buildPreviewBoard();
+    return this.previewBoard;
+  },
+
+  /**
+   * 造一块演示用的棋盘。**这是装饰，不是一局合法的棋** ——
+   * 它从来不经过 RuleEngine，可能有重复落子、也可能凑巧连成 5 个，都不代表任何事，
+   * 页面上也标了"演示棋盘"的铭牌说明这一点。
+   *
+   * 用整数哈希而不是 Math.random：刷新页面必须看到同一盘。否则每次刷新布局都变，
+   * 看起来像 bug，而且想对比"换个配色之后好不好看"就没有基准了。
+   */
+  /** bias 可以显式给（默认 PREVIEW_BIAS）。做成参数是为了能【跨多档取值测试】——
+   *  只测默认值的话，"表不够长就往 0 拽"那类只在大取值下暴露的问题测不出来。 */
+  buildPreviewBoard(bias) {
+    if (bias === undefined) bias = PREVIEW_BIAS;
+    if (!Number.isInteger(bias) || bias < 1)
+      throw new Error("聚拢强度必须是 >= 1 的整数，收到 " + bias);
+    if (bias > PREVIEW_SALTS[0].length)
+      throw new Error("聚拢强度 " + bias + " 超过了种子表的长度 " + PREVIEW_SALTS[0].length +
+                      "（越界会让棋子整团偏到角上，不是「更聚拢」）");
+    const board = new Board3D(PREVIEW_N, PREVIEW_N, PREVIEW_N);
+    const last = PREVIEW_N - 1;
+    // 整数哈希（Knuth 乘数 + xorshift 混合）→ [0,1) 的均匀值。用哈希而不是 Math.random：
+    // 刷新页面必须看到同一盘，否则每次刷新布局都变，看起来像 bug。
+    const u = (i, salt) => {
+      let v = Math.imul(i + 1, salt);
+      v ^= v >>> 15; v = Math.imul(v, 2246822519); v ^= v >>> 13;
+      return (v >>> 0) / 4294967296;
+    };
+    // 一个轴的坐标 = PREVIEW_BIAS 个独立均匀值的平均 → 向中心聚拢。
+    // 平均值的期望仍是 (n-1)/2，也就是棋盘正中心，所以聚拢是【对称】的、不会偏。
+    const axis = (i, ai) => {
+      const salts = PREVIEW_SALTS[ai];
+      let sum = 0;
+      for (let k = 0; k < bias; k++) sum += u(i, salts[k]);
+      return Math.round((sum / bias) * last);
+    };
+    let placed = 0;
+    // 聚拢之后撞位的概率上去了（有效体积从 1000 格降到约 290 格），
+    // 所以预算给到 8 倍：目标是真放下 PREVIEW_STONES 颗，而不是"试够了就算"。
+    for (let i = 0; i < PREVIEW_STONES * 8 && placed < PREVIEW_STONES; i++) {
+      const x = axis(i, 0), y = axis(i, 1), z = axis(i, 2);
+      if (board.get(x, y, z) !== EMPTY) continue;
+      board.set(x, y, z, (placed % 2) ? BLACK : WHITE);
+      placed++;
+    }
+    return board;
+  },
+
+  uploadPreviewInstances() {
+    if (!Renderer.ok) return;
+    const gl = Renderer.gl;
+    const board = this.ensurePreview();
+    const dims = board.dims;
+    const cs = cellSize(dims);
+    const opqPos = [], opqCol = [];
+    const black = Palette.rgb("--black"), white = Palette.rgb("--white");
+    board.forEachStone((x, y, z, s) => {
+      const p = this.worldOf(x, y, z, dims, cs);
+      const rgb = (s === BLACK) ? black : white;
+      opqPos.push(p[0], p[1], p[2], cs * 0.68);
+      opqCol.push(rgb[0], rgb[1], rgb[2], 1.0);
+    });
+
+    this.opqCount = opqPos.length / 4;
+    this.ghCount = 0;
+    this.cursorData = null;
+    this.hoverLineCount = 0;
+    this.rotOutlineCount = 0;
+    this.winLineCount = 0;
+    // 演示盘上刻意【不画当前层蓝框】：那东西标的是"这一手要落在哪一层"，
+    // 而起始界面根本没有"这一手"。画上去会让人以为那里可以点。
+    this.activeGridCount = 0;
+    this.staticGridCount = Renderer.uploadLines("static", this.gridSegments(dims, cs, cs * 0.06));
+
+    const upload = (buf, arr) => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.DYNAMIC_DRAW);
+    };
+    upload(Renderer.opacityBuf, opqPos); upload(Renderer.opacityCol, opqCol);
+    upload(Renderer.ghostBuf, []);       upload(Renderer.ghostCol, []);
+  },
+
+  /** 画起始界面的演示盘。dt 是秒；用时间驱动而不是每帧固定增量，
+   *  否则 144Hz 屏上的转速会是 60Hz 屏的两倍多。 */
+  drawPreview(dt) {
+    if (!Renderer.ok) return;
+    this.uploadPreviewInstances();
+    // dt 夹到 [0, 0.2]。上限是给「切回标签页」用的 —— 几十秒的 dt 会让棋盘唰地跳一大截；
+    // 下限是给负 dt 用的（时钟回拨、或者调用方手滑传了负数）。不夹下界的话角度会倒着走，
+    // 而「棋盘偶尔倒转一下」是最难归因的那类现象。
+    const step = Math.max(0, Math.min(0.2, dt || 0));
+    this.previewYaw = (this.previewYaw + PREVIEW_DEG_PER_SEC * step) % 360;
+
+    const cam = this.camera;
+    const keep = [cam.yaw, cam.pitch, cam.distance, cam.minDistance, cam.maxDistance];
+    const r = this.el.view.getBoundingClientRect();
+    cam.yaw = this.previewYaw;
+    cam.pitch = PREVIEW_PITCH;
+    cam.frameBoard(r.width / Math.max(1, r.height), true);
+    this.draw3D();
+    cam.yaw = keep[0]; cam.pitch = keep[1]; cam.distance = keep[2];
+    cam.minDistance = keep[3]; cam.maxDistance = keep[4];
+  },
+
+  openSetup() {
+    this.el.setup.classList.remove("off");
+    this.el.stage.classList.add("preview");
+    this.setHover(null);
+    this.syncSetupInputs();
+    this.refreshSetupSummary();
+    this.ensurePreview();
+    this.uploadPreviewInstances();
+  },
+
+  closeSetup() {
+    this.el.setup.classList.add("off");
+    this.el.stage.classList.remove("preview");
+  },
+
+  /** 规则浮层是不是开着。和 setupOpen 一样从 DOM 派生，不另存布尔值。 */
+  get rulesOpen() {
+    return !!(this.el.rulesPanel && this.el.rulesPanel.classList &&
+              !this.el.rulesPanel.classList.contains("off"));
+  },
+
+  /**
+   * 打开规则全文。正文**现场从 #rulesSrc 渲染**，页面上没有第二份规则文本 ——
+   * 那段文本是 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.md 生成的，
+   * 并由测试断言逐字节相等。手抄一份进 HTML 就等于让"玩家看到的规则"和
+   * "代码实际执行的规则"变成两件可以分别漂移的东西。
+   */
+  openRules() {
+    if (!this.el.rulesPanel) return;
+    if (!this.rulesRendered) {
+      const src = this.el.rulesSrc ? this.el.rulesSrc.textContent : "";
+      this.el.rulesBody.innerHTML = renderRulesMarkdown(src);
+      this.rulesRendered = true;
+    }
+    this.el.rulesPanel.classList.remove("off");
+    this.el.rulesBody.scrollTop = 0;
+    this.setHover(null);      // 浮层盖住了三维视图，悬停红线留在后面没有意义
+  },
+
+  closeRules() {
+    if (this.el.rulesPanel) this.el.rulesPanel.classList.add("off");
+  },
+
+  // ------------------------------------------------------------------ 拾取
+
+  /** 屏幕坐标 → 当前层平面上的格子。 */
+  pick(sx, sy) {
+    // 演示模式（起始界面）下不做拾取：那张棋盘是装饰，落子无处可落。
+    if (this.setupOpen) return null;
+    const rect = this.el.gl.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    const eye = this.camera.eye();
+    const view = M4.lookAt(eye, [0,0,0], [0,1,0]);
+    const proj = M4.perspective(this.camera.fov, w / Math.max(1, h), 0.1, 800);
+    const vp = M4.multiply(proj, view);
+    const inv = M4.invert(vp);
+    if (!inv) return null;
+
+    const ndcX = (sx / w) * 2 - 1;
+    const ndcY = 1 - (sy / h) * 2;
+    const near = M4.transformPoint(inv, [ndcX, ndcY, -1]);
+    const far = M4.transformPoint(inv, [ndcX, ndcY, 1]);
+    let dx = far[0]-near[0], dy = far[1]-near[1], dz = far[2]-near[2];
+
+    const dims = this.session.board.dims;
+    const cs = cellSize(dims);
+    // 三条边各有各的偏移：格点 i 的世界坐标 = (i - (边长-1)/2) * cs
+    const offX = (dims[0] - 1) * 0.5;
+    const offY = (dims[1] - 1) * 0.5;
+    const planeZ = (this.activeLayer - (dims[2] - 1) * 0.5) * cs;
+
+    // 射线与平面平行时无法判断深度（正好侧视这一层），直接放弃
+    if (Math.abs(dz) < 1e-6) return null;
+    const t = (planeZ - near[2]) / dz;
+    const hx = near[0] + dx * t;
+    const hy = near[1] + dy * t;
+
+    const cx = Math.round(hx / cs + offX);
+    const cy = Math.round(hy / cs + offY);
+    if (cx < 0 || cy < 0 || cx >= dims[0] || cy >= dims[1]) return null;
+    return { x: cx, y: cy };
+  },
+
+  // ------------------------------------------------------------------ 绘制
+
+  draw3D() {
+    if (!Renderer.ok) return;
+    const gl = Renderer.gl;
+    const canvas = this.el.gl;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+
+    gl.viewport(0, 0, w, h);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    const eye = this.camera.eye();
+    const view = M4.lookAt(eye, [0,0,0], [0,1,0]);
+    const proj = M4.perspective(this.camera.fov, w / h, 0.1, 800);
+    const vp = M4.multiply(proj, view);
+
+    // 1) 不透明棋子
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    this.drawInstances(Renderer.opacityBuf, Renderer.opacityCol, this.opqCount, vp, 1.0, 0.34, 0.30, 0.55, 0.95);
+
+    // 2) 格线：alpha 混合 + 不写深度 → 被棋子挡住的线自动消失。
+    //
+    //    原来是加性混合（blendFunc SRC_ALPHA, ONE）。加性混合在浅色底上是反的：
+    //    它只会把背景越加越亮，浅灰底色会直接糊成一片白。浅灰主题必须换成标准 alpha 混合。
+    //    代价是格线之间不再"顺序无关"，但格线是静态细线、重叠很少，看不出差别。
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    Renderer.drawLines("static", this.staticGridCount, vp, Palette.rgba("--border", 0.55), 1.0);
+    Renderer.drawLines("active", this.activeGridCount, vp, Palette.rgba("--accent", 0.80), 1.0);
+    // 待转的那一层（绿）：四维模式下才画。和蓝色的"当前层"是两个独立的东西 ——
+    // 当前层是你要落子的层，待转层是你要转的层，选 z 轴时它们可能恰好是同一层，
+    // 那时两个框会重合，绿的后画所以盖在蓝的上面，看起来就是"这一层既是当前层也要转"。
+    if (this.rotOutlineCount) {
+      Renderer.drawLines("rotLayer", this.rotOutlineCount, vp, Palette.rgba("--ok", 0.95), 1.0);
+    }
+    // 悬停校准线（红）：即将落子的格点上，x / y / z 三条贯穿线。三条里不含任何一个
+    // 斜向获胜方向 —— 轴向是最难在透视里判断的（斜线至少有明显的走向），校准价值最高。
+    // 这个红比 --danger(#c0392b) 更亮：--danger 已经被"长连犯规"的获胜连线占了，
+    // 两者虽然不会同时出现，但含义完全不同，颜色上要能分开。
+    if (this.hoverLineCount) {
+      Renderer.drawLines("hover", this.hoverLineCount, vp, Palette.rgba("--hover-line", 0.95), 1.0);
+    }
+    if (this.winLineCount) {
+      const foul = this.session.lastOutcome.isOverlineFoul;
+      Renderer.drawLines("win", this.winLineCount, vp,
+        Palette.rgba(foul ? "--danger" : "--gold", 0.95), 1.0);
+    }
+
+    // 3) 幽灵棋子 + 最后一手标记 + 落点光标
+    //    boost 取 0.8 而不是 1.6：正反两个半球都会画（Cull 关闭），亮度天然翻倍，这里把它算回去
+    //    幽灵子的 alpha 从 0.16 提到 0.42：加性混合下 0.16 的"淡"是加在深色底上的加法，
+    //    换成 alpha 混合后同样的数值只会变成几乎看不见的一层灰，必须重新取值。
+    this.drawInstances(Renderer.ghostBuf, Renderer.ghostCol, this.ghCount, vp, 0.8, 0.55, 0.0, 0.6, 0.85);
+    if (this.cursorData) {
+      this.pushCursorInstance();
+      this.drawInstances(Renderer.cursorBuf, Renderer.cursorCol, 1, vp, 0.8, 0.6, 0.0, 0.6, 0.0);
+    }
+
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  },
+
+  pushCursorInstance() {
+    const gl = Renderer.gl;
+    if (!Renderer.cursorBuf) {
+      Renderer.cursorBuf = gl.createBuffer();
+      Renderer.cursorCol = gl.createBuffer();
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, Renderer.cursorBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, this.cursorData.subarray(0, 4), gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, Renderer.cursorCol);
+    gl.bufferData(gl.ARRAY_BUFFER, this.cursorData.subarray(4, 8), gl.DYNAMIC_DRAW);
+  },
+
+  drawInstances(posBuf, colBuf, count, vp, boost, ambient, spec, rim, edgeAmt) {
+    if (!count || !Renderer.ok) return;
+    const gl = Renderer.gl;
+    const p = Renderer.progStone;
+
+    gl.bindVertexArray(Renderer.vaoStone);
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+    gl.enableVertexAttribArray(2);
+    gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribDivisor(2, 1);
+    gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+    gl.enableVertexAttribArray(3);
+    gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribDivisor(3, 1);
+
+    gl.useProgram(p);
+    gl.uniformMatrix4fv(gl.getUniformLocation(p, "uViewProj"), false, vp);
+    gl.uniform3fv(gl.getUniformLocation(p, "uKeyDir"), [0.42, 0.82, -0.40]);
+    gl.uniform1f(gl.getUniformLocation(p, "uAmbient"), ambient);
+    gl.uniform1f(gl.getUniformLocation(p, "uSpec"), spec);
+    gl.uniform1f(gl.getUniformLocation(p, "uRim"), rim);
+    gl.uniform1f(gl.getUniformLocation(p, "uBoost"), boost);
+    gl.uniform3fv(gl.getUniformLocation(p, "uEdge"), Palette.rgb("--stone-edge"));
+    gl.uniform1f(gl.getUniformLocation(p, "uEdgeAmt"), edgeAmt || 0.0);
+
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, Renderer.sphereVerts.length / 6, count);
+  },
+
+  // ------------------------------------------------------------------ 右侧面板：活动层
+
+  /** nx×ny 个【交织点】的排布：相邻两点间距 cs，整盘跨度 (nx-1)*cs × (ny-1)*cs，居中。
+   *  和三维视图同一套约定 —— 棋子落在线的交织处，最外圈线离板边半个格，
+   *  所以板面要按 nx*cs × ny*cs 铺（比交织点范围每边多出 cs/2）。
+   *
+   *  cs 取 min(w/nx, h/ny) —— 两个方向各按自己的边长算，再取小的那个。
+   *  用 min(w,h)/max(nx,ny) 之类的写法在长方体下会让棋盘贴不到边、整体缩在角落里。
+   *  立方时退化成原来的 min(w,h)/n。 */
+  gridLayout(w, h, nx, ny) {
+    const cs = Math.min(w / Math.max(1, nx), h / Math.max(1, ny));
+    const extX = cs * (nx - 1), extY = cs * (ny - 1);
+    return { cs: cs, ox: (w - extX) / 2, oy: (h - extY) / 2 };
+  },
+
+  setCanvasSize(canvas, ctx) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    // y 轴翻转为向上：右侧面板画的就是"从 -z 正视第 k 层"，y 方向必须和三维世界一致
+    ctx.setTransform(dpr, 0, 0, -dpr, 0, h);
+    return { w: w, h: h, dpr: dpr };
+  },
+
+  drawLayerBase() {
+    if (!this.session) return;
+    const canvas = this.el.layerBase;
+    const ctx = this.ctxBase;
+    const size = this.setCanvasSize(canvas, ctx);
+    const w = canvas.clientWidth, h = canvas.clientHeight;   // CSS 像素，用于布局计算
+    ctx.clearRect(0, 0, w, h);
+
+    const dims = this.session.board.dims;
+    const nx = dims[0], ny = dims[1];
+    const lay = this.gridLayout(w, h, nx, ny);
+    this.layout.cell = lay.cs;
+    const board = this.session.board;
+    const cs = lay.cs;
+    // 交织点 / 格线的屏幕坐标。面板的坐标约定就这一条，
+    // drawLayerOverlay 和 cellFromEvent 里各有一份一模一样的副本 ——
+    // 三处必须同时改。改之前它们各写各的，于是面板用格心、三维用格点，
+    // 两边差半格错了很久都没人发现。
+    const px = (i) => lay.ox + i * cs;
+    const py = (j) => lay.oy + j * cs;
+
+    // 板面：外圈线再往外留半个格。真实棋盘的板边就是这样，
+    // 少了这半个格，最外圈的线会贴着画布边，看着像画布被裁掉了一块。
+    ctx.fillStyle = Palette.hex("--cell");
+    ctx.fillRect(lay.ox - cs * 0.5, lay.oy - cs * 0.5, cs * nx, cs * ny);
+
+    // 这一列在别的层还有子的空交织点，点一个小方块提示 ——
+    // 三维棋盘上最容易忽略的就是自己上/下层已经落过子。
+    // 画在格线【下面】是有意的：线正好从方块上压过去，
+    // 看着像"被标记过的交织点"，而不是浮在棋盘上的一张贴片。
+    ctx.fillStyle = Palette.hex("--cell-hint");
+    for (let j = 0; j < ny; j++) {
+      for (let i = 0; i < nx; i++) {
+        if (board.get(i, j, this.activeLayer) !== EMPTY) continue;
+        if (this.colCounts[i + nx * j] <= 0) continue;
+        const s = cs * 0.5;
+        ctx.fillRect(px(i) - s * 0.5, py(j) - s * 0.5, s, s);
+      }
+    }
+
+    // 格线：nx 条竖线 + ny 条横线，nx*ny 个交点就是落子点
+    ctx.strokeStyle = Palette.hex("--line2d");
+    ctx.lineWidth = Math.max(1, cs * 0.04);
+    ctx.beginPath();
+    for (let i = 0; i < nx; i++) {
+      ctx.moveTo(px(i), py(0));      ctx.lineTo(px(i), py(ny - 1));
+    }
+    for (let j = 0; j < ny; j++) {
+      ctx.moveTo(px(0), py(j));      ctx.lineTo(px(nx - 1), py(j));
+    }
+    ctx.stroke();
+
+    // 星位：和真实棋盘一样，中央天元 + 四个角星。15 路上落在 (3,3) 那一圈，
+    // 星位本身就是"子该下在交点上"最直观的视觉锚点，所以面板落到交织点后必须补上。
+    // 长方体下三条边长不同，星位必须【每个轴各算一份】，否则角星会跑到棋盘外面。
+    if (nx >= 9 && ny >= 9) {
+      const mx = (nx - 1) >> 1, my = (ny - 1) >> 1, k = 3;
+      const qx = nx - 4, qy = ny - 4;
+      ctx.fillStyle = Palette.hex("--line2d");
+      for (const p of [[mx,my],[k,k],[k,qy],[qx,k],[qx,qy]]) {
+        ctx.beginPath();
+        ctx.arc(px(p[0]), py(p[1]), Math.max(1, cs * 0.10), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 棋子：落在交织点上，不是格子里。半径 cs*0.34 是有约束的 ——
+    // 三维那边球体直径取 cs*0.68（见 uploadInstances），两个视图的子必须一样大。
+    for (let j = 0; j < ny; j++) {
+      for (let i = 0; i < nx; i++) {
+        const s = board.get(i, j, this.activeLayer);
+        if (s === EMPTY) continue;
+        ctx.beginPath();
+        ctx.arc(px(i), py(j), cs * 0.34, 0, Math.PI * 2);
+        ctx.fillStyle = Palette.hex(s === BLACK ? "--black" : "--white");
+        ctx.fill();
+        // 描边是必须的：淡板面和白子的对比度只有 1.3:1，
+        // 不描边的话白子和板面基本看不出区别。黑子也一起描，两种子的边界感才一致。
+        ctx.strokeStyle = Palette.hex("--stone-edge");
+        ctx.lineWidth = Math.max(1, cs * 0.06);
+        ctx.stroke();
+      }
+    }
+  },
+
+  drawLayerOverlay() {
+    if (!this.session) return;
+    const canvas = this.el.layerOverlay;
+    const ctx = this.ctxOverlay;
+    this.setCanvasSize(canvas, ctx);
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+
+    const dims = this.session.board.dims;
+    const lay = this.gridLayout(w, h, dims[0], dims[1]);
+    const board = this.session.board;
+
+    // 交织点的屏幕坐标 —— 与 drawLayerBase 里 px()/py() 同一套约定
+    const px = (i) => lay.ox + i * lay.cs;
+    const py = (j) => lay.oy + j * lay.cs;
+
+    // 最后一手
+    if (this.session.moveCount > 0) {
+      const last = this.session.history[this.session.moveCount - 1];
+      if (last.z === this.activeLayer) {
+        ctx.beginPath();
+        ctx.arc(px(last.x), py(last.y), lay.cs * 0.44, 0, Math.PI * 2);
+        ctx.strokeStyle = Palette.hex("--accent");
+        ctx.lineWidth = Math.max(1, lay.cs * 0.10);
+        ctx.stroke();
+      }
+    }
+
+    // 获胜连线
+    if (this.session.status === "Decided" && this.session.lastOutcome.line) {
+      const foul = this.session.lastOutcome.isOverlineFoul;
+      ctx.strokeStyle = Palette.hex(foul ? "--danger" : "--gold");
+      ctx.lineWidth = Math.max(1, lay.cs * 0.08);
+      for (const p of this.session.lastOutcome.line) {
+        if (p[2] !== this.activeLayer) continue;
+        ctx.beginPath();
+        ctx.arc(px(p[0]), py(p[1]), lay.cs * 0.30, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // 悬停：边长 0.88 格、以交织点为中心的方框（改之前是 0.88 格、以格心为中心，
+    // 尺寸没变，只是跟着子一起挪到了交织点上）
+    if (this.hover && this.session.status === "Playing") {
+      const free = board.isEmpty(this.hover.x, this.hover.y, this.activeLayer);
+      ctx.strokeStyle = Palette.hex(free ? "--accent" : "--danger");
+      ctx.lineWidth = Math.max(1, lay.cs * 0.09);
+      const cx = px(this.hover.x), cy = py(this.hover.y);
+      const o = lay.cs * 0.44;
+      ctx.strokeRect(cx - o, cy - o, o * 2, o * 2);
+    }
+  },
+
+  // ------------------------------------------------------------------ 右侧面板：全层缩略条
+
+  /** 第 i 层的瓦片。n 是【层数】(nz) —— 这里排的是"一层一格"，与 x/y 边长无关。 */
+  stripTileRect(i, w, h, n) {
+    const aspect = h > 1 ? w / h : 1;
+    let cols = Math.ceil(Math.sqrt(Math.max(1, n * aspect)));
+    cols = Math.max(1, Math.min(n, cols));
+    const rows = Math.max(1, Math.ceil(n / cols));
+    const pad = 3;
+    const avail = Math.min((w - pad * (cols + 1)) / cols, (h - pad * (rows + 1)) / rows);
+    if (avail <= 1) return null;
+    const totalW = avail * cols + pad * (cols - 1);
+    const totalH = avail * rows + pad * (rows - 1);
+    const x0 = (w - totalW) / 2, y0 = (h - totalH) / 2;
+    const col = i % cols, row = Math.floor(i / cols);
+    return { x: x0 + col * (avail + pad), y: y0 + row * (avail + pad), size: avail, cols: cols, rows: rows };
+  },
+
+  drawStrip() {
+    if (!this.session) return;
+    const canvas = this.el.strip;
+    const ctx = this.ctxStrip;
+    // 缩略条不需要 y 向上，用默认的向下坐标系
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+
+    const cw = canvas.clientWidth, ch = canvas.clientHeight;
+    const dims = this.session.board.dims;
+    const nx = dims[0], ny = dims[1], nz = dims[2];
+    const board = this.session.board;
+    const drawStones = board.stoneCount <= 4000;
+
+    let maxCount = 1;
+    for (let i = 0; i < nz; i++) if (this.layerCounts[i] > maxCount) maxCount = this.layerCounts[i];
+
+    for (let z = 0; z < nz; z++) {
+      const t = this.stripTileRect(z, cw, ch, nz);
+      if (!t) break;
+
+      const active = z === this.activeLayer;
+      if (active) {
+        ctx.fillStyle = Palette.hex("--accent");
+        ctx.fillRect(t.x - 1.5, t.y - 1.5, t.size + 3, t.size + 3);
+      }
+      ctx.fillStyle = Palette.hex(active ? "--panel-hi" : "--panel");
+      ctx.fillRect(t.x, t.y, t.size, t.size);
+
+      if (drawStones) {
+        // 长方体下瓦片是方的、棋盘不是 —— 格距按【两个方向里大的那个】算，
+        // 再把整块画布居中，两条边短的那个方向自然就留白了。
+        // 用 t.size/nx 会让 ny > nx 的棋盘纵向溢出瓦片。
+        const cs = t.size / Math.max(nx, ny);
+        // 和面板同一套约定：交织点在瓦片里也留了半个格的边，子画在交织点上。
+        // 边长取 0.68cs —— 和三维球体的直径、面板圆的直径是同一个比值，
+        // 三个视图里"子相对格距有多大"才是同一个数。
+        // 缩略图里的子比面板里的还小，白子更是必须有描边才分得出来，
+        // 否则整层看上去就是一片浅灰，读不出"这一层有没有子"。
+        const x0 = t.x + (t.size - nx * cs) / 2 + cs * 0.5;
+        const y0 = t.y + (t.size - ny * cs) / 2 + cs * 0.5;
+        const px = Math.max(1, cs * 0.68);
+        for (let y = 0; y < ny; y++) {
+          for (let x = 0; x < nx; x++) {
+            const s = board.get(x, y, z);
+            if (s === EMPTY) continue;
+            // canvas 的 y 向下，而三维世界里 y 向上，这里翻一下，缩略图才和 3D 视图同向
+            const sx = x0 + x * cs, sy = y0 + (ny - 1 - y) * cs;
+            ctx.fillStyle = Palette.hex(s === BLACK ? "--black" : "--white");
+            ctx.fillRect(sx - px * 0.5, sy - px * 0.5, px, px);
+            if (px >= 2.5) {
+              ctx.strokeStyle = Palette.hex("--stone-edge");
+              ctx.lineWidth = 1;
+              ctx.strokeRect(sx - px * 0.5 + 0.5, sy - px * 0.5 + 0.5, px - 1, px - 1);
+            }
+          }
+        }
+      }
+
+      // 每层底部的占用条：棋子太多退化时信息还在
+      const frac = maxCount > 0 ? this.layerCounts[z] / maxCount : 0;
+      if (frac > 0) {
+        ctx.fillStyle = Palette.hex(active ? "--accent" : "--ok");
+        ctx.fillRect(t.x, t.y + t.size - Math.max(1.5, t.size * 0.08), t.size * frac, Math.max(1.5, t.size * 0.08));
+      }
+    }
+  },
+
+  stripTileAt(mx, my) {
+    const canvas = this.el.strip;
+    const cw = canvas.clientWidth, ch = canvas.clientHeight;
+    const n = this.session.board.dims[2];
+    for (let z = 0; z < n; z++) {
+      const t = this.stripTileRect(z, cw, ch, n);
+      if (!t) return -1;
+      if (mx >= t.x && mx <= t.x + t.size && my >= t.y && my <= t.y + t.size) return z;
+    }
+    return -1;
+  },
+
+  // ------------------------------------------------------------------ 文字与状态
+
+  refreshTexts() {
+    if (!this.session) return;
+    const s = this.session;
+
+    this.el.status.textContent = s.describeStatus();
+    this.el.status.style.color = s.status === "Decided"
+      ? (s.lastOutcome.status === MoveStatus.LoseByOverline ? "#c0392b" : "#a9741a")
+      : Palette.hex("--text");
+    // 先手指示圆点：白子必须描边，否则在淡色面板上就是一个看不见的圆
+    this.el.chip.style.background = Palette.hex(s.currentPlayer === BLACK ? "--black" : "--white");
+    this.el.chip.style.borderColor = Palette.hex("--stone-edge");
+    this.el.rule.textContent = s.rules.describe(s.firstPlayer);
+    // 转动不计入"手数"（冷却数的是落子），所以单独报一次，免得玩家以为转动没被记上
+    let info = "已下 " + s.moveCount + " 手";
+    if (s.rotationCount > 0) info += " · 转动 " + s.rotationCount + " 次";
+    const d = s.dims, nz = d[2];
+    info += " · 棋盘 " + d[0] + "×" + d[1] + "×" + d[2] +
+      " · 当前层 " + (this.activeLayer + 1) + "/" + nz + " (z=" + this.activeLayer + ")";
+    this.el.info.textContent = info;
+    this.el.layerLabel.textContent = "第 " + (this.activeLayer + 1) + " / " + nz + " 层";
+
+    // 放在下面那个 early return 之前 —— 否则分胜负时转动面板就不会刷新了
+    this.refreshRotPanel();
+
+    this.el.modeGhost.classList.toggle("sel", this.ghostMode);
+    this.el.modeSlice.classList.toggle("sel", !this.ghostMode);
+    this.el.sliceGroup.classList.toggle("on", !this.ghostMode);
+    this.el.sliceLabel.textContent = "只画到 z ≤ " + (this.activeLayer + 1) + "/" + nz;
+
+    if (!this.el.banner.classList.contains("on")) return;
+    if (s.isDraw) {
+      this.el.bannerTitle.textContent = "和局\n棋盘已满";
+      this.el.bannerTitle.style.color = Palette.hex("--text");
+      this.el.bannerSub.textContent = "";
+    } else if (s.lastOutcome.status === MoveStatus.LoseByOverline) {
+      this.el.bannerTitle.textContent = "长连犯规\n先手连成 " + s.lastOutcome.longestRun + " 连，" + cnOf(s.winner) + "棋胜";
+      this.el.bannerTitle.style.color = Palette.hex("--danger");
+      this.el.bannerSub.textContent = "先手必须恰好 5 连";
+    } else {
+      this.el.bannerTitle.textContent = cnOf(s.winner) + "棋胜\n" + s.lastOutcome.longestRun + " 连";
+      this.el.bannerTitle.style.color = Palette.hex("--gold");
+      this.el.bannerSub.textContent = "第 " + s.moveCount + " 手";
+    }
+  },
+
+  showBanner() { this.el.banner.classList.add("on"); this.refreshTexts(); },
+  hideBanner() { this.el.banner.classList.remove("on"); },
+
+  toast(msg, dim) {
+    this.el.toast.textContent = msg;
+    this.el.toast.style.color = Palette.hex(dim ? "--dim" : "--danger");
+    this.el.toast.classList.add("on");
+    this.toastTimer = 2.2;
+  },
+
+  // ------------------------------------------------------------------ 交互
+
+  bindUi() {
+    const on = (id, fn) => this.el[id].addEventListener("click", fn);
+
+    on("modeGhost", () => this.setGhostMode(true));
+    on("modeSlice", () => this.setGhostMode(false));
+    on("sliceDown", () => this.setActiveLayer(this.activeLayer - 1));
+    on("sliceUp", () => this.setActiveLayer(this.activeLayer + 1));
+    on("prevLayer", () => this.setActiveLayer(this.activeLayer - 1));
+    on("nextLayer", () => this.setActiveLayer(this.activeLayer + 1));
+    on("topLayer", () => this.setActiveLayer(this.session.board.dims[2] - 1));
+    on("undoBtn", () => this.undo());
+    on("restartBtn", () => this.restart());
+    on("swapBtn", () => this.swapFirst());
+    on("setupBtn", () => this.openSetup());
+    on("rulesBtn", () => this.openRules());
+    on("rulesClose", () => this.closeRules());
+    // 点浮层空白处（不是卡片本身）也关掉。判 e.target 就是为了区分这两者 ——
+    // 不判的话，在卡片里选中文字一松手就把浮层关了。
+    if (this.el.rulesPanel) {
+      this.el.rulesPanel.addEventListener("click", (e) => {
+        if (e.target === this.el.rulesPanel) this.closeRules();
+      });
+    }
+    on("bannerUndo", () => this.undo());
+    on("bannerRestart", () => this.restart());
+
+    on("firstBlack", () => this.setSetupFirst(BLACK));
+    on("firstWhite", () => this.setSetupFirst(WHITE));
+
+    // ---- 四维模式
+    on("mode3d", () => this.setSetupMode(false));
+    on("mode4d", () => this.setSetupMode(true));
+    document.querySelectorAll(".coolBtn").forEach(b => {
+      b.addEventListener("click", () => this.setSetupCool(parseInt(b.dataset.cool, 10)));
+    });
+    document.querySelectorAll(".rotAxis").forEach(b => {
+      b.addEventListener("click", () => this.setRotAxis(parseInt(b.dataset.axis, 10)));
+    });
+    document.querySelectorAll(".rotTurns").forEach(b => {
+      b.addEventListener("click", () => {
+        this.rotTurns = parseInt(b.dataset.turns, 10);
+        this.refreshRotPanel();
+      });
+    });
+    on("rotCW", () => { this.rotClockwise = true; this.refreshRotPanel(); });
+    on("rotCCW", () => { this.rotClockwise = false; this.refreshRotPanel(); });
+    on("rotLayerDown", () => this.nudgeRotLayer(-1));
+    on("rotLayerUp", () => this.nudgeRotLayer(1));
+    on("rotGo", () => this.doRotate());
+    on("rotRestore", () => this.restoreRotation());
+    // 尺寸输入框。input 事件只刷新那行说明（不提交），change（失焦/回车）才提交夹取后的值 ——
+    // 理由见 commitDimInput 的注释：删掉旧数字的中间态不能被当成"要下最小盘"。
+    const dimInputs = [["dimX", 0], ["dimY", 1], ["dimZ", 2], ["dimN", 0]];
+    for (const [id, idx] of dimInputs) {
+      const el = this.el[id];
+      if (!el || !el.addEventListener) continue;
+      el.addEventListener("input", () => this.refreshSetupSummary());
+      el.addEventListener("change", () => this.commitDimInput(id, idx));
+    }
+    on("dimCube", () => this.setSetupCube(!this.setupCube));
+    on("startBtn", () => {
+      this.closeSetup();
+      const d = this.fourD ? [this.setupSize, this.setupSize, this.setupSize] : this.setupDims;
+      this.newGame(d, this.setupFirst);
+      this.toast(cnOf(this.setupFirst) + "先手，" + d[0] + "×" + d[1] + "×" + d[2] + " 开局", true);
+    });
+
+    // 面板网格点击落子
+    this.el.layerBase.addEventListener("click", (e) => {
+      const cell = this.cellFromEvent(e, this.el.layerBase);
+      if (cell) this.tryPlace(cell.x, cell.y);
+    });
+    this.el.layerBase.addEventListener("mousemove", (e) => {
+      const cell = this.cellFromEvent(e, this.el.layerBase);
+      this.setHover(cell);
+    });
+    this.el.layerBase.addEventListener("mouseleave", () => this.setHover(null));
+
+    // 缩略条点击跳层
+    this.el.strip.addEventListener("click", (e) => {
+      const r = this.el.strip.getBoundingClientRect();
+      const z = this.stripTileAt(e.clientX - r.left, e.clientY - r.top);
+      if (z >= 0) this.setActiveLayer(z);
+    });
+
+    window.addEventListener("keydown", (e) => {
+      // Esc 必须放在前面：浮层开着时它是唯一还有意义的键
+      if (e.key === "Escape" && this.rulesOpen) { this.closeRules(); return; }
+      // 规则浮层开着时不吃任何快捷键 —— 否则"看规则时按了下 R 把棋局重开了"，
+      // 而屏幕上唯一可见的东西是规则，玩家根本不会想到是自己按的
+      if (this.rulesOpen) return;
+      if (this.setupOpen) return;
+      const k = e.key.toLowerCase();
+      if (k === "z") this.undo();
+      else if (k === "r") this.restart();
+      else if (k === "g") this.setGhostMode(!this.ghostMode);
+      else if (k === "q" || k === "[") this.setActiveLayer(this.activeLayer - 1);
+      else if (k === "e" || k === "]") this.setActiveLayer(this.activeLayer + 1);
+      else if (k === "t") this.doRotate();                 // 四维：执行转动
+      else if (k === "y") this.restoreRotation();          // 四维：恢复本次转动
+    });
+  },
+
+  cellFromEvent(e, canvas) {
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;           // canvas 的 y 向下
+    const dims = this.session.board.dims;
+    const nx = dims[0], ny = dims[1];
+    const lay = this.gridLayout(r.width, r.height, nx, ny);
+    if (lay.cs <= 0.5) return null;
+    // 取【最近的交织点】，不是"包含它的格子"。这两种写法差半格：
+    // 用 floor 算格子再当格点用，落子点会整体偏 (-0.5,-0.5)，而且越往右下偏得越多。
+    // round 还有个附带好处 —— 每个交织点的命中区向外扩了半格，
+    // 所以最外圈（x=0、y=ny-1 这些）也点得到，不会因为贴着板边而点不中。
+    const x = Math.round((mx - lay.ox) / lay.cs);
+    const y = Math.round((r.height - my - lay.oy) / lay.cs);  // 翻回 y 向上
+    if (x < 0 || y < 0 || x >= nx || y >= ny) return null;
+    return { x: x, y: y };
+  },
+
+  bindInput() {
+    const gl = this.el.gl;
+
+    gl.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      this.pressInView = true;
+      this.dragging = true;
+      this.dragMoved = 0;
+      this.lastMouse = [e.clientX, e.clientY];
+      gl.classList.add("dragging");
+    });
+
+    window.addEventListener("pointermove", (e) => {
+      if (this.dragging) {
+        const dx = e.clientX - this.lastMouse[0];
+        const dy = e.clientY - this.lastMouse[1];
+        this.lastMouse = [e.clientX, e.clientY];
+        this.dragMoved += Math.hypot(dx, dy);
+        this.camera.yaw += dx * 0.32;
+        this.camera.pitch = Math.max(-85, Math.min(85, this.camera.pitch - dy * 0.32));
+      }
+
+      // 悬停拾取：只有在三维视口上方才算
+      const r = gl.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom) {
+        this.setHover(this.pick(e.clientX - r.left, e.clientY - r.top));
+      } else {
+        this.setHover(null);
+      }
+    });
+
+    window.addEventListener("pointerup", (e) => {
+      if (e.button !== 0) return;
+      gl.classList.remove("dragging");
+      if (this.pressInView && this.dragMoved < 6) {
+        // 位移小于 6 像素才算"点击"，否则是拖拽旋转
+        const r = gl.getBoundingClientRect();
+        const cell = this.pick(e.clientX - r.left, e.clientY - r.top);
+        if (cell) this.tryPlace(cell.x, cell.y);
+      }
+      this.pressInView = false;
+      this.dragging = false;
+    });
+
+    gl.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const f = 1 - Math.max(-1, Math.min(1, e.deltaY * 0.0012)) * 0.9;
+      this.camera.distance = Math.max(this.camera.minDistance,
+        Math.min(this.camera.maxDistance, this.camera.distance * f));
+    }, { passive: false });
+  },
+
+  setHover(cell) {
+    // 起始界面上左边是演示棋盘，不参与交互
+    if (this.setupOpen) cell = null;
+    const same = (cell === null && this.hover === null) ||
+      (cell && this.hover && cell.x === this.hover.x && cell.y === this.hover.y);
+    if (same) return;
+    this.hover = cell;
+    this.el.coords.textContent = cell
+      ? "将落子 (" + cell.x + "," + cell.y + "," + this.activeLayer + ")"
+      : "把鼠标移到棋盘上以选择落点";
+    if (this.session) this.uploadInstances();
+    this.drawLayerOverlay();
+  },
+
+  tryPlace(x, y) {
+    if (this.setupOpen) return;
+    if (!this.session || this.session.status !== "Playing") return;
+    const o = this.session.place(x, y, this.activeLayer);
+    if (o.status === MoveStatus.Rejected) this.toast(o.reason, false);
+  },
+
+  setActiveLayer(z) {
+    if (!this.session) return;
+    // 层是 z 层，所以夹取用的是 nz —— 不是 nx 也不是 ny
+    const clamped = Math.max(0, Math.min(this.session.board.dims[2] - 1, z));
+    if (clamped === this.activeLayer) return;
+    this.activeLayer = clamped;
+    // 切片深度恒等于当前层 —— 否则会出现"活动层落在被切掉的那一半里"这种自相矛盾的状态
+    this.uploadActiveGrid();
+    this.uploadInstances();
+    this.drawLayerBase();
+    this.drawLayerOverlay();
+    this.drawStrip();
+    this.refreshTexts();
+  },
+
+  setGhostMode(ghost) {
+    if (this.ghostMode === ghost) return;
+    this.ghostMode = ghost;
+    this.uploadInstances();
+    this.refreshTexts();
+  },
+
+  // ------------------------------------------------------------------ 四维转动
+
+  /** 面板上的选择 → 一次转动。非四维模式直接返回（按钮本来就不可见）。 */
+  doRotate() {
+    if (!this.session || !this.session.rotationEnabled) return;
+    const o = this.session.rotateBy(
+      this.rotAxis,
+      this.rotLayer,
+      this.rotClockwise ? RotationDirection.Clockwise : RotationDirection.CounterClockwise,
+      this.rotTurns);
+    // 成功的提示走 onRotationApplied 回调；这里只管三种"没转成"。
+    // 它们都不消耗回合、不留下痕迹 —— 提示必须说清是哪种，否则看起来像按钮坏了。
+    if (!o.accepted) this.toast(o.describe(), false);
+    this.refreshRotPanel();
+  },
+
+  restoreRotation() {
+    if (!this.session) return;
+    // 成功时的提示走 onRotationUndone 回调
+    if (!this.session.undoLastRotation()) this.toast("最后一步不是转动，没法恢复", false);
+    this.refreshRotPanel();
+  },
+
+  setRotAxis(a) {
+    this.rotAxis = a;
+    this.refreshRotPanel();
+    this.uploadInstances();
+    this.uploadActiveGrid();
+  },
+
+  /** 层号上下移动。refreshRotPanel 负责夹到 [0, n)，所以这里可以放心 ±1。 */
+  nudgeRotLayer(d) {
+    if (!this.session) return;
+    this.rotLayer += d;
+    this.refreshRotPanel();
+    this.uploadInstances();
+    this.uploadActiveGrid();
+  },
+
+  /**
+   * 把转动面板上的一切刷新一遍：可见性、选中态、层标签、冷却状态、按钮可用性、提示语。
+   * 任何会影响到转动的状态变了都要调它 —— 集中在一处，免得漏掉某一个入口。
+   */
+  refreshRotPanel() {
+    if (!this.session || !this.el.rotPanel) return;
+    const on = this.session.rotationEnabled;
+    this.el.rotPanel.classList.toggle("off", !on);
+    this.el.stripWrap.classList.toggle("compact", on);
+    if (!on) return;
+
+    const n = this.session.size;
+    this.rotLayer = Math.max(0, Math.min(n - 1, this.rotLayer));
+
+    for (const b of document.querySelectorAll(".rotAxis")) {
+      b.classList.toggle("sel", parseInt(b.dataset.axis, 10) === this.rotAxis);
+    }
+    for (const b of document.querySelectorAll(".rotTurns")) {
+      b.classList.toggle("sel", parseInt(b.dataset.turns, 10) === this.rotTurns);
+    }
+    this.el.rotCW.classList.toggle("sel", this.rotClockwise);
+    this.el.rotCCW.classList.toggle("sel", !this.rotClockwise);
+
+    const layerStones = this.session.board.countLayerStones(this.rotAxis, this.rotLayer);
+    this.el.rotLayerLabel.textContent =
+      axisName(this.rotAxis) + " = " + this.rotLayer + "（本层 " + layerStones + " 子）";
+    this.el.rotStatus.textContent = this.session.describeRotationStatus();
+    this.el.rotGo.disabled = !this.session.canRotate;
+    this.el.rotRestore.disabled = !this.session.canUndoLastRotation;
+
+    // 提示语按"最可能挡住你的那件事"排序，一次只说一条
+    let hint;
+    if (this.session.status !== "Playing") {
+      hint = "棋局已结束。";
+    } else if (layerStones === 0) {
+      hint = "这一层是空的，转不动。换一层，或者先在三维视图里看看子都在哪。";
+    } else if (!this.session.canRotate) {
+      hint = "冷却中：还要再落 " + this.session.placementsUntilRotation + " 手。转动占掉一整个回合，转完不能立刻落子。";
+    } else if (this.session.canUndoLastRotation) {
+      hint = "最后一步是转动，可以「恢复本次转动」退回去。";
+    } else {
+      hint = "顺时针 = 从该轴负方向朝原点看。转完若盘面出现 5 连会被整体撤销；转动占掉一整个回合。";
+    }
+    this.el.rotHint.textContent = hint;
+  },
+
+  undo() { if (!this.session.undo()) this.toast("没有可悔的棋了", true); },
+  restart() { this.hideBanner(); this.session.restart(); this.toast("已重开", true); },
+  swapFirst() {
+    const next = opponentOf(this.session.firstPlayer);
+    this.setupFirst = next;
+    this.hideBanner();
+    this.session.reset(this.session.board.dims, next, this.session.rules);
+    this.toast("已重开，改为" + cnOf(next) + "先手", true);
+  },
+
+  setSetupFirst(c) {
+    this.setupFirst = c;
+    this.el.firstBlack.classList.toggle("sel", c === BLACK);
+    this.el.firstWhite.classList.toggle("sel", c === WHITE);
+    this.refreshSetupSummary();
+  },
+
+  /** 夹到 [BoardLimits.Min, BoardLimits.Max]。范围只有 BoardLimits 这一处定义。 */
+  clampDim(v) {
+    if (!isFinite(v)) return BoardLimits.Min;
+    return Math.max(BoardLimits.Min, Math.min(BoardLimits.Max, Math.round(v)));
+  },
+
+  /**
+   * 设成三轴联动的立方（也就是"三轴联动"打开时的那个 N）。
+   * 保留这个名字是因为它是对外（测试、控制台）最顺手的入口；
+   * 真正的事实源是 setupDims，见 setupSize 的 getter/setter。
+   *
+   * 范围下限说明：内核自己的下限是 RuleSet.minSizeFourD = max(2, WinLength)，
+   * 因为棋盘装不下一条 5 连就永远分不出胜负。UI 这里收得更紧（8），是产品选择，不是规则。
+   */
+  setSetupSize(sz) {
+    const n = this.clampDim(sz);
+    this.setupDims = [n, n, n];
+    this.syncSetupInputs();
+    this.refreshSetupSummary();
+  },
+
+  /** 三维模式的三个轴分别设置。长方体是网页版独有的扩展，见 README。 */
+  setSetupDims(x, y, z) {
+    this.setupDims = [this.clampDim(x), this.clampDim(y), this.clampDim(z)];
+    this.syncSetupInputs();
+    this.refreshSetupSummary();
+  },
+
+  /** 把 state 写回输入框。**只在这里写 DOM**，其余地方一律改 state 再调它 ——
+   *  反过来的话，"输入框显示 20、state 里是 8"这种不一致迟早出现。 */
+  syncSetupInputs() {
+    const d = this.setupDims;
+    if (this.el.dimX) this.el.dimX.value = String(d[0]);
+    if (this.el.dimY) this.el.dimY.value = String(d[1]);
+    if (this.el.dimZ) this.el.dimZ.value = String(d[2]);
+    if (this.el.dimN) this.el.dimN.value = String(d[0]);   // 四维用同一个 N
+    for (const id of ["dimX", "dimY", "dimZ", "dimN"]) {
+      if (this.el[id]) this.el[id].classList.remove("bad");
+    }
+    if (this.el.dimCube) this.el.dimCube.classList.toggle("sel", this.setupCube);
+  },
+
+  /**
+   * 输入框 → state。**在 change（失焦/回车）时才提交，不在 input 时提交** ——
+   * 用户删掉旧数字准备打新数字的过程中，输入框里必然短暂地是空串或 "1"，
+   * 那一瞬间就夹取的话会把 15 变成 8，用户接着打的 "0" 就接到 8 后面变成 80。
+   * 空的/非数一律退回原值（而不是退回下限）：那是"还没打完"，不是"要一个最小的棋盘"。
+   */
+  commitDimInput(id, index) {
+    const el = this.el[id];
+    if (!el) return;
+    const raw = el.value === undefined || el.value === null ? "" : String(el.value).trim();
+    const v = parseInt(raw, 10);
+    const cur = this.setupDims[index];
+    if (!isFinite(v)) {                      // 空 / 乱打 → 退回原值，不算错
+      this.syncSetupInputs();
+      return;
+    }
+    const c = this.clampDim(v);
+    const bad = (c !== v);
+    el.classList.toggle("bad", bad);
+    if (this.setupCube || this.fourD) {
+      // 三轴联动：改一个就等于改三个。四维模式也走这条 —— 它必须立方。
+      this.setupDims = [c, c, c];
+    } else {
+      this.setupDims[index] = c;
+    }
+    this.syncSetupInputs();            // 先把夹取后的值写回输入框（顺带清掉所有 bad 类）
+    if (bad) el.classList.add("bad");  // 被夹取过就标红，告诉用户这个数不是他填的那个
+    this.refreshSetupSummary();
+  },
+
+  /** 「三轴联动」开关。关掉之后才能填出长方体。 */
+  setSetupCube(on) {
+    if (this.fourD) on = true;      // 四维必须立方，开关对它没有意义
+    this.setupCube = on;
+    if (on) this.setupDims = [this.setupDims[0], this.setupDims[0], this.setupDims[0]];
+    this.syncSetupInputs();
+    this.refreshSetupSummary();
+  },
+
+  setSetupMode(fourD) {
+    this.fourD = fourD;
+    this.el.mode3d.classList.toggle("sel", !fourD);
+    this.el.mode4d.classList.toggle("sel", fourD);
+    this.el.dimsRow3d.classList.toggle("hide", fourD);
+    this.el.dimsRow4d.classList.toggle("hide", !fourD);
+    this.el.coolRow.classList.toggle("hide", !fourD);
+    // 换模式时把尺寸重置成本模式的默认值（三维 15、四维 8）。
+    // 不这么做就会出现"切到四维、输入框里还留着三维的数"这类对不上的状态。
+    if (fourD) {
+      this.setupCube = true;                    // 四维必须立方
+      this.setupDims = [8, 8, 8];
+    } else {
+      this.setupDims = [15, 15, 15];
+    }
+    this.syncSetupInputs();
+    this.refreshSetupSummary();
+  },
+
+  setSetupCool(c) {
+    this.setupCool = c;
+    document.querySelectorAll(".coolBtn").forEach(b => {
+      b.classList.toggle("sel", parseInt(b.dataset.cool, 10) === c);
+    });
+    this.refreshSetupSummary();
+  },
+
+  /** 实测量（贪心模拟）：[中位手数, 一局结束时一层里的平均子数]。
+   *  **只列真跑过的尺寸，其余不编** —— 见 Web_Gomoku3D/README.md。
+   *  5 和 6 是下限还在 5 的那一轮测的，现在 UI 下限是 8、这两档已经选不到；
+   *  数据留着是为了不丢记录，不代表还能选。 */
+  fourDMeasured: { 5: [15, 3.0], 6: [13, 2.2], 8: [11, 1.4], 15: [10, 0.67] },
+
+  refreshSetupSummary() {
+    const d = this.fourD ? [this.setupSize, this.setupSize, this.setupSize] : this.setupDims;
+    const nx = d[0], ny = d[1], nz = d[2];
+    const cells = nx * ny * nz;
+    const cube = (nx === ny && ny === nz);
+    const big = Math.max(nx, ny, nz);
+    const cellsText = cells.toLocaleString();
+    let warn = "";
+
+    if (this.fourD) {
+      const n = nx;
+      const meas = this.fourDMeasured[n];
+      const perLayer = meas ? meas[1] + " 颗" : "全盘子数 ÷ " + n;
+      let line = "\n四维：每落 " + this.setupCool + " 手可转动一层（占掉整个回合，转动本身不算一手）。" +
+        "\n一层 = " + n + "×" + n + " 格，占全盘 1/" + n + "；一局结束时一层里平均 " + perLayer + "。";
+      if (meas) {
+        const times = Math.max(1, Math.floor((meas[0] - 1) / this.setupCool));
+        line += "\n按实测中位 " + meas[0] + " 手算，这一局最多转 " + times + " 次（实际通常更少，棋局常在那之前就结束了）。";
+      }
+      if (n >= 15) {
+        line += "\n注意：棋盘这么大时一层里常常只有一两颗子，多数转动会撞上「转完没变化」的判定。";
+      }
+      warn = line;
+    } else if (!cube) {
+      // 长方体是网页版独有的扩展。这段提示必须点明"测试向量不覆盖它"，
+      // 否则 README 里"立方路径由向量逐条钉住"这句话会被这一处悄悄推翻。
+      warn = "\n长方体棋盘（三轴不等）是网页版独有的扩展：" +
+        "现有的一致性测试向量只覆盖立方，不覆盖它。";
+      if (big >= 40) {
+        warn += "\n" + big + " 那条边很大时，三维视图里的格线会非常密（幽灵层模式可以缓解）。";
+      }
+    } else if (nx >= 40) {
+      warn = "\n提示：" + nx + "³ = " + cellsText + " 格，棋子用实例化渲染没有问题，" +
+        "但层数太多时全层缩略图会退化成占用条，三维视图里的格线也会非常密（幽灵层模式可以缓解）。";
+    } else if (nx >= 25) {
+      warn = "\n提示：" + nx + "³ = " + cellsText + " 格，建议配合幽灵层模式查看。";
+    } else if (nx <= 9) {
+      // 只说"小盘先手优势大"这个方向，不编具体数字 —— 没真跑过的不写进文案。
+      // 【曾经这里写着"15³ 上实测先手已胜 41.3%"】：那 41.3 是获胜线数量之比
+      // （15³ 的 23639 条 ÷ 15² 的 572 条），是几何计数，不是对局统计。
+      // 这个工程里【没有任何胜率实测数据】—— 没有 AI 可自对弈，贪心模拟量的是
+      // 中位手数和每层子数。别再把它当胜率写回来。
+      warn = "\n注意：棋盘越小，5 连越容易连成，先手优势也越大。";
+    }
+
+    this.el.sizeSummary.textContent = nx + " × " + ny + " × " + nz + "（" + cellsText + " 格）· " +
+      cnOf(this.setupFirst) + "先手" + warn;
+  },
+
+  resize() {
+    const r = this.el.view.getBoundingClientRect();
+    this.camera.frameBoard(r.width / Math.max(1, r.height), true);
+    this.drawLayerBase();
+    this.drawLayerOverlay();
+    this.drawStrip();
+  },
+
+  /**
+   * 主循环。起始界面打开时画演示盘、关闭时画对局盘 —— 两者共用同一个 canvas、
+   * 同一套着色器、同一份 draw3D，靠 uploadPreviewInstances 换掉逐实例数据来区分。
+   *
+   * （原来那一支的注释写的是"设置页打开时也继续画"，但那个分支其实是空的、什么都不画，
+   *   注释和实现对不上。现在这一支真的在画，注释才和代码一致。）
+   */
+  loop() {
+    const t = (typeof performance === "object" && performance && performance.now)
+      ? performance.now() : Date.now();
+    const dt = this.lastFrameT ? (t - this.lastFrameT) / 1000 : 0;   // 首帧没有上一帧，dt = 0
+    this.lastFrameT = t;
+
+    if (this.toastTimer > 0) {
+      this.toastTimer -= Math.min(0.2, dt || 0);
+      if (this.toastTimer <= 0) this.el.toast.classList.remove("on");
+    }
+    if (this.setupOpen) this.drawPreview(dt);
+    else this.draw3D();
+    requestAnimationFrame(() => this.loop());
+  },
+};
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => Game.init());
+  else Game.init();
+}
+
+// 供 node 下的测试读取内核
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { Board3D, RuleSet, RuleEngine, GameSession, DIRS13, MoveStatus, RestrictionTarget,
+                     EMPTY, BLACK, WHITE, opponentOf, cnOf,
+                     AXIS_X, AXIS_Y, AXIS_Z, RotationDirection, RotateStatus,
+                     RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName };
+}
+</script>
+</body>
+</html>
