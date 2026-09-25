@@ -27,6 +27,7 @@ const HTML_PATH = path.join(HERE, "..", "index.html");
 // 规则正文的权威来源。index.html 里嵌的那份是【生成物】，
 // 断言的正是"生成物逐字节等于它"。
 const RULES_PATH = path.join(HERE, "..", "RULES_SPEC.md");
+const RULES_EN_PATH = path.join(HERE, "..", "RULES_SPEC.en.md");
 const html = fs.readFileSync(HTML_PATH, "utf8");
 
 let passed = 0;
@@ -79,6 +80,14 @@ function makeElement(tag, id) {
     dataset: {},
     textContent: "",
     innerHTML: "",
+    // 真属性的影子本。collectStatic 现在读的是 data-i18n 的【属性值】（不是 id），
+    // 桩里没有这一层的话 applyStatic 会在 getAttribute 上直接抛 TypeError ——
+    // 那样"切语言"这条路径在桩里根本跑不到，后面的断言就全成了空断言。
+    _attrs: {},
+    getAttribute(name) {
+      return Object.prototype.hasOwnProperty.call(this._attrs, name) ? this._attrs[name] : null;
+    },
+    setAttribute(name, v) { this._attrs[name] = String(v); },
     width: 300,
     height: 200,
     clientWidth: 800,
@@ -151,14 +160,18 @@ elementsById.set("layerOverlay", makeElement("canvas", "layerOverlay"));
 elementsById.set("strip", makeElement("canvas", "strip"));
 elementsById.set("view", makeElement("div", "view"));
 elementsById.set("setup", makeElement("div", "setup"));
-// #rulesSrc 是 <script type="text/plain">，文本就是嵌进去的 RULES_SPEC.md 全文。
+// #rulesSrc / #rulesSrcEn 是 <script type="text/plain">，文本就是嵌进去的规则全文。
 // 桩里必须放【真内容】：否则渲染出来是空字符串，所有"正文里有没有 xxx"的断言
 // 都会在空字符串上做文章 —— 那正是"假测试"的典型长相。
-{
-  const rm = html.match(/<script type="text\/plain" id="rulesSrc">\n([\s\S]*?)\n<\/script>/);
-  const el = makeElement("div", "rulesSrc");
-  el.textContent = rm ? rm[1] + "\n" : "";
-  elementsById.set("rulesSrc", el);
+// 两份都要灌：只灌中文那份的话，英文浮层在桩里渲染的是空字符串，
+// 而那几条"英文规则里有 xxx"的断言照样会过（在空串上找子串本来就找不到，
+// 但"找不到就报错"的断言会红 —— 反过来"找到了就报错"的断言会静默通过）。
+for (const id of ["rulesSrc", "rulesSrcEn"]) {
+  const rm = html.match(new RegExp('<script type="text\\/plain" id="' + id + '">\\n([\\s\\S]*?)\\n<\\/script>'));
+  if (!rm) throw new Error("index.html 里找不到 #" + id + " 的 script 块");
+  const el = makeElement("div", id);
+  el.textContent = rm[1] + "\n";
+  elementsById.set(id, el);
 }
 // 开局时设置页是打开的（CSS 默认不是 display:none），这里如实反映
 elementsById.get("setup").classList.add("off"); // 启动后会被 Game 打开设置页的流程覆盖
@@ -191,14 +204,77 @@ const rotAxisEls = group(".rotAxis", rotAxisValues, "axis");
 const rotTurnEls = group(".rotTurns", rotTurnValues, "turns");
 const coolEls = group(".coolBtn", coolValues, "cool");
 
+// 这三组原来【一条长度断言都没有】。它们的取值靠上面那三条正则从 HTML 里抠，
+// 而正则要求 data-axis / data-turns / data-cool 紧跟 class —— 往中间插一个新属性
+// （比如 data-i18n）就会让数组静默变空，然后 syncCoolRow / setSetupCool 在桩里
+// 变成空操作，所有断言照样绿。这里把它钉死：抠出来的条数必须和 HTML 里 class 的
+// 出现次数一致。
+for (const [name, els, cls] of [["rotAxis", rotAxisEls, ".rotAxis"],
+                                ["rotTurns", rotTurnEls, ".rotTurns"],
+                                ["coolBtn", coolEls, ".coolBtn"]]) {
+  const inHtml = (html.match(new RegExp('class="' + cls.slice(1) + '[^"]*"', "g")) || []).length;
+  if (els.length !== inHtml || els.length === 0) {
+    throw new Error(`桩解析 ${name} 得到 ${els.length} 个，HTML 里有 ${inHtml} 个 —— ` +
+      `dom-smoke 顶部那三条正则要求 data-* 紧跟 class，中间插了别的属性就会静默抠空`);
+  }
+}
+
+// 带 data-i18n / data-i18n-html 的静态文案元素。和上面几组同一个套路：从 HTML 里解析。
+// 【这一块不加，applyLang 在桩里就是静默空操作】—— querySelectorAll 只认三个选择器，
+// 认不出 [data-i18n] 就返回空数组，applyStatic 遍历一个空列表，然后所有"切到英文"的
+// 断言都会通过，因为它们压根没有元素可查。那正是"假测试"的标准长相。
+// 正文取 HTML 里的原文，所以切回中文时写回的就是 HTML 里那一份，不是桩另编的。
+const i18nEls = [];
+const i18nHtmlEls = [];
+{
+  const re = /<(\w+)\b([^>]*\bdata-i18n(-html)?="([^"]+)"[^>]*)>([\s\S]*?)<\/\1>/g;
+  for (const m of html.matchAll(re)) {
+    const attrs = m[2], isHtml = !!m[3], key = m[4], body = m[5];
+    const idm = attrs.match(/\bid="([^"]+)"/);
+    if (!idm) throw new Error("data-i18n 的元素没有 id，没法当键：" + m[0].slice(0, 60));
+    const el = elementsById.get(idm[1]);
+    if (!el) throw new Error('<' + m[1] + ' id="' + idm[1] + '"> 不在 realIds 里');
+    // 【键是属性值，不是 id】和 index.html 里 collectStatic() 取键的方式保持一致。
+    // 两边不一致的话，桩里"切到英文"用的键和浏览器里用的不是同一个 ——
+    // 那这条断言就只是在验证桩自己的想象。
+    el.setAttribute(isHtml ? "data-i18n-html" : "data-i18n", key);
+    el.dataset.i18n = key;
+    if (isHtml) { el.innerHTML = body; i18nHtmlEls.push(el); }
+    else { el.textContent = body; i18nEls.push(el); }
+  }
+  // 分母只数【标签里的】属性（<标签 … data-i18n="…"），不是整份源文件里数子串。
+  // 源码里提一句 data-i18n="…" 的地方不止标签：JS 注释里解释这个属性时就会写到，
+  // 而那种提及不是元素、也不会被解析 —— 按子串数的话，注释一写多就报
+  // "有元素没被解析到"，把真正要抓的"非叶子元素"淹没在假警报里。
+  const decl = [...html.matchAll(/<\w+\b[^>]*\bdata-i18n(-html)?="[^"]+"/g)].length;
+  if (i18nEls.length + i18nHtmlEls.length !== decl) {
+    throw new Error(`HTML 的标签里有 ${decl} 个 data-i18n 属性，桩只解析出 ` +
+      `${i18nEls.length + i18nHtmlEls.length} 个 —— 有元素没被解析到（可能不是叶子元素）`);
+  }
+  if (i18nEls.length === 0) throw new Error("一个 data-i18n 元素都没解析出来，静态文案的检查会全部空转");
+}
+
+// <html> 元素。语言切换要往它上面写类名和 lang —— stubs 里没有的话，
+// applyLang 会在 documentElement 上是 undefined 的地方直接抛 TypeError，
+// 那样"切换语言"这条路径在桩里根本跑不到，后面的断言就都成了空断言。
+// lang 的初值从 HTML 里解析，和别的 id 一样不在这里另写一份。
+const htmlEl = makeElement("html");
+{
+  const m = html.match(/<html[^>]*\slang="([^"]+)"/);
+  htmlEl.lang = m ? m[1] : "";
+}
+
 const documentStub = {
   readyState: "complete",
+  documentElement: htmlEl,
   getElementById(id) { return elementsById.has(id) ? elementsById.get(id) : null; },
   createElement(tag) { return makeElement(tag); },
   querySelectorAll(sel) {
     if (sel === ".rotAxis") return rotAxisEls;
     if (sel === ".rotTurns") return rotTurnEls;
     if (sel === ".coolBtn") return coolEls;
+    if (sel === "[data-i18n]") return i18nEls;
+    if (sel === "[data-i18n-html]") return i18nHtmlEls;
     return [];
   },
   addEventListener() {},
@@ -230,6 +306,7 @@ const fullScript = html.slice(scriptStart + 8, scriptEnd);
 let Game = null;
 let PALETTE = null, FALLBACK_COLORS = null, cellSize = null, BoardLimits = null, CoreNS = null;
 let renderRulesMarkdown = null, escapeHtmlNS = null;
+let TEXT_EN = null, STATIC_EN = null, t = null;
 step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   const runner = new Function(
     "document", "window", "requestAnimationFrame", "console", "Set", "Map",
@@ -237,6 +314,10 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
       " Palette: Palette, FALLBACK_COLORS: FALLBACK_COLORS, cellSize: cellSize," +
       " BoardLimits: BoardLimits," +
       " renderRulesMarkdown: renderRulesMarkdown, escapeHtml: escapeHtml," +
+      // 两张表和 t() 都要露出来：语言那几步检查的就是"表里有没有这一条"，
+      // 只能从表本身问，不能从界面上反推（界面上少一条英文的表现是"那一处还是中文"，
+      // 而这一条恰恰是检查要抓的东西）。表的键是【键名】不是 DOM，不违反"桩不另写一份"。
+      " TEXT_EN: TEXT.en, STATIC_EN: STATIC_TEXT.en, t: t," +
       " CoreNS: { GameSession: GameSession, FourDSession: FourDSession, RuleSet: RuleSet," +
       "           RotateStatus: RotateStatus, MoveStatus: MoveStatus } };"
   );
@@ -246,6 +327,8 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   PALETTE = NS.Palette; FALLBACK_COLORS = NS.FALLBACK_COLORS;
   cellSize = NS.cellSize; BoardLimits = NS.BoardLimits; CoreNS = NS.CoreNS;
   renderRulesMarkdown = NS.renderRulesMarkdown; escapeHtmlNS = NS.escapeHtml;
+  TEXT_EN = NS.TEXT_EN; STATIC_EN = NS.STATIC_EN; t = NS.t;
+  if (!TEXT_EN || !STATIC_EN || !t) throw new Error("英文文案表没有暴露出来");
   if (!Game) throw new Error("Game 对象没有暴露出来");
   if (!PALETTE || !FALLBACK_COLORS || !cellSize || !BoardLimits)
     throw new Error("调色板 / cellSize / BoardLimits 没有暴露出来");
@@ -1298,38 +1381,82 @@ step("四维模式：给长方体会退化成立方；内核层面转动一律�
   Game.newGame(15, 1);
 });
 
-step("规则全文：页面里嵌的那段必须逐字节等于 RULES_SPEC.md", () => {
+step("规则全文：页面里嵌的两段必须逐字节等于各自的源文件", () => {
   // 这条是整个功能的支点。游戏里显示"规则全文"，如果嵌的是手抄的一份，
   // 就有了第二份规则文本 —— 改了一边忘了另一边，玩家看到的规则和代码执行的规则
   // 就会不一致，而那种不一致没有任何东西会报警。
-  // 所以：正文只此一份（RULES_SPEC.md），页面里那段是生成物，这里钉死它们相等。
-  const src = fs.readFileSync(RULES_PATH, "utf8").replace(/\r\n/g, "\n");
-  const i = html.indexOf("<!-- RULES-EMBED-BEGIN -->");
-  const j = html.indexOf("<!-- RULES-EMBED-END -->");
-  if (i < 0 || j < 0) throw new Error("index.html 里找不到 RULES-EMBED 标记");
-  const m = html.slice(i, j).match(/<script type="text\/plain" id="rulesSrc">\n([\s\S]*?)\n<\/script>/);
-  if (!m) throw new Error("标记之间找不到 #rulesSrc 的 script 块");
-  const embedded = m[1] + "\n";
+  // 所以：每种语言正文只此一份（RULES_SPEC.md / RULES_SPEC.en.md），页面里那两段是
+  // 生成物，这里钉死它们各等于自己的源文件。两种语言同样查，不是只查中文那份。
+  const DOCS = [
+    { rel: "RULES_SPEC.md", path: RULES_PATH, begin: "<!-- RULES-EMBED-BEGIN -->",
+      end: "<!-- RULES-EMBED-END -->", id: "rulesSrc" },
+    { rel: "RULES_SPEC.en.md", path: RULES_EN_PATH, begin: "<!-- RULES-EMBED-EN-BEGIN -->",
+      end: "<!-- RULES-EMBED-EN-END -->", id: "rulesSrcEn" },
+  ];
 
-  if (embedded !== src) {
-    const a = embedded.split("\n"), b = src.split("\n");
-    let firstDiff = -1;
-    for (let k = 0; k < Math.max(a.length, b.length); k++) {
-      if (a[k] !== b[k]) { firstDiff = k; break; }
+  let prevEnd = -1;
+  for (const d of DOCS) {
+    const src = fs.readFileSync(d.path, "utf8");
+    const i = html.indexOf(d.begin);
+    const j = html.indexOf(d.end);
+    if (i < 0 || j < 0) throw new Error("index.html 里找不到 " + d.begin + " / " + d.end);
+    // 顺序：后一条整个排在前一条 END 之后。反过来的话重新生成会把它整段吃掉。
+    if (i < prevEnd) throw new Error(d.rel + " 的标记排在 " + DOCS[0].rel + " 的 END 之前");
+    prevEnd = j + d.end.length;
+
+    const re = new RegExp('<script type="text\\/plain" id="' + d.id + '">\\n([\\s\\S]*?)\\n<\\/script>');
+    const m = html.slice(i, j).match(re);
+    if (!m) throw new Error("标记之间找不到 #" + d.id + " 的 script 块");
+    const embedded = m[1] + "\n";
+
+    if (embedded !== src) {
+      const a = embedded.split("\n"), b = src.split("\n");
+      let firstDiff = -1;
+      for (let k = 0; k < Math.max(a.length, b.length); k++) {
+        if (a[k] !== b[k]) { firstDiff = k; break; }
+      }
+      // 报出第一处差异所在的行 —— 否则"两份一万字的文档不一样"这句话没法用
+      throw new Error("嵌进页面的 " + d.rel + " 和源文件不一致（第 " + (firstDiff + 1) + " 行起）\n" +
+        "      页面：" + JSON.stringify((a[firstDiff] || "").slice(0, 60)) + "\n" +
+        "      文件：" + JSON.stringify((b[firstDiff] || "").slice(0, 60)) + "\n" +
+        "      修法：node _verify/embed-rules.mjs");
     }
-    // 报出第一处差异所在的行 —— 否则"两份七千字的文档不一样"这句话没法用
-    throw new Error("嵌进页面的规则和 RULES_SPEC.md 不一致（第 " + (firstDiff + 1) + " 行起）\n" +
-      "      页面：" + JSON.stringify((a[firstDiff] || "").slice(0, 60)) + "\n" +
-      "      文件：" + JSON.stringify((b[firstDiff] || "").slice(0, 60)) + "\n" +
-      "      修法：node _verify/embed-rules.mjs");
-  }
-  if (embedded.length !== src.length)
-    throw new Error("长度都不等：页面 " + embedded.length + " 文件 " + src.length);
 
-  // 顺带把"能不能安全嵌进 script 标签"钉住：正文里出现 </script 就会被当场截断
-  if (/<\/script/i.test(src)) throw new Error("RULES_SPEC.md 里出现了 </script，无法原样嵌入");
-  if (src.indexOf("\r") >= 0) throw new Error("RULES_SPEC.md 不是纯 LF —— 先统一行尾");
-  if (!/^# /.test(src)) throw new Error("RULES_SPEC.md 不像是一份 Markdown（开头不是一级标题）");
+    // 顺带把"能不能安全嵌进 script 标签"钉住：正文里出现 </script 就会被当场截断
+    if (/<\/script/i.test(src)) throw new Error(d.rel + " 里出现了 </script，无法原样嵌入");
+    if (src.indexOf("\r") >= 0) throw new Error(d.rel + " 不是纯 LF —— 先统一行尾");
+    if (!/^# /.test(src)) throw new Error(d.rel + " 不像是一份 Markdown（开头不是一级标题）");
+
+    // 渲染器只认这几样，另外三样会【静默降级】成原样文字：
+    // 有序列表和围栏代码块渲染器根本不支持，写成 *斜体* 则会原样显示星号。
+    // 英文技术写作比中文更爱用这三种，所以这里对两份都钉死，不是只钉英文那份。
+    if (/^\s*\d+\.\s/m.test(src)) throw new Error(d.rel + " 里出现了有序列表（渲染器不支持，会掉成普通段落）");
+    if (/```/.test(src)) throw new Error(d.rel + " 里出现了围栏代码块（渲染器不支持）");
+    if (/(^|[^*])\*[^*\n]+\*(?!\*)/m.test(src)) throw new Error(d.rel + " 里出现了 *斜体*（渲染器只认 **粗体**）");
+  }
+});
+
+step("规则全文：中英两份的章节结构和数字必须对得上", () => {
+  // 逐字对译做不到，但【结构】和【数字】是两件必须一致的事：
+  // 少一节（"这一节忘了翻"）、或者哪边的数字抄错一个（23639 写成 2363），
+  // 单独读一份文档都看不出来，而玩家按哪一份玩都可能不对。
+  const zh = fs.readFileSync(RULES_PATH, "utf8");
+  const en = fs.readFileSync(RULES_EN_PATH, "utf8");
+  const heads = (s) => [1, 2, 3].map((n) => (s.match(new RegExp("^#{" + n + "} ", "gm")) || []).length);
+  const hz = heads(zh), he = heads(en);
+  if (hz.join("/") !== he.join("/"))
+    throw new Error("中英两份的章节数对不上（# / ## / ###）：中文 " + hz.join("/") + "，英文 " + he.join("/"));
+  if (hz[0] === 0) throw new Error("两份都没有一级标题，上面的比较是 0 == 0 的空断言");
+
+  const nums = (s) => [...new Set(s.match(/\d+/g) || [])].sort((a, b) => Number(a) - Number(b));
+  const nz = nums(zh), ne = nums(en);
+  const onlyZh = nz.filter((x) => ne.indexOf(x) < 0);
+  const onlyEn = ne.filter((x) => nz.indexOf(x) < 0);
+  if (onlyZh.length || onlyEn.length)
+    throw new Error("两份文档里的数字对不上：\n" +
+      "      只在中文里有：" + (onlyZh.join(", ") || "（无）") + "\n" +
+      "      只在英文里有：" + (onlyEn.join(", ") || "（无）") +
+      "\n      规则里的每个数字都是判据，抄错一个不会有人看出来。");
 });
 
 step("起始界面：规则摘要必须还在（玩家点「开始游戏」之前唯一能看到规则的地方）", () => {
@@ -1340,7 +1467,9 @@ step("起始界面：规则摘要必须还在（玩家点「开始游戏」之�
   // 为什么要钉这一段：起始界面上原本还挂着一句开发者向的"规则全文见 RULES_SPEC.md …"，
   // 删掉它是对的（要看全文，右上角有「具体规则」按钮，比让玩家去工程目录里找文件合理）。
   // 但它和上面两行【玩家向】的规则摘要挨在一起，删的时候多删一行不会有任何测试报警。
-  const m = html.match(/<div id="ruleNote">([\s\S]*?)<\/div>/);
+  // 标签上允许有别的属性（现在挂着 data-i18n-html）：这条钉的是"摘要还在、还在这一段里"，
+  // 不是"这个标签一个属性都不能有" —— 加 [^>]* 不放松任何东西。
+  const m = html.match(/<div id="ruleNote"[^>]*>([\s\S]*?)<\/div>/);
   if (!m) throw new Error("index.html 里找不到 <div id=\"ruleNote\">，起始界面就没有规则摘要了");
   const text = m[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
   for (const [needle, why] of [
@@ -1484,6 +1613,293 @@ step("键盘与面板事件回调都能挂上", () => {
   if (!Game.el.gl._listeners.wheel) throw new Error("gl 没有挂 wheel");
   if (!Game.el.layerBase._listeners.click) throw new Error("活动层网格没有挂 click");
   if (!Game.el.strip._listeners.click) throw new Error("缩略条没有挂 click");
+});
+
+// ---------------------------------------------------------------------------
+// 界面语言
+//
+// 这组刻意放在【最后】：它会把界面切到英文再切回来，中间的每一条断言读的都是
+// 另一种语言的界面。放在前面的话，后面那些按中文写的断言会读到英文 ——
+// 那是"测试顺序影响结果"，比它想抓的 bug 更难查。
+// 最后一条会把语言复位，且它自己就断言复位成功。
+// ---------------------------------------------------------------------------
+step("语言：HTML 里每个 data-i18n 键在英文表里都有，且表里没有多余的键", () => {
+  const keys = new Set();
+  // 【只数标签里的属性，不数整份源码里的子串】：源码里提到这个属性的地方不止标签 ——
+  // index.html 里 collectStatic() 的注释就用 data-i18n="modeGhostTypo" 举例说明
+  // "属性值写错会怎样"，那句话被当成第 42 个元素，于是这条断言报的是
+  // "这些键没有英文：modeGhostTypo" —— 一个注释引起的假警报，而真正的漏翻会被它淹掉。
+  // 要求前面是个开标签（<标签名 后跟属性）就能把注释和正文都挡在外面。
+  for (const m of html.matchAll(/<\w+\b[^>]*\bdata-i18n(?:-html)?="([^"]+)"/g)) keys.add(m[1]);
+  if (keys.size < 30) throw new Error("只解析出 " + keys.size + " 个键，太少了 —— 正则或属性写错了");
+  const missing = [...keys].filter((k) => STATIC_EN[k] === undefined);
+  if (missing.length) throw new Error("这些键没有英文：" + missing.join(", "));
+  const extra = Object.keys(STATIC_EN).filter((k) => !keys.has(k));
+  if (extra.length) throw new Error("英文表里这些键在 HTML 里没有对应元素（拼错了？）：" + extra.join(", "));
+});
+
+// 从源码里把 t()/tn()/say()/sayN() 的键抠出来。
+//
+// 【为什么值得写一个真扫描器而不是一条正则】：这几种调用的实参形态差得太远 ——
+// t("k")、t("k", {}),、say(() => "中文" + x, "k")、sayN(fn, "k.one", "k.many", n)，
+// 而且第一个实参箭头函数里本来就有逗号。用正则去"按逗号切"必然在某个形态上静默抓不全，
+// 而抓不全的后果是"漏一条英文永远不报警"——界面上只表现为那一句还是中文。
+// 所以这里做的是括号配平 + 跳过字符串/注释，按实参位置取。
+//
+// 键必须写成字面量，也正是为了让这段扫描能看见它们。
+const isWordChar = (c) => c !== undefined && /[A-Za-z0-9_$]/.test(c);
+
+/** 从 i 处的引号开始，返回闭引号的下标（跳过 \x 转义）。没闭合就返回末位。 */
+function skipStr(src, i) {
+  const q = src[i];
+  for (let k = i + 1; k < src.length; k++) {
+    if (src[k] === "\\") { k++; continue; }
+    if (src[k] === q) return k;
+  }
+  return src.length;
+}
+
+/** j 是某个标识符左边界的前一个位置；返回它前面那个词（跳过空白）。 */
+function precedingKeyword(src, j) {
+  let m = j;
+  while (m >= 0 && /\s/.test(src[m])) m--;
+  const end = m + 1;
+  while (m >= 0 && isWordChar(src[m])) m--;
+  return src.slice(m + 1, end);
+}
+
+/** return /case 这类关键字后面跟的是正则不是除号。 */
+const REGEX_AFTER_WORD = ["return", "typeof", "case", "delete", "void", "new",
+                          "in", "of", "instanceof", "do", "else", "yield", "await"];
+
+/**
+ * 这个 / 是正则字面量的开头还是除号？
+ *
+ * 【为什么必须判】：脚本里有一句 .replace(/"/g, "&quot;")，那个 / 后面跟着一个
+ * 双引号。不把它当正则读的话，扫描会把 /" 里的 " 当成字符串开头，然后一路跑到
+ * 几百字符之外的下一个引号才"闭合" —— 从此整段代码都在字符串里，后面所有调用点
+ * 一个也扫不到。【而扫描结果是 0 个键时，如果只断言"扫到的键都在表里"，
+ * 就是全绿的空转】。所以这条判断是这段扫描能不能成立的地基，不是优化。
+ *
+ * 判据是标准的那条：能作为值的结尾（标识符、数字、) ] }）之后是除号，其余是正则。
+ */
+function regexAllowed(src, i) {
+  let j = i - 1;
+  while (j >= 0 && /\s/.test(src[j])) j--;
+  if (j < 0) return true;                                  // 行首
+  if (/[A-Za-z0-9_$]/.test(src[j])) {
+    const end = j + 1;
+    while (j >= 0 && isWordChar(src[j])) j--;
+    return REGEX_AFTER_WORD.indexOf(src.slice(j + 1, end)) >= 0;
+  }
+  return ")]}".indexOf(src[j]) < 0;
+}
+
+/** / 处的正则字面量，返回闭 / 的下标。字符组 [...] 里的 / 不算结束。 */
+function skipRegex(src, i) {
+  let inClass = false;
+  for (let k = i + 1; k < src.length; k++) {
+    const c = src[k];
+    if (c === "\\") { k++; continue; }
+    if (c === "\n") return k - 1;                          // 正则不跨行：当成没闭合
+    if (inClass) { if (c === "]") inClass = false; continue; }
+    if (c === "[") { inClass = true; continue; }
+    if (c === "/") return k;
+  }
+  return src.length;
+}
+
+/**
+ * src[i] 是字符串 / 注释 / 正则的开头吗？是就返回它【之后】的下标，不是返回 -1。
+ * 三个扫描循环（主循环、matchParen、skipFunctionBody）共用这一处 ——
+ * 各写一份的话，"正则字面量"这种漏一种就是一处静默的错位。
+ */
+function skipNonCode(src, i) {
+  const c = src[i];
+  if (c === '"' || c === "'" || c === "`") return skipStr(src, i) + 1;
+  if (c === "/" && src[i + 1] === "/") { const e = src.indexOf("\n", i); return e < 0 ? src.length : e; }
+  if (c === "/" && src[i + 1] === "*") { const e = src.indexOf("*/", i + 2); return e < 0 ? src.length : e + 2; }
+  if (c === "/" && regexAllowed(src, i)) return skipRegex(src, i) + 1;
+  return -1;
+}
+
+/** 从 ( 的下标开始，返回配对的那个 ) 的下标。 */
+function matchParen(src, i) {
+  let depth = 0;
+  for (let k = i; k < src.length; k++) {
+    const next = skipNonCode(src, k);
+    if (next >= 0) { k = next - 1; continue; }
+    const d = src[k];
+    if (d === "(" || d === "[" || d === "{") depth++;
+    else if (d === ")" || d === "]" || d === "}") { depth--; if (depth === 0) return k; }
+  }
+  return src.length;
+}
+
+/** `function t(...) {...}` —— parenAt 是形参表那个 ( 的下标，返回函数体 } 的下标。 */
+function skipFunctionBody(src, parenAt) {
+  let k = matchParen(src, parenAt) + 1;
+  while (k < src.length && /\s/.test(src[k])) k++;
+  if (src[k] !== "{") return k;               // 理论上走不到；真走到了就当它到这儿结束
+  let depth = 0;
+  for (; k < src.length; k++) {
+    const next = skipNonCode(src, k);
+    if (next >= 0) { k = next - 1; continue; }
+    const d = src[k];
+    if (d === "{" || d === "(" || d === "[") depth++;
+    else if (d === "}" || d === ")" || d === "]") { depth--; if (depth === 0) return k; }
+  }
+  return src.length;
+}
+
+function textKeysInSource(src) {
+  const keys = new Set();
+  // 实参位置：t/tn 从 0 数，say/sayN 的第 0 个是中文表达式，键从 1 数
+  const KEY_ARG = { t: [0], tn: [0, 1], say: [1], sayN: [1, 2] };
+
+  for (let i = 0; i < src.length; i++) {
+    const next = skipNonCode(src, i);
+    if (next >= 0) { i = next - 1; continue; }
+    if (src[i] !== "(") continue;
+
+    // 往左看：被调用的是不是那四个名字（跳过空白，再吃一整个标识符）
+    let j = i - 1;
+    while (j >= 0 && /\s/.test(src[j])) j--;
+    const nameEnd = j + 1;
+    while (j >= 0 && isWordChar(src[j])) j--;
+    const name = src.slice(j + 1, nameEnd);
+    // hasOwnProperty 而不是 KEY_ARG[name] —— 后者会把 "constructor"/"toString"
+    // 这些原型上的名字当成命中（脚本里就有 cells.toLocaleString()）。
+    if (!Object.prototype.hasOwnProperty.call(KEY_ARG, name)) continue;
+    if (j >= 0 && src[j] === ".") continue;   // obj.t(...) 不是这里的东西
+    // function t(key, params) {...} 是【定义】不是调用点。它必须整个跳过，不能只跳形参表：
+    // say 的形参 zhFn / tn 的函数体里都在转发变量（`return t(n === 1 ? keyOne : keyMany, …)`），
+    // 那是机制的内部构造，按定义就不可能是字面量。这四段之外要是出现"变量当键"，
+    // 下面照样会报红 —— 而这四段正是唯一豁免的地方，名字写死在这里。
+    if (precedingKeyword(src, j) === "function") { i = skipFunctionBody(src, i); continue; }
+
+    // 从 ( 配平到 )，沿途记下【顶层】逗号 —— 第一个实参是箭头函数时里面本来就有逗号，
+    // 按逗号硬切会把 say(() => a + b, "k") 切错。
+    const close = matchParen(src, i);
+    const argStart = [i + 1];
+    {
+      let depth = 1;
+      for (let k = i + 1; k < close; k++) {
+        const nx = skipNonCode(src, k);
+        if (nx >= 0) { k = nx - 1; continue; }
+        const d = src[k];
+        if (d === "(" || d === "[" || d === "{") depth++;
+        else if (d === ")" || d === "]" || d === "}") depth--;
+        else if (d === "," && depth === 1) argStart.push(k + 1);
+      }
+    }
+    const args = argStart.map((s, n) => {
+      const e = n + 1 < argStart.length ? argStart[n + 1] - 1 : close;
+      return src.slice(s, e).trim();
+    });
+    for (const idx of KEY_ARG[name]) {
+      const a = args[idx];
+      if (a === undefined) continue;
+      const m = a.match(/^"([^"\\]*)"$/);
+      if (!m) {
+        // 键写成字面量是硬要求 —— 写成变量或拼出来的字符串，这条检查就看不见它了。
+        // 那种情况下【漏一条英文不会报警】，所以这里当场报错而不是跳过。
+        throw new Error(name + "() 的第 " + (idx + 1) + " 个实参不是字符串字面量：" +
+          JSON.stringify(a.slice(0, 60)) + "\n      （键写成变量后" +
+          "这条检查就看不见它了 —— 要么改成字面量，要么把它加进一个显式清单）");
+      }
+      keys.add(m[1]);
+    }
+  }
+  return keys;
+}
+
+step("语言：脚本里每个 t()/tn() 的键在英文表里都有", () => {
+  const used = textKeysInSource(fullScript);
+  if (used.size < 30) throw new Error("只从脚本里抓到 " + used.size + " 个键，太少了 —— 扫描漏了，检查会空转");
+  const missing = [...used].filter((k) => TEXT_EN[k] === undefined);
+  if (missing.length) throw new Error("脚本里用了但英文表里没有的键：" + missing.join(", "));
+  // 反方向：表里有、代码里没人用 —— 多半是改名时漏改了一处，留着只会烂在那儿
+  const dead = Object.keys(TEXT_EN).filter((k) => !used.has(k));
+  if (dead.length) throw new Error("英文表里这些键没人用（改名漏改？）：" + dead.join(", "));
+});
+
+step("语言：切到英文后界面真的变了，且状态行/信息行是英文", () => {
+  Game.setLang("en");
+  if (documentStub.documentElement.lang !== "en")
+    throw new Error("documentElement.lang 应为 en，实际 " + documentStub.documentElement.lang);
+  if (!documentStub.documentElement.classList.contains("lang-en"))
+    throw new Error("documentElement 上没有 .lang-en —— 英文排版那一段 CSS 不会生效");
+  if (Game.el.langBtn.textContent !== "中文")
+    throw new Error("英文界面下语言按钮应写「中文」，实际 " + JSON.stringify(Game.el.langBtn.textContent));
+  if (Game.el.startBtn.textContent !== "Start game")
+    throw new Error("开始按钮应为英文，实际 " + JSON.stringify(Game.el.startBtn.textContent));
+
+  // 状态行：走的是内核的 describeStatus(lang)，数字必须和中文那份一样
+  const s = Game.session;
+  const zh = s.describeStatus();
+  const en = s.describeStatus("en");
+  if (en === zh) throw new Error("describeStatus 在两种语言下返回了同一句话：" + en);
+  if (/[一-鿿]/.test(en)) throw new Error("英文状态行里还有汉字：" + en);
+  const nums = (x) => (String(x).match(/\d+/g) || []).join(",");
+  if (nums(en) !== nums(zh))
+    throw new Error("中英状态行的数字对不上（很可能是英文那侧漏了分支）：\n" +
+      "      中：" + zh + "\n      英：" + en);
+  if (Game.el.status.textContent !== en)
+    throw new Error("状态行没有跟着语言走，实际：" + Game.el.status.textContent);
+
+  // 规则浮层的正文按语言选块。选错了没有任何东西会报警：英文界面里出现一整篇
+  // 中文规则看着"像"是漏翻，而渲染缓存还会把它一直挂在那儿，重新打开也不修。
+  Game.rulesRendered = false;          // 强制重渲染（正常路径上由 applyLang 置回 false）
+  Game.openRules();
+  const bodyEn = Game.el.rulesBody.innerHTML;
+  if (bodyEn.indexOf("Winning directions") < 0)
+    throw new Error("英文界面下规则浮层渲染的不是英文正文：" + bodyEn.slice(0, 80));
+  if (/[一-鿿]/.test(bodyEn))
+    throw new Error("英文规则浮层里还有汉字（多半是取到了 #rulesSrc）");
+  Game.setLang("zh");
+  Game.rulesRendered = false;
+  Game.openRules();
+  if (Game.el.rulesBody.innerHTML.indexOf("获胜方向") < 0)
+    throw new Error("切回中文后规则浮层没有跟着回去");
+  Game.closeRules();
+  Game.setLang("en");                  // 还原成这一步进来时的语言，别影响后面的 step
+});
+
+step("语言：切回中文后，每个静态元素都与 HTML 原文逐字节相等", () => {
+  // 这是这一组里最重要的一条：applyStatic 的中文方向是"写回快照"，
+  // 快照抄错了、或者哪次切英文把中文盖掉了，都只会在【切回来】的时候才看得出来。
+  Game.setLang("zh");
+  if (Game.el.startBtn.textContent !== "开始游戏")
+    throw new Error("切回中文后开始按钮不对：" + JSON.stringify(Game.el.startBtn.textContent));
+  if (documentStub.documentElement.lang !== "zh-CN")
+    throw new Error("切回后 lang 应为 zh-CN，实际 " + documentStub.documentElement.lang);
+  if (documentStub.documentElement.classList.contains("lang-en"))
+    throw new Error("切回中文后 .lang-en 还在，英文排版会继续生效");
+
+  const bad = [];
+  for (const key of Object.keys(STATIC_EN)) {
+    const el = elementsById.get(key);
+    if (!el) { bad.push(key + "（元素不存在）"); continue; }
+    const el0 = i18nHtmlEls.indexOf(el) >= 0 ? i18nHtmlEls[i18nHtmlEls.indexOf(el)]
+                                             : i18nEls[i18nEls.indexOf(el)];
+    const prop = i18nHtmlEls.indexOf(el) >= 0 ? "innerHTML" : "textContent";
+    if (!el0) { bad.push(key + "（没被桩解析到）"); continue; }
+    if (el[prop] !== el0[prop]) bad.push(key + "：" + JSON.stringify(el[prop]).slice(0, 50));
+  }
+  if (bad.length) throw new Error("切回中文后有 " + bad.length + " 个元素和 HTML 原文不一致：\n      " + bad.join("\n      "));
+});
+
+step("语言：未知语言名被夹回中文，不认识的键显示键名而不是 undefined", () => {
+  Game.setLang("fr");
+  if (Game.lang !== "zh") throw new Error("未知语言应退回 zh，实际 " + Game.lang);
+  Game.setLang("en");
+  // 缺键时必须显示键名 —— 显示 undefined 或空白会看起来像"界面坏了"，
+  // 显示 "no.such.key" 一眼就知道是漏了翻译。
+  if (t("no.such.key") !== "no.such.key")
+    throw new Error("缺键时应返回键名，实际 " + JSON.stringify(t("no.such.key")));
+  Game.setLang("zh");
+  if (Game.lang !== "zh") throw new Error("复位失败");
 });
 
 // ---------------------------------------------------------------------------

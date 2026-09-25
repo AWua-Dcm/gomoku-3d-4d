@@ -1,7 +1,11 @@
 # gomoku-3d-4d
 
+**中文** | [English](README.en.md)
+
 **三维与四维五子棋** —— 单文件网页版，双击即玩，零依赖。
 *3D & 4D Gomoku in a single HTML file. No build step, no server, no dependencies.*
+
+网页界面本身也能切中英文：右上角的按钮，默认中文。
 
 ![起始界面](_verify/shots/1-起始界面.png)
 
@@ -57,7 +61,7 @@ bash _verify/run-all.sh
 八步，期望结果：
 
 ```
-11733 + 19408 + 98 + 53 + 8845 + 115 + 63 = 40315 项断言全绿
+11733 + 19408 + 98 + 59 + 8845 + 115 + 104 = 40362 项断言全绿
 ```
 
 第 8 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -70,8 +74,18 @@ bash _verify/run-all.sh
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 三维规则基线（回放冻结向量） |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 四维转动一致性 |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 53 | 界面桩环境 |
-| `node _verify/browser-check.mjs` | 63 | 真实浏览器（GLSL 编译、布局几何、控制台报错） |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 59 | 界面桩环境（含中英双语切换） |
+| `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | 联机内核：和网页版逐格对拍 1156 组 |
+| `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | 联机 HTTP 层（本机 loopback） |
+| `node _verify/browser-check.mjs` | 104 | 真实浏览器（GLSL 编译、布局几何、控制台报错、英文排版） |
+
+后两项联机测试在第 7 步里跑，**不可跳过**（端口是随机挑的空闲端口）。
+另有两个注入验证脚本，专门证明上面那些检查**真的会红**：
+
+| 命令 | 覆盖 |
+|---|---|
+| `python _verify/inject-rulenote.py` | 把起始界面的规则摘要改坏 3 处，两套检查必须 3/3 抓到 |
+| `python _verify/inject-i18n.py` | 把中英切换的几条通路各弄坏一处，两套检查必须 4/4 抓到 |
 
 ### 关于"冻结的向量"
 
@@ -90,16 +104,20 @@ bash _verify/run-all.sh
 
 ```
 .
+├── README.en.md                ← 这份 README 的英文版
 ├── Web_Gomoku3D/
 │   ├── index.html              ← 全部代码。三维/四维渲染 + 规则内核 + 界面，单文件零依赖
-│   ├── README.md               ← 工程细节：架构、证据边界、已知限制（比这份深入得多）
-│   ├── RULES_SPEC.md           ← 玩家向的规则全文。页面上「具体规则」显示的就是它
-│   ├── ONLINE.md               ← 双人联机的方案设计
+│   ├── README.md               ← 工程细节：架构、证据边界、已知限制（比这份深入得多，只有中文）
+│   ├── RULES_SPEC.md           ← 玩家向的规则全文（中文）。页面上「具体规则」显示的就是它
+│   ├── RULES_SPEC.en.md        ← 规则全文的英文版。切到英文后页面上显示的就是它
+│   ├── ONLINE.md               ← 双人联机的方案设计（只有中文）
 │   └── tests/                  ← 离线测试 + 两份冻结的向量
 ├── _verify/
 │   ├── run-all.sh              ← 一条命令跑完全部离线验证
 │   ├── browser-check.mjs       ← 无头 Chrome/Edge：GLSL、控制台、布局几何、截图
-│   ├── embed-rules.mjs         ← 把 RULES_SPEC.md 嵌进 index.html 的生成器
+│   ├── embed-rules.mjs         ← 把两份 RULES_SPEC 嵌进 index.html 的生成器
+│   ├── inject-rulenote.py      ← 注入验证：证明规则摘要那几条检查真的会红
+│   ├── inject-i18n.py          ← 注入验证：证明中英切换那几条检查真的会红
 │   └── shots/                  ← browser-check 的截图
 ├── 打开流程.md                  ← 上手流程 + 验收清单
 └── LICENSE
@@ -115,6 +133,30 @@ bash _verify/run-all.sh
 3. 将来做联机时的服务器（当裁判）
 
 **只有一份实现**，不存在"网页版改了、服务器忘了改"这种分叉。
+
+---
+
+## 中英双语
+
+界面右上角的按钮在中文 / 英文之间切换，**默认中文**（不读 `navigator.language` 自动检测 ——
+要的是"切换"，不是"猜"）。选择记在 `localStorage` 里，下次打开还是它。
+
+规则全文有中英两份（`RULES_SPEC.md` / `RULES_SPEC.en.md`），切语言时浮层跟着换。
+`_verify/shots/` 里有一张英文起始界面的截图（`6-起始界面-英文.png`），
+它和中文那张 `1-起始界面.png` 是**同一个状态**，两张摆在一起能直接比。
+
+三件值得知道的事：
+
+- **中文原文留在 HTML 里，英文进字符串表。** 切回中文是把 HTML 里那份原文写回去，
+  所以中文只有一份，不会出现"HTML 一份、表里一份"各自漂移
+- **规则内核里也有英文文案。** 内核本来就在拼中文句子（`黑`/`白`/状态描述），
+  翻译它没有绕开的办法 —— 它得能被 `server.js` 和三个测试原样抽出去跑，不能引用外部的文案表。
+  代价是内核不再只是算法。每个文案函数尾部多了一个 `lang = "zh"` 参数，不传时逐字节等于从前
+- **英文 UI 里的中文是有断言盯着的**：`browser-check` 会切到英文把渲染树逐屏扫一遍，
+  凡是可见文字都不能是中文、也不能是漏翻后露出来的键名（`info.moves.one` 这种）
+
+（顺带说一句：这份文档里写死的那个断言总数需要手改，所以它总是慢半拍。
+真正的总数以 `bash _verify/run-all.sh` 的输出为准。）
 
 ---
 

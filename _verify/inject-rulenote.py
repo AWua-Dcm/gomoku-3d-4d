@@ -40,7 +40,10 @@ ORIG = read(HTML)
 
 LINE5 = "    规则：任意空格可落子，无重力约束。先手必须【恰好 5 连】，连成 6 个及以上判长连负；后手 ≥5 连即胜。<br>\n"
 LINE13 = "    获胜方向为 13 个：3 轴向 + 6 面对角 + 4 体对角。右侧面板可以逐层查看与落子。\n"
-BLOCK = '  <div id="ruleNote">\n' + LINE5 + LINE13 + "  </div>\n"
+# 标签上现在还挂着 data-i18n-html（界面语言切换要用）。注入锚点必须逐字符对上
+# 【当前的】HTML，改了实现就得跟着改锚点 —— 对不上时这个脚本 exit(2) 而不是静默跳过，
+# 就是为了逼出这次修改。改完必须重跑，确认三处注入仍然 3/3 被抓到。
+BLOCK = '  <div id="ruleNote" data-i18n-html="ruleNote">\n' + LINE5 + LINE13 + "  </div>\n"
 DEV = ('    <span style="color:#8a7d69">规则全文见工程根目录的 RULES_SPEC.md，'
        '尺寸与规则内核与 Unity 版共用同一套测试向量。</span>\n')
 
