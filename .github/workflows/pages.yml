@@ -1,0 +1,46 @@
+name: 发布网页版
+
+# 每次推 main 自动重建。发布的是 Web_Gomoku3D/index.html 这个**原件本身** ——
+# 这里刻意不从仓库里切一个 docs/ 之类的副本出去：本工程的根本主张就是"零依赖单文件"，
+# 多留一份副本就等于多一个会静默走样的东西。要改玩法，改 index.html 就行，推上去即生效。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 让同时到达的两次推送排队而不是互相覆盖，但不要取消已在进行中的那次发布 ——
+# 半截的发布比慢一点更糟。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      # 站点就是这一个文件。只拷 index.html ——
+      # tests/（含冻结的 vectors.json）、server.js、_verify/ 都不推上台。
+      - name: 只挑出网页本体
+        run: |
+          mkdir -p _site
+          cp Web_Gomoku3D/index.html _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -5,6 +5,8 @@
 **3D & 4D Gomoku** — one HTML file, double-click to play, zero dependencies.
 *三维与四维五子棋 —— 单文件网页版，双击即玩，零依赖。*
 
+**▶ Play online: <https://awua-dcm.github.io/gomoku-3d-4d/>** — the same single file, hosted on GitHub Pages.
+
 The game's interface switches between English and Chinese too: the button in the top-right
 corner. It starts in Chinese.
 

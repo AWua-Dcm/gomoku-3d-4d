@@ -5,6 +5,8 @@
 **三维与四维五子棋** —— 单文件网页版，双击即玩，零依赖。
 *3D & 4D Gomoku in a single HTML file. No build step, no server, no dependencies.*
 
+**▶ 在线试玩：<https://awua-dcm.github.io/gomoku-3d-4d/>**（就是同一份文件，托管在 GitHub Pages）
+
 网页界面本身也能切中英文：右上角的按钮，默认中文。
 
 ![起始界面](_verify/shots/1-起始界面.png)
