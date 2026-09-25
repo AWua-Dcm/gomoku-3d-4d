@@ -1673,6 +1673,55 @@ class FourDSession {
   }
 }
 
+/**
+ * 盘面指纹。**服务器和浏览器共用这一个函数** —— 它是"规则有没有分叉"的唯一检测手段。
+ *
+ * 【为什么必须住在内核区间里】要是服务器和客户端各写一份哈希实现，那本身就是一处会分叉的
+ * 地方：用来自查分叉的机制自己分叉了。而且它不会"没有症状" —— 它会**天天误报**，
+ * 最后被人当成噪音关掉，比没有还糟。放进这一段之后它被 CORE_HASH 一起盖住，
+ * 两边连"哈希算法是否一致"都由握手保证，闭环。
+ *
+ * 【为什么不用 crypto】`node:crypto` 浏览器里没有；`crypto.subtle` 是**异步**的，
+ * 会把整条重放链染成 async。这里只需要判断"两边是否相同"，不需要抗碰撞 ——
+ * 一个纯 JS 整数哈希足够，而且同步，好在会话方法里直接调。
+ *
+ * 【覆盖范围】整盘每一格 + 三维尺寸 + 出子权 + 落子数 + 转动数 + 状态 + 胜者。
+ *   · 不能抽查格子 —— 抽查漏掉的那格正是最危险的分叉
+ *   · 不能只看棋盘 —— 四维下"棋盘逐格相同"**不蕴含**"两边一致"：转动记录决定了
+ *     「恢复本次转动」还灵不灵、下一次冷却从哪算起
+ *   · 不能含时间或任何本地状态 —— 两端算出来必须逐位相同
+ *
+ * `isDraw` 不用单独混：它由 status + winner 完全决定，混进去只是重复。
+ *
+ * @param {FourDSession} s 三维模式下它是透明壳，一样适用
+ * @returns {string} 8 位十六进制
+ */
+function fingerprint(s) {
+  // FNV-1a（32 位）。选它是因为实现只有几行、无查表、无分支，抄错的可能性最低。
+  let h = 0x811c9dc5;
+  const mix = (byte) => {
+    h = (h ^ (byte & 0xff)) >>> 0;
+    // h *= 16777619 的移位写法：直接乘会超出 32 位整数精度
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  };
+  /** 混一个可能超过一字节的整数。落子数能到 50³=125000，一字节装不下。 */
+  const mixInt = (v) => { mix(v); mix(v >>> 8); mix(v >>> 16); mix(v >>> 24); };
+
+  const cells = s.board.cells;                    // 扁平 Uint8Array —— 整盘逐格
+  for (let i = 0; i < cells.length; i++) mix(cells[i]);
+
+  const d = s.board.dims;                         // 尺寸也要混：不同尺寸的空盘前缀相同
+  mix(d[0]); mix(d[1]); mix(d[2]);
+
+  mix(s.currentPlayer);
+  mixInt(s.moveCount);
+  mixInt(s.rotationCount || 0);   // 三维模式下恒为 0（FourDSession 没有转动记录）
+  mix(s.winner);
+  mix(s.status === "Playing" ? 1 : 2);
+
+  return h.toString(16).padStart(8, "0");
+}
+
 /* GOMOKU-CORE-END */
 /* ========================================================================== */
 
@@ -3901,7 +3950,7 @@ if (typeof document !== "undefined") {
 // 供 node 下的测试读取内核
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { Board3D, RuleSet, RuleEngine, GameSession, DIRS13, MoveStatus, RestrictionTarget,
-                     EMPTY, BLACK, WHITE, opponentOf, cnOf,
+                     EMPTY, BLACK, WHITE, opponentOf, cnOf, fingerprint,
                      AXIS_X, AXIS_Y, AXIS_Z, RotationDirection, RotateStatus,
                      RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName };
 }
