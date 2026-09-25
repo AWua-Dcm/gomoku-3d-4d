@@ -109,6 +109,11 @@ async function shot(name) {
  *
  * 【顺带清掉 toast】它是另一个时间相关的元素（会自己淡出），
  * 留着的话截图同样会飘。一起钉住。
+ *
+ * 【钉住相位还不够】这个函数只保证"同一个页面状态拍出来一样"。页面状态本身若在两次
+ * 运行间不同，PNG 照样会漂 —— 实测漂过四千来个抗锯齿像素，全在预览棋盘那块。
+ * 所以每张图拍的时机也要一样：要么都在刚加载完的页面上拍，要么拍之前先重载一次。
+ * 某张图哪天又开始漂时，先看它是不是在"进过对局"的页面上拍的（见 6-起始界面-英文 那段）。
  */
 async function freezePreview(yaw) {
   await ev(`(() => {
@@ -124,6 +129,59 @@ async function freezePreview(yaw) {
   })()`);
   await sleep(150);               // 等合成器把这一帧真正落到屏幕上
 }
+
+/**
+ * 扫一遍渲染树，把"可见的叶子文字"里可疑的那些挑出来。在页面里求值，返回数组。
+ *
+ * 两道筛，对应"漏翻一处"的两种长相：
+ *   ① 还是中文 —— 静态文案没进表、或者 JS 现拼的句子写死了中文。
+ *   ② 露出键名 —— t() 查不到键时是【把键名原样返回】的（见 index.html 里 t() 的注释），
+ *      界面上就会出现 "info.moves.one" 这种东西。它是纯 ASCII，
+ *      汉字那一筛看不见它，而它恰恰是最该被发现的一种：说明表和调用点对不上。
+ *
+ * 【"可见"必须真的判】：三种看不见都要算进来，少一种就是一条假的红，而假的红
+ * 比漏报更坏 —— 它会训练人忽略这条断言。
+ *   display:none —— 隐藏的往往是【祖先】（#banner / #toast 靠父元素的 class 隐掉），
+ *                   而 getComputedStyle(子元素).display 照旧返回它自己的值。
+ *                   getClientRects().length 把祖先链上的 display:none 一起算了进去。
+ *   opacity:0    —— #toast 是靠它淡出的，盒子还在，要沿祖先链乘才知道真实不透明度。
+ *   visibility   —— 它本来就是继承的，computed 拿到的就是生效值。
+ */
+const SWEEP_EXPR = `(() => {
+  // 允许名单：这两处【故意】在英文界面里留汉字。
+  //   #langBtn 写的是"点了会变成什么"，英文界面下就该写「中文」；
+  //   .seal 是装饰性的古风印章，换成拉丁字母和那圈楷体边框更不搭（见 STATIC_TEXT 的注释）。
+  const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal")]);
+  const visible = (el) => {
+    if (el.getClientRects().length === 0) return false;
+    if (getComputedStyle(el).visibility === "hidden") return false;
+    let o = 1;
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) o *= parseFloat(getComputedStyle(e).opacity);
+    return o >= 0.05;
+  };
+  const out = [];
+  for (const el of document.querySelectorAll("*")) {
+    if (allow.has(el)) continue;
+    if (!document.body.contains(el)) continue;      // <title>/<style> 里的中文不算界面文案
+    const tag = el.tagName.toLowerCase();
+    if (tag === "script" || tag === "style") continue;  // #rulesSrc 那份中文正文还在页面上，只是没被选
+    if (el.children.length) continue;               // 只看叶子：父元素的 textContent 是子元素的拼接
+    if (!visible(el)) continue;
+    const t = (el.textContent || "").trim();
+    if (!t) continue;
+    const where = el.id ? "#" + el.id : tag;
+    if (/[\\u4e00-\\u9fff]/.test(t)) out.push({ kind: "cjk", what: where + " = " + JSON.stringify(t.slice(0, 50)) });
+    // 【按子串找，不是整串比对】漏翻一条 JS 拼的句子时，键名是混在一句话中间的：
+    // #info 会渲染成 "info.moves.one · board 15×15×15 · …"，整串当然不是键名。
+    // 只认"整串恰好是键名"的话，这类漏翻正好从缝里漏过去（注入 b 就是这么漏的）。
+    // 前后那个 [^A-Za-z0-9_.] 是防误报：句末的 "index.html." 因为后面跟着句点不算，
+    // "e.g." 同理 —— 缩写后面那个点被 lookahead 挡掉了。
+    else if (/(?:^|[^A-Za-z0-9_.])[a-z][A-Za-z]*(?:\\.[A-Za-z][A-Za-z]*)+(?![A-Za-z0-9_.])/.test(t)) {
+      out.push({ kind: "key", what: where + " = " + JSON.stringify(t.slice(0, 80)) });
+    }
+  }
+  return out;
+})()`;
 
 function drainConsole() {
   const out = [];
@@ -461,7 +519,614 @@ try {
     "三维 [l,t]=" + narrow.a + " 四维=" + narrow.c +
     "（尺寸行高度：三维 " + narrow.h3 + "px / 四维 " + narrow.h4 + "px —— " +
     "这就是换行发生了但按钮没动）");
+
+  // ---- 5b. 窄屏 + 英文：同样不能溢出、按钮同样不能动
+  //
+  // 【必须在 900×700 下量，不能挪到宽屏去】：英文的每一句都比中文长，横向更容易
+  // 溢出；而"按钮不动"这条不变量在英文下的前提是"两条尺寸行都换了行、格子高度取 max"。
+  // 在 1600×900 下测英文，两条尺寸行可能根本不换行 —— 那这条就是在重复中文那边
+  // 已经验过的东西，等于没测。所以趁着手上的视口还是窄的，立刻把语言切过去量一遍。
+  const narrowEn = await ev(`(() => {
+    Game.setLang("en");
+    const s = document.getElementById("setup");
+    const snap = () => {
+      const b = document.getElementById("startBtn").getBoundingClientRect();
+      return [Math.round(b.left), Math.round(b.top)];
+    };
+    const h = (id) => Math.round(document.getElementById(id).getBoundingClientRect().height);
+    Game.setSetupMode(false); const a = snap(); const h3 = h("dimsRow3d");
+    Game.setSetupMode(true);  const c = snap(); const h4 = h("dimsRow4d");
+    Game.setSetupMode(false);
+    return { docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+             setupOver: s.scrollWidth - s.clientWidth,
+             a: a, c: c, h3: h3, h4: h4,
+             startText: document.getElementById("startBtn").textContent };
+  })()`);
+  // 先确认真的切过去了 —— 否则下面这几条全在中文界面上量，而中文那边已经绿了
+  check(narrowEn.startText === "Start game", "窄屏下切语言真的生效了（未生效的话下面几条是空断言）",
+    "#startBtn 上是 " + JSON.stringify(narrowEn.startText));
+  check(narrowEn.docOver <= 1, "窄屏（900×700）+ 英文下整个页面没有横向滚动",
+    "溢出 " + narrowEn.docOver + "px —— 英文每句都比中文长，这里是它最容易撑破的地方");
+  check(narrowEn.setupOver <= 1, "窄屏 + 英文下起始界面本身没有横向滚动", "溢出 " + narrowEn.setupOver + "px");
+  check(narrowEn.a.join(",") === narrowEn.c.join(","),
+    "窄屏 + 英文下切到四维，开始游戏按钮的横纵坐标仍然完全不变",
+    "三维 [l,t]=" + narrowEn.a + " 四维=" + narrowEn.c +
+    "（尺寸行高度：三维 " + narrowEn.h3 + "px / 四维 " + narrowEn.h4 + "px）");
+  // 【反空洞】和中文那条同一个道理：不换行的话上面那条什么都没测到
+  check(narrowEn.h3 > 60, "窄屏 + 英文下三维尺寸行确实换行了（否则上面那条是空断言）",
+    "实际高度 " + narrowEn.h3 + "px");
+
   await send("Emulation.clearDeviceMetricsOverride");
+
+  // ---- 6. 英文界面：语言标记、CSS 真的换了、状态行不压按钮
+  const en = await ev(`(() => {
+    // 回到起始界面，这样 #status / #topRight 那对比的是对局中的右上角
+    Game.openSetup();
+    Game.setLang("en");
+    const root = document.documentElement;
+    const rowLabel = document.querySelector(".rowLabel");
+    const coolNote = document.getElementById("coolNote");
+    const btn = document.getElementById("rulesBtn");
+    const st  = document.getElementById("status");
+    const r = (el) => { const b = el.getBoundingClientRect();
+      return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+    Game.closeRules();
+    return {
+      lang: root.lang,
+      cls: root.className,
+      rowLabelW: Math.round(rowLabel.getBoundingClientRect().width),
+      // 每个行标占几个行盒。Range.getClientRects() 换行就多一个矩形，比拿高度除行高可靠
+      // （line-height 可能是 normal，除出来是 NaN）。英文行标比中文长得多，
+      // "Rotation cooldown" 就是会顶不住的典型。
+      labelLines: [...document.querySelectorAll(".rowLabel")].map((el) => {
+        const rg = document.createRange();
+        rg.selectNodeContents(el);
+        return { id: el.id, lines: rg.getClientRects().length, text: el.textContent };
+      }),
+      coolNoteW: Math.round(coolNote.getBoundingClientRect().width),
+      ruleNote: document.getElementById("ruleNote").textContent.replace(/\\s+/g, " ").trim(),
+      hintText: document.getElementById("hint").textContent.replace(/\\s+/g, " ").trim(),
+      btn: r(btn), status: r(st),
+      titleText: document.getElementById("setupTitle").textContent,
+      // 中文那份规则正文此时【还在页面上】，只是没被选择 —— 顺带确认没被删掉
+      zhRulesLen: (document.getElementById("rulesSrc").textContent || "").length,
+      enRulesLen: (document.getElementById("rulesSrcEn").textContent || "").length,
+    };
+  })()`);
+
+  check(en.lang === "en", "切到英文后 documentElement.lang 是 en（屏幕阅读器要认这个）",
+    "实际 " + JSON.stringify(en.lang));
+  check((" " + en.cls + " ").indexOf(" lang-en ") >= 0,
+    "切到英文后 html 上有 .lang-en —— 英文排版那一段 CSS 靠它生效",
+    "实际 class=" + JSON.stringify(en.cls));
+  // 这一条查的是"CSS 覆盖真的生效了"，不是"类名挂上了"：CSS 里 .rowLabel 中文 96px、
+  // 英文 138px。只查类名的话，选择器写错（比如还是 html[lang="en"]）照样绿。
+  check(en.rowLabelW === 138, "英文排版生效：.rowLabel 的计算宽度是 138px（中文是 96px）",
+    "实际 " + en.rowLabelW + "px —— 96 说明 html.lang-en 那段 CSS 没生效");
+  check(en.coolNoteW > 0, "冷却说明行在英文下量得到宽度", "实际 " + en.coolNoteW);
+  // 行标必须都只占一行。折行的后果不是"难看"那么轻：行表把三条尺寸输入框对齐在一条竖线上，
+  // 行标一折，"转动冷却"那一行就比别的行高一截，整块面板的节奏全乱。
+  // 这跟"切模式时按钮不动"是同一条链上的东西 —— 那一列宽度是常量，靠的就是行标不折行。
+  check(en.labelLines.every((x) => x.lines <= 1),
+    "英文的行标都排得下一行（宽度够，没有折行）",
+    en.labelLines.filter((x) => x.lines > 1)
+      .map((x) => x.id + " = " + JSON.stringify(x.text) + " 占了 " + x.lines + " 行").join("；"));
+  check(en.titleText === "3D Gomoku", "起始界面标题是英文", "实际 " + JSON.stringify(en.titleText));
+
+  // 规则摘要读的是【渲染出来的文字】，和中文那几条同一个套路。
+  // 光查"切了语言"是不够的：data-i18n-html 那条通路（走 innerHTML 而不是 textContent）
+  // 只有这一处断言能验到，中文那三条验的是另一个方向。
+  for (const needle of ["exactly five", "overline", "13 winning directions"])
+    check(en.ruleNote.indexOf(needle) >= 0, "英文起始界面的规则摘要里有「" + needle + "」",
+      "渲染出来的文字：" + en.ruleNote);
+  check(/[一-鿿]/.test(en.ruleNote) === false, "英文规则摘要里没有汉字", en.ruleNote);
+  check(en.hintText.indexOf("Drag to rotate") >= 0, "英文操作提示也换了（同样是 data-i18n-html）",
+    "渲染出来的文字：" + en.hintText);
+
+  // 两份规则正文都还在页面上，只是按语言选一份用
+  check(en.zhRulesLen > 3000 && en.enRulesLen > 3000,
+    "中英两份规则正文都还嵌在页面里",
+    "中文 " + en.zhRulesLen + " 字符 / 英文 " + en.enRulesLen + " 字符");
+
+  // 右上角：英文的按钮更宽，状态行留白是【实测】算出来的 ——
+  // 算漏了的表现就是按钮压住状态文字，而那种重叠只有真排版引擎量得出来
+  const overlapEn = !(en.btn.l >= en.status.r || en.btn.r <= en.status.l ||
+                      en.btn.b <= en.status.t || en.btn.t >= en.status.b);
+  check(!overlapEn, "英文下右上角按钮不压状态文字",
+    JSON.stringify(en.btn) + " vs " + JSON.stringify(en.status));
+
+  // 切语言这条路径上任何一句 console.warn 都会让这条红。localStorage 在 file:// 下
+  // 可能抛 SecurityError，storeGet/storeSet 必须安静降级 —— 这就是验它的地方。
+  const consoleEn = drainConsole();
+  check(consoleEn.length === 0, "切到英文、开合浮层的过程中控制台没有输出",
+    consoleEn.join("\n      "));
+
+  // 英文规则浮层：切语言后必须重渲染，而且渲染出来的得是英文
+  const enRules = await ev(`(() => {
+    document.getElementById("rulesBtn").click();
+    const body = document.getElementById("rulesBody");
+    const out = { text: body.textContent.replace(/\\s+/g, " ").trim(),
+                  hasZh: /[\\u4e00-\\u9fff]/.test(body.textContent),
+                  len: body.innerHTML.length };
+    document.getElementById("rulesClose").click();
+    return out;
+  })()`);
+  check(enRules.text.indexOf("Winning directions") >= 0, "英文下规则浮层渲染的是英文正文",
+    "开头：" + enRules.text.slice(0, 80));
+  check(!enRules.hasZh, "英文规则浮层里没有汉字（有的话是取到了 #rulesSrc）",
+    "开头：" + enRules.text.slice(0, 80));
+  check(enRules.len > 5000, "英文规则正文渲染出来的长度合理", "实际 " + enRules.len + " 字符");
+
+  // ---- 6b. 英文界面逐屏扫一遍：不许剩中文，也不许露出键名
+  //
+  // 【为什么值得单独扫一遍】这一版写完之后，界面上仍然留着两处中文：
+  // #dimRange 的"可填"和 #coolNote 的"四维模式才有" —— 它们是 JS 现拼的句子
+  // （值从 BoardLimits 算出来），既不在 HTML 里、也不经过任何一张表，
+  // 所以"源码扫描"和"表里有没有这个键"两类检查都看不见它们。
+  // **是靠英文截图用眼睛发现的。** 眼睛不能每次都用，所以这里把它变成断言：
+  // 切到英文，把整棵渲染树扫一遍，凡是可见的叶子文字都要过下面两道筛。
+  //
+  // 这一条能抓到的是整个类别 —— 以后任何人加一句硬编码的界面文案，
+  // 只要它出现在英文界面上，这里就红，不需要谁记得去更新什么清单。
+  //
+  // 【必须逐屏扫，不能只扫起始界面】：起始界面上根本看不到 #modeGhost / #modeSlice
+  // （那两个按钮只在对局里显示）、看不到转动面板、看不到状态行 —— 只扫起始界面的话，
+  // 漏翻一个"幽灵层"按钮在这里是隐形的。注入验证第一次就漏了这一条。
+  const sweep = (async (screen) => {
+    const bad = await ev(SWEEP_EXPR);
+    check(bad.length === 0,
+      "英文界面上（" + screen + "）没有一处可见文字是中文或键名",
+      "还有 " + bad.length + " 处：\n      " + bad.map((b) => b.what).join("\n      "));
+  });
+
+  await sweep("起始界面");
+
+  // 起始界面切到四维，再扫一遍。#dimsSlot 是把三维行和四维行叠在同一个格子里，
+  // 【每次只显示一条】，所以上面那一遍只扫到了三维那条 —— #dimRange4d 的"必须立方"
+  // 和 #coolNote 的冷却说明都还是隐形的。它们恰好也都是 JS 现拼的句子。
+  const en4d = await ev(`(() => {
+    Game.setSetupMode(true);
+    const sum = () => document.getElementById("sizeSummary").textContent;
+    // 「每 N 手可转动一层」这句在【两个地方】各写了一遍：起始界面的小结走文案表
+    // （setup.fourD.everyOne / everyMany），游戏里的 #rule 走内核（RuleSet.describe）。
+    // 两处都得钉 —— 单复数各钉一次，写错哪一处这里都会红。
+    // 界面上选不到冷却 1（按钮是 3/5/8/10），所以"every 1 moves"这种错自己不会露头。
+    Game.setSetupCool(5);
+    const many = sum();
+    Game.setSetupCool(1);
+    const one = sum();
+    // #rule 那条路：冷却是在开局那一刻拷进 rules 的，改完冷却得重新开局才看得见。
+    Game.newGame([15, 15, 15], 1);
+    const rule1 = document.getElementById("rule").textContent;
+    Game.setSetupCool(5);
+    Game.newGame([15, 15, 15], 1);
+    const rule5 = document.getElementById("rule").textContent;
+    return { fourD: Game.fourD, note: document.getElementById("coolNote").textContent,
+             many: many, one: one, rule1: rule1, rule5: rule5 };
+  })()`);
+  check(en4d.fourD === true && en4d.note === "A rotation uses up the whole turn",
+    "起始界面已经切到四维，下面那一遍扫的是四维的尺寸行",
+    JSON.stringify(en4d));
+  check(en4d.many.indexOf("every 5 moves you may rotate one layer") >= 0 &&
+        en4d.one.indexOf("every move you may rotate one layer") >= 0 &&
+        en4d.one.indexOf("every 1 moves") < 0,
+    "起始界面小结里的「每 N 手可转动一层」按单复数换了形",
+    JSON.stringify({ many: en4d.many, one: en4d.one }));
+  check(en4d.rule5.indexOf("every 5 moves you may rotate one layer") >= 0 &&
+        en4d.rule1.indexOf("every move you may rotate one layer") >= 0 &&
+        en4d.rule1.indexOf("every 1 moves") < 0,
+    "内核那一份（游戏里的规则行）也按单复数换了形",
+    JSON.stringify({ rule1: en4d.rule1, rule5: en4d.rule5 }));
+  await sweep("起始界面·四维");
+
+  // 进对局：这一步把状态行、信息行、坐标行、层号、幽灵层/切片按钮、
+  // 转动面板全都变成可见的，然后重新扫一遍。
+  const enPlay = await ev(`(() => {
+    Game.setSetupMode(true);                    // 四维：转动面板那一片也会显示出来
+    document.getElementById("startBtn").click();
+    Game.session.place(0, 0, 0);
+    Game.session.place(1, 1, 1);
+    Game.session.rotateBy(0, 3, true, 1);       // 转一次，把 #rotStatus 的文案也逼出来
+    Game.onBoardChanged(true);
+    Game.setActiveLayer(3);
+    Game.setHover([2, 3, 3]);
+    Game.el.toast.classList.remove("on");       // 提示是按时淡出的，留着会飘
+    Game.toastTimer = 0;
+    Game.draw3D();
+    return { fourD: Game.fourD, setupOpen: Game.setupOpen,
+             rotVisible: getComputedStyle(document.getElementById("rotPanel")).visibility };
+  })()`);
+  check(enPlay.setupOpen === false && enPlay.fourD === true,
+    "英文对局开起来了（四维），下面那一遍扫的是对局界面",
+    JSON.stringify(enPlay));
+
+  await sweep("对局界面·四维");
+
+  // 再来一遍对局界面，这次只落 1 手、只转 1 次 —— 专为【单数形态】走一遍。
+  // 上面那遍走了 2 手，英文表里被用到的全是复数键（info.moves.many），
+  // 单数键（info.moves.one / info.rotations.one）一次都没露过面：把它们从英文表里
+  // 删掉，界面上什么都不会变，扫描也就什么都扫不到（注入 b 就是这么漏的）。
+  // 而英文的单复数正是最容易"只对了一半"的地方 —— 两条都写着，错一条另一条照样好看。
+  const enOne = await ev(`(() => {
+    // 冷却默认 5 手，落第 1 手就转会被拒（"还要再落 4 子才能转动"）——
+    // 拒了的话 info.rotations.* 这一整段根本不会渲染，上面那个"单数键露过面"
+    // 的前提就不成立，后面那一遍扫描也就成了空扫。所以先把冷却调成 1。
+    Game.setSetupCool(1);
+    Game.newGame([15, 15, 15], 1);
+    Game.session.place(0, 0, 0);
+    // 转【棋子所在的那一层】：空层会被拒（"该层是空的，转动不改变任何东西"），
+    // 拒了同样拿不到 info.rotations.* 那段文案。
+    const o = Game.session.rotateBy(0, 0, true, 1);
+    Game.onBoardChanged(true);
+    Game.el.toast.classList.remove("on");
+    Game.toastTimer = 0;
+    return { info: document.getElementById("info").textContent,
+             moves: Game.session.moveCount, rots: Game.session.rotationCount,
+             fourD: Game.fourD, rotStatus: o.status, rotReason: o.reason };
+  })()`);
+  check(enOne.moves === 1 && enOne.rots === 1 &&
+        enOne.info.indexOf("1 move played") === 0 && enOne.info.indexOf(" · 1 rotation") > 0,
+    "单数文案（第 1 手 / 第 1 次转动）真的渲染出来了，下面那一遍扫得到它",
+    JSON.stringify(enOne));
+  await sweep("对局界面·单数");
+
+  // 终局横幅也扫一遍。它是【唯一】一处 white-space: pre-line 的文案，
+  // 中英文都在对应位置放了 \\n —— 漏翻的话这里会显示中文。
+  const enOver = await ev(`(() => {
+    Game.newGame([15, 15, 15], 1);            // 黑先
+    const P = Game.session;
+    // 【长连只能靠"一手把两段接起来"造出来】—— 按规则第 5.2 节，先手连到第 5 颗
+    // 就已经赢了、棋局当场结束，根本走不到第 6 颗。所以黑先摆 0,1,2 和 4,5 两段，
+    // 再落 3 把它们接成 6 连。白棋摆在 0,2,4,6,8 上，隔着落、自己连不成 5 颗。
+    const black = [0, 1, 2, 4, 5, 3];
+    for (let i = 0; i < black.length; i++) {
+      P.place(black[i], 0, 0);                // 轮到黑
+      if (i < black.length - 1) P.place(i * 2, 8, 8);   // 轮到白，最后一步黑直接终局
+    }
+    Game.onBoardChanged(true);
+    Game.showBanner();
+    Game.el.toast.classList.remove("on");
+    Game.toastTimer = 0;
+    return { title: document.getElementById("bannerTitle").textContent,
+             sub: document.getElementById("bannerSub").textContent,
+             run: P.lastOutcome.longestRun,
+             overline: P.lastOutcome.status === MoveStatus.LoseByOverline,
+             on: document.getElementById("banner").classList.contains("on") };
+  })()`);
+  check(enOver.overline === true && enOver.run === 6,
+    "构造出来的确实是一次长连终局（否则下面那两条是空断言）",
+    JSON.stringify(enOver));
+  check(enOver.on === true, "终局横幅显示出来了", JSON.stringify(enOver));
+  await sweep("终局横幅");
+
+  // 顺手把横幅本身也断言掉：它是 JS 写的、不挂 data-i18n，扫一遍只能说明"不是中文"，
+  // 说明不了"是那句该有的英文"。长连犯规这句还带一个数字，两件事一起钉。
+  check(enOver.title.indexOf("Overline") >= 0 && enOver.title.indexOf("6") >= 0,
+    "英文终局横幅写的是长连犯规并带上了连子数",
+    "实际 " + JSON.stringify(enOver.title));
+  check(enOver.sub === "The first player must make exactly 5 in a row",
+    "英文终局横幅的副标题跟着换了", "实际 " + JSON.stringify(enOver.sub));
+
+  // 回起始界面，后面那几条模式按钮的断言都按"设置页开着"的样子来。
+  // 【冷却调回默认 5】上面为了逼出单数文案把它设成了 1，留着的话那一屏会写着
+  // "every 1 moves"，而界面上根本选不出这个值。
+  // 【模式调回三维】这样下面那条"高亮的按钮和当前模式一致"断的是三维那一侧，
+  // 加上上面四维那一侧，两个方向都走过。模式不调回去也行，但页面会停在一个
+  // 谁都到不了的组合上（冷却 1 + 四维），后面再往这段里加断言的人会被它绊一下。
+  await ev(`Game.setSetupCool(5); Game.setSetupMode(false); Game.openSetup()`);
+  await sleep(400);
+
+  // 模式按钮：选中的那个必须就是当前模式，英文标签也不能左右对调。
+  //
+  // 【为什么扫描扫不出来】：中文那版是「三维 · 经典 / 四维 · 可转层」，一眼能认出
+  // 哪个对哪个；英文那版是「3D · Classic / 4D · Rotatable」，两条都是一句地道的英文，
+  // 表里把两句话写反了，扫描照样全绿 —— 它只知道"不是中文"，不知道"贴错了按钮"。
+  // 而这一屏是有对照物的：四维才有的"must be cubic"和转动冷却就在它下面一行。
+  //
+  // 光看类名不够（.sel 在不在，是代码自己说的），所以连背景色一起量：
+  // button.sel 的底色是 --accent，和未选中的那个必须真的不一样 ——
+  // 否则"选中"只存在于类名里，屏幕上看不出来。
+  const enMode = await ev(`(() => {
+    const lum = (el) => {
+      const m = getComputedStyle(el).backgroundColor.match(/[\\d.]+/g) || [];
+      return (+m[0]) * 0.299 + (+m[1]) * 0.587 + (+m[2]) * 0.114;
+    };
+    const a = document.getElementById("mode3d"), b = document.getElementById("mode4d");
+    return { fourD: Game.fourD,
+             sel3d: a.classList.contains("sel"), sel4d: b.classList.contains("sel"),
+             label3d: a.textContent, label4d: b.textContent,
+             l3: Math.round(lum(a)), l4: Math.round(lum(b)) };
+  })()`);
+  check(enMode.label3d === "3D · Classic" && enMode.label4d === "4D · Rotatable",
+    "英文的模式按钮标签没有左右对调", JSON.stringify(enMode));
+  check(enMode.sel4d === enMode.fourD && enMode.sel3d === !enMode.fourD,
+    "高亮的模式按钮和当前模式一致", JSON.stringify(enMode));
+  check(enMode.sel4d ? enMode.l4 < enMode.l3 - 40 : enMode.l3 < enMode.l4 - 40,
+    "选中的模式按钮底色明显更深（选中在屏幕上真的看得出来）", JSON.stringify(enMode));
+
+  // 英文截图。**必须走 freezePreview()**：演示盘每秒自转 6°，不钉住的话
+  // 每次跑测试这张 PNG 都会变脏，真实改动和自转噪声就混在一起了。
+  //
+  // 【为什么拍之前要重新加载一次】上面那一串检查把页面留在"刚打完一局"的状态里，
+  // 而 1..5 那几张都是**刚加载完**的页面上拍的。实测：同一次运行内连拍四张逐字节相同
+  // （所以不是有动画在跑），但两次运行之间预览棋盘那块会差出四千来个抗锯齿像素 ——
+  // 进过对局的画布和刚加载的画布，收尾状态不是一个东西。重载之后 EN 这张和中文那张
+  // 就是同一个起点，两张摆在一起能直接比。
+  //
+  // 顺带钉住一件本来就该验的事：语言选择存在 localStorage 里，重载之后必须还是英文。
+  await send("Page.navigate", { url: PAGE });
+  await sleep(2600);
+  const afterReload = await ev(`({
+    lang: Game.lang,
+    domLang: document.documentElement.lang,
+    cls: document.documentElement.className,
+    title: document.getElementById("setupTitle").textContent,
+    setupOpen: Game.setupOpen,
+    fourD: Game.fourD,
+    cool: Game.setupCool,
+    dims: Game.setupDims.join("×"),
+    label3d: (document.getElementById("mode3d") || {}).textContent
+  })`);
+  check(afterReload.lang === "en" && afterReload.domLang === "en" &&
+        (" " + afterReload.cls + " ").indexOf(" lang-en ") >= 0 &&
+        afterReload.title === "3D Gomoku",
+    "重载之后界面还是英文（语言选择存在 localStorage 里，不是只活在内存里）",
+    JSON.stringify(afterReload));
+  check(afterReload.setupOpen === true && afterReload.fourD === false &&
+        afterReload.cool === 5 && afterReload.dims === "15×15×15",
+    "重载之后停在默认的起始界面（三维、冷却 5、15³）—— 和 1-起始界面.png 中文那张同状态",
+    JSON.stringify(afterReload));
+
+  await freezePreview(-28);
+  await shot("6-起始界面-英文");
+
+  // 切回中文再收尾：后面没有别的断言了，但让页面停在默认状态，
+  // 免得下次有人在这段后面接着写断言时，捡到一个英文界面。
+  await ev(`Game.setLang("zh")`);
+
+  // ---- 7. 游玩界面：格线开关 / 终局横幅的关闭与拖动 / 相机夹取
+  //
+  // 这一节全是"只有真浏览器答得了"的问题：transform 叠加有没有被 CSS 吃掉、
+  // 拖完之后矩形到底落在哪、开关有没有真的重画。node 桩里没有排版引擎，
+  // getBoundingClientRect 是个写死的 {0,0,800,600}，一个字都验不出来。
+  await ev(`(() => { Game.closeSetup(); Game.newGame([15, 15, 15], 1); return 1; })()`);
+
+  // ---- 7a. 格线开关：状态位 + 计数 + **画布上真的少了一大片墨**
+  //
+  // 【为什么数像素，而不是"比两次截图的字节"】一开始用的是 Page.captureScreenshot
+  // 两次、断言 base64 不相等。那是**假阳性断言**：这个页面的抗锯齿本身就在抖
+  // （`freezePreview` 的注释里写着"实测漂过四千来个抗锯齿像素"），所以不相等几乎必然成立，
+  // 跟格线关没关没关系。要证明"画面真的变了"，只能量**变了多少**。
+  //
+  // 数像素走 gl.readPixels，不走截图，有两个好处：
+  //   · `Game.draw3D()` 和 `readPixels` 在**同一个任务**里，合成器还没参与，
+  //     拿到的是刚画出来的那一帧，不受抗锯齿抖动影响 —— 同一状态重复量是同一个数；
+  //   · 顺便能量到"还剩多少墨"，于是"只隐藏静态灰网、蓝框要留着"这条产品选择
+  //     可以在**像素层面**钉住，而不只是钉一个状态位。
+  const gOn = await ev(`(() => {
+    Game.setGridVisible(true);
+    Game.el.toast.classList.remove("on"); Game.toastTimer = 0;
+    return { n: Game.staticGridCount, v: Game.gridVisible, sel: Game.el.modeGrid.classList.contains("sel") };
+  })()`);
+  const ink = await ev(`(() => {
+    const ctx = document.getElementById("gl").getContext("webgl2");
+    const measure = () => {
+      Game.draw3D();                       // 同一个任务里画完就读，别等合成器
+      const w = ctx.drawingBufferWidth, h = ctx.drawingBufferHeight;
+      const a = new Uint8Array(w * h * 4);
+      ctx.readPixels(0, 0, w, h, ctx.RGBA, ctx.UNSIGNED_BYTE, a);
+      const bg = [a[0], a[1], a[2]];       // 左下角那一点当背景色（清屏色就是 --bg）
+      let n = 0;
+      for (let i = 0; i < a.length; i += 4)
+        if (Math.abs(a[i]-bg[0]) + Math.abs(a[i+1]-bg[1]) + Math.abs(a[i+2]-bg[2]) > 8) n++;
+      return n;
+    };
+    const total = ctx.drawingBufferWidth * ctx.drawingBufferHeight;
+    const on = measure();
+    Game.setGridVisible(false);
+    const off = measure();
+    // 状态必须在**恢复之前**读 —— 放在 setGridVisible(true) 后面读到的就是恢复后的值，
+    // 那样这条断言会永远看到 v:true（这是我自己第一版踩的坑）。
+    const gOff = { n: Game.staticGridCount, v: Game.gridVisible,
+                   sel: Game.el.modeGrid.classList.contains("sel") };
+    Game.setGridVisible(true);
+    return { total: total, on: on, off: off, offState: gOff };
+  })()`);
+  const wantSeg = (3 * 15 * 15 + 12) * 12;
+  check(gOn.v === true && gOn.n === wantSeg && gOn.sel === true &&
+        ink.offState.v === false && ink.offState.n === wantSeg && ink.offState.sel === false,
+    "格线开关：状态位翻转、按钮 sel 跟着掉，而 staticGridCount 原样不动（只闸 draw 不闸 upload）",
+    JSON.stringify(gOn) + " → " + JSON.stringify(ink.offState) + "，期望 " + wantSeg);
+  // 先确认这次测量本身有效 —— 否则下面那条比例断言会因为"两边都是 0"而假通过。
+  // 15³ 满格线时实测约 24.7 万像素有墨（总 53 万），这里只要求"明显有东西"。
+  check(ink.on > 50000,
+    "前置：开着格线时画布上确实有大量墨（测量本身有效，不是读回一片空白）",
+    "ink=" + ink.on + " / total=" + ink.total);
+  // 真正的断言：关掉格线要能去掉绝大部分墨。实测 24.7 万 → 2.9 万（5.4%）。
+  // 阈值放到 40% 是留余量 —— 这条要抓的是"开关根本没接到绘制上"（那样两边一样多），
+  // 不是去卡一个精确比例。
+  check(ink.off < ink.on * 0.4,
+    "关掉格线之后画布上的墨确实大幅减少（开关真的接到了绘制上，不只是翻了个状态位）",
+    "ink " + ink.on + " → " + ink.off + "（" + (100 * ink.off / ink.on).toFixed(1) + "%）");
+  // 而剩下的那部分不能是零：蓝色当前层框、悬停线、落点光标、获胜连线都是要留着的。
+  // 「只隐藏静态灰网」这个选择在像素层面被钉在这里 —— 以后有人顺手把 active 也关掉，这条会红。
+  check(ink.off > 5000,
+    "关掉格线后不是一片空白：当前层蓝框还在画（钉住'只隐藏静态灰网'这个产品选择）",
+    "ink=" + ink.off);
+
+  // ---- 7b. 终局横幅：可关、可拖、拖不出 #view
+  const ban = await ev(`(() => {
+    Game.newGame([15, 15, 15], 1);
+    const P = Game.session;
+    for (let i = 0; i < 5; i++) { P.place(i, 0, 0); if (i < 4) P.place(i * 2, 8, 8); }
+    Game.onBoardChanged(true); Game.showBanner();
+    Game.el.toast.classList.remove("on"); Game.toastTimer = 0;
+
+    const b = document.getElementById("banner"), v = document.getElementById("view");
+    const close = document.getElementById("bannerClose");
+    const r0 = b.getBoundingClientRect(), c = close.getBoundingClientRect();
+    const vr = v.getBoundingClientRect();
+    // 用**真的 PointerEvent**驱动，不走合成函数：这一节要验的正是
+    // "指针事件 + transform 叠加在真浏览器里到底对不对"，绕开事件系统就白测了。
+    const mk = (x, y) => new PointerEvent("pointerdown", { bubbles: true, cancelable: true,
+      pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 1, clientX: x, clientY: y });
+    const cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
+    b.dispatchEvent(mk(cx, cy));
+    window.dispatchEvent(new PointerEvent("pointermove", { bubbles: true,
+      pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 1,
+      clientX: cx + 60, clientY: cy + 40 }));
+    window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true,
+      pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 0,
+      clientX: cx + 60, clientY: cy + 40 }));
+    const r1 = b.getBoundingClientRect();
+
+    // 再往死里拖一次，看夹取
+    b.dispatchEvent(mk(cx + 60, cy + 40));
+    window.dispatchEvent(new PointerEvent("pointermove", { bubbles: true,
+      pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 1,
+      clientX: cx + 9000, clientY: cy + 9000 }));
+    window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true,
+      pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 0,
+      clientX: cx + 9000, clientY: cy + 9000 }));
+    const r2 = b.getBoundingClientRect();
+
+    return {
+      dx: r1.left - r0.left, dy: r1.top - r0.top,
+      inside: r2.left >= vr.left - 0.5 && r2.right <= vr.right + 0.5 &&
+              r2.top >= vr.top - 0.5 && r2.bottom <= vr.bottom + 0.5,
+      r2: { l: r2.left, t: r2.top, r: r2.right, b: r2.bottom },
+      vr: { l: vr.left, t: vr.top, r: vr.right, b: vr.bottom },
+      // 关闭按钮必须落在横幅里面（它原来是绝对定位钉右上角的，钉歪了会飘到棋盘上）
+      closeInside: c.left >= r0.left - 0.5 && c.right <= r0.right + 0.5 &&
+                   c.top >= r0.top - 0.5 && c.bottom <= r0.bottom + 0.5,
+      on: b.classList.contains("on"),
+      tf: b.style.transform,
+    };
+  })()`);
+  // 位移必须**等于**鼠标位移。这里最容易错的就是 transform 叠加写漏一半 ——
+  // 那样 CSS 里居中的 translate(-50%,-50%) 会被覆盖，横幅瞬间跳到右下角，
+  // 表现是"一拖就飞走"。差值断言正好抓住它。
+  check(Math.abs(ban.dx - 60) <= 1 && Math.abs(ban.dy - 40) <= 1,
+    "横幅拖动跟手：位移等于鼠标位移（transform 叠加写对了，没把居中吃掉）",
+    "实际位移 (" + ban.dx.toFixed(1) + "," + ban.dy.toFixed(1) + ")，期望 (60,40)；transform=" + JSON.stringify(ban.tf));
+  check(ban.inside,
+    "横幅拖到超界时被夹在 #view 里（#view 是 overflow:hidden，拖出去就永久够不着）",
+    JSON.stringify(ban.r2) + " vs #view " + JSON.stringify(ban.vr));
+  check(ban.closeInside, "关闭按钮落在横幅框内（绝对定位没钉歪）", JSON.stringify(ban.r2));
+  check(ban.on === true, "前置：拖动不该把横幅关掉");
+
+  // ---- 7c. 关掉横幅之后：仍然不能落子，悔棋之后才能继续
+  const afterClose = await ev(`(() => {
+    const before = Game.session.moveCount;
+    document.getElementById("bannerClose").click();
+    const hidden = !document.getElementById("banner").classList.contains("on");
+    const st = Game.session.status;
+    // 点棋盘正中：终局之后必须落不下
+    const gl = document.getElementById("gl"), r = gl.getBoundingClientRect();
+    Game.tryPlace(7, 7);
+    const placed = Game.session.moveCount !== before;
+    const toast = document.getElementById("toast").textContent;
+    Game.undo();
+    const resumed = Game.session.status;
+    return { hidden: hidden, status: st, placed: placed, toast: toast, resumed: resumed };
+  })()`);
+  check(afterClose.hidden === true, "点关闭之后横幅真的消失了（真浏览器的 class + display）");
+  check(afterClose.status === "Decided" && afterClose.placed === false,
+    "关掉横幅不改变棋局：状态仍是 Decided，落子落不下",
+    JSON.stringify(afterClose));
+  check(afterClose.toast.indexOf("本局已结束") >= 0,
+    "终局后点棋盘有可读提示（原来是静默吞掉，看起来像页面卡了）",
+    "实际 " + JSON.stringify(afterClose.toast));
+  check(afterClose.resumed === "Playing",
+    "悔棋之后回到进行中 —— 这是终局后继续本局的唯一出路", JSON.stringify(afterClose));
+
+  // ---- 7d. 相机：垂直能拖到接近正俯视，且不会震荡/越界
+  const cam = await ev(`(() => {
+    const c = Game.camera;
+    c.yaw = 0; c.pitch = 0;
+    const seq = []; let prev = c.pitch, backwards = 0, over = 0;
+    const pole = (window.__camPole = 89.5);
+    for (let i = 0; i < 400; i++) {
+      Game.applyDrag(0, -1 / 0.32);           // 每拍往上拖 1 度
+      if (c.pitch < prev - 1e-9) backwards++;
+      if (Math.abs(c.pitch) > pole + 1e-9) over++;
+      prev = c.pitch;
+    }
+    seq.push(c.pitch);
+    const top = c.pitch;
+    c.pitch = 0;
+    for (let i = 0; i < 400; i++) Game.applyDrag(0, 1 / 0.32);
+    const bot = c.pitch;
+    c.yaw = -32; c.pitch = 24;
+    return { top: top, bot: bot, backwards: backwards, over: over,
+             cosTop: Math.cos(top * Math.PI / 180) };
+  })()`);
+  check(cam.over === 0 && Math.abs(cam.top - 89.5) < 1e-9 && Math.abs(cam.bot + 89.5) < 1e-9,
+    "相机垂直拖到上限就停住，不越界（上限不是 90，否则 lookAt 会退化成画面滚半圈）",
+    JSON.stringify(cam));
+  // 这条钉的是"顶面真的正对了"：85° 时 cos=0.087（还偏轴 5°），89.5° 时 cos=0.0087（偏 0.5°）。
+  check(cam.cosTop < 0.02,
+    "往上拖能到接近正俯视（cos < 0.02，即离极轴不到 1.2°）",
+    "cos=" + cam.cosTop.toFixed(5));
+  check(cam.backwards === 0,
+    "垂直拖拽单调，不在极点附近来回震荡（被砍掉的'翻越极点'版本每拍倒退一次）",
+    "倒退 " + cam.backwards + " 次");
+
+  // ---- 7e. 触屏加固：拖动面必须禁掉浏览器手势
+  const ta = await ev(`(() => {
+    const g = getComputedStyle(document.getElementById("gl"));
+    const b = getComputedStyle(document.getElementById("banner"));
+    return { gl: g.touchAction, banner: b.touchAction, cursor: b.cursor };
+  })()`);
+  check(ta.gl === "none" && ta.banner === "none",
+    "两个拖拽面（#gl / #banner）都关掉了浏览器的触屏手势",
+    JSON.stringify(ta));
+  check(ta.cursor === "move", "横幅上显示 move 光标（能拖的提示）", JSON.stringify(ta));
+
+  // ---- 7f. 窄窗口下关闭按钮不能跑到 #view 外面
+  //
+  // #view 只有视口的 42%。横幅原来的 min-width 是死数 300px，所以在 600px 宽的窗口里
+  // 横幅（300px）比 #view（252px）还宽，被 overflow:hidden 裁掉右边一截 ——
+  // 而关闭按钮恰好钉在右上角。那样返回的是"悔棋/再来一局（居中）点得到、
+  // 关闭（靠右）点不到"，也就是又变回"关不掉"，正好是这次要修的问题。
+  // 900×700 那道窄屏检查（第 5 节）触发不到这个：900 宽时 #view = 378px > 300px。
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 600, height: 700, deviceScaleFactor: 1, mobile: false });
+  const tiny = await ev(`(() => {
+    Game.closeSetup(); Game.newGame([15, 15, 15], 1);
+    const P = Game.session;
+    for (let i = 0; i < 5; i++) { P.place(i, 0, 0); if (i < 4) P.place(i * 2, 8, 8); }
+    Game.onBoardChanged(true); Game.showBanner();
+    Game.el.toast.classList.remove("on"); Game.toastTimer = 0;
+    const v = document.getElementById("view").getBoundingClientRect();
+    const b = document.getElementById("banner").getBoundingClientRect();
+    const c = document.getElementById("bannerClose").getBoundingClientRect();
+    return { viewW: v.width, bannerW: b.width,
+             closeInView: c.left >= v.left - 0.5 && c.right <= v.right + 0.5 &&
+                          c.top >= v.top - 0.5 && c.bottom <= v.bottom + 0.5,
+             bannerInView: b.left >= v.left - 0.5 && b.right <= v.right + 0.5,
+             c: { l: Math.round(c.left), r: Math.round(c.right), t: Math.round(c.top) },
+             v: { l: Math.round(v.left), r: Math.round(v.right) } };
+  })()`);
+  check(tiny.bannerW <= tiny.viewW + 0.5,
+    "窄窗口（600px）下横幅不比 #view 宽（min()/max-width 生效）",
+    "横幅 " + Math.round(tiny.bannerW) + "px vs #view " + Math.round(tiny.viewW) + "px");
+  check(tiny.closeInView && tiny.bannerInView,
+    "窄窗口下关闭按钮完整落在 #view 里（不被 overflow:hidden 裁掉，否则就是'关不掉'）",
+    "关闭按钮 " + JSON.stringify(tiny.c) + " vs #view " + JSON.stringify(tiny.v));
+  await send("Emulation.clearDeviceMetricsOverride");
+
+  const consoleAfter7 = drainConsole();
+  check(consoleAfter7.length === 0,
+    "第 7 节交互过程中控制台没有报错", consoleAfter7.join("\n      "));
+
+  // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态
+  await ev(`(() => {
+    Game.setGridVisible(true);
+    Game.bannerDX = 0; Game.bannerDY = 0; Game.bannerDrag = null; Game.applyBannerOffset();
+    Game.openSetup();
+    return 1;
+  })()`);
 } catch (e) {
   check(false, "浏览器检查整体跑通", String(e && e.stack || e));
 } finally {

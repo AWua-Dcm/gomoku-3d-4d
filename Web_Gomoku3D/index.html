@@ -109,7 +109,13 @@
 
   /* ---------- 左侧：三维视图 ---------- */
   #view { flex: 0 0 42%; position: relative; overflow: hidden; }
-  #gl { display: block; width: 100%; height: 100%; cursor: grab; }
+  /* touch-action: none —— 原来全文件一处都没有。桌面上看不出来，触屏上要命：
+     浏览器的滚动/缩放/双指手势识别会抢在 pointermove 之前把拖拽吃掉，
+     表现为"手指划了半天棋盘不动，页面倒是跟着滚"。页面本来就是 overflow:hidden
+     且滚轮已经 preventDefault，禁掉手势与既有意图一致。
+     加它的动机是相机垂直拖拽的范围放宽了（85° → 89.5°，见 CAM_POLE），
+     拖拽行程变长，触屏上被浏览器手势抢走的概率也跟着变大。 */
+  #gl { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
   #gl.dragging { cursor: grabbing; }
 
   #modebar {
@@ -130,14 +136,44 @@
   #coords { color: var(--accent); font-size: 15px; margin-bottom: 5px; }
   #hint { color: var(--dim); font-size: 12.5px; }
 
+  /* 终局横幅。**可以拖动**（见 Game.bindBannerDrag），所以它是这一版里
+     唯一一个"位置会被 JS 改"的浮层。
+
+     居中是靠 transform 的 translate(-50%,-50%) 做的。拖动**不能**直接改写
+     style.transform —— transform 是简写属性，赋一次值就把里面的 -50%,-50% 一起抹掉，
+     弹窗会瞬间跳到右下角。所以拖动写成两个 translate 叠加：
+       translate(-50%,-50%) translate(Xpx, Ypx)
+     复位时把 style.transform 置空、落回这条 CSS 规则。
+     （另一条路是把位移放进独立的 CSS `translate:` 属性，它和 transform 互不干扰，
+     但那是 2022 才 Baseline 的属性，两个 translate 叠加零新基线要求、也一样清晰。）
+
+     touch-action: none 的理由同 #gl —— 它现在也是一个拖拽面。
+     cursor: move 是"这块能拖"的提示；里面的按钮靠 button{cursor:pointer} 覆盖回去
+     （cursor 是继承属性，但直接命中的规则永远赢过继承）。 */
   #banner {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
     background: rgba(252,249,241,.97); border: 1px solid var(--border); border-radius: 8px;
-    padding: 26px 34px; text-align: center; min-width: 300px; display: none;
+    padding: 26px 34px; text-align: center; display: none;
+    cursor: move; touch-action: none;
+    /* 宽度夹在 #view 之内。**这不是审美，是"关闭按钮会不会被裁掉"**：
+       #view 只有视口的 42%，而横幅原来的 min-width 是死数 300px，
+       所以窗口窄于约 714px 时横幅比 #view 还宽，被 overflow:hidden 裁掉右边一截 ——
+       而关闭按钮正是钉在右上角的那一个。表现就是：悔棋/再来一局（居中）点得到，
+       关闭（靠右）点不到，于是又变回"关不掉"。加这两个按钮之前，
+       溢出裁掉的只是文字，是观感问题；加了按钮之后就变成功能问题。
+       min() 是这个文件里已有的写法（见 #rulesCard 的 width: min(940px,100%)）。
+       正常宽度下 min(300px,100%) 就是 300px，一个像素都不动。 */
+    min-width: min(300px, 100%);
+    max-width: 100%;
   }
   #banner.on { display: block; }
   #bannerTitle { font-size: 27px; font-weight: 600; margin-bottom: 6px; white-space: pre-line; }
   #bannerSub { color: var(--dim); font-size: 13px; margin-bottom: 18px; }
+  /* 关闭按钮钉在右上角，不进"悔棋 / 再来一局"那一排 —— 那一排是两个等宽的主操作，
+     塞第三个进去会改变它们的宽度和位置，而"关闭"是次要动作，混在一起还会让人误以为
+     它是第三个选项。绝对定位对既有布局零影响（browser-check 里有一条
+     "#banner 与 #bannerClose 不重叠"的几何断言盯着它）。 */
+  #bannerClose { position: absolute; right: 10px; top: 10px; }
 
   #toast {
     position: absolute; left: 50%; top: calc(50% + 128px); transform: translateX(-50%);
@@ -313,18 +349,32 @@
               line-height: 1.8; border-top: 1px solid var(--border); padding-top: 14px; }
   #startBtn { font-size: 18px; font-weight: 600; padding: 13px 48px; letter-spacing: 3px; }
 
-  /* ---------- 右上角的「具体规则」与规则浮层 ---------- */
-  /* 按钮放在 #stage 外面、用 fixed：起始界面（#setup，z-index:50）和对局界面都要点得到。
-     放进任何一侧的容器里，另一侧就会看不到它。 */
-  #rulesBtn {
+  /* ---------- 右上角：语言切换 +「具体规则」，以及规则浮层 ---------- */
+  /* 这两个按钮放在 #stage 外面、用 fixed：起始界面（#setup，z-index:50）和对局界面
+     都要点得到。放进任何一侧的容器里，另一侧就会看不到它。
+
+     【为什么包一层容器】原来只有 #rulesBtn 自己 fixed，状态行的留白在 CSS 里
+     写死 104px（按中文「具体规则」四个字量的）。现在多了一个语言按钮，而且两种语言
+     下两个按钮的总宽不一样 —— 再写死就是"每加一个按钮、每换一种语言都重量一次"。
+     改成实测：留白本来就该跟着按钮走，见 layoutTopRight()。 */
+  #topRight {
     position: fixed; top: 14px; right: 14px; z-index: 60;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #rulesBtn {
     font-size: 13px; padding: 7px 13px;
     background: var(--panel-hi); color: var(--text);
     border: 1px solid var(--border); border-radius: 4px;
     box-shadow: 0 1px 6px rgba(90,72,44,.12);
   }
+  /* 语言按钮上写的是【点了会变成什么】（中文界面下写 EN，英文界面下写中文），
+     所以它不能进 data-i18n 快照表 —— 两种语言下是两个不同的字符串。
+     min-width 让 "EN" 和 "中文" 的宽度一致：不设的话切一下语言按钮自己会变宽 8px，
+     而它左边就是「具体规则」—— 那个按钮会跟着挪。这是这个工程反复在消的那类跳动。 */
+  #langBtn { font-size: 13px; padding: 7px 11px; min-width: 52px; }
   /* 对局时把状态行的右边留出来 —— 不然按钮会压在"黑棋落子（第 N 手）"上面。
-     状态文字是左对齐的，右边本来就是空的，留白不影响观感。 */
+     状态文字是左对齐的，右边本来就是空的，留白不影响观感。
+     这个 104px 只是【JS 跑起来之前】的兜底值；真实值由 layoutTopRight() 实测写入。 */
   #statusRow { padding-right: 104px; }
 
   #rulesPanel {
@@ -372,13 +422,55 @@
   }
   #rulesBody th { background: var(--panel-hi); font-weight: 600; }
   #rulesBody tr:nth-child(even) td { background: rgba(230,220,200,.35); }
+
+  /* ---------- 英文排版修正 ----------
+     上面那些宽度是按【中文字宽】量的：一个汉字 14px 就是 14px 宽，拉丁字母平均只有
+     六成左右。所以英文有两种相反的风险 —— 标签比中文【宽】（"Turn cooldown" 比
+     「转动冷却」宽），而同样信息量的句子比中文【长】。下面这几条就是逐个改掉
+     那些"写死了、且是按中文量的"值。
+
+     为什么不干脆把上面那些 width 都改成 min-width / 自适应：那几条 width 存在的理由
+     恰恰是【宽度必须恒定】—— `.rowLabel` 窄了宽了会让整列输入框左右错位，`#coolNote`
+     窄了宽了会让居中的那一行在两种模式下左右挪。所以这里不是"取消写死"，
+     是"每种语言各写死一个正确的值"。
+
+     选择器挂在 html 的 .lang-en 类上，而不是 [lang="en"] 属性上。
+     lang 是【外部的】属性：屏幕阅读器、连字、断词都认它，将来有人做"按浏览器语言
+     自动选"或者用别的工具改它，都会顺带把这一整块排版改掉 —— 而"排版跟错了语言"
+     没有任何症状，只表现为某一列窄了几像素。类是我们自己的开关，只有 applyLang 会写。 */
+  html.lang-en body {
+    /* 上面 html,body 的字体栈前三个全是中文字体，而它们在 Windows 上确实存在 ——
+       英文会落到 "Microsoft YaHei" 的拉丁字形上，那是它最弱的部分。
+       英文界面显式走拉丁 UI 字体。 */
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  /* 英文行标比四个汉字宽。118px 是"看着差不多"估出来的，量出来不够：
+     最长的 "Rotation cooldown" 会折成两行 —— 而它一折，那一行就比别的行高一截，
+     整块面板的对齐节奏就断了。138px 是照最长那条量出来的值，
+     browser-check 里"每个行标只占一个行盒"那条断言钉着它（它自己就先红过一次）。 */
+  html.lang-en .rowLabel { width: 138px; }
+  /* "Direction" 在 34px 里放不下（要 ~56px）。 */
+  html.lang-en .rotLabel { width: 62px; }
+  /* 同上：这一条也必须是【固定值】，理由见上面 #coolNote 的注释。
+     11em = 137.5px 装不下 "Rotation costs a whole turn"（~161px），改成 14em。
+     代价是英文的转动冷却行在 900px 窗口下会换行 —— .row 本来就是 wrap 的，
+     而 #coolRow 在两种模式下都在（只是三维下按钮禁用），所以换行与否不随模式变，
+     「切模式按钮不动」那条不变量不受影响。 */
+  html.lang-en #coolNote { width: 14em; }
+  /* 拉丁字母不需要汉字那么大的字距，2px/3px 会显得散。 */
+  html.lang-en #setup h1 { letter-spacing: 0; }
+  html.lang-en #startBtn { letter-spacing: 1px; }
+  /* 同样的信息量，英文的字符数比中文多，固定的 92px 会更早开始内部滚动。
+     这里可以放宽（它只影响总高，不影响"两种模式高度相等"——那个不变量靠的是
+     这块高度【恒定】，而不是靠它恰好是 92）。 */
+  html.lang-en #sizeSummary { height: 108px; }
 </style>
 </head>
 <body class="paper">
 
 <!-- RULES-EMBED-BEGIN -->
 <!-- 由 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.md 生成，不要手改。
-     改了 RULES_SPEC.md 之后跑：node _verify/embed-rules.mjs -->
+     改了 Web_Gomoku3D/RULES_SPEC.md 之后跑：node _verify/embed-rules.mjs -->
 <script type="text/plain" id="rulesSrc">
 # 三维五子棋 · 规则
 
@@ -596,6 +688,234 @@
 </script>
 <!-- RULES-EMBED-END -->
 
+<!-- 英文规则全文。**必须整个排在中文那对的 END 之后**：重新生成是按
+     "本条的 BEGIN 切到本条的 END" 替换的，夹在中文那对中间的话，生成一次就会
+     把它整段删掉，而 --check 比对的是替换结果、也会认为一致 —— 删掉这件事
+     不会有任何东西报警。embed-rules.mjs 的 checkOrder() 现在把顺序不对变成当场退出。 -->
+<!-- RULES-EMBED-EN-BEGIN -->
+<!-- 由 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.en.md 生成，不要手改。
+     改了 Web_Gomoku3D/RULES_SPEC.en.md 之后跑：node _verify/embed-rules.mjs -->
+<script type="text/plain" id="rulesSrcEn">
+# 3D Gomoku · Rules
+
+Gomoku (five in a row) played on a solid N×N×N board: **whoever first lines up five stones of one color along a single straight line wins**.
+
+The big difference from flat Gomoku is that there are far more straight lines — **13 directions** in all.
+So blocking the front is not enough: a line can cut through diagonally, run straight up, or pass through several layers.
+
+There is no gravity on the board. **Stones can float** with nothing under them, and any empty cell is playable.
+
+---
+
+## 1. The board
+
+| Item | Rule |
+|---|---|
+| Shape | A cubic board, N × N × N playable cells |
+| Size | 8 ≤ N ≤ 50, default 15 |
+| Coordinates | `(x, y, z)`, each axis numbered 0 to N−1 |
+| Layer | All cells with the same `z` form one layer; "layer k" means the layer at `z = k` |
+| Cell state | empty / black stone / white stone |
+
+The directions of the three axes:
+
+- `x`: increases to the right
+- `y`: increases upward
+- `z`: increases into the screen
+
+So from the default viewpoint **layer 0 is closest to you and the least likely to be hidden behind other layers**, and a new game starts there.
+
+In 3D mode the three axes need not be the same length (an 8×12×30 rectangular board, for example):
+turn off "Link all three axes" to set them separately.
+
+## 2. Placing a stone
+
+- You may play on **any empty cell**. There is no gravity and no rule that something must support the stone — it can hang in mid-air.
+- One stone per turn, and the turn passes to the opponent at once.
+- A stone cannot be taken back on its own, but you can undo.
+
+## 3. Who moves first
+
+- Before the game you choose "Black first" or "White first", and that choice **does not change for the rest of the game**.
+- **"First player" means whoever makes the opening move of this game**, not black in particular.
+- To change it mid-game, "Swap first player" **restarts the game** with the new first player — it does not flip the sides of the game in progress.
+
+## 4. Winning directions: 13 of them
+
+Every cell takes part in at most 13 lines at once:
+
+| Kind | Count | Directions |
+|---|---|---|
+| Axes | 3 | one along each of x / y / z |
+| Face diagonals | 6 | the diagonals within each coordinate plane (`(1,1,0)`, `(1,-1,0)` and the like) |
+| Body diagonals | 4 | diagonals crossing all three axes (`(±1,±1,±1)`) |
+
+3 axes + 6 face diagonals + 4 body diagonals = 13.
+
+The check looks only at the 13 lines through **the stone just played**, and it counts **both ways along each of them**:
+a whole line's length = 1 + the run of same-colored stones on one side + the run on the other side.
+Counting one side only would miss the case where a single move joins two separate runs into one.
+
+## 5. Winning and losing
+
+### 5.1 Second player: five or more wins
+
+If any line through the stone just played holds five or more stones of one color, that player wins immediately.
+
+### 5.2 First player: exactly five in a row
+
+The first player **loses by making the line too long**:
+
+- **Exactly five** on any line → wins.
+- **Six or more** on any line (an overline) → **loses immediately**, and the opponent wins.
+
+**The overline loss follows the "first player" role, whoever holds it**: choose black first and black carries it, choose white first and white carries it — in which case black is free (five or more wins).
+
+### 5.3 One move making both five and six
+
+On a solid board it is common for one move to land on two lines at once. In that case **the overline wins out**: it is an overline loss.
+
+### 5.4 A useful consequence
+
+When the first player builds a line one stone at a time, **reaching the fifth stone already wins and the game ends on the spot**,
+so the sixth stone is never reached. Therefore:
+
+> An overline can only come from a move that joins two runs together — with `0,1,2` and `4,5`
+> already on the board, playing `3` joins them into six. You cannot reach an overline by placing stones one at a time.
+
+## 6. Undo
+
+- You can undo all the way back to before the game started.
+- Undoing clears the win/loss state too: the game returns to "in progress" and it is the turn of the player whose move was taken back.
+- Shortcut `Z`, or the "Undo Z" button on the panel.
+
+## 7. Draw
+
+The board fills up with no winner → a draw.
+15×15×15 has 3375 cells, so this almost never happens in practice, but the rules allow for it.
+
+## 8. Why the first player is restricted
+
+A solid board has far more lines than a flat one. On a 15×15×15 board there are **23639** lines of length exactly 5,
+which is **41 times** as many as on a flat board of the same side length. With that many directions, "one move making two
+threats at once, so the opponent can block only one" is far easier than in the flat game — and if both sides played by
+identical rules, the first player's advantage would be too large for the second player to have a game at all.
+
+So the first player carries the "exactly five in a row" restriction. This is the most fundamental difference between this
+game and flat Gomoku.
+
+## 9. The right panel: looking at one layer
+
+The right panel draws **layer k as seen from the front**:
+
+- `x` runs across, increasing to the right
+- `y` runs up, increasing upward
+- The layer number `z` is depth, changed with `＜` `＞` or by clicking the layer strip below
+
+The panel is oriented exactly like the 3D view, so nothing has to be rotated in your head — the two always show the same layer.
+
+## 10. 4D mode: you can rotate a layer
+
+This is an optional way to play; turn it on before the game with "4D · Rotatable": **rotate one layer 90° like a Rubik's cube**,
+and the stones already on that layer are carried along. "4D" refers to time — the board itself changes, while the coordinates
+are still three axes and the total number of cells is still N×N×N.
+
+The mode is chosen before the game and **cannot be changed during it**. If you did not pick it, none of this section applies,
+and sections 1 through 9 are unaffected by it.
+
+### 10.1 How to rotate
+
+| Parameter | Values |
+|---|---|
+| Axis | x / y / z |
+| Layer | which layer (0 to N−1) |
+| Direction | clockwise / counterclockwise |
+| Turns | 1 / 2 / 3, that is 90° / 180° / 270° |
+
+**"Clockwise" is viewed from the negative end of that axis, looking toward the origin.**
+For the `z` axis that is the direction you see on screen, with no conversion needed;
+the `x` and `y` axes are viewed from the left of the board and from below it.
+
+One counterclockwise turn equals three clockwise turns. Four turns equal no turn, so **that option is not offered**.
+
+### 10.2 What a rotation does
+
+Only the cells of the rotated layer move; everything outside it stays put.
+Every cell in that layer has exactly one destination, so two stones never collide, and **the total number of stones never changes**.
+
+### 10.3 Which rotations are rejected
+
+The checks run in order; if any one of them fails, the whole thing is dropped: the board does not move, it does not count as a
+move, and no record is kept.
+
+| Check | When it fails |
+|---|---|
+| The game must be in 4D mode | rejected |
+| The game must still be in progress | rejected |
+| The layer number must exist | rejected |
+| The cooldown must be ready | rejected |
+| The rotated board must be **different** from before | "nothing changed"; not counted as a move |
+| The rotated board must **not contain five in a row** | the whole thing is rolled back |
+
+"Must be different" looks at **what the board looks like**, not at how many turns you asked for: a layer that was already
+empty, or a pattern that happens to rotate back onto itself, both count as "nothing changed". The interface tells you which
+of the two it was, because otherwise the button just looks broken.
+
+The last check means **a rotation can never win the game**: it cannot be used as an attack, only to break up an opponent's
+line or to rearrange your own stones.
+
+### 10.4 Rotation cooldown
+
+> Between two rotations you must **place** at least 5 stones.
+
+- **Only placements count**; a rotation itself does not — otherwise it becomes "only one turn in five may be a rotation", which is too hard to keep track of.
+- It can be set to 3 / 5 / 8 / 10, default 5.
+- The first rotation is subject to it too: you must place 5 stones after the game starts before you can rotate.
+- Undo rolls the cooldown back as well, so the counter and the board never disagree.
+
+### 10.5 What a rotation costs
+
+A rotation **uses up the whole turn**: the opponent moves immediately afterward, and you cannot "rotate and then place".
+Every turn is therefore "place or rotate, one or the other".
+
+A rotation does not count as move number N; the Nth move always means the Nth placement (the interface reports rotations separately).
+
+### 10.6 Undoing a rotation
+
+| Action | Effect |
+|---|---|
+| Undo `Z` | Takes back the last step — a rotation or a placement — and can go back to before the game started |
+| Restore rotation `Y` | Available only when the last move was exactly a rotation |
+
+Once someone places a stone, that rotation has landed and can no longer be taken back on its own — otherwise it would become a
+time machine spanning many moves.
+
+Undoing also returns the cooldown to what it was before the rotation.
+
+### 10.7 Sizes
+
+| Mode | Sizes | Default |
+|---|---|---|
+| 3D | 8 ≤ N ≤ 50, the three axes may differ | 15 |
+| 4D | 8 ≤ N ≤ 50, **must be cubic** | 8 |
+
+4D having to be cubic is not laziness: rotating a layer requires that layer's two sides to be equal, and all three axes must
+be rotatable, so all three must be the same length.
+
+4D defaults to 8 rather than 15 because **the bigger the board, the fewer stones a layer holds, and the less a rotation shows** —
+on a 15×15×15 board a layer holds less than one stone on average, and most rotations hit the "nothing changed" case.
+
+## 11. What this game does not do
+
+- **No double-three or double-four restrictions.** In traditional Renju (Gomoku's competitive form) the first player is also
+  barred from "one move making two open threes / two fours" and the like; this game implements the overline loss only. The
+  penalty falls after the move — there is no cell you are forbidden to play.
+- **No computer opponent.** Two people take turns on the same device.
+- **Rotations are not animated**; they land instantly, with only a brief highlight on the rotated layer.
+- **Rotations can only be made with the panel buttons**, not by dragging in the 3D view.
+</script>
+<!-- RULES-EMBED-EN-END -->
+
 <div id="stage">
 
   <div id="view">
@@ -604,11 +924,18 @@
     <!-- 起始界面打开时，左边这块画布就变成演示棋盘（自动缓慢旋转的 10×10×10）。
          铭牌是必须的：从对局里点「设置」进来时，左边仍然摆着一盘棋，
          不说明的话看起来像是自己的棋局还在。 -->
-    <div id="previewTag">演示棋盘 · 10 × 10 × 10<br>与左侧设置无关，也不参与对局</div>
+    <div id="previewTag" data-i18n-html="previewTag">演示棋盘 · 10 × 10 × 10<br>与左侧设置无关，也不参与对局</div>
 
     <div id="modebar">
-      <button id="modeGhost" class="mini sel">幽灵层</button>
-      <button id="modeSlice" class="mini">切片</button>
+      <button id="modeGhost" class="mini sel" data-i18n="modeGhost">幽灵层</button>
+      <button id="modeSlice" class="mini" data-i18n="modeSlice">切片</button>
+      <!-- 隐藏三维静态格线。`sel` 表示"格线可见"（默认），和 modeGhost 的 sel=幽灵层生效
+           是同一套语义：亮着 = 这个东西有作用。
+           存在的理由见 uploadGrid / gridSegments 那段注释：格线是 alpha 混合画的，
+           n 层屏幕位置重合的线累积透过率是 0.45^n，15³ 时已经是 6.3e-6 ——
+           立方体内部会读成一片灰网，盘里的子被糊得看不见。这是"从 15³ 起就必然发生"的，
+           不是大棋盘才有的问题，所以需要一个一键关掉它的开关。 -->
+      <button id="modeGrid" class="mini sel" data-i18n="modeGrid">格线</button>
       <div id="sliceGroup">
         <button id="sliceDown" class="mini">-</button>
         <div id="sliceLabel"></div>
@@ -618,38 +945,50 @@
 
     <div id="hintbox">
       <div id="coords">把鼠标移到棋盘上以选择落点</div>
-      <div id="hint">左键拖拽旋转 · 滚轮缩放 · 单击当前层落子<br>
-        Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · T 转动 · Y 恢复本次转动<br>
+      <div id="hint" data-i18n-html="hint">左键拖拽旋转 · 滚轮缩放 · 单击当前层落子<br>
+        Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · H 格线 · T 转动 · Y 恢复本次转动<br>
         绿框 = 待转的那一层 · 蓝框 = 当前层（四维模式下才有绿框）</div>
     </div>
 
     <div id="banner">
+      <button id="bannerClose" class="mini" data-i18n="bannerClose">关闭 Esc</button>
       <div id="bannerTitle">黑棋胜</div>
       <div id="bannerSub"></div>
-      <button id="bannerUndo">悔棋</button>
-      <button id="bannerRestart">再来一局</button>
+      <button id="bannerUndo" data-i18n="bannerUndo">悔棋</button>
+      <button id="bannerRestart" data-i18n="bannerRestart">再来一局</button>
     </div>
 
     <div id="toast"></div>
   </div>
 
 
-  <!-- 右上角的「具体规则」。刻意放在 #stage 外面、用 position:fixed：
+  <!-- 右上角：语言切换 +「具体规则」。刻意放在 #stage 外面、用 position:fixed：
      起始界面（#setup 是 fixed 且 z-index:50）和对局界面都要能点到它，
-     放在任何一侧的容器里都会在另一侧消失。 -->
-<button id="rulesBtn" title="查看完整规则">具体规则</button>
+     放在任何一侧的容器里都会在另一侧消失。
+
+     两个按钮包在一个容器里，是为了让对局时的状态行能按【实测总宽】给它们让位 ——
+     总宽随语言变，写死一个数就必然按不住。见 CSS 里 #topRight 的注释。
+     语言按钮刻意排在前面：这样「具体规则」仍然贴着右边 14px，位置和加它之前一模一样。 -->
+<div id="topRight">
+  <!-- 按钮上写的是【点了会变成什么】：中文界面下写 EN，英文界面下写中文。
+       所以它不能走 data-i18n（那是"固定文案"表），由 applyLang() 单独处理。 -->
+  <button id="langBtn" class="mini" title="切换界面语言 / Switch language">EN</button>
+  <!-- title 用双语写死：整个文件只有这一个 title 属性，
+       为它单独搭一套 i18n 不值当，而双语反而是两种语言下都对的信息。 -->
+  <button id="rulesBtn" title="查看完整规则 / Full rules" data-i18n="rulesBtn">具体规则</button>
+</div>
 
 <!-- 规则浮层。内容由 openRules() 从 #rulesSrc 现场渲染 —— 页面上没有第二份规则文本。 -->
 <div id="rulesPanel" class="off">
   <div id="rulesCard">
     <div id="rulesHead">
-      <div id="rulesTitle">规则全文</div>
+      <div id="rulesTitle" data-i18n="rulesTitle">规则全文</div>
       <!-- 这个 div 是空的，而且【不能删】：它是 #rulesHead 里唯一带 flex:1 的那一项，
            少了它「关闭」按钮会贴到标题右边而不是靠右。原先里面写着文件名
            RULES_SPEC.md —— 那是工程侧的叫法，玩家看到的规则页不该出现，
            改成玩家向之后就没有要写的东西了。 -->
       <div id="rulesSrcName"></div>
-      <button id="rulesClose" class="mini">关闭 Esc</button>
+      <button id="rulesClose" class="mini" data-i18n="rulesClose">关闭 Esc</button>
     </div>
     <div id="rulesBody"></div>
   </div>
@@ -669,7 +1008,7 @@
       <button id="prevLayer" class="mini">＜</button>
       <div id="layerLabel"></div>
       <button id="nextLayer" class="mini">＞</button>
-      <button id="topLayer" class="mini">顶层</button>
+      <button id="topLayer" class="mini" data-i18n="topLayer">顶层</button>
     </div>
 
     <div id="stripWrap"><canvas id="strip"></canvas></div>
@@ -680,44 +1019,44 @@
          和"当前层"根本不是同一个概念，单向同步会在用户手选之后又被盖回去。 -->
     <div id="rotPanel" class="off">
       <div id="rotHead">
-        <div id="rotTitle">转动一层</div>
+        <div id="rotTitle" data-i18n="rotTitle">转动一层</div>
         <div id="rotStatus"></div>
       </div>
       <div class="rotRow">
-        <div class="rotLabel">轴</div>
+        <div class="rotLabel" id="rotLabelAxis" data-i18n="rotLabelAxis">轴</div>
         <button class="rotAxis" data-axis="0">x</button>
         <button class="rotAxis" data-axis="1">y</button>
         <button class="rotAxis sel" data-axis="2">z</button>
       </div>
       <div class="rotRow">
-        <div class="rotLabel">层</div>
+        <div class="rotLabel" id="rotLabelLayer" data-i18n="rotLabelLayer">层</div>
         <button id="rotLayerDown" class="mini">−</button>
         <div id="rotLayerLabel"></div>
         <button id="rotLayerUp" class="mini">+</button>
       </div>
       <div class="rotRow">
-        <div class="rotLabel">方向</div>
-        <button id="rotCW" class="sel">顺时针</button>
-        <button id="rotCCW">逆时针</button>
+        <div class="rotLabel" id="rotLabelDir" data-i18n="rotLabelDir">方向</div>
+        <button id="rotCW" class="sel" data-i18n="rotCW">顺时针</button>
+        <button id="rotCCW" data-i18n="rotCCW">逆时针</button>
       </div>
       <div class="rotRow">
-        <div class="rotLabel">次数</div>
+        <div class="rotLabel" id="rotLabelTurns" data-i18n="rotLabelTurns">次数</div>
         <button class="rotTurns sel" data-turns="1">1 · 90°</button>
         <button class="rotTurns" data-turns="2">2 · 180°</button>
         <button class="rotTurns" data-turns="3">3 · 270°</button>
       </div>
       <div class="rotRow">
-        <button id="rotGo">执行转动</button>
-        <button id="rotRestore" disabled>恢复本次转动</button>
+        <button id="rotGo" data-i18n="rotGo">执行转动</button>
+        <button id="rotRestore" disabled data-i18n="rotRestore">恢复本次转动</button>
       </div>
       <div id="rotHint"></div>
     </div>
 
     <div id="buttons">
-      <button id="undoBtn">悔棋 Z</button>
-      <button id="restartBtn">重开 R</button>
-      <button id="swapBtn">换先手</button>
-      <button id="setupBtn">设置</button>
+      <button id="undoBtn" data-i18n="undoBtn">悔棋 Z</button>
+      <button id="restartBtn" data-i18n="restartBtn">重开 R</button>
+      <button id="swapBtn" data-i18n="swapBtn">换先手</button>
+      <button id="setupBtn" data-i18n="setupBtn">设置</button>
     </div>
   </aside>
 </div>
@@ -726,21 +1065,21 @@
   <div class="titleRow">
     <div class="seal serif">弈</div>
     <div>
-      <h1 class="serif">三维五子棋</h1>
-      <div class="sub serif">十三向连五 —— 立体棋盘上，光堵正面是没用的</div>
+      <h1 class="serif" id="setupTitle" data-i18n="setupTitle">三维五子棋</h1>
+      <div class="sub serif" id="setupSub" data-i18n="setupSub">十三向连五 —— 立体棋盘上，光堵正面是没用的</div>
     </div>
   </div>
 
   <div class="row">
-    <div class="rowLabel">对局模式</div>
-    <button id="mode3d" class="sel">三维 · 经典</button>
-    <button id="mode4d">四维 · 可转层</button>
+    <div class="rowLabel" id="rowLabelMode" data-i18n="rowLabelMode">对局模式</div>
+    <button id="mode3d" class="sel" data-i18n="mode3d">三维 · 经典</button>
+    <button id="mode4d" data-i18n="mode4d">四维 · 可转层</button>
   </div>
 
   <div class="row">
-    <div class="rowLabel">谁先手</div>
-    <button id="firstBlack" class="sel" data-first="1">黑棋先手</button>
-    <button id="firstWhite" data-first="2">白棋先手</button>
+    <div class="rowLabel" id="rowLabelFirst" data-i18n="rowLabelFirst">谁先手</div>
+    <button id="firstBlack" class="sel" data-first="1" data-i18n="firstBlack">黑棋先手</button>
+    <button id="firstWhite" data-first="2" data-i18n="firstWhite">白棋先手</button>
   </div>
 
   <!-- 三维和四维的尺寸行**共用同一个槽位**（网格叠放，见 CSS 里的 #dimsSlot）。
@@ -752,13 +1091,13 @@
   <!-- 三维模式：三个轴各填一个数，8..50。默认三轴联动（cubeOn），想下长方体就点掉它。
        长方体是【网页版独有】的扩展，没有测试向量覆盖，见 README 的说明。 -->
   <div class="row" id="dimsRow3d">
-    <div class="rowLabel">棋盘尺寸</div>
+    <div class="rowLabel" id="rowLabelSize3d" data-i18n="rowLabelSize3d">棋盘尺寸</div>
     <input id="dimX" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
     <span class="dimTimes">×</span>
     <input id="dimY" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
     <span class="dimTimes">×</span>
     <input id="dimZ" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
-    <button id="dimCube" class="mini sel">三轴联动</button>
+    <button id="dimCube" class="mini sel" data-i18n="dimCube">三轴联动</button>
     <!-- 可填范围。**内容是空的**：文字由 syncSetupInputs() 从内核的 BoardLimits 现算，
          一个字都不写死在这里 —— 写死的话它会和内核约束各自漂移，而"范围"这种东西
          漂移了没人会发现，只表现为"填进去了但开不了局"。 -->
@@ -768,7 +1107,7 @@
   <!-- 四维模式：只能立方。不是"没做"，是数学上不成立 —— 绕某轴转一层要求
        另外两个自由轴等长，三个轴都能转就只能 nx = ny = nz。见 README。 -->
   <div class="row hide" id="dimsRow4d">
-    <div class="rowLabel">棋盘尺寸</div>
+    <div class="rowLabel" id="rowLabelSize4d" data-i18n="rowLabelSize4d">棋盘尺寸</div>
     <input id="dimN" class="dimInput" type="number" min="8" max="50" step="1" value="8" inputmode="numeric">
     <span class="dimTimes">³</span>
     <!-- 原来这里还有一条 <span id="dimNote">，文本同下（"必须立方…"），但它是个独立的
@@ -787,22 +1126,22 @@
        HTML 里先写死 disabled：默认就是三维，JS 还没跑起来之前状态也得是对的。
        #coolNote 的宽度在 CSS 里写死，理由见那条规则。 -->
   <div class="row" id="coolRow">
-    <div class="rowLabel">转动冷却</div>
-    <button class="coolBtn" data-cool="3" disabled>3 手</button>
-    <button class="coolBtn sel" data-cool="5" disabled>5 手</button>
-    <button class="coolBtn" data-cool="8" disabled>8 手</button>
-    <button class="coolBtn" data-cool="10" disabled>10 手</button>
+    <div class="rowLabel" id="rowLabelCool" data-i18n="rowLabelCool">转动冷却</div>
+    <button class="coolBtn" data-cool="3" disabled id="cool3" data-i18n="cool3">3 手</button>
+    <button class="coolBtn sel" data-cool="5" disabled id="cool5" data-i18n="cool5">5 手</button>
+    <button class="coolBtn" data-cool="8" disabled id="cool8" data-i18n="cool8">8 手</button>
+    <button class="coolBtn" data-cool="10" disabled id="cool10" data-i18n="cool10">10 手</button>
     <span id="coolNote" class="hint"></span>
   </div>
 
   <div id="sizeSummary"></div>
 
-  <div id="ruleNote">
+  <div id="ruleNote" data-i18n-html="ruleNote">
     规则：任意空格可落子，无重力约束。先手必须【恰好 5 连】，连成 6 个及以上判长连负；后手 ≥5 连即胜。<br>
     获胜方向为 13 个：3 轴向 + 6 面对角 + 4 体对角。右侧面板可以逐层查看与落子。
   </div>
 
-  <button id="startBtn" class="sel">开始游戏</button>
+  <button id="startBtn" class="sel" data-i18n="startBtn">开始游戏</button>
 </div>
 
 <script>
@@ -840,12 +1179,48 @@ const RestrictionTarget = { None: 0, FirstPlayer: 1, Black: 2 };
 function opponentOf(s) { return s === BLACK ? WHITE : (s === WHITE ? BLACK : EMPTY); }
 function cnOf(s) { return s === BLACK ? "黑" : (s === WHITE ? "白" : "空"); }
 
+/* --------------------------------------------------------------------------
+   内核的英文文案。
+   【为什么英文要在内核里】内核被四个消费者**单独抽出去执行**（三个 node 测试 +
+   server.js 的 new Function），它引用不到外面的任何表。所以拼句子要用到的词
+   必须放在这条 BEGIN/END 之间，否则 server.js 一加载就 ReferenceError。
+
+   【中文那侧一条都没动】。每个函数里都是 "if (lang === 'en') 走英文" 顶在最前面，
+   底下的原句逐字节还是原来那句 —— 保证"默认语言下输出不变"是结构性的，
+   不需要任何人相信我搬字符串时抄对了。
+
+   代价：内核现在装着两种语言的界面文案，CORE_HASH 因此会变。这不是新性质
+   （内核本来就在产文案：cnOf 返回"黑/白"、describeStatus 返回整句话），
+   只是从一种语言变成两种。server.js 和 index.html 同仓同 commit，自洽。
+
+   【翻译得对不对，这里一个字都保证不了】断言能证明"是英文"，证明不了"是好英文"。
+   中英若有出入，以中文为准。见 打开流程.md 的"还没验证过的部分"。
+
+   【lang 一律带默认值 "zh"，不是写成光秃秃的 lang】：默认值会让 Function.length
+   停在它【之前】。online.test.mjs:515 断言的 rotate.length === 1 抓的是
+   "rotate 只收一个 RotationMove，四参数版叫 rotateBy" 这件事 —— 写成 rotate(move, lang)
+   会让 .length 变成 2，那条断言当场红，而它想守的东西其实没坏。带默认值两头都成立：
+   不传 lang 时行为逐字节等于从前，.length 也还是 1。
+   -------------------------------------------------------------------------- */
+const EN_SIDE = { BLACK: "Black", WHITE: "White", EMPTY: "empty" };
+function enOf(s) { return s === BLACK ? EN_SIDE.BLACK : (s === WHITE ? EN_SIDE.WHITE : EN_SIDE.EMPTY); }
+
 /** 走子记录 */
 function MoveRecord(x, y, z, player, moveNumber) {
-  return { x: x, y: y, z: z, player: player, moveNumber: moveNumber };
+  // 【这里必须把原型接上，不能直接 return 一个字面量】函数体 return 对象时，
+  // `new` 得到的是那个字面量、不是 this —— 而字面量的原型是 Object.prototype，
+  // 下面挂的那个 toString 就永远够不着：rec.toString() 走的是
+  // Object.prototype.toString，得到字符串 "[object Object]"。
+  // 症状只在悔棋提示上：中英文都会显示成"已悔棋：[object Object]"。
+  // 接上原型之后 `new MoveRecord(...)` 和 `MoveRecord(...)` 两种写法都对
+  // （RotationMove / RotationRecord 是 class，本来就没这个问题）。
+  return Object.assign(Object.create(MoveRecord.prototype),
+                       { x: x, y: y, z: z, player: player, moveNumber: moveNumber });
 }
-MoveRecord.prototype.toString = function () {
-  return "#" + this.moveNumber + " " + cnOf(this.player) + "(" + this.x + "," + this.y + "," + this.z + ")";
+MoveRecord.prototype.toString = function (lang = "zh") {
+  return lang === "en"
+    ? "#" + this.moveNumber + " " + enOf(this.player) + " (" + this.x + "," + this.y + "," + this.z + ")"
+    : "#" + this.moveNumber + " " + cnOf(this.player) + "(" + this.x + "," + this.y + "," + this.z + ")";
 };
 
 /** 棋盘尺寸上下限。**UI 只有这一处定义**，输入框的 min/max、夹取、提示文案都从它取。 */
@@ -1085,21 +1460,42 @@ class RuleSet {
     if (this.restricted === RestrictionTarget.Black) return player === BLACK;
     return player === firstPlayer;
   }
-  describe(firstPlayer) {
-    let s = cnOf(firstPlayer) + "先手 · ";
+  describe(firstPlayer, lang = "zh") {
+    // 中英写成【同一条分支】而不是"英文另起一段"，理由见上面内核文案那段注释：
+    // 分支结构只有一份，就不可能出现"加了条规则、英文那侧忘了跟"这种静默分叉。
+    // 代价是每个返回点上挂一个三元。值得。
+    const en = lang === "en";
+    let s = en ? enOf(firstPlayer) + " first · " : cnOf(firstPlayer) + "先手 · ";
     if (!this.overlineLoses || this.restricted === RestrictionTarget.None) {
-      return s + "双方 ≥" + this.winLength + " 连即胜（自由规则）" + this._rotationSuffix();
+      return s + (en ? "either side wins with " + this.winLength + "+ in a row (open rules)"
+                     : "双方 ≥" + this.winLength + " 连即胜（自由规则）") + this._rotationSuffix(lang);
     }
-    const who = this.restricted === RestrictionTarget.Black ? "黑棋" : "先手(" + cnOf(firstPlayer) + ")";
-    s += who + "须恰好 " + this.winLength + " 连，" + (this.winLength + 1) + " 连及以上判负";
-    s += " · 后手 ≥" + this.winLength + " 连胜";
-    if (!this.overlineTakesPrecedence) s += " · 同手命中恰好" + this.winLength + "连时判胜";
-    return s + this._rotationSuffix();
+    const who = this.restricted === RestrictionTarget.Black
+      ? (en ? "Black" : "黑棋")
+      : (en ? "the first player (" + enOf(firstPlayer) + ")" : "先手(" + cnOf(firstPlayer) + ")");
+    s += en ? who + " must make exactly " + this.winLength + " in a row; " + (this.winLength + 1) + " or more loses"
+            : who + "须恰好 " + this.winLength + " 连，" + (this.winLength + 1) + " 连及以上判负";
+    s += en ? " · the second player wins with " + this.winLength + "+ in a row"
+            : " · 后手 ≥" + this.winLength + " 连胜";
+    if (!this.overlineTakesPrecedence) {
+      s += en ? " · exactly " + this.winLength + " on the same move also wins"
+              : " · 同手命中恰好" + this.winLength + "连时判胜";
+    }
+    return s + this._rotationSuffix(lang);
   }
   /** 四维模式追加的一行规则描述。三维模式返回空串，描述文本一字不变。 */
-  _rotationSuffix() {
+  _rotationSuffix(lang = "zh") {
     if (!this.allowRotation) return "";
-    return " · 四维：每落 " + this.rotationCooldownPlacements + " 子可转动一层";
+    const n = this.rotationCooldownPlacements;
+    // 冷却为 1 时英文写成 "every 1 moves" 是错的。界面那一侧有 sayN 可用，内核这一侧
+    // 没有 —— 内核里不能放文案表（它要被 node 和 server.js 原样抽出去单独跑），
+    // 所以就地判一次单复数。中文没有这个问题，下面那行一字不动。
+    // 单数时那个 "1" 直接不写（"every move"）—— 和起始界面小结里的说法保持一致，
+    // 两处指的是同一件事，措辞不该各写各的。
+    if (lang === "en") {
+      return " · 4D: every " + (n === 1 ? "move" : n + " moves") + " you may rotate one layer";
+    }
+    return " · 四维：每落 " + n + " 子可转动一层";
   }
 }
 
@@ -1221,10 +1617,20 @@ class GameSession {
 
   canPlace(x, y, z) { return this.status === "Playing" && this.board.isEmpty(x, y, z); }
 
-  place(x, y, z) {
-    if (this.status !== "Playing") return this._reject("棋局已结束，请先悔棋或重开");
-    if (!this.board.inBounds(x, y, z)) return this._reject("坐标越界 " + x + "," + y + "," + z);
-    if (!this.board.isEmpty(x, y, z)) return this._reject("该位置已有棋子 " + x + "," + y + "," + z);
+  place(x, y, z, lang = "zh") {
+    // lang 只影响【被拒时那句原因】。默认("zh")下每个字都和以前一样 ——
+    // server.js 调 place 时不传 lang，线上协议因此仍然是中文，联机测试里的
+    // 中文子串断言一条都不动。
+    const en = lang === "en";
+    if (this.status !== "Playing") {
+      return this._reject(en ? "The game is over — undo or restart first" : "棋局已结束，请先悔棋或重开");
+    }
+    if (!this.board.inBounds(x, y, z)) {
+      return this._reject(en ? "Out of bounds: " + x + "," + y + "," + z : "坐标越界 " + x + "," + y + "," + z);
+    }
+    if (!this.board.isEmpty(x, y, z)) {
+      return this._reject(en ? "That cell is taken: " + x + "," + y + "," + z : "该位置已有棋子 " + x + "," + y + "," + z);
+    }
 
     const player = this.currentPlayer;
     this.board.set(x, y, z, player);
@@ -1313,13 +1719,20 @@ class GameSession {
     return { status: MoveStatus.Rejected, winner: EMPTY, longestRun: 0, line: null, isOverlineFoul: false, reason: reason };
   }
 
-  describeStatus() {
+  describeStatus(lang = "zh") {
+    const en = lang === "en";
     if (this.status === "Decided") {
-      if (this.isDraw) return "和局：棋盘已满";
-      if (this.lastOutcome.status === MoveStatus.LoseByOverline) return "长连犯规！" + cnOf(this.winner) + "棋胜";
-      return cnOf(this.winner) + "棋胜";
+      if (this.isDraw) return en ? "Draw — the board is full" : "和局：棋盘已满";
+      if (this.lastOutcome.status === MoveStatus.LoseByOverline) {
+        return en ? "Overline! " + enOf(this.winner) + " wins"
+                  : "长连犯规！" + cnOf(this.winner) + "棋胜";
+      }
+      return en ? enOf(this.winner) + " wins" : cnOf(this.winner) + "棋胜";
     }
-    return cnOf(this.currentPlayer) + "棋落子（第 " + (this.history.length + 1) + " 手）";
+    // 英文写得短是【有约束的】：#status 是 22px、#statusRow 只有 34px 高，长了会换行，
+    // 一换行整行变高就把下面的棋盘挤小（#boardWrap 是 flex:1 1 auto）。别加词。
+    return en ? enOf(this.currentPlayer) + " to move (move " + (this.history.length + 1) + ")"
+              : cnOf(this.currentPlayer) + "棋落子（第 " + (this.history.length + 1) + " 手）";
   }
 }
 
@@ -1412,7 +1825,11 @@ class RotationMove {
     if (layer < 0) throw new Error("层号不能为负：" + layer);
     return new RotationMove(axis, layer, cwTurns);
   }
-  toString() { return axisName(this.axis) + "=" + this.layer + " 顺时针" + this.turns + "次"; }
+  toString(lang = "zh") {
+    return axisName(this.axis) + "=" + this.layer + (lang === "en"
+      ? ", " + this.turns + (this.turns === 1 ? " turn clockwise" : " turns clockwise")
+      : " 顺时针" + this.turns + "次");
+  }
 }
 
 function axisName(a) { return a === AXIS_X ? "x" : (a === AXIS_Y ? "y" : "z"); }
@@ -1423,9 +1840,12 @@ function axisName(a) { return a === AXIS_X ? "x" : (a === AXIS_Y ? "y" : "z"); }
  * 用户选的是逆时针，提示却说顺时针，等于在惩罚用户没记住归一化规则。
  * 180° 不分顺逆，单独一档。
  */
-function describeRotationMove(m) {
+function describeRotationMove(m, lang = "zh") {
+  // 180° 不分顺逆、两种语言也一样，所以这一档放在语言分支【之前】，只有一份。
   if (m.turns === 2) return "180°";
-  return m.turns === 1 ? "顺时针 90°" : "逆时针 90°";
+  const en = lang === "en";
+  return m.turns === 1 ? (en ? "90° clockwise" : "顺时针 90°")
+                       : (en ? "90° counterclockwise" : "逆时针 90°");
 }
 
 /** 一次转动的判定结果。 */
@@ -1438,11 +1858,12 @@ class RotateOutcome {
     this.reason = reason || null;
   }
   get accepted() { return this.status === RotateStatus.Rotated; }
-  describe() {
-    if (this.status === RotateStatus.Rotated) return "已转动 " + this.move.toString();
-    if (this.status === RotateStatus.NoRotation) return "转不动：" + this.reason;
-    if (this.status === RotateStatus.CreatesLine) return "已撤销：" + this.reason;
-    return "不能转动：" + this.reason;
+  describe(lang = "zh") {
+    const en = lang === "en";
+    if (this.status === RotateStatus.Rotated) return (en ? "Rotated " : "已转动 ") + this.move.toString(lang);
+    if (this.status === RotateStatus.NoRotation) return (en ? "No change: " : "转不动：") + this.reason;
+    if (this.status === RotateStatus.CreatesLine) return (en ? "Rolled back: " : "已撤销：") + this.reason;
+    return (en ? "Can't rotate: " : "不能转动：") + this.reason;
   }
 }
 
@@ -1460,9 +1881,13 @@ class RotationRecord {
     this.placementsBefore = placementsBefore;
     this.layerStones = layerStones;
   }
-  toString() {
-    return "#" + this.placementsBefore + "后 " + cnOf(this.player) + " " + this.move.toString() +
-      "（本层 " + this.layerStones + " 子）";
+  toString(lang = "zh") {
+    const en = lang === "en";
+    return (en ? "after " + this.placementsBefore + ": " + enOf(this.player) + " " +
+                 this.move.toString(lang) + " (" + this.layerStones +
+                 (this.layerStones === 1 ? " stone" : " stones") + " in that layer)"
+               : "#" + this.placementsBefore + "后 " + cnOf(this.player) + " " + this.move.toString() +
+                 "（本层 " + this.layerStones + " 子）");
   }
 }
 
@@ -1525,8 +1950,8 @@ class FourDSession {
   get rotationEnabled() { return this.inner.rules.allowRotation; }
 
   canPlace(x, y, z) { return this.inner.canPlace(x, y, z); }
-  place(x, y, z) { return this.inner.place(x, y, z); }
-  describeStatus() { return this.inner.describeStatus(); }
+  place(x, y, z, lang = "zh") { return this.inner.place(x, y, z, lang); }
+  describeStatus(lang = "zh") { return this.inner.describeStatus(lang); }
 
   reset(dims, firstPlayer, rules) {
     this.inner.reset(dims, firstPlayer, rules);   // 会触发 onReset，清空转动记录
@@ -1555,11 +1980,21 @@ class FourDSession {
   }
 
   /** 给 UI 用的一行转动状态。 */
-  describeRotationStatus() {
+  describeRotationStatus(lang = "zh") {
+    const en = lang === "en";
     if (!this.rotationEnabled) return "";
-    if (this.inner.status !== "Playing") return "棋局已结束";
-    if (this.canRotate) return "可以转动（距上次转动已过 " + this.placementsSinceLastRotation + " 手）";
-    return "距下次转动还需 " + this.placementsUntilRotation + " 手（已过 " + this.placementsSinceLastRotation + " 手）";
+    if (this.inner.status !== "Playing") return en ? "The game is over" : "棋局已结束";
+    if (this.canRotate) {
+      return en ? "Ready to rotate (" + this.placementsSinceLastRotation + " moves since the last one)"
+                : "可以转动（距上次转动已过 " + this.placementsSinceLastRotation + " 手）";
+    }
+    // 只剩 1 手时英文要写 "1 more move" —— 内核里放不下文案表（它要被 server.js 和
+    // 三个测试原样抽出去跑），所以就地判一次，写法和上面 _rotationSuffix 那句一致。
+    // 这一行是常显的 22px 状态行，界面上够得到（冷却 3 时落满 2 子就是 1）。
+    const left = this.placementsUntilRotation;
+    return en ? left + " more " + (left === 1 ? "move" : "moves") + " before the next rotation (" +
+                  this.placementsSinceLastRotation + " since the last one)"
+              : "距下次转动还需 " + left + " 手（已过 " + this.placementsSinceLastRotation + " 手）";
   }
 
   // ---------------------------------------------------------------- 转动
@@ -1569,23 +2004,39 @@ class FourDSession {
    * **除了 Rotated，其它三种都不改变棋盘、不消耗回合、不留下任何痕迹** —— 这一条是这套实现的
    * 全部要点：玩家可以放心地去试，试错的代价永远是零。
    */
-  rotate(move) {
-    if (!this.rotationEnabled) return this._reject(move, "当前不是四维模式");
-    if (this.inner.status !== "Playing") return this._reject(move, "棋局已结束，请先悔棋或重开");
+  rotate(move, lang = "zh") {
+    const en = lang === "en";
+    if (!this.rotationEnabled) return this._reject(move, en ? "Not in 4D mode" : "当前不是四维模式");
+    if (this.inner.status !== "Playing") {
+      return this._reject(move, en ? "The game is over — undo or restart first" : "棋局已结束，请先悔棋或重开");
+    }
 
     // 长方体棋盘上转层在数学上不存在（两个自由轴必须等长）。这是"拒绝"而不是抛异常 ——
     // 和层号越界、冷却未到同类：棋盘不动、不消耗回合、留下一句能读懂的原因。
     // 构造上走不到这里：UI 在四维模式下只给一个 N，但内核不依赖 UI 的约束来保证自己的前提。
     if (!this.inner.board.isCube) {
       const d = this.inner.board.dims;
-      return this._reject(move, "四维模式要求立方棋盘，当前是 " + d[0] + "×" + d[1] + "×" + d[2] +
-                                "（转层要求两个自由轴等长）");
+      return this._reject(move, en
+        ? "4D rotation needs a cube board; this one is " + d[0] + "×" + d[1] + "×" + d[2] +
+          " (the two free axes must be equal)"
+        : "四维模式要求立方棋盘，当前是 " + d[0] + "×" + d[1] + "×" + d[2] +
+          "（转层要求两个自由轴等长）");
     }
 
     const n = this.inner.board.size;
-    if (move.layer >= n) return this._reject(move, "层号越界 " + move.layer + "（棋盘 " + n + "³）");
-    if (move.layer < 0) return this._reject(move, "层号不能为负 " + move.layer);
-    if (!this.canRotate) return this._reject(move, "还要再落 " + this.placementsUntilRotation + " 子才能转动");
+    if (move.layer >= n) {
+      return this._reject(move, en ? "Layer " + move.layer + " is out of range (board is " + n + "³)"
+                                   : "层号越界 " + move.layer + "（棋盘 " + n + "³）");
+    }
+    if (move.layer < 0) {
+      return this._reject(move, en ? "Layer number can't be negative: " + move.layer
+                                   : "层号不能为负 " + move.layer);
+    }
+    if (!this.canRotate) {
+      const left = this.placementsUntilRotation;
+      return this._reject(move, en ? left + " more " + (left === 1 ? "move" : "moves") + " before you can rotate"
+                                   : "还要再落 " + left + " 子才能转动");
+    }
 
     const board = this.inner.board;
     const layerStones = board.countLayerStones(move.axis, move.layer);
@@ -1594,8 +2045,9 @@ class FourDSession {
     const changed = board.rotateLayer(move.axis, move.layer, move.turns);
     if (!changed) {
       const why = layerStones === 0
-        ? "该层是空的，转动不改变任何东西"
-        : "该层的图案在这个转动下不变，等于没转";
+        ? (en ? "this layer is empty — a rotation changes nothing" : "该层是空的，转动不改变任何东西")
+        : (en ? "this layer's pattern is unchanged by that rotation — nothing would move"
+              : "该层的图案在这个转动下不变，等于没转");
       return new RotateOutcome(RotateStatus.NoRotation, move, layerStones, why);
     }
 
@@ -1609,8 +2061,10 @@ class FourDSession {
     if (runs.length > 0) {
       // 逆置换 = 顺时针再转 (4 - t) 次，不需要额外存原图
       board.rotateLayer(move.axis, move.layer, 4 - move.turns);
-      return new RotateOutcome(RotateStatus.CreatesLine, move, layerStones,
-        "转动会让盘面上出现 " + this.inner.rules.winLength + " 连（" + runs.length + " 条），已整体撤销");
+      return new RotateOutcome(RotateStatus.CreatesLine, move, layerStones, en
+        ? "that rotation would create " + this.inner.rules.winLength + " in a row (" + runs.length +
+          " line" + (runs.length === 1 ? "" : "s") + ") — rolled back"
+        : "转动会让盘面上出现 " + this.inner.rules.winLength + " 连（" + runs.length + " 条），已整体撤销");
     }
 
     const player = this.inner.currentPlayer;
@@ -1625,9 +2079,17 @@ class FourDSession {
     return outcome;
   }
 
-  /** 按用户输入的"方向 + 次数"转一层。 */
-  rotateBy(axis, layer, direction, turns) {
-    return this.rotate(RotationMove.create(axis, layer, direction, turns));
+  /**
+   * 按用户输入的"方向 + 次数"转一层。
+   *
+   * 【lang 必须一路传下去】rotate() 会把"没转成"的原因（层是空的 / 冷却未到 / 不是立方盘…）
+   * 冻进 outcome.reason，而 UI 那句 `describe(this.lang)` 只换前缀、不重写原因 ——
+   * 少传一个 lang，英文界面上就会出现 "No change: 该层是空的，转动不改变任何东西"
+   * 这种半中半英的提示，而它只需要点一下"执行转动"就能看见。
+   * （落子那条路没这个问题：tryPlace 一直传着 this.lang，见 index.html:4658。）
+   */
+  rotateBy(axis, layer, direction, turns, lang = "zh") {
+    return this.rotate(RotationMove.create(axis, layer, direction, turns), lang);
   }
 
   _reject(move, reason) { return new RotateOutcome(RotateStatus.Rejected, move, 0, reason); }
@@ -1778,6 +2240,315 @@ const Palette = {
   rgba(name, alpha) { const c = this.rgb(name); return [c[0], c[1], c[2], alpha]; },
 };
 
+
+/* --------------------------------------------------------------------------
+   界面语言。**同样放在内核区间之外** —— 内核那边碰不得 DOM，而这一层全是 DOM。
+
+   为什么要有它：这份工程是中文优先的，但规则和玩法对英文读者一样成立；
+   界面不跟着走，他们就只能对着一屏看不懂的字按按钮。
+
+   【中文静态文案的唯一来源是 HTML 本身，不是下面这张表】。按钮、标签、标题的中文原文
+   留在 HTML 里原样不动，切换时英文从 STATIC_TEXT 取、中文从"开局时拍的快照"写回去。
+   于是中文只有一份、英文只有一份，不会出现"改了一边忘了另一边"那种没有任何东西会
+   报警的分叉 —— 这个工程在颜色（散在五处）和 worldOf（两份拷贝）上各踩过一次，
+   见 _verify/embed-rules.mjs 文件头。
+
+   JS 拼出来的句子（"已下 N 手"这种）没有 HTML 原文可依，但处理方式【是同一条】：
+   中文仍在它原来的位置（就是代码里那句表达式），英文进 TEXT，调用点走 say()。
+   于是两张表都只有英文：
+     - STATIC_TEXT：键 = 元素 id。中文在 HTML 里。
+     - TEXT：键 = 语义名。中文在调用点那句表达式里。
+   契约不一样就分开命名。混成一张表，迟早有人往 STATIC_TEXT 里补一条中文，
+   然后困惑界面为什么不跟着变。
+
+   【为什么不把中文也搬进 TEXT，让两种语言并排好对照】：中文那侧被 40315 项断言钉着，
+   而"一个字节都没动过"和"搬的时候很小心"是两种保证 —— 前者不需要任何人相信我抄对了。
+   -------------------------------------------------------------------------- */
+const LANGS = ["zh", "en"];
+let LANG = "zh";
+
+/* 【默认语言无条件中文，不读 navigator.language】—— 这是硬要求，不是偏好。
+   _verify/browser-check.mjs 用 --headless=new 起 Chrome，那种环境下
+   navigator.language 是 en-US，而它有几十条断言读的是【中文】渲染结果。
+   一旦改成按浏览器语言自动选，页面开局就是英文，那一整批断言当场全红，
+   而红的原因（"我改进了语言检测"）离现场非常远，极难归因。
+   玩家要的是"能切换"，所以这里是切换，不是自动检测。 */
+const LANG_KEY = "gomoku.lang";
+
+/**
+ * localStorage 的两层保险。环境里可能【根本没有】它（node 桩、老浏览器），
+ * 也可能有但一访问就抛（file:// 在某些浏览器里是不透明源，访问 localStorage 抛 SecurityError）。
+ * 两种都必须安静降级：页面上任何一条控制台报错都会让 browser-check 的控制台断言变红，
+ * 而"存不了语言偏好"远不该是让整个页面看起来坏掉的理由。
+ */
+function storeGet(key) {
+  try {
+    if (typeof localStorage === "undefined" || !localStorage) return null;
+    return localStorage.getItem(key);
+  } catch (e) { return null; }
+}
+function storeSet(key, value) {
+  try {
+    if (typeof localStorage === "undefined" || !localStorage) return;
+    localStorage.setItem(key, value);
+  } catch (e) { /* 存不了就算了，语言当次仍然有效 */ }
+}
+
+/**
+ * 静态文案的英文。键 = 元素 id（见 collectStatic）。中文在 HTML 里，一个字都没搬。
+ *
+ * 【少一条会怎样】不会崩，也不会出现 undefined：applyStatic 查不到就留着中文。
+ * 所以这条通路上的错误长相是"英文界面里有几个地方还是中文"。
+ * 靠不住眼睛，所以 dom-smoke 里有一条"HTML 里每个 data-i18n 键这张表里都得有"的检查。
+ *
+ * 【.seal 里的"弈"字故意没有英文】它是装饰性的印章，两种语言都不换 ——
+ * 换成拉丁字母和那一圈楷体边框更不搭。这是选择，不是漏了。
+ * 同理没进表的还有 #dimTimes 的 × / ³、#rotTurns 的 "1 · 90°"、#prevLayer 的箭头：
+ * 它们只有数字和符号，两种语言一样。
+ */
+const STATIC_TEXT = { en: {
+  // ---- 左侧舞台
+  "previewTag": "Demo board · 10 × 10 × 10<br>Independent of the settings on the left — not part of the game",
+  "hint": "Drag to rotate · Scroll to zoom · Click to place on the current layer<br>" +
+    "Z undo · R restart · Q/E change layer · G view mode · H grid lines · T rotate · Y restore rotation<br>" +
+    "Green box = the layer about to rotate · Blue box = current layer (green only in 4D)",
+  "modeGhost": "Ghost layers",
+  "modeSlice": "Slice",
+  "modeGrid": "Grid lines",
+
+  // ---- 终局横幅（标题和副标题由 JS 写，不在这张表里）
+  "bannerUndo": "Undo",
+  "bannerRestart": "Play again",
+  "bannerClose": "Close Esc",
+
+  // ---- 右上角与规则浮层
+  "rulesBtn": "Full rules",
+  "rulesTitle": "Full rules",
+  "rulesClose": "Close Esc",
+
+  // ---- 右侧面板
+  "topLayer": "Top layer",
+  "rotTitle": "Rotate a layer",
+  "rotLabelAxis": "Axis",
+  "rotLabelLayer": "Layer",
+  "rotLabelDir": "Direction",
+  "rotLabelTurns": "Turns",
+  "rotCW": "Clockwise",
+  "rotCCW": "Counterclockwise",
+  "rotGo": "Rotate",
+  "rotRestore": "Restore rotation",
+  "undoBtn": "Undo Z",
+  "restartBtn": "Restart R",
+  "swapBtn": "Swap first player",
+  "setupBtn": "Settings",
+
+  // ---- 起始界面
+  "setupTitle": "3D Gomoku",
+  "setupSub": "Thirteen directions — on a 3D board, blocking the front is not enough",
+  "rowLabelMode": "Mode",
+  "rowLabelFirst": "First player",
+  "rowLabelSize3d": "Board size",
+  "rowLabelSize4d": "Board size",
+  "rowLabelCool": "Rotation cooldown",
+  "mode3d": "3D · Classic",
+  "mode4d": "4D · Rotatable",
+  "firstBlack": "Black first",
+  "firstWhite": "White first",
+  "dimCube": "Link all three axes",
+  "cool3": "3 moves",
+  "cool5": "5 moves",
+  "cool8": "8 moves",
+  "cool10": "10 moves",
+  "startBtn": "Start game",
+
+  // ---- 起始界面的规则摘要（含 <br>）。英文读者看到的是同一件事的白话说法，
+  //      不是中文那一行的逐字对译。
+  "ruleNote": "Rules: you may play on any empty cell — there is no gravity. " +
+    "The first player must make <b>exactly five</b> in a row; six or more is an overline loss. " +
+    "The second player wins with five or more.<br>" +
+    "There are 13 winning directions: 3 axes + 6 face diagonals + 4 body diagonals. " +
+    "Use the panel on the right to step through layers and place stones.",
+} };
+
+/**
+ * JS 拼出来的句子的英文。键 = 语义名（"info.moves"），占位符写 {name}。中文在调用点。
+ * 带 .one / .many 的成对键是单复数（见 sayN），英文只有这两形。
+ *
+ * 【英文写得比中文克制是有原因的】#status 是 22px、#statusRow 只有 34px 高，
+ * 一换行就把下面的棋盘挤小；#coolNote / #dimRange 那几行在同宽下也不能比中文长太多，
+ * 否则 900×700 会横向溢出。这里没有一句是"逐字对译"——按英文读者的读法重写，
+ * 并且能短就短。
+ */
+const TEXT = { en: {
+  // ---- 对局状态行与信息行
+  "info.moves.one": "{n} move played",
+  "info.moves.many": "{n} moves played",
+  "info.rotations.one": " · {n} rotation",
+  "info.rotations.many": " · {n} rotations",
+  "info.board": " · board {x}×{y}×{z} · layer {layer}/{n} (z={z0})",
+  "layer.label": "Layer {i} / {n}",
+  "slice.label": "Drawing up to z ≤ {i}/{n}",
+  "coords.hover": "Will place at ({x},{y},{z})",
+  "coords.idle": "Move the mouse over the board to pick a cell",
+
+  // ---- 终局横幅。#bannerTitle 是 white-space:pre-line，\n 是排版，位置要和中文对齐
+  "banner.draw": "Draw\nBoard full",
+  "banner.overline": "Overline!\nFirst player made {n} in a row — {who} wins",
+  "banner.overlineSub": "The first player must make exactly 5 in a row",
+  "banner.win": "{who} wins\n{n} in a row",
+  "banner.winSub": "Move {n}",
+
+  // ---- 四维面板
+  "rot.layerLabel.one": "{axis} = {layer} (1 stone in this layer)",
+  "rot.layerLabel.many": "{axis} = {layer} ({n} stones in this layer)",
+  "rot.hint.over": "The game is over.",
+  "rot.hint.empty": "This layer is empty — nothing to rotate. Pick another layer, or check the 3D view to see where the stones are.",
+  // 冷却只剩 1 手时要说 "1 more move" —— 和 setup.fourD.every* 同一类单复数。
+  // 这一处【界面上够得到】：冷却选 3 时落两手，placementsUntilRotation 就是 1。
+  "rot.hint.cool.one": "Cooling down: 1 more move. A rotation uses up the whole turn, so you can't place right after rotating.",
+  "rot.hint.cool.many": "Cooling down: {n} more moves. A rotation uses up the whole turn, so you can't place right after rotating.",
+  "rot.hint.undo": "The last move was a rotation — you can take it back with “Restore”.",
+  "rot.hint.ready": "Clockwise = looking from the negative end of that axis toward the origin. If a rotation would create 5 in a row it is rolled back; a rotation uses up the whole turn.",
+
+  // ---- 浮动提示
+  "toast.undone": "Undone: {move}",
+  "toast.rotated": "{move}",
+  "toast.rotUndone": "Restored to before the rotation ({move} undone)",
+  "toast.start": "{who} first, {x}×{y}×{z} — game on",
+  "toast.noRotUndo": "The last move wasn't a rotation — nothing to restore",
+  "toast.noUndo": "No moves left to undo",
+  "toast.decided": "This game is over — undo to keep playing",
+  "toast.restarted": "Restarted",
+  "toast.swapped": "Restarted with {who} first",
+
+  // ---- 起始界面：可填范围与冷却行。{range} 是 "8 – 50"，两种语言共用
+  //      （数字和那个 EN DASH 不翻译，online-http.test.mjs 按它断言）
+  "range.allowed": "{range} allowed",
+  "range.cubicOnly": "{range} · must be cubic (rotating a layer needs the other two axes equal)",
+  "cool.usesTurn": "A rotation uses up the whole turn",
+  "cool.fourDOnly": "4D mode only",
+
+  // ---- 起始界面下方的尺寸摘要。\n 全部是排版（white-space: pre-line）
+  "setup.summary": "{x} × {y} × {z} ({cells} cells) · {who} first{rest}",
+  "setup.perLayer": "{n} stones",
+  "setup.perLayerEst": "total stones ÷ {n}",
+  // 两句话拆成两条，因为只有第一句带那个会变的数（冷却）。冷却 = 1 时英文必须写
+  // "every move" —— 写成 "every 1 moves" 是错的，而界面上选不到 1（按钮是 3/5/8/10），
+  // 所以这条只在脚本把冷却调成 1 时才露出来，谁也不会顺手发现它。
+  "setup.fourD.everyOne": "\n4D: every move you may rotate one layer (it uses up the whole turn; the rotation itself doesn't count as a move).",
+  "setup.fourD.everyMany": "\n4D: every {cool} moves you may rotate one layer (it uses up the whole turn; the rotation itself doesn't count as a move).",
+  "setup.fourD.layer": "\nOne layer is {n}×{n} cells — 1/{n} of the board; at the end of a game a layer holds {perLayer} on average.",
+  // 这一条的单复数看的是 {times}（最多转几次），不是中位手数 —— 冷却选 8 或 10 时
+  // times 会被 Math.max(1, …) 兜成 1（5 路盘中位 15 手：floor(14/10) = 1），界面上够得到。
+  // 占位符叫 {median} 不叫 {n}：sayN 会往参数里塞一个 n（= 选复数用的那个数），
+  // 重名的占位符会被它盖掉，{n} 会渲染成转动次数而不是中位手数。
+  "setup.fourD.times.one": "\nAt the measured median of {median} moves, that's at most 1 rotation (usually fewer — games often end before then).",
+  "setup.fourD.times.many": "\nAt the measured median of {median} moves, that's at most {times} rotations (usually fewer — games often end before then).",
+  "setup.fourD.dense": "\nNote: on a board this big a layer often holds only one or two stones, so most rotations hit the “nothing changed” case.",
+  "setup.rect": "\nA rectangular board (three unequal axes) is an extension unique to the web version: the existing consistency vectors cover cubes only, not this.",
+  "setup.rect.big": "\nWith an edge of {n}, the 3D grid lines get very dense (turning grid lines off, or Ghost layers mode, both help).",
+  "setup.big": "\nNote: {n}³ = {cells} cells. Instanced rendering handles the stones fine, but with this many layers" +
+    " the all-layer strip degenerates into an occupancy bar, and the 3D grid lines get very dense" +
+    " (turning grid lines off, or Ghost layers mode, both help).",
+  "setup.mid": "\nNote: {n}³ = {cells} cells. Ghost layers mode is recommended.",
+  "setup.small": "\nNote: the smaller the board, the easier it is to make 5 in a row — and the bigger the first player's advantage.",
+
+  // ---- WebGL2 起不来时的故障文案（替掉 #hint 的静态内容）
+  "hint.noWebgl2": "<b style='color:#c0392b'>This browser doesn't support WebGL2, so the 3D board can't be shown.</b><br>" +
+    "The layer panel on the right still works.",
+} };
+
+/** 把 {name} 换成 params[name]。缺参数时原样留着（{n} 挂在界面上比静默消失好查）。 */
+function fill(s, params) {
+  if (!params) return s;
+  return s.replace(/\{(\w+)\}/g, function (m, k) {
+    return params[k] === undefined || params[k] === null ? m : String(params[k]);
+  });
+}
+
+/** 取英文文案。键不存在时返回键本身 —— 界面上显示一个键名（"info.moves"）
+ *  一眼就能看出漏了，比显示 undefined 或空白强。中文路径不会走到这里。 */
+function t(key, params) {
+  const s = TEXT.en[key];
+  return s === undefined ? key : fill(s, params);
+}
+
+/**
+ * 单复数。**英文只有"一个 / 不止一个"两形，中文没有复数**，所以选哪个键只能由
+ * 调用点显式写出来。在表里用一个键配 | 分隔、再约定按 params.n 切的话，
+ * 一旦 n 传错就静默选错形。
+ */
+function tn(keyOne, keyMany, n, params) {
+  return t(n === 1 ? keyOne : keyMany, params);
+}
+
+/**
+ * 中文走 zhFn()，英文走表。JS 文案层唯一的入口。
+ *
+ * zhFn 是【函数】不是字符串，故意的：切到英文时它根本不会被调用，所以中文那侧
+ * 的拼接不会白算一遍。传字符串的话两种语言都得在调用点求值，中文那句就一直在算。
+ */
+function say(zhFn, key, params) {
+  return LANG === "en" ? t(key, params) : zhFn();
+}
+
+/** say 的复数版：n 自动进 params.n，调用点不用再塞一遍。 */
+function sayN(zhFn, keyOne, keyMany, n, params) {
+  if (LANG !== "en") return zhFn();
+  const p = { n: n };
+  if (params) for (const k in params) p[k] = params[k];
+  return tn(keyOne, keyMany, n, p);
+}
+
+/* 静态文案的快照。init() 一开始就拍，那时候 HTML 原文还没被任何 JS 碰过。 */
+let staticEls = null;
+
+/**
+ * 收集带 data-i18n / data-i18n-html 标记的元素，并拍下中文原文。
+ *
+ * 键就是元素 id，不另起一套键名：id 在这份文件里本来就必须唯一、必须真实存在
+ * （node 桩的 getElementById 只认 HTML 里有的 id），拿它当键等于免费得到
+ * "键写错了会当场空引用"这层保护。
+ *
+ * data-i18n-html 给那三个含 <br> / <span> 的元素用（textContent 换不动它们，
+ * 会把标记一起吃掉）。它们的中文快照存 innerHTML。
+ */
+function collectStatic() {
+  const out = [];
+  const push = function (list, isHtml) {
+    for (let i = 0; i < list.length; i++) {
+      const el = list[i];
+      // 【键取属性值，不是取 id】这个属性一直以来的值都和 id 一模一样，所以"取 id"
+      // 看起来也对 —— 但它让属性的值变成了没人读的装饰：写成 data-i18n="modeGhostTypo"
+      // 而 id 还是 modeGhost 时，运行时一切照旧（照旧显示中文），只有源码扫描会红。
+      // 那种"测试说错了、程序没事"的注入验证是假的：它证明不了运行时会坏。
+      // 取属性值之后，属性写错就是真的漏翻，浏览器里当场看得见。
+      // 属性值为空（写成光秃秃的 data-i18n）时退回 id，不至于把整条搞丢。
+      const attr = el.getAttribute(isHtml ? "data-i18n-html" : "data-i18n");
+      out.push({ el: el, key: attr || el.id, isHtml: isHtml,
+                 zh: isHtml ? el.innerHTML : el.textContent });
+    }
+  };
+  push(document.querySelectorAll("[data-i18n]"), false);
+  push(document.querySelectorAll("[data-i18n-html]"), true);
+  return out;
+}
+
+/** 把静态文案刷成当前语言。两个方向都走这里：英文查表，中文写快照。 */
+function applyStatic() {
+  if (!staticEls) staticEls = collectStatic();
+  const en = STATIC_TEXT.en;
+  for (let i = 0; i < staticEls.length; i++) {
+    const s = staticEls[i];
+    const mapped = en[s.key];
+    // 英文表里没有这一条时【留着中文】，不是留空。少写一条英文的表现应该是
+    // "那一处还是中文"，而不是"界面上缺了一块"——前者一眼能看出漏了，后者看起来像坏了。
+    const want = LANG === "en" && mapped !== undefined ? mapped : s.zh;
+    if (s.isHtml) s.el.innerHTML = want;
+    else s.el.textContent = want;
+  }
+}
+
 /**
  * 三维视图的格距。以**最长边**为基准归一化到 10 个世界单位 ——
  *   - 立方时就是原来的 10/n，一个数都没变；
@@ -1835,6 +2606,42 @@ const PREVIEW_SALTS = [
 const PREVIEW_DEG_PER_SEC = 6;
 /** 演示视角的俯仰。22° 略高于水平，三维结构读得最清楚。 */
 const PREVIEW_PITCH = 22;
+
+/** 拖拽灵敏度（度/像素）。沿用这个项目一直以来的取值，手感不变。 */
+const CAM_DEG_PER_PX = 0.32;
+/**
+ * pitch 的上下限，**刻意不是 90，也刻意不做"翻越极点"**。两条都是量出来的，不是想出来的。
+ *
+ * 【为什么不能是 90】
+ * pitch 正好 ±90° 时视线与 up=[0,1,0] 严格平行，M4.lookAt 里 up×dir 退化成零向量，
+ * 代码会走 `if (len < 1e-6) { xx = 1; ... }` 那一支，把相机的 x 轴硬设成 (1,0,0)。
+ * 留 0.5° 余量已经绰绰有余：cos(89.5°) = 8.7e-3，比那个 1e-6 的阈值大四个数量级。
+ *
+ * 【为什么不做"越过极点翻到另一面"】
+ * 试过，两个问题，第二个是死结：
+ *
+ *   1. 折返表示会把状态压回极点之内 —— "越过极点 1°"存成 pitch=89.05，
+ *      下一拍继续往上拖又是 90.05，于是再折返。实测在极点附近来回震荡：
+ *        81 82 … 89 89.95 89.05 89.95 89.05 …
+ *      表现是棋盘在极点边上永远抖动，翻不到另一面去。
+ *
+ *   2. **就算把状态改成连续量也救不了**：转盘相机的屏幕 x 轴是 `normalize(up × eye)`，
+ *      而 eye 在极点两侧分别落在 (0,1,∓ε) —— 于是在极点处 x 轴**整个反号**：
+ *        pitch = 89.9 → 屏幕 x 轴 = (-1, 0, 0)
+ *        pitch = 90.1 → 屏幕 x 轴 = (+1, 0, 0)
+ *      反号 = 画面瞬间滚 180°。而且折返后的 (pitch, yaw) 和折返前给出的是**同一个 eye**，
+ *      所以换任何 yaw 都消不掉它 —— 这是"转盘 + 固定 up"的几何奇点，不是实现没写好。
+ *      three.js 的 Spherical.makeSafe() 把 φ 夹在 [ε, π-ε]、Blender 的转盘模式同样不让
+ *      你越过天顶，都是在绕开这个奇点。
+ *
+ * 想要真的无限翻滚，唯一的路是 trackball（把 up 跟着一起转，比如 three.js 的
+ * TrackballControls）—— 代价是地平线不再水平、棋盘会歪，而本项目的红色悬停校准线是
+ * x/y/z 三条**轴向**贯穿线、读落点全靠它，相机一歪这套读法就废了。所以这里选择夹住。
+ *
+ * 89.5° 相对原来的 85° 是实打实的改善：85° 时相机离极轴还有 0.087×距离（偏 5°），
+ * 89.5° 只剩 0.0087×距离（偏 0.5°），顶面和底面才是真的正对。
+ */
+const CAM_POLE = 89.5;
 
 
 /* --------------------------------------------------------------------------
@@ -2318,6 +3125,12 @@ const Game = {
   camera: new OrbitCamera(),
   activeLayer: 0,
   ghostMode: true,
+  /** 三维静态格线是否可见。**只影响 draw3D 里的那次 drawLines 调用，不影响 uploadGrid** ——
+   *  计数（staticGridCount）是 dom-smoke 逐位钉住的不变量，而且每次切换都重传 GPU 缓冲
+   *  是白花钱。切换因此是零成本的。
+   *  刻意不持久化：全项目只有界面语言一项进 localStorage，ghostMode / activeLayer
+   *  这些同样是视图状态，都只在内存里。 */
+  gridVisible: true,
   hover: null,          // {x, y}
   // 起始界面的尺寸状态。**唯一事实源是 setupDims**；setupSize 是它的 getter/setter，
   // 指的是"三轴联动时的那个 N"（也是四维模式的 N）。
@@ -2341,7 +3154,22 @@ const Game = {
   dragMoved: 0,
   lastMouse: [0, 0],
   pressInView: false,
+  /** 终局横幅被拖到的位置（相对居中位置的像素偏移）。**复位时机是 onReset**：
+   *  重开 / 换先手 / 开新局时回正，而悔棋（onMoveUndone）不动它 ——
+   *  玩家把横幅挪开是为了看棋，悔一步接着下的时候没有理由让它跳回去。 */
+  bannerDX: 0,
+  bannerDY: 0,
+  /** 拖动横幅时的临时状态，null = 没在拖。
+   *  `{x, y, dx, dy, minX, maxX, minY, maxY}`：x/y 是 pointerdown 的落点，
+   *  dx/dy 是那一刻已有的位移（拖动要累加在它上面），min/max 是可拖范围的四条边界。
+   *  边界在 pointerdown 时**算一次就存下**：pointermove 里反复读 getBoundingClientRect()
+   *  既慢又错 —— 祖先只要带上 transform / filter / will-change 就会成为 containing block，
+   *  矩形会跟着漂，差值就算歪了。client 坐标是视口坐标，直接用它的差值最稳。 */
+  bannerDrag: null,
   winLine: null,
+  /** WebGL2 起不来时置位。#hint 平时是静态文案（HTML 里那句），故障时才由
+   *  refreshHint() 接管 —— 切语言要能重刷它，所以这个状态得留着。 */
+  glFailed: false,
   // ---- 起始界面（演示棋盘）
   previewBoard: null,
   previewYaw: -28,       // 自转从这个角度起步，和对局相机的默认朝向错开一点
@@ -2365,18 +3193,31 @@ const Game = {
               !this.el.setup.classList.contains("off"));
   },
 
+  /** 终局横幅是不是开着。同样从 DOM 派生，理由与 setupOpen / rulesOpen 一致：
+   *  .on 类已经是"看得见看不见"的唯一事实源，再存一个布尔量就必然出现
+   *  "标志说开着、类已经去掉"这种对不上的状态，而它的表现是"按 Esc 没反应"。 */
+  get bannerOpen() {
+    return !!(this.el.banner && this.el.banner.classList &&
+              this.el.banner.classList.contains("on"));
+  },
+
   init() {
-    const ids = ["gl","modeGhost","modeSlice","sliceGroup","sliceDown","sliceUp","sliceLabel",
-      "coords","hint","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","toast",
+    const ids = ["gl","modeGhost","modeSlice","modeGrid","sliceGroup","sliceDown","sliceUp","sliceLabel",
+      "coords","hint","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
-      "rulesBtn","rulesPanel","rulesClose","rulesBody","rulesSrc",
+      "rulesBtn","rulesPanel","rulesClose","rulesBody","rulesSrc","rulesSrcEn",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
       "dimRange","dimRange4d","coolNote",
       "rotPanel","rotStatus","rotLayerDown","rotLayerUp","rotLayerLabel",
-      "rotCW","rotCCW","rotGo","rotRestore","rotHint"];
+      "rotCW","rotCCW","rotGo","rotRestore","rotHint",
+      "topRight","langBtn","statusRow"];
     for (const id of ids) this.el[id] = document.getElementById(id);
+
+    // 静态文案的中文快照必须在【这个位置】拍：再往下走，这些元素就有被 JS 写上的值了，
+    // 拍晚了会把 JS 写进去的当成"HTML 原文"，切回中文时写回的就是个中间态。
+    staticEls = collectStatic();
 
     // 调色板必须在任何绘制之前读一次：三维的清屏色、格线、棋子描边都从这里取。
     Palette.read();
@@ -2386,11 +3227,12 @@ const Game = {
     this.ctxStrip = this.el.strip.getContext("2d");
 
     if (!Renderer.init(this.el.gl)) {
-      this.el.hint.innerHTML = "<b style='color:#c0392b'>这个浏览器不支持 WebGL2，三维棋盘无法显示。</b><br>" +
-                               "右侧的分层面板仍然可以正常使用。";
+      this.glFailed = true;     // 语言切换时靠它决定 #hint 写哪一段
+      this.refreshHint();
     }
 
     this.bindInput();
+    this.bindBannerDrag();
     this.bindUi();
     this.newGame(this.setupDims, this.setupFirst);
     // 起始页在 HTML 里本来就是"设置页打开着"（#setup 没有 off 类），所以启动时要做的
@@ -2400,7 +3242,85 @@ const Game = {
     if (this.setupOpen) this.openSetup();
     this.resize();
     window.addEventListener("resize", () => this.resize());
+    // 语言放在【最后】：先把上次的选择读回来（读不到就是默认的中文），
+    // 再把界面刷成它。applyLang 会重跑各个 refresh 函数，那些依赖的状态
+    // 到这一步才全部就绪。
+    const saved = storeGet(LANG_KEY);
+    if (saved && LANGS.indexOf(saved) >= 0) LANG = saved;
+    this.applyLang();
     requestAnimationFrame(() => this.loop());
+  },
+
+  // ------------------------------------------------------------------ 界面语言
+
+  /** 当前界面语言。只读 —— 唯一事实源是模块级的 LANG，写它一律走 setLang()，
+   *  否则会出现"表换了、界面没刷"这种半截状态。 */
+  get lang() { return LANG; },
+
+  /** 切语言。持久化和刷界面都在这里，调用方只管说要哪种。 */
+  setLang(lang) {
+    const next = LANGS.indexOf(lang) >= 0 ? lang : "zh";
+    if (next === LANG) return;
+    LANG = next;
+    storeSet(LANG_KEY, LANG);
+    this.applyLang();
+  },
+
+  /**
+   * 把界面刷成 LANG 指定的语言。init 末尾和 setLang 都走这一个入口 ——
+   * 两处各写一遍的话，"启动时"和"点击时"迟早会有细微差别。
+   *
+   * 顺序是【先改语言的标记、再改文字】：标记一改，CSS 里那批英文排版修正立刻生效，
+   * 接着写进去的英文就是在正确的宽度约束下量的。反过来做的话，layoutTopRight
+   * 会量到中文规则下的按钮宽度。
+   */
+  applyLang() {
+    // 这里写【两个】东西，各有各的用处，不是冗余：
+    //   .lang-en  —— 布局开关。只由这里增删，CSS 那一整块英文排版修正认它。
+    //   lang      —— 语义。屏幕阅读器、连字、断词认它；中文写 zh-CN，和 HTML 里原本的值一致。
+    // 分开的理由见 CSS 那段注释：布局不能是"别人改了 lang"的副作用。
+    const root = document.documentElement;
+    root.classList.toggle("lang-en", LANG === "en");
+    root.lang = LANG === "en" ? "en" : "zh-CN";
+    // 语言按钮上写的是【点了会变成什么】，所以它不进 data-i18n 表：
+    // 它是两种语言下两个不同的字符串，不是同一句话的两种译法。
+    this.el.langBtn.textContent = LANG === "en" ? "中文" : "EN";
+    applyStatic();
+    // JS 拼出来的文案：挨个重刷。refreshTexts 要求有棋局，其余几个读的是设置页状态，
+    // 没有棋局时也成立（起始界面就是那种情况）。
+    if (this.session) this.refreshTexts();
+    this.syncSetupInputs();
+    this.syncCoolRow();
+    this.refreshSetupSummary();
+    // 这两个是 JS 写的、不挂 data-i18n 的元素，applyStatic 管不到它们。
+    // refreshHint 只在 WebGL2 失败时动手，正常情况下它直接返回。
+    this.refreshCoords();
+    this.refreshHint();
+    // 规则浮层渲染一次就缓存。不失效的话，切语言后它仍挂着上一种语言的正文，
+    // 而且因为"已经渲染过"这个标志还在，重新打开也不会修。
+    this.rulesRendered = false;
+    // 按钮宽度随语言变，状态行的留白要重新量。
+    this.layoutTopRight();
+  },
+
+  /**
+   * 状态行右边留出右上角那两个按钮的宽度，否则按钮会压在"黑棋落子（第 N 手）"上。
+   *
+   * 【这里原来是一个写死的数】：CSS 里 #statusRow 的 padding-right: 104px，
+   * 按中文「具体规则」四个字量的。现在右上角多了一个语言按钮，而且两种语言下
+   * 两个按钮的总宽都不一样 —— 继续写死就是"每加一个按钮、每换一种语言都重量一次"，
+   * 而量漏了没有任何东西会报警，只表现为对局时状态文字被按钮压住。
+   * 所以改成实测：留白本来就该跟着按钮走。
+   *
+   * CSS 里那个 104px 留着当兜底（JS 还没跑起来时用）。量到 0 宽就不动它 ——
+   * node 桩里的 getBoundingClientRect 返回的是常量，量出来的数没有布局意义。
+   */
+  layoutTopRight() {
+    const box = this.el.topRight, row = this.el.statusRow;
+    if (!box || !row || typeof box.getBoundingClientRect !== "function") return;
+    let w = 0;
+    try { w = box.getBoundingClientRect().width || 0; } catch (e) { w = 0; }
+    if (w > 0) row.style.paddingRight = Math.ceil(w + 20) + "px";
   },
 
   // ------------------------------------------------------------------ 一局棋
@@ -2432,7 +3352,12 @@ const Game = {
       this.session.reset(d, first, rules);
     }
     this.activeLayer = 0;
+    // 视图状态跟着新局复位。ghostMode 一直都是这么做的，gridVisible 属于同一类，
+    // 一并在开新局时回到默认 —— 否则"上一局关掉的格线"会静悄悄地跟到下一局，
+    // 而玩家看到的只是"新棋盘怎么没有格线"。
+    // （只影响"设置 → 开始游戏"这条路；悔棋、换先手都不会走到这里。）
     this.ghostMode = true;
+    this.gridVisible = true;
     this.hover = null;
     // 换局时把转动面板复位：上一局的层号可能已经越界，方向/次数留着也会让人以为选好了。
     this.rotAxis = AXIS_Z;
@@ -2450,19 +3375,34 @@ const Game = {
       this.hideBanner();
     }
   },
-  onMoveUndone(rec) { this.hideBanner(); this.onBoardChanged(false); this.toast("已悔棋：" + rec.toString(), true); },
-  onReset() { this.hideBanner(); this.activeLayer = 0; this.onBoardChanged(true); },
+  onMoveUndone(rec) {
+    this.hideBanner(); this.onBoardChanged(false);
+    this.toast(say(() => "已悔棋：" + rec.toString(), "toast.undone", { move: rec.toString("en") }), true);
+  },
+  onReset() {
+    this.hideBanner();
+    // 新的一局 = 横幅回到正中。悔棋不走这里（那是 onMoveUndone），
+    // 所以"挪开横幅看棋 → 悔一步接着下"不会让横幅突然跳回去。
+    this.bannerDX = 0; this.bannerDY = 0; this.bannerDrag = null;
+    this.applyBannerOffset();
+    this.activeLayer = 0;
+    this.onBoardChanged(true);
+  },
 
   // 转动成功时才走这里（三种"没转成"由 doRotate 自己提示，因为它们不留痕迹）
   onRotationApplied(rec, outcome) {
     this.hideBanner();
     this.onBoardChanged(false);
-    this.toast(cnOf(rec.player) + "棋转动 " + axisName(rec.move.axis) + " = " + rec.move.layer +
-      " · " + describeRotationMove(rec.move) + " · 本层原有 " + rec.layerStones + " 颗子", true);
+    // rec.toString() 就是同一件事的紧凑写法，英文侧直接复用它，不另造一套措辞 ——
+    // 提示语和「恢复」那条用同一个说法，玩家才认得出"这是刚才那一步"。
+    this.toast(say(() => cnOf(rec.player) + "棋转动 " + axisName(rec.move.axis) + " = " + rec.move.layer +
+                         " · " + describeRotationMove(rec.move) + " · 本层原有 " + rec.layerStones + " 颗子",
+                   "toast.rotated", { move: rec.toString("en") }), true);
   },
   onRotationUndone(rec) {
     this.onBoardChanged(false);
-    this.toast("已恢复转动前的样子（" + describeRotationMove(rec.move) + " 已撤销）", true);
+    this.toast(say(() => "已恢复转动前的样子（" + describeRotationMove(rec.move) + " 已撤销）",
+                   "toast.rotUndone", { move: describeRotationMove(rec.move, "en") }), true);
   },
 
   onBoardChanged(full) {
@@ -2906,15 +3846,20 @@ const Game = {
   },
 
   /**
-   * 打开规则全文。正文**现场从 #rulesSrc 渲染**，页面上没有第二份规则文本 ——
-   * 那段文本是 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.md 生成的，
-   * 并由测试断言逐字节相等。手抄一份进 HTML 就等于让"玩家看到的规则"和
-   * "代码实际执行的规则"变成两件可以分别漂移的东西。
+   * 打开规则全文。正文**现场从 #rulesSrc / #rulesSrcEn 渲染**，页面上没有第二份
+   * 规则文本 —— 那两段文本是 _verify/embed-rules.mjs 从 RULES_SPEC.md 和
+   * RULES_SPEC.en.md 生成的，并由测试断言逐字节相等。手抄一份进 HTML 就等于让
+   * "玩家看到的规则"和"代码实际执行的规则"变成两件可以分别漂移的东西。
+   *
+   * 两种语言各嵌一段，这里按当前语言选。**渲染结果要跟着语言失效**（applyLang 里
+   * 把 rulesRendered 置回 false），否则切完语言再打开浮层，看到的还是上一种语言的正文，
+   * 而且"已经渲染过"这个标志还在，重新打开也不会修。
    */
   openRules() {
     if (!this.el.rulesPanel) return;
     if (!this.rulesRendered) {
-      const src = this.el.rulesSrc ? this.el.rulesSrc.textContent : "";
+      const el = LANG === "en" ? this.el.rulesSrcEn : this.el.rulesSrc;
+      const src = el ? el.textContent : "";
       this.el.rulesBody.innerHTML = renderRulesMarkdown(src);
       this.rulesRendered = true;
     }
@@ -2999,7 +3944,19 @@ const Game = {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
-    Renderer.drawLines("static", this.staticGridCount, vp, Palette.rgba("--border", 0.55), 1.0);
+    // 静态格线可以整体关掉。**只跳过这一次 drawLines，不动 staticGridCount、
+    // 也不重传缓冲** —— 见 Game.gridVisible 的注释。
+    //
+    // 关掉的**只有这一层灰网**。下面那几样全都留着，它们不是"格线"而是读盘必须的辅助：
+    //   蓝框  = 我要在哪一层落子（关了就不知道子会落在哪层）
+    //   红线  = 落点校准（关了点哪儿全靠猜）
+    //   绿框  = 四维模式下待转的那一层
+    //   金线  = 获胜连线（关了就不知道赢在哪）
+    // 这正是"只隐藏静态灰网"这个产品选择在代码里的落点，dom-smoke 有一条测试
+    // 盯着关闭时 active 仍然被画。
+    if (this.gridVisible) {
+      Renderer.drawLines("static", this.staticGridCount, vp, Palette.rgba("--border", 0.55), 1.0);
+    }
     Renderer.drawLines("active", this.activeGridCount, vp, Palette.rgba("--accent", 0.80), 1.0);
     // 待转的那一层（绿）：四维模式下才画。和蓝色的"当前层"是两个独立的东西 ——
     // 当前层是你要落子的层，待转层是你要转的层，选 z 轴时它们可能恰好是同一层，
@@ -3345,44 +4302,58 @@ const Game = {
     if (!this.session) return;
     const s = this.session;
 
-    this.el.status.textContent = s.describeStatus();
+    this.el.status.textContent = s.describeStatus(this.lang);
     this.el.status.style.color = s.status === "Decided"
       ? (s.lastOutcome.status === MoveStatus.LoseByOverline ? "#c0392b" : "#a9741a")
       : Palette.hex("--text");
     // 先手指示圆点：白子必须描边，否则在淡色面板上就是一个看不见的圆
     this.el.chip.style.background = Palette.hex(s.currentPlayer === BLACK ? "--black" : "--white");
     this.el.chip.style.borderColor = Palette.hex("--stone-edge");
-    this.el.rule.textContent = s.rules.describe(s.firstPlayer);
+    this.el.rule.textContent = s.rules.describe(s.firstPlayer, this.lang);
     // 转动不计入"手数"（冷却数的是落子），所以单独报一次，免得玩家以为转动没被记上
-    let info = "已下 " + s.moveCount + " 手";
-    if (s.rotationCount > 0) info += " · 转动 " + s.rotationCount + " 次";
+    let info = sayN(() => "已下 " + s.moveCount + " 手",
+                    "info.moves.one", "info.moves.many", s.moveCount);
+    if (s.rotationCount > 0) {
+      info += sayN(() => " · 转动 " + s.rotationCount + " 次",
+                   "info.rotations.one", "info.rotations.many", s.rotationCount);
+    }
     const d = s.dims, nz = d[2];
-    info += " · 棋盘 " + d[0] + "×" + d[1] + "×" + d[2] +
-      " · 当前层 " + (this.activeLayer + 1) + "/" + nz + " (z=" + this.activeLayer + ")";
+    info += say(() => " · 棋盘 " + d[0] + "×" + d[1] + "×" + d[2] +
+                      " · 当前层 " + (this.activeLayer + 1) + "/" + nz + " (z=" + this.activeLayer + ")",
+                "info.board", { x: d[0], y: d[1], z: d[2], layer: this.activeLayer + 1, n: nz, z0: this.activeLayer });
     this.el.info.textContent = info;
-    this.el.layerLabel.textContent = "第 " + (this.activeLayer + 1) + " / " + nz + " 层";
+    this.el.layerLabel.textContent = say(() => "第 " + (this.activeLayer + 1) + " / " + nz + " 层",
+                                         "layer.label", { i: this.activeLayer + 1, n: nz });
 
     // 放在下面那个 early return 之前 —— 否则分胜负时转动面板就不会刷新了
     this.refreshRotPanel();
 
     this.el.modeGhost.classList.toggle("sel", this.ghostMode);
     this.el.modeSlice.classList.toggle("sel", !this.ghostMode);
+    this.el.modeGrid.classList.toggle("sel", this.gridVisible);
     this.el.sliceGroup.classList.toggle("on", !this.ghostMode);
-    this.el.sliceLabel.textContent = "只画到 z ≤ " + (this.activeLayer + 1) + "/" + nz;
+    this.el.sliceLabel.textContent = say(() => "只画到 z ≤ " + (this.activeLayer + 1) + "/" + nz,
+                                         "slice.label", { i: this.activeLayer + 1, n: nz });
 
     if (!this.el.banner.classList.contains("on")) return;
+    // #bannerTitle 是 white-space: pre-line，`\n` 是【排版】不是空白 ——
+    // 英文那两条也必须在对应位置断行，否则横幅会从两行变成一行长条。
     if (s.isDraw) {
-      this.el.bannerTitle.textContent = "和局\n棋盘已满";
+      this.el.bannerTitle.textContent = say(() => "和局\n棋盘已满", "banner.draw");
       this.el.bannerTitle.style.color = Palette.hex("--text");
       this.el.bannerSub.textContent = "";
     } else if (s.lastOutcome.status === MoveStatus.LoseByOverline) {
-      this.el.bannerTitle.textContent = "长连犯规\n先手连成 " + s.lastOutcome.longestRun + " 连，" + cnOf(s.winner) + "棋胜";
+      this.el.bannerTitle.textContent = say(
+        () => "长连犯规\n先手连成 " + s.lastOutcome.longestRun + " 连，" + cnOf(s.winner) + "棋胜",
+        "banner.overline", { n: s.lastOutcome.longestRun, who: enOf(s.winner) });
       this.el.bannerTitle.style.color = Palette.hex("--danger");
-      this.el.bannerSub.textContent = "先手必须恰好 5 连";
+      this.el.bannerSub.textContent = say(() => "先手必须恰好 5 连", "banner.overlineSub");
     } else {
-      this.el.bannerTitle.textContent = cnOf(s.winner) + "棋胜\n" + s.lastOutcome.longestRun + " 连";
+      this.el.bannerTitle.textContent = say(
+        () => cnOf(s.winner) + "棋胜\n" + s.lastOutcome.longestRun + " 连",
+        "banner.win", { who: enOf(s.winner), n: s.lastOutcome.longestRun });
       this.el.bannerTitle.style.color = Palette.hex("--gold");
-      this.el.bannerSub.textContent = "第 " + s.moveCount + " 手";
+      this.el.bannerSub.textContent = say(() => "第 " + s.moveCount + " 手", "banner.winSub", { n: s.moveCount });
     }
   },
 
@@ -3403,6 +4374,7 @@ const Game = {
 
     on("modeGhost", () => this.setGhostMode(true));
     on("modeSlice", () => this.setGhostMode(false));
+    on("modeGrid", () => this.toggleGrid());
     on("sliceDown", () => this.setActiveLayer(this.activeLayer - 1));
     on("sliceUp", () => this.setActiveLayer(this.activeLayer + 1));
     on("prevLayer", () => this.setActiveLayer(this.activeLayer - 1));
@@ -3412,6 +4384,8 @@ const Game = {
     on("restartBtn", () => this.restart());
     on("swapBtn", () => this.swapFirst());
     on("setupBtn", () => this.openSetup());
+    // 语言按钮上写的是【点了会变成什么】，所以点它 = 切到"另一种"，不是切到某个固定值。
+    on("langBtn", () => this.setLang(LANG === "en" ? "zh" : "en"));
     on("rulesBtn", () => this.openRules());
     on("rulesClose", () => this.closeRules());
     // 点浮层空白处（不是卡片本身）也关掉。判 e.target 就是为了区分这两者 ——
@@ -3423,6 +4397,7 @@ const Game = {
     }
     on("bannerUndo", () => this.undo());
     on("bannerRestart", () => this.restart());
+    on("bannerClose", () => this.hideBanner());
 
     on("firstBlack", () => this.setSetupFirst(BLACK));
     on("firstWhite", () => this.setSetupFirst(WHITE));
@@ -3462,7 +4437,8 @@ const Game = {
       this.closeSetup();
       const d = this.fourD ? [this.setupSize, this.setupSize, this.setupSize] : this.setupDims;
       this.newGame(d, this.setupFirst);
-      this.toast(cnOf(this.setupFirst) + "先手，" + d[0] + "×" + d[1] + "×" + d[2] + " 开局", true);
+      this.toast(say(() => cnOf(this.setupFirst) + "先手，" + d[0] + "×" + d[1] + "×" + d[2] + " 开局",
+                     "toast.start", { who: enOf(this.setupFirst), x: d[0], y: d[1], z: d[2] }), true);
     });
 
     // 面板网格点击落子
@@ -3486,6 +4462,8 @@ const Game = {
     window.addEventListener("keydown", (e) => {
       // Esc 必须放在前面：浮层开着时它是唯一还有意义的键
       if (e.key === "Escape" && this.rulesOpen) { this.closeRules(); return; }
+      // 规则的浮层在最上面，所以它先吃 Esc。关掉之后再按一次 Esc 才轮到终局横幅。
+      if (e.key === "Escape" && this.bannerOpen) { this.hideBanner(); return; }
       // 规则浮层开着时不吃任何快捷键 —— 否则"看规则时按了下 R 把棋局重开了"，
       // 而屏幕上唯一可见的东西是规则，玩家根本不会想到是自己按的
       if (this.rulesOpen) return;
@@ -3494,6 +4472,7 @@ const Game = {
       if (k === "z") this.undo();
       else if (k === "r") this.restart();
       else if (k === "g") this.setGhostMode(!this.ghostMode);
+      else if (k === "h") this.toggleGrid();
       else if (k === "q" || k === "[") this.setActiveLayer(this.activeLayer - 1);
       else if (k === "e" || k === "]") this.setActiveLayer(this.activeLayer + 1);
       else if (k === "t") this.doRotate();                 // 四维：执行转动
@@ -3519,6 +4498,81 @@ const Game = {
     return { x: x, y: y };
   },
 
+  /**
+   * 一次拖拽位移 → 相机角度。抽成独立方法是为了能被直接测 ——
+   * 原来这两行埋在 window 的 pointermove 闭包里，只能靠合成 DOM 事件够到，
+   * 于是全项目**一条相机夹取的测试都没有**。
+   *
+   * yaw 无界（水平方向能一直转，这是转盘相机的本意），pitch 夹在 ±CAM_POLE。
+   * 为什么不做"越过极点翻到另一面"，见 CAM_POLE 那段 —— 那是几何奇点，不是没写好。
+   */
+  applyDrag(dx, dy) {
+    const cam = this.camera;
+    cam.yaw += dx * CAM_DEG_PER_PX;
+    cam.pitch = Math.max(-CAM_POLE, Math.min(CAM_POLE, cam.pitch - dy * CAM_DEG_PER_PX));
+  },
+
+  /**
+   * 终局横幅的拖动。**和 canvas 的拖拽同构**：pointerdown 挂在元素上，
+   * pointermove / pointerup 挂在 window（全文件没有一处 setPointerCapture，
+   * 指针移出元素后事件靠 window 兜住）。
+   *
+   * **没有位移阈值**，和 canvas 那条路径保持一致：那边也是 pointermove 一起就 applyDrag
+   * （一两个像素的位移照样转），`dragMoved < 6` 只用来决定 pointerup 算不算"点击落子"。
+   * 这里同理 —— 手抖一两个像素时横幅跟着挪一两像素（看不出来），
+   * 而 pointerdown/pointerup 都落在同一个按钮上，那个按钮的 click 照常触发。
+   * 不去做"按在按钮上就不拖"的判断：那要用 closest()/tagName，DOM 桩不一定有，
+   * 而且会让"按在标题上能拖、按在按钮附近拖不动"这种边界变得难以解释。
+   */
+  bindBannerDrag() {
+    const banner = this.el.banner;
+    if (!banner) return;
+
+    banner.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      const viewRect = this.el.view.getBoundingClientRect();
+      const rect = banner.getBoundingClientRect();
+      this.bannerDrag = {
+        x: e.clientX, y: e.clientY,
+        dx: this.bannerDX, dy: this.bannerDY,
+        // 可拖范围：横幅四边都不越出 #view。缓存一次，不在 pointermove 里重读（理由见字段注释）。
+        minX: viewRect.left - rect.left,
+        maxX: viewRect.right - rect.right,
+        minY: viewRect.top - rect.top,
+        maxY: viewRect.bottom - rect.bottom,
+      };
+    });
+
+    window.addEventListener("pointermove", (e) => {
+      const d = this.bannerDrag;
+      if (!d) return;
+      const dx = d.dx + (e.clientX - d.x);
+      const dy = d.dy + (e.clientY - d.y);
+      // 窄窗口下 #view 可能比横幅还窄（#banner 是 min-width:300px + 34px 内边距 ≈ 368px，
+      // 而 #view 只有视口的 42%），这时 min > max。夹取会返回一个越界的怪值，
+      // 所以显式归零 —— 表现就是"居中并溢出"，和没拖过一样。
+      this.bannerDX = d.maxX < d.minX ? 0 : Math.max(d.minX, Math.min(d.maxX, dx));
+      this.bannerDY = d.maxY < d.minY ? 0 : Math.max(d.minY, Math.min(d.maxY, dy));
+      this.applyBannerOffset();
+    });
+
+    window.addEventListener("pointerup", (e) => {
+      if (e.button !== 0) return;
+      this.bannerDrag = null;
+    });
+  },
+
+  /** 把 bannerDX / bannerDY 写进 style.transform。归零时置空串，落回 CSS 规则。 */
+  applyBannerOffset() {
+    const b = this.el.banner;
+    if (!b || !b.style) return;
+    // **必须是两个 translate 叠加**：只写 translate(X,Y) 会把 CSS 里居中的
+    // translate(-50%,-50%) 一起抹掉（transform 是简写属性），横幅会瞬间跳到右下角。
+    b.style.transform = (this.bannerDX || this.bannerDY)
+      ? "translate(-50%,-50%) translate(" + this.bannerDX + "px," + this.bannerDY + "px)"
+      : "";
+  },
+
   bindInput() {
     const gl = this.el.gl;
 
@@ -3537,8 +4591,7 @@ const Game = {
         const dy = e.clientY - this.lastMouse[1];
         this.lastMouse = [e.clientX, e.clientY];
         this.dragMoved += Math.hypot(dx, dy);
-        this.camera.yaw += dx * 0.32;
-        this.camera.pitch = Math.max(-85, Math.min(85, this.camera.pitch - dy * 0.32));
+        this.applyDrag(dx, dy);
       }
 
       // 悬停拾取：只有在三维视口上方才算
@@ -3578,17 +4631,48 @@ const Game = {
       (cell && this.hover && cell.x === this.hover.x && cell.y === this.hover.y);
     if (same) return;
     this.hover = cell;
-    this.el.coords.textContent = cell
-      ? "将落子 (" + cell.x + "," + cell.y + "," + this.activeLayer + ")"
-      : "把鼠标移到棋盘上以选择落点";
+    this.refreshCoords();
     if (this.session) this.uploadInstances();
     this.drawLayerOverlay();
   },
 
+  /**
+   * #coords 的文字。单独一个方法是为了让切语言时能重刷它 ——
+   * 它由 JS 写，所以【不能】挂 data-i18n：静态文案的回写只会拿快照把实时值盖掉。
+   * HTML 里那句"把鼠标移到棋盘上以选择落点"是 JS 跑起来之前的占位，同 key，
+   * 两处措辞必须一致（英文在 "coords.idle" 里只有一份）。
+   */
+  /** WebGL2 起不来时替换 #hint 的内容。正常情况不动它（那是 HTML 里的静态文案）。 */
+  refreshHint() {
+    if (!this.glFailed) return;
+    this.el.hint.innerHTML = say(
+      () => "<b style='color:#c0392b'>这个浏览器不支持 WebGL2，三维棋盘无法显示。</b><br>" +
+            "右侧的分层面板仍然可以正常使用。",
+      "hint.noWebgl2");
+  },
+
+  refreshCoords() {
+    const cell = this.hover;
+    this.el.coords.textContent = cell
+      ? say(() => "将落子 (" + cell.x + "," + cell.y + "," + this.activeLayer + ")",
+            "coords.hover", { x: cell.x, y: cell.y, z: this.activeLayer })
+      : say(() => "把鼠标移到棋盘上以选择落点", "coords.idle");
+  },
+
   tryPlace(x, y) {
     if (this.setupOpen) return;
-    if (!this.session || this.session.status !== "Playing") return;
-    const o = this.session.place(x, y, this.activeLayer);
+    if (!this.session) return;
+    // 终局之后点棋盘：原来是**静默 return**。落子确实没落下（内核也会拒），
+    // 但"点了完全没反应"和"页面卡了"在玩家眼里是同一件事 —— 而"关掉结果弹窗之后
+    // 不能下棋"这个要求，只有可读才成立。所以这里说清楚，并指出唯一的出路。
+    //
+    // 不去屏蔽相机拖拽：关掉/挪开弹窗之后**要看棋盘**正是这次要解决的问题，
+    // 把旋转一起锁掉就自相矛盾了。
+    if (this.session.status !== "Playing") {
+      this.toast(say(() => "本局已结束 · 按 Z 或点「悔棋」可继续这一局", "toast.decided"), false);
+      return;
+    }
+    const o = this.session.place(x, y, this.activeLayer, this.lang);
     if (o.status === MoveStatus.Rejected) this.toast(o.reason, false);
   },
 
@@ -3614,6 +4698,16 @@ const Game = {
     this.refreshTexts();
   },
 
+  /** 隐藏 / 显示三维静态格线。**不需要重传任何缓冲**，只要重画一次。 */
+  setGridVisible(v) {
+    v = !!v;
+    if (this.gridVisible === v) return;
+    this.gridVisible = v;
+    this.refreshTexts();   // 里面会 toggle #modeGrid 的 sel
+  },
+
+  toggleGrid() { this.setGridVisible(!this.gridVisible); },
+
   // ------------------------------------------------------------------ 四维转动
 
   /** 面板上的选择 → 一次转动。非四维模式直接返回（按钮本来就不可见）。 */
@@ -3623,17 +4717,19 @@ const Game = {
       this.rotAxis,
       this.rotLayer,
       this.rotClockwise ? RotationDirection.Clockwise : RotationDirection.CounterClockwise,
-      this.rotTurns);
+      this.rotTurns, this.lang);
     // 成功的提示走 onRotationApplied 回调；这里只管三种"没转成"。
     // 它们都不消耗回合、不留下痕迹 —— 提示必须说清是哪种，否则看起来像按钮坏了。
-    if (!o.accepted) this.toast(o.describe(), false);
+    if (!o.accepted) this.toast(o.describe(this.lang), false);
     this.refreshRotPanel();
   },
 
   restoreRotation() {
     if (!this.session) return;
     // 成功时的提示走 onRotationUndone 回调
-    if (!this.session.undoLastRotation()) this.toast("最后一步不是转动，没法恢复", false);
+    if (!this.session.undoLastRotation()) {
+      this.toast(say(() => "最后一步不是转动，没法恢复", "toast.noRotUndo"), false);
+    }
     this.refreshRotPanel();
   },
 
@@ -3677,36 +4773,50 @@ const Game = {
     this.el.rotCCW.classList.toggle("sel", !this.rotClockwise);
 
     const layerStones = this.session.board.countLayerStones(this.rotAxis, this.rotLayer);
-    this.el.rotLayerLabel.textContent =
-      axisName(this.rotAxis) + " = " + this.rotLayer + "（本层 " + layerStones + " 子）";
-    this.el.rotStatus.textContent = this.session.describeRotationStatus();
+    this.el.rotLayerLabel.textContent = sayN(
+      () => axisName(this.rotAxis) + " = " + this.rotLayer + "（本层 " + layerStones + " 子）",
+      "rot.layerLabel.one", "rot.layerLabel.many", layerStones,
+      { axis: axisName(this.rotAxis), layer: this.rotLayer });
+    this.el.rotStatus.textContent = this.session.describeRotationStatus(this.lang);
     this.el.rotGo.disabled = !this.session.canRotate;
     this.el.rotRestore.disabled = !this.session.canUndoLastRotation;
 
     // 提示语按"最可能挡住你的那件事"排序，一次只说一条
     let hint;
     if (this.session.status !== "Playing") {
-      hint = "棋局已结束。";
+      hint = say(() => "棋局已结束。", "rot.hint.over");
     } else if (layerStones === 0) {
-      hint = "这一层是空的，转不动。换一层，或者先在三维视图里看看子都在哪。";
+      hint = say(() => "这一层是空的，转不动。换一层，或者先在三维视图里看看子都在哪。", "rot.hint.empty");
     } else if (!this.session.canRotate) {
-      hint = "冷却中：还要再落 " + this.session.placementsUntilRotation + " 手。转动占掉一整个回合，转完不能立刻落子。";
+      // 走 sayN 而不是 say：只剩 1 手时英文是 "1 more move"，写成 "1 more moves" 是错的。
+      // 中文没有复数，那句一字未动。
+      hint = sayN(
+        () => "冷却中：还要再落 " + this.session.placementsUntilRotation + " 手。转动占掉一整个回合，转完不能立刻落子。",
+        "rot.hint.cool.one", "rot.hint.cool.many", this.session.placementsUntilRotation,
+        { n: this.session.placementsUntilRotation });
     } else if (this.session.canUndoLastRotation) {
-      hint = "最后一步是转动，可以「恢复本次转动」退回去。";
+      hint = say(() => "最后一步是转动，可以「恢复本次转动」退回去。", "rot.hint.undo");
     } else {
-      hint = "顺时针 = 从该轴负方向朝原点看。转完若盘面出现 5 连会被整体撤销；转动占掉一整个回合。";
+      hint = say(
+        () => "顺时针 = 从该轴负方向朝原点看。转完若盘面出现 5 连会被整体撤销；转动占掉一整个回合。",
+        "rot.hint.ready");
     }
     this.el.rotHint.textContent = hint;
   },
 
-  undo() { if (!this.session.undo()) this.toast("没有可悔的棋了", true); },
-  restart() { this.hideBanner(); this.session.restart(); this.toast("已重开", true); },
+  undo() {
+    if (!this.session.undo()) this.toast(say(() => "没有可悔的棋了", "toast.noUndo"), true);
+  },
+  restart() {
+    this.hideBanner(); this.session.restart();
+    this.toast(say(() => "已重开", "toast.restarted"), true);
+  },
   swapFirst() {
     const next = opponentOf(this.session.firstPlayer);
     this.setupFirst = next;
     this.hideBanner();
     this.session.reset(this.session.board.dims, next, this.session.rules);
-    this.toast("已重开，改为" + cnOf(next) + "先手", true);
+    this.toast(say(() => "已重开，改为" + cnOf(next) + "先手", "toast.swapped", { who: enOf(next) }), true);
   },
 
   setSetupFirst(c) {
@@ -3760,12 +4870,18 @@ const Game = {
     // 输入框上已经有一份 min/max（浏览器自带的上下箭头和校验用它），
     // 那一份由 dom-smoke 断言和 BoardLimits 相等。显示文本这里直接生成，
     // 连"第二份"都不存在，所以它不可能和实际会被夹取的范围不一致。
-    const range = "可填 " + BoardLimits.Min + " – " + BoardLimits.Max;
-    if (this.el.dimRange) this.el.dimRange.textContent = range;
+    //
+    // 【数字和那个 – 两种语言共用，只有前缀换】：范围分隔符是 EN DASH（不是连字符），
+    // online-http.test.mjs 的 /8 – 50/ 就是靠这个字符断言的，英文侧也不能换。
+    const range = BoardLimits.Min + " – " + BoardLimits.Max;
+    if (this.el.dimRange) this.el.dimRange.textContent =
+      say(() => "可填 " + range, "range.allowed", { range: range });
     // 四维那句"必须立方"的说明并进这里（原来是个独立的 <span id="dimNote">）。
     // 短横线后面那句是**原因**：绕某轴转一层要求另外两个自由轴等长，
     // 三个轴都能转就只能 nx = ny = nz。不是"没做"，是数学上不成立。
-    if (this.el.dimRange4d) this.el.dimRange4d.textContent = range + " · 必须立方（转层要求另两轴等长）";
+    if (this.el.dimRange4d) this.el.dimRange4d.textContent = say(
+      () => "可填 " + range + " · 必须立方（转层要求另两轴等长）",
+      "range.cubicOnly", { range: range });
   },
 
   /**
@@ -3844,7 +4960,9 @@ const Game = {
     const on = this.fourD;
     document.querySelectorAll(".coolBtn").forEach(b => { b.disabled = !on; });
     if (this.el.coolNote) {
-      this.el.coolNote.textContent = on ? "转动会占掉一个回合" : "四维模式才有";
+      this.el.coolNote.textContent = on
+        ? say(() => "转动会占掉一个回合", "cool.usesTurn")
+        : say(() => "四维模式才有", "cool.fourDOnly");
     }
   },
 
@@ -3868,47 +4986,74 @@ const Game = {
     const cells = nx * ny * nz;
     const cube = (nx === ny && ny === nz);
     const big = Math.max(nx, ny, nz);
-    const cellsText = cells.toLocaleString();
+    // 【显式给 locale】：原来这里是 cells.toLocaleString()，用的是运行时默认值 ——
+    // 界面语言和数字的分组方式本来就该是同一件事，而那不是"没写"能保证的。
+    // zh-CN 和 en-US 的千位分隔符都是逗号，所以既有断言里的 125,000 / 3,375 / 2,880 不受影响。
+    const cellsText = cells.toLocaleString(this.lang === "en" ? "en-US" : "zh-CN");
     let warn = "";
 
+    // warn 的每一段自己就带语言：say() 直接产出当前语言的那一段，
+    // 拼进下面那行时不用再分一次语言（末尾的 {rest} 就是这个已本地化的 warn）。
     if (this.fourD) {
       const n = nx;
       const meas = this.fourDMeasured[n];
-      const perLayer = meas ? meas[1] + " 颗" : "全盘子数 ÷ " + n;
-      let line = "\n四维：每落 " + this.setupCool + " 手可转动一层（占掉整个回合，转动本身不算一手）。" +
-        "\n一层 = " + n + "×" + n + " 格，占全盘 1/" + n + "；一局结束时一层里平均 " + perLayer + "。";
+      const perLayer = meas ? say(() => meas[1] + " 颗", "setup.perLayer", { n: meas[1] })
+                            : say(() => "全盘子数 ÷ " + n, "setup.perLayerEst", { n: n });
+      let line = sayN(
+        () => "\n四维：每落 " + this.setupCool + " 手可转动一层（占掉整个回合，转动本身不算一手）。",
+        "setup.fourD.everyOne", "setup.fourD.everyMany", this.setupCool,
+        { cool: this.setupCool }) +
+        say(() => "\n一层 = " + n + "×" + n + " 格，占全盘 1/" + n + "；一局结束时一层里平均 " + perLayer + "。",
+            "setup.fourD.layer", { n: n, perLayer: perLayer });
       if (meas) {
         const times = Math.max(1, Math.floor((meas[0] - 1) / this.setupCool));
-        line += "\n按实测中位 " + meas[0] + " 手算，这一局最多转 " + times + " 次（实际通常更少，棋局常在那之前就结束了）。";
+        // 选复数的是 times（最多转几次），不是 meas[0]（中位手数）—— 两者都进参数，
+        // 但占位符分开命名，理由见 TEXT 里 setup.fourD.times.* 的注释。
+        line += sayN(
+          () => "\n按实测中位 " + meas[0] + " 手算，这一局最多转 " + times + " 次（实际通常更少，棋局常在那之前就结束了）。",
+          "setup.fourD.times.one", "setup.fourD.times.many", times,
+          { median: meas[0], times: times });
       }
       if (n >= 15) {
-        line += "\n注意：棋盘这么大时一层里常常只有一两颗子，多数转动会撞上「转完没变化」的判定。";
+        line += say(
+          () => "\n注意：棋盘这么大时一层里常常只有一两颗子，多数转动会撞上「转完没变化」的判定。",
+          "setup.fourD.dense");
       }
       warn = line;
     } else if (!cube) {
       // 长方体是网页版独有的扩展。这段提示必须点明"测试向量不覆盖它"，
       // 否则 README 里"立方路径由向量逐条钉住"这句话会被这一处悄悄推翻。
-      warn = "\n长方体棋盘（三轴不等）是网页版独有的扩展：" +
-        "现有的一致性测试向量只覆盖立方，不覆盖它。";
+      // 【英文那份不是逐字对译】：中文里"测试向量"是准确的，英文读者看到
+      // "consistency vectors" 只会一头雾水，所以写的是同一件事的白话说法。
+      warn = say(
+        () => "\n长方体棋盘（三轴不等）是网页版独有的扩展：" +
+              "现有的一致性测试向量只覆盖立方，不覆盖它。",
+        "setup.rect");
       if (big >= 40) {
-        warn += "\n" + big + " 那条边很大时，三维视图里的格线会非常密（幽灵层模式可以缓解）。";
+        warn += say(() => "\n" + big + " 那条边很大时，三维视图里的格线会非常密（关掉格线，或用幽灵层模式，都可以缓解）。",
+                    "setup.rect.big", { n: big });
       }
     } else if (nx >= 40) {
-      warn = "\n提示：" + nx + "³ = " + cellsText + " 格，棋子用实例化渲染没有问题，" +
-        "但层数太多时全层缩略图会退化成占用条，三维视图里的格线也会非常密（幽灵层模式可以缓解）。";
+      warn = say(
+        () => "\n提示：" + nx + "³ = " + cellsText + " 格，棋子用实例化渲染没有问题，" +
+              "但层数太多时全层缩略图会退化成占用条，三维视图里的格线也会非常密" +
+              "（关掉格线，或用幽灵层模式，都可以缓解）。",
+        "setup.big", { n: nx, cells: cellsText });
     } else if (nx >= 25) {
-      warn = "\n提示：" + nx + "³ = " + cellsText + " 格，建议配合幽灵层模式查看。";
+      warn = say(() => "\n提示：" + nx + "³ = " + cellsText + " 格，建议配合幽灵层模式查看。",
+                 "setup.mid", { n: nx, cells: cellsText });
     } else if (nx <= 9) {
       // 只说"小盘先手优势大"这个方向，不编具体数字 —— 没真跑过的不写进文案。
       // 【曾经这里写着"15³ 上实测先手已胜 41.3%"】：那 41.3 是获胜线数量之比
       // （15³ 的 23639 条 ÷ 15² 的 572 条），是几何计数，不是对局统计。
       // 这个工程里【没有任何胜率实测数据】—— 没有 AI 可自对弈，贪心模拟量的是
       // 中位手数和每层子数。别再把它当胜率写回来。
-      warn = "\n注意：棋盘越小，5 连越容易连成，先手优势也越大。";
+      warn = say(() => "\n注意：棋盘越小，5 连越容易连成，先手优势也越大。", "setup.small");
     }
 
-    this.el.sizeSummary.textContent = nx + " × " + ny + " × " + nz + "（" + cellsText + " 格）· " +
-      cnOf(this.setupFirst) + "先手" + warn;
+    this.el.sizeSummary.textContent = say(
+      () => nx + " × " + ny + " × " + nz + "（" + cellsText + " 格）· " + cnOf(this.setupFirst) + "先手" + warn,
+      "setup.summary", { x: nx, y: ny, z: nz, cells: cellsText, who: enOf(this.setupFirst), rest: warn });
   },
 
   resize() {
