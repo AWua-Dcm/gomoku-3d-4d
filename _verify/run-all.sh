@@ -4,14 +4,16 @@
 # 这个工程【只有网页版】—— 原 Unity/C# 实现已经删除。
 # 所以这些检查既不需要 Unity，也不需要 .NET，只要有 node。
 #
-# 七步（第 7 步可选）：
+# 八步（第 8 步可选）：
 #   1. 规则正文自检           —— 页面里嵌的规则全文 == RULES_SPEC.md
 #   2. 向量文件完整性          —— 见下面【冻结的向量】
 #   3. 网页版规则内核测试      —— 回放 vectors.json + 自身断言
 #   4. 网页版转动一致性测试    —— 回放 rotation-vectors.json + MapCoord/RotateLayer 互校
 #   5. 网页版长方体棋盘测试    —— 网页版独有的扩展，向量不覆盖它，证据只有这一份
 #   6. 网页版 DOM 冒烟测试     —— 桩环境里真的把界面跑一遍
-#   7. 真实浏览器检查（可选）  —— 无头 Chrome/Edge：GLSL 编译、控制台报错、布局几何
+#   7. 联机协议测试            —— 进程内直调逐格对拍（不经过网络）
+#                                + 真 HTTP / 真 SSE（自己起服务器，绑 127.0.0.1）
+#   8. 真实浏览器检查（可选）  —— 无头 Chrome/Edge：GLSL 编译、控制台报错、布局几何
 #                                本机没装浏览器就自动跳过，不算失败
 #
 # ============================================================================
@@ -51,13 +53,13 @@ ROTATION_MD5_EXPECT="33d638c973e4f4a5ccb2be67ad475ae4"
 
 banner() { echo; echo "################ $1 ################"; echo; }
 
-banner "1/7  规则正文自检"
+banner "1/8  规则正文自检"
 # 网页版把 RULES_SPEC.md 全文嵌进了 index.html 给"具体规则"按钮用。
 # 正文只此一份，页面上那段是生成物 —— 这里先确认它没被改脏，
 # 不然规则文档改了两边，玩家看到的和代码执行的就会不一致。
 node "$HERE/embed-rules.mjs" --check || FAIL=1
 
-banner "2/7  向量文件完整性（冻结锁）"
+banner "2/8  向量文件完整性（冻结锁）"
 for pair in "vectors.json:$VECTORS_MD5_EXPECT" \
             "rotation-vectors.json:$ROTATION_MD5_EXPECT"; do
   f="${pair%%:*}"; want="${pair##*:}"
@@ -78,19 +80,26 @@ for pair in "vectors.json:$VECTORS_MD5_EXPECT" \
   fi
 done
 
-banner "3/7  网页版规则内核测试"
+banner "3/8  网页版规则内核测试"
 ( cd "$PROJ" && node Web_Gomoku3D/tests/rules.test.mjs ) || FAIL=1
 
-banner "4/7  网页版转动一致性测试"
+banner "4/8  网页版转动一致性测试"
 ( cd "$PROJ" && node Web_Gomoku3D/tests/rotation.test.mjs ) || FAIL=1
 
-banner "5/7  网页版长方体棋盘测试"
+banner "5/8  网页版长方体棋盘测试"
 ( cd "$PROJ" && node Web_Gomoku3D/tests/dims.test.mjs ) || FAIL=1
 
-banner "6/7  网页版 DOM 冒烟测试"
+banner "6/8  网页版 DOM 冒烟测试"
 ( cd "$PROJ" && node Web_Gomoku3D/tests/dom-smoke.test.mjs ) || FAIL=1
 
-banner "7/7  真实浏览器检查（可选，没装浏览器就跳过）"
+# 【这一步不可跳过】它和上面几步一样是硬失败，没有"没装就跳过"的说法 ——
+# 它只依赖 node，任何能跑这个脚本的机器都跑得了它。
+banner "7/8  联机协议测试"
+( cd "$PROJ" && node Web_Gomoku3D/tests/online.test.mjs ) || FAIL=1
+# 真 HTTP + 真 SSE：自己起一台服务器，绑 127.0.0.1（绑 0.0.0.0 在 Windows 上会弹防火墙框）
+( cd "$PROJ" && node Web_Gomoku3D/tests/online-http.test.mjs ) || FAIL=1
+
+banner "8/8  真实浏览器检查（可选，没装浏览器就跳过）"
 ( cd "$PROJ" && node _verify/browser-check.mjs ) || FAIL=1
 
 echo
@@ -100,11 +109,18 @@ if [ $FAIL -eq 0 ]; then
   echo "=================================================="
   echo
   echo "仍未验证的部分："
-  echo "  · 配色好不好看、三维观感、交互手感（第 7 步只验到「能编译 / 没报错 / 布局几何」）"
+  echo "  · 配色好不好看、三维观感、交互手感（第 8 步只验到「能编译 / 没报错 / 布局几何」）"
   echo "  · 四维转动的手感（转层是否直观、提示是否看得懂）"
+  echo "  · 联机在**真实跨网**下的表现（心跳、代理缓冲、移动网络切换）"
+  echo "    第 7 步只验到本机 loopback，跨网必须真人异地实测"
+  echo "  · 公网暴露之后的实际抗扫描情况（ONLINE.md §5.4 那组上限值是经验值，不是测出来的）"
+  echo
+  echo "另有一条不在这个脚本里的检查（很慢，但改了联机代码就一定该跑）："
+  echo "    node _verify/inject-online.mjs"
+  echo "  它故意改坏 25 处代码，逐条确认测试会变红 —— 防的是「测试看着全绿其实什么都没验」。"
   echo
   echo "网页版请直接用浏览器打开 Web_Gomoku3D/index.html"
-  echo "第 7 步的截图在 _verify/shots/"
+  echo "第 8 步的截图在 _verify/shots/"
 else
   echo "=================================================="
   echo "  有检查失败，见上面的输出"
