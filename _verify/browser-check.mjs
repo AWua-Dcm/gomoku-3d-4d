@@ -91,6 +91,40 @@ async function shot(name) {
   fs.writeFileSync(path.join(OUT_DIR, name + ".png"), Buffer.from(r.result.data, "base64"));
 }
 
+/**
+ * 把起始界面那张演示盘钉在一个固定角度，然后才截图。
+ *
+ * 【为什么必须这么做】演示盘每秒自转 6°（`index.html` 里的 `PREVIEW_DEG_PER_SEC`）。
+ * 截图落在哪个相位完全取决于**跑测试时的墙钟时间**，于是每次跑完测试
+ * `_verify/shots/` 里的 PNG 都会变脏 —— 视觉上一模一样，字节上差几十个。
+ * 后果不是"不好看"，而是 **`git status` 从此永远不可信**：真实改动和自转噪声混在一起。
+ * 而 README 恰好嵌了其中一张图，所以这些 PNG 又必须留在版本库里，不能 ignore。
+ *
+ * 【做法】把 `drawPreview` 包一层，把 `dt` 强制成 0 —— 自转停住。
+ * RAF 循环照常跑（所以对局视图的渲染一点没变），因而**不需要"冻住再解开"**，
+ * 也就没有顺序依赖：这个函数在任何时刻重复调用都安全。
+ *
+ * 【为什么不改 `index.html`】为了截图可复现而给产品代码加测试钩子，
+ * 是把测试的复杂度转嫁到被测试的东西上。这里纯测试侧就能解决。
+ *
+ * 【顺带清掉 toast】它是另一个时间相关的元素（会自己淡出），
+ * 留着的话截图同样会飘。一起钉住。
+ */
+async function freezePreview(yaw) {
+  await ev(`(() => {
+    if (!Game.__origDrawPreview) {
+      Game.__origDrawPreview = Game.drawPreview;
+      Game.drawPreview = function (dt) { return Game.__origDrawPreview.call(this, 0); };
+    }
+    Game.previewYaw = ${yaw};
+    Game.el.toast.classList.remove("on");
+    Game.toastTimer = 0;
+    Game.drawPreview(0);          // 立刻按这个角度画一帧，不等下一次 RAF
+    return Game.previewYaw;
+  })()`);
+  await sleep(150);               // 等合成器把这一帧真正落到屏幕上
+}
+
 function drainConsole() {
   const out = [];
   for (const e of events) {
@@ -265,6 +299,7 @@ try {
   // 留一张四维状态的截图。上面那几条只说"没动"，看不出四维到底长什么样 ——
   // 而"四维那一版有没有多出一行、有没有留空槽位"正是这一版最容易出错的地方。
   await ev(`Game.setSetupMode(true)`);
+  await freezePreview(-28);
   await shot("5-起始界面-四维模式");
   await ev(`Game.setSetupMode(false)`);
 
@@ -286,6 +321,8 @@ try {
     check(setup.ruleNote.indexOf(gone) < 0, "起始界面不该再出现开发者向的「" + gone + "」",
       "渲染出来的文字：" + setup.ruleNote);
 
+  // -28° 是 `index.html` 里 `previewYaw` 的初值 —— 这张图就是"刚打开时看到的样子"
+  await freezePreview(-28);
   await shot("1-起始界面");
 
   // ---- 3. 开始游戏 + 长方形棋盘
@@ -380,10 +417,11 @@ try {
   })()`);
   check(closed === true, "按 Esc 能关掉规则浮层");
 
-  await ev(`(() => { Game.openSetup(); Game.previewYaw = 130; return true; })()`);
-  await sleep(700);
-  await ev(`(() => { Game.el.toast.classList.remove("on"); Game.toastTimer = 0; Game.drawPreview(0.016); return true; })()`);
-  await sleep(300);
+  await ev(`Game.openSetup()`);
+  await sleep(700);                 // 等 openSetup 的布局/过渡稳定下来再冻
+  // 130° 是刻意挑的：它和 -28° 差得足够远，能看清"转到另一面"之后三维格线的
+  // 读感有没有变（这是唯一一张从别的角度看演示盘的图）。
+  await freezePreview(130);
   await shot("3-起始界面-转到另一面");
 
   // ---- 5. 窄屏：换行是对的，但不能横向溢出，也不能让按钮又动起来
