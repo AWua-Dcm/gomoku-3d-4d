@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>三维五子棋</title>
+<!-- 空图标。不写这行，浏览器在 http(s) 下会自动去要 /favicon.ico；静态托管
+     （GitHub Pages）上没有这个文件，于是 404、控制台多一条红字。而这条 404
+     唯独在 file:// 下不会出现 —— 表现为本地跑 browser-check 是 124/124、
+     对着线上跑是 123/124。放 data: 空图标而不是真放一个 favicon.ico，
+     是为了守住"单文件"这个前提。 -->
+<link rel="icon" href="data:,">
 <style>
   /* 【配色：古风·宣纸】单一事实源就是这一块。
      网页版原来是"冷灰 + 五处硬编码颜色"（CSS 一套、gl.clearColor 一套、着色器 STONE_EDGE
