@@ -130,6 +130,14 @@
     background: var(--overlay); border: 1px solid var(--border);
     border-radius: 6px; padding: 7px 10px;
   }
+  /* 模式条里「看谁」那组和「怎么看」那组之间的竖线。高度写死一个 18px 而不是 100%：
+     条子里有 27px 高的按钮和十几个字的标签，拉满会随内容高度变，看起来像没对齐。
+
+     左右各 margin 4px 是【必须的】，1px 竖线自己分不开两组：默认状态下「格线」和「全部」
+     同时亮着，两个深蓝按钮挨在一起（条子本身只有 8px 间距），看上去就是一个宽按钮。
+     加上 margin 之后这处间距变成 8+4+1+4+8 = 25px，是普通按钮间距的三倍，
+     分组才读得出来。（实测截图确认过：不加 margin 时那条线夹在两个蓝块中间基本看不见。） */
+  .modeSep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); flex: 0 0 auto; }
   #sliceGroup { display: none; align-items: center; gap: 6px; }
   #sliceGroup.on { display: flex; }
   #sliceLabel { color: var(--dim); font-size: 13px; min-width: 128px; text-align: center; }
@@ -942,6 +950,16 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
            立方体内部会读成一片灰网，盘里的子被糊得看不见。这是"从 15³ 起就必然发生"的，
            不是大棋盘才有的问题，所以需要一个一键关掉它的开关。 -->
       <button id="modeGrid" class="mini sel" data-i18n="modeGrid">格线</button>
+      <!-- 棋子过滤。单独占一组，左边用一条竖线和其他几项隔开 ——
+           前三个按钮管的是"怎么看"（幽灵/切片/格线），这三个管的是"看谁"，
+           不加分隔的话「全部」会被读成"所有视图模式都打开"。
+           三档而不是两个开关：两个开关会出现"都亮着 / 都灭着"这两种需要想一下的状态，
+           而这里三档互斥、任意时刻恰好一个 sel，当前在看什么一眼可见。
+           顺序和 sel 的落点都由 setStoneFilter 的取值决定，不在这里写死。 -->
+      <div class="modeSep"></div>
+      <button id="stoneAll" class="mini sel" data-i18n="stoneAll">全部</button>
+      <button id="stoneBlack" class="mini" data-i18n="stoneBlack">只看黑</button>
+      <button id="stoneWhite" class="mini" data-i18n="stoneWhite">只看白</button>
       <div id="sliceGroup">
         <button id="sliceDown" class="mini">-</button>
         <div id="sliceLabel"></div>
@@ -952,7 +970,7 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
     <div id="hintbox">
       <div id="coords">把鼠标移到棋盘上以选择落点</div>
       <div id="hint" data-i18n-html="hint">左键拖拽旋转 · 滚轮缩放 · 单击当前层落子<br>
-        Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · H 格线 · T 转动 · Y 恢复本次转动<br>
+        Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · H 格线 · B 只看黑/白 · T 转动 · Y 恢复本次转动<br>
         绿框 = 待转的那一层 · 蓝框 = 当前层（四维模式下才有绿框）</div>
     </div>
 
@@ -2316,11 +2334,14 @@ const STATIC_TEXT = { en: {
   // ---- 左侧舞台
   "previewTag": "Demo board · 10 × 10 × 10<br>Independent of the settings on the left — not part of the game",
   "hint": "Drag to rotate · Scroll to zoom · Click to place on the current layer<br>" +
-    "Z undo · R restart · Q/E change layer · G view mode · H grid lines · T rotate · Y restore rotation<br>" +
+    "Z undo · R restart · Q/E change layer · G view mode · H grid lines · B black/white only · T rotate · Y restore rotation<br>" +
     "Green box = the layer about to rotate · Blue box = current layer (green only in 4D)",
   "modeGhost": "Ghost layers",
   "modeSlice": "Slice",
   "modeGrid": "Grid lines",
+  "stoneAll": "Both",
+  "stoneBlack": "Black only",
+  "stoneWhite": "White only",
 
   // ---- 终局横幅（标题和副标题由 JS 写，不在这张表里）
   "bannerUndo": "Undo",
@@ -3137,6 +3158,18 @@ const Game = {
    *  刻意不持久化：全项目只有界面语言一项进 localStorage，ghostMode / activeLayer
    *  这些同样是视图状态，都只在内存里。 */
   gridVisible: true,
+  /** 棋子过滤：0 = 双方都画，BLACK / WHITE = 只画这一方。
+   *
+   *  **纯视图状态，一行都不碰内核** —— 被滤掉的子照样占着那一格，落子、判胜、悔棋、
+   *  数气全按原样走。所以"隐藏的子还能不能下"这种问题不存在：点上去内核照旧拒绝，
+   *  并给出"那里有子"的提示（见 tryPlace → session.place 的 Rejected 分支）。
+   *
+   *  刻意【只作用于三维棋盘】，右侧面板和缩略条一直画双方。理由是那两个视图在这里的
+   *  角色不同：三维棋盘是"看形状"的，滤掉一方才看得清另一方的结构；面板是"核对事实"的，
+   *  滤了它就没有任何地方能确认那一格到底有没有子。两边不一致是刻意的，不是漏了。
+   *
+   *  和 gridVisible 一样不持久化，且开新局复位（见 newGame）。 */
+  stoneFilter: 0,
   hover: null,          // {x, y}
   // 起始界面的尺寸状态。**唯一事实源是 setupDims**；setupSize 是它的 getter/setter，
   // 指的是"三轴联动时的那个 N"（也是四维模式的 N）。
@@ -3208,7 +3241,8 @@ const Game = {
   },
 
   init() {
-    const ids = ["gl","modeGhost","modeSlice","modeGrid","sliceGroup","sliceDown","sliceUp","sliceLabel",
+    const ids = ["gl","modeGhost","modeSlice","modeGrid","stoneAll","stoneBlack","stoneWhite",
+      "sliceGroup","sliceDown","sliceUp","sliceLabel",
       "coords","hint","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
@@ -3364,6 +3398,7 @@ const Game = {
     // （只影响"设置 → 开始游戏"这条路；悔棋、换先手都不会走到这里。）
     this.ghostMode = true;
     this.gridVisible = true;
+    this.stoneFilter = 0;
     this.hover = null;
     // 换局时把转动面板复位：上一局的层号可能已经越界，方向/次数留着也会让人以为选好了。
     this.rotAxis = AXIS_Z;
@@ -3470,6 +3505,11 @@ const Game = {
       // 幽灵层保留整盘信息，切片只保留需要看的那一半，最干净也最省。
       if (!this.ghostMode && z > this.activeLayer) return;
 
+      // 只看黑 / 只看白：被滤掉的子整颗都不画。**放在这里而不是更外面**，
+      // 是为了让过滤和"切片""幽灵层"共用同一个出口 —— 三个视图状态各写一处的话，
+      // 迟早有一个分支只判了其中一个条件。
+      if (this.stoneFilter && s !== this.stoneFilter) return;
+
       // 颜色全部走调色板。白子原来是纯白 [1,1,1]，和二维面板的 --white 其实不是同一个色 ——
       // 那种"三维和面板差一点点"的偏差肉眼几乎发现不了，但换主题时就会放大成两个色调。
       let rgb;
@@ -3491,8 +3531,12 @@ const Game = {
     // 判据必须是"那一格还是落子方的子"，不能只判"那一格不空" —— 四维模式下转动会把棋子
     // 搬走，原位置上可能是空格、也可能是被对手的子顶上。只判不空的话，标记就会挂在一颗
     // 跟最后一手毫无关系的棋子上。
-    if (this.session.moveCount > 0) {
-      const last = this.session.history[this.session.moveCount - 1];
+    const last = this.session.moveCount > 0
+      ? this.session.history[this.session.moveCount - 1] : null;
+    // 轮不到自己看的那一方，光晕也跟着不画 —— 底下的子都被滤掉了，
+    // 光晕会孤零零地套在一格空白上，看着像"这里有个看不见的子"。
+    const lastFilteredOut = !!last && !!this.stoneFilter && last.player !== this.stoneFilter;
+    if (last && !lastFilteredOut) {
       if (board.getOrDefault(last.x, last.y, last.z) === last.player) {
         const p = this.worldOf(last.x, last.y, last.z, dims, cs);
         ghPos.push(p[0], p[1], p[2], cs * 0.88);
@@ -4337,6 +4381,12 @@ const Game = {
     this.el.modeGhost.classList.toggle("sel", this.ghostMode);
     this.el.modeSlice.classList.toggle("sel", !this.ghostMode);
     this.el.modeGrid.classList.toggle("sel", this.gridVisible);
+    // 三档互斥：任意时刻恰好一个亮着。用三个 === 而不是两两 toggle，
+    // 这样"某个取值漏了没处理"会表现为三个全灭 —— 一眼能看出来，
+    // 而两两 toggle 的写法漏一个只是两个同时灭，看着像正常的未选中态。
+    this.el.stoneAll.classList.toggle("sel", this.stoneFilter === 0);
+    this.el.stoneBlack.classList.toggle("sel", this.stoneFilter === BLACK);
+    this.el.stoneWhite.classList.toggle("sel", this.stoneFilter === WHITE);
     this.el.sliceGroup.classList.toggle("on", !this.ghostMode);
     this.el.sliceLabel.textContent = say(() => "只画到 z ≤ " + (this.activeLayer + 1) + "/" + nz,
                                          "slice.label", { i: this.activeLayer + 1, n: nz });
@@ -4381,6 +4431,9 @@ const Game = {
     on("modeGhost", () => this.setGhostMode(true));
     on("modeSlice", () => this.setGhostMode(false));
     on("modeGrid", () => this.toggleGrid());
+    on("stoneAll", () => this.setStoneFilter(0));
+    on("stoneBlack", () => this.setStoneFilter(BLACK));
+    on("stoneWhite", () => this.setStoneFilter(WHITE));
     on("sliceDown", () => this.setActiveLayer(this.activeLayer - 1));
     on("sliceUp", () => this.setActiveLayer(this.activeLayer + 1));
     on("prevLayer", () => this.setActiveLayer(this.activeLayer - 1));
@@ -4479,6 +4532,7 @@ const Game = {
       else if (k === "r") this.restart();
       else if (k === "g") this.setGhostMode(!this.ghostMode);
       else if (k === "h") this.toggleGrid();
+      else if (k === "b") this.cycleStoneFilter();
       else if (k === "q" || k === "[") this.setActiveLayer(this.activeLayer - 1);
       else if (k === "e" || k === "]") this.setActiveLayer(this.activeLayer + 1);
       else if (k === "t") this.doRotate();                 // 四维：执行转动
@@ -4713,6 +4767,24 @@ const Game = {
   },
 
   toggleGrid() { this.setGridVisible(!this.gridVisible); },
+
+  /** 只看黑 / 只看白。f 取 0（双方）、BLACK、WHITE；非法值一律当 0，
+   *  免得某个调用方传进来一个 EMPTY 就把整盘棋全滤没了 —— 那看起来像"棋盘空了"。
+   *  只需要重传棋子实例，格线/光标/悬停线都和它无关，所以不走 onBoardChanged。 */
+  setStoneFilter(f) {
+    f = (f === BLACK || f === WHITE) ? f : 0;
+    if (this.stoneFilter === f) return;
+    this.stoneFilter = f;
+    this.uploadInstances();
+    this.refreshTexts();   // 里面会 toggle 那三个按钮的 sel
+  },
+
+  /** B 键的循环：全部 → 只看黑 → 只看白 → 全部。
+   *  顺序和选择器里排的一致，键盘用户按出来的顺序和看到的一样。 */
+  cycleStoneFilter() {
+    this.setStoneFilter(this.stoneFilter === 0 ? BLACK
+                       : this.stoneFilter === BLACK ? WHITE : 0);
+  },
 
   // ------------------------------------------------------------------ 四维转动
 
