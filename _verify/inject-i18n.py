@@ -52,6 +52,17 @@ def tail_of(out):
 
 ORIG = read(HTML)
 
+# 每条注入【预期由谁抓到】。
+#
+# 【为什么不一律要求两套都抓到】有几条天然只有一套看得见，硬要求两套会让这个脚本
+# 永远红 —— 而"永远红"和"永远绿"一样没用（没人会再看它）。逐条写清楚之后，
+# 缺了任何一个【预期】抓到的都算失败，而"预期之外多抓到"不扣分：
+#   b 英文少一条单数形：只有真浏览器里造一局 1 手才露得出来（桩里不会渲染那句话）
+#   c 中文不回写快照：桩里那条"切回中文逐字节等于 HTML 原文"是唯一的证据
+#   g 列表不高亮 / h 复数不选形：都只有真浏览器里那两条断言盯着
+EXPECT = {"a": ("dom", "brw"), "b": ("brw",), "c": ("dom",), "d": ("dom", "brw"),
+          "e": ("dom", "brw"), "f": ("dom", "brw"), "g": ("brw",), "h": ("brw",)}
+
 # 下面每条锚点都必须在【当前的】index.html 里逐字符存在。对不上时这个脚本
 # exit(2) 而不是静默跳过 —— 实现改了就得跟着改锚点，而"锚点过期"这件事
 # 只有在这里会报警。改完必须重跑，确认 4/4 仍然被抓到。
@@ -77,12 +88,13 @@ INJECTIONS = [
     ("b. 从 TEXT.en 里删掉 info.moves.one（漏翻一句 JS 拼的文案）",
      lambda h: h.replace('  "info.moves.one": "{n} move played",\n', "", 1)),
 
-    # ---- (c) 中文方向不回写快照，改成"永远显示英文"。
-    # 症状：切回中文时界面还是英文 —— 而"切到英文"那条通路一切正常，看不出问题。
+    # ---- (c) 中文方向不回写快照，改成"切回中文时不写任何东西"。
+    # 症状：切回中文时界面还是上一种语言 —— 而"切到外语"那条通路一切正常，看不出问题。
     ("c. applyStatic 的中文方向不再回写快照（切回中文失效）",
      lambda h: h.replace(
-         "const want = LANG === \"en\" && mapped !== undefined ? mapped : s.zh;",
-         "const want = mapped !== undefined ? mapped : s.zh;", 1)),
+         "    if (s.isHtml) s.el.innerHTML = want;\n    else s.el.textContent = want;",
+         "    if (LANG === \"zh\") continue;\n    if (s.isHtml) s.el.innerHTML = want;\n"
+         "    else s.el.textContent = want;", 1)),
 
     # ---- (d) JS 现拼的句子退回硬编码中文。
     # 【这条是这一版真正的教训】：实现完成时 #dimRange 的"可填"和 #coolNote 的
@@ -93,6 +105,35 @@ INJECTIONS = [
      lambda h: h.replace(
          'say(() => "可填 " + range, "range.allowed", { range: range });',
          '"可填 " + range;', 1)),
+
+    # ---- (e) 内核文案缺一种语言 —— 【六语言那一版真出过的事故，必须钉住】。
+    # 症状：那一条在日语界面上退回中文，而前后半句还是日语，于是出现
+    # "半句日语半句中文"（实测："黒が先手 · 先手（黒）须恰好 5 连，6 连及以上判负"）。
+    # 【为什么这条最要紧】它不报错、不留空、也不在静态表里 —— 只靠"表里有没有这个键"
+    # 那类检查完全看不见。靠的是两样：browser-check 里日语那条【简体专有字】扫描
+    # （需/负/连 这些字日语里不会用），以及 dom-smoke 里按"会被选中的那一形"查齐全性。
+    ("e. 内核 status.turn 的日语译文删掉（内核文案缺一种语言）",
+     lambda h: h.replace('ja: "{who}の手番（{n}手目）", ', "", 1)),
+
+    # ---- (f) 某种语言的静态表里少一条。
+    # 症状：那一处退回英文（表里没有 → 退到 en → 再没有才留中文快照）。
+    # 【只查 CJK 的扫描抓不住它】（英语残留不是汉字），所以靠的是 browser-check 里
+    # 那条【正向】检查：带 data-i18n 的元素必须等于该语言的表值。
+    ("f. 从 STATIC_TEXT.ja 里删掉 modeGhost（某种语言少一条静态文案）",
+     lambda h: h.replace('  "modeGhost": "ゴースト表示",\n', "", 1)),
+
+    # ---- (g) 语言列表不再高亮当前语言。
+    # 症状：点开列表看不出自己在哪种语言上；切换功能本身还是好的。
+    # 这条盯的是"列表里恰好一项高亮、且那一项就是当前语言"。
+    ("g. syncLangList 变成空操作（列表不再标出当前语言）",
+     lambda h: h.replace("  syncLangList() {\n    for (let i = 0;",
+                         "  syncLangList() {\n    if (1) return;\n    for (let i = 0;", 1)),
+
+    # ---- (h) 复数选形退化成"永远 many"。
+    # 症状：俄语该用"少数形"的地方全用复数形 —— 中文英文都看不出来（它们没有这一形），
+    # 只有 browser-check 里那条"3 手用的是 .few"会红。
+    ("h. pluralForm 的俄语分支失效（永远选 many）",
+     lambda h: h.replace('  if (lang === "ru") {', "  if (false) {", 1)),
 ]
 
 try:
@@ -111,15 +152,23 @@ try:
         rc_brw, out_brw = run(BROWSER, SCRATCH)
         write(HTML, ORIG)
 
-        d = "抓到" if rc_dom else "!! 漏了"
-        b = "抓到" if rc_brw else "!! 漏了"
-        if rc_dom and rc_brw:
+        got = set()
+        if rc_dom:
+            got.add("dom")
+        if rc_brw:
+            got.add("brw")
+        want = set(EXPECT.get(name[0], ("dom", "brw")))
+        ok = want <= got
+        if ok:
             caught += 1
-        print("注入 " + name)
-        print("    dom-smoke     : " + d + "   " + tail_of(out_dom))
-        print("    browser-check : " + b + "   " + tail_of(out_brw))
+        print("注入 " + name + ("（预期 " + "/".join(sorted(want)) + " 抓到）" if not ok else ""))
+        print("    dom-smoke     : " + ("抓到" if rc_dom else "没抓到") + "   " + tail_of(out_dom))
+        print("    browser-check : " + ("抓到" if rc_brw else "没抓到") + "   " + tail_of(out_brw))
+        if not ok:
+            print("    !! 预期由 " + "/".join(sorted(want)) + " 抓到，实际只有 " +
+                  ("/".join(sorted(got)) or "谁都没抓到"))
     print()
-    print(str(caught) + "/" + str(len(INJECTIONS)) + " 处注入被两套检查同时抓到")
+    print(str(caught) + "/" + str(len(INJECTIONS)) + " 处注入被【预期的检查】抓到")
     print("注入期间的截图在 " + SCRATCH + "（_verify/shots/ 里那六张基线图没被碰）")
     sys.exit(0 if caught == len(INJECTIONS) else 1)
 finally:

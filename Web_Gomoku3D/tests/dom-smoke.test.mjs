@@ -308,6 +308,8 @@ let PALETTE = null, FALLBACK_COLORS = null, cellSize = null, BoardLimits = null,
 let renderRulesMarkdown = null, escapeHtmlNS = null;
 let TEXT_EN = null, STATIC_EN = null, t = null;
 let clampPan2d = null, OrbitCameraNS = null, GESTURE = null;
+let CORE_TEXT = null, LANG_INFO = null, pluralFormNS = null, PLURAL_FORMS = null;
+let TEXT_ALL = null, STATIC_ALL = null, LANGS_LIST = null;
 let RendererNS = null;
 // 相机拖拽的两个常量。**从源码里抓，不在这里抄一份** —— 抄了就会各自漂移，
 // 而"夹取到底是 85 还是 89.95"正是这几条测试要钉的东西。
@@ -335,6 +337,9 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
       // 触屏手势那几个纯函数/常量。露出来是为了"平移边界、双击窗口、手柄标尺"
       // 这些能被逐个边界值钉住 —— 靠合成触摸事件只能验到几条主路径，
       // 而越界回夹、"刚好等于窗口"这种边界恰恰是合成事件最难构造的。
+      " CORE_TEXT: CORE_TEXT, LANG_INFO: LANG_INFO, pluralForm: pluralForm," +
+      " TEXT_ALL: TEXT, STATIC_ALL: STATIC_TEXT, LANGS_LIST: LANGS," +
+      " PLURAL_FORMS: PLURAL_FORMS," +
       " clampPan2d: clampPan2d, OrbitCamera: OrbitCamera," +
       " GESTURE: { ZOOM2D_MAX: ZOOM2D_MAX, TAP_WINDOW_MS: TAP_WINDOW_MS," +
       "            TAP_NEAR_PX: TAP_NEAR_PX, PINCH_TAIL_MS: PINCH_TAIL_MS }," +
@@ -350,6 +355,12 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   TEXT_EN = NS.TEXT_EN; STATIC_EN = NS.STATIC_EN; t = NS.t;
   RendererNS = NS.Renderer;
   clampPan2d = NS.clampPan2d; OrbitCameraNS = NS.OrbitCamera; GESTURE = NS.GESTURE;
+  CORE_TEXT = NS.CORE_TEXT; LANG_INFO = NS.LANG_INFO; pluralFormNS = NS.pluralForm;
+  TEXT_ALL = NS.TEXT_ALL; STATIC_ALL = NS.STATIC_ALL; LANGS_LIST = NS.LANGS_LIST;
+  if (!TEXT_ALL || !STATIC_ALL || !LANGS_LIST) throw new Error('六语言的表没有暴露出来');
+  PLURAL_FORMS = NS.PLURAL_FORMS;
+  if (!CORE_TEXT || !LANG_INFO || !pluralFormNS || !PLURAL_FORMS)
+    throw new Error('六语言那几个量没有暴露出来');
   if (!clampPan2d || !OrbitCameraNS || !GESTURE) throw new Error("触屏手势那几个量没有暴露出来");
   if (!TEXT_EN || !STATIC_EN || !t) throw new Error("英文文案表没有暴露出来");
   if (!RendererNS) throw new Error("Renderer 没有暴露出来");
@@ -1826,10 +1837,31 @@ function skipFunctionBody(src, parenAt) {
   return src.length;
 }
 
+/**
+ * 从源码里扫出所有用到的文案键。返回 { keys, bases } —— 分开是因为两种实参不一样：
+ *
+ *   keys  —— 完整的键（t / say / ct）
+ *   bases —— 复数基名（sayN / tPlural / ctPlural）。它在表里可能展开成
+ *            .one / .few / .many 三形（英文两形、俄语三形），也可能就是基名本身
+ *            （单数那一形直接写成基名的键，比如 rot.status.wait）。
+ *            所以它既不能直接当键查表、也不能直接算"没人用"，得单独一套判断。
+ *
+ * 【内核的 ct / ctPlural 也一起扫】—— 内核文案表同样会漏、同样会改错名，
+ * 而它坏起来的表现是"界面上冒出一句中文"（缺项退到中文），很难靠眼睛发现。
+ */
+/** 去掉内核区间（GOMOKU-CORE-BEGIN/END 之间）之后的源码 —— 界面的文案键在那里才有。 */
+function outsideKernel(src) {
+  const a = src.indexOf("GOMOKU-CORE-BEGIN"), b = src.indexOf("GOMOKU-CORE-END");
+  if (a < 0 || b < 0) throw new Error("源码里找不到内核区间的标记，扫描没法切分");
+  return src.slice(0, a) + src.slice(b);
+}
+
 function textKeysInSource(src) {
   const keys = new Set();
-  // 实参位置：t/tn 从 0 数，say/sayN 的第 0 个是中文表达式，键从 1 数
-  const KEY_ARG = { t: [0], tn: [0, 1], say: [1], sayN: [1, 2] };
+  const bases = new Set();
+  // 实参位置：t/ct 从 0 数，say 的第 0 个是中文表达式、键从 1 数
+  const KEY_ARG = { t: [0], say: [1], ct: [0] };
+  const BASE_ARG = { sayN: [1], tPlural: [0], ctPlural: [0] };
 
   for (let i = 0; i < src.length; i++) {
     const next = skipNonCode(src, i);
@@ -1844,7 +1876,9 @@ function textKeysInSource(src) {
     const name = src.slice(j + 1, nameEnd);
     // hasOwnProperty 而不是 KEY_ARG[name] —— 后者会把 "constructor"/"toString"
     // 这些原型上的名字当成命中（脚本里就有 cells.toLocaleString()）。
-    if (!Object.prototype.hasOwnProperty.call(KEY_ARG, name)) continue;
+    const isKey = Object.prototype.hasOwnProperty.call(KEY_ARG, name);
+    const isBase = Object.prototype.hasOwnProperty.call(BASE_ARG, name);
+    if (!isKey && !isBase) continue;
     if (j >= 0 && src[j] === ".") continue;   // obj.t(...) 不是这里的东西
     // function t(key, params) {...} 是【定义】不是调用点。它必须整个跳过，不能只跳形参表：
     // say 的形参 zhFn / tn 的函数体里都在转发变量（`return t(n === 1 ? keyOne : keyMany, …)`），
@@ -1871,7 +1905,7 @@ function textKeysInSource(src) {
       const e = n + 1 < argStart.length ? argStart[n + 1] - 1 : close;
       return src.slice(s, e).trim();
     });
-    for (const idx of KEY_ARG[name]) {
+    for (const idx of (isKey ? KEY_ARG[name] : BASE_ARG[name])) {
       const a = args[idx];
       if (a === undefined) continue;
       const m = a.match(/^"([^"\\]*)"$/);
@@ -1882,20 +1916,156 @@ function textKeysInSource(src) {
           JSON.stringify(a.slice(0, 60)) + "\n      （键写成变量后" +
           "这条检查就看不见它了 —— 要么改成字面量，要么把它加进一个显式清单）");
       }
-      keys.add(m[1]);
+      (isKey ? keys : bases).add(m[1]);
     }
   }
-  return keys;
+  return { keys: keys, bases: bases };
 }
 
-step("语言：脚本里每个 t()/tn() 的键在英文表里都有", () => {
-  const used = textKeysInSource(fullScript);
-  if (used.size < 30) throw new Error("只从脚本里抓到 " + used.size + " 个键，太少了 —— 扫描漏了，检查会空转");
-  const missing = [...used].filter((k) => TEXT_EN[k] === undefined);
+/**
+ * 一个复数基名在表里"有东西"没有：可能整句就写在基名上（单数那一形直接写成基名），
+ * 也可能展开成三形。两种都算命中 —— 和 tPlural / ctPlural 的查表退路一致。
+ */
+function baseExists(table, base) {
+  return PLURAL_FORMS.some((f) => table[base + "." + f] !== undefined) || table[base] !== undefined;
+}
+/** 表里这个键算不算"被用到了"（完整键本身，或某个基名展开出来的一形）。 */
+function keyIsUsed(key, used) {
+  if (used.keys.has(key)) return true;
+  for (const b of used.bases) {
+    if (key === b || key.indexOf(b + ".") === 0) return true;
+  }
+  return false;
+}
+
+step("语言：脚本里每个 t()/say() 的键在英文表里都有", () => {
+  // 【只扫内核区间之外】内核那半边的键属于 CORE_TEXT，由下面那条单独查。
+  // 两边混在一起扫的话，界面这条会把内核的键全报成"英文表里没有"（它确实没有 ——
+  // 内核文案表是另一张），于是这条检查变成永远红。
+  const used = textKeysInSource(outsideKernel(fullScript));
+  if (used.keys.size < 30) throw new Error("只从脚本里抓到 " + used.keys.size + " 个键，太少了 —— 扫描漏了，检查会空转");
+  if (used.bases.size < 3) throw new Error("只抓到 " + used.bases.size + " 个复数基名，太少了 —— 扫描漏了");
+  const missing = [...used.keys].filter((k) => TEXT_EN[k] === undefined);
   if (missing.length) throw new Error("脚本里用了但英文表里没有的键：" + missing.join(", "));
+  const badBase = [...used.bases].filter((b) => !baseExists(TEXT_EN, b));
+  if (badBase.length) throw new Error("这些复数基名在英文表里既没有基名也没有任何一形：" + badBase.join(", "));
   // 反方向：表里有、代码里没人用 —— 多半是改名时漏改了一处，留着只会烂在那儿
-  const dead = Object.keys(TEXT_EN).filter((k) => !used.has(k));
+  const dead = Object.keys(TEXT_EN).filter((k) => !keyIsUsed(k, used));
   if (dead.length) throw new Error("英文表里这些键没人用（改名漏改？）：" + dead.join(", "));
+});
+
+/**
+ * 【"会被选中的那一形"是什么意思】复数键在表里可能有三条
+ * （`rot.move` / `rot.move.few` / `rot.move.many`），而某种语言只会走到其中一条：
+ * 中文日文韩文恒走 many、英法走 one/many、俄语三种都走。所以"这个基名有没有值"
+ * 是个假命题 —— 值写在够不着的那一条上，运行时照样退到中文。
+ *
+ * 【为什么按形严格查、而不是"退回链上随便哪条有值就算过"】运行时确实有一条
+ * 退回链（.形 → 基名 → .many），但走到退回那一支就是**看得见的错**：
+ * 英文少了 .one 会渲染成 "1 more moves"。实测注入 b（删掉 info.moves.one）
+ * 时，按"链上有值就算过"写的话这条检查全绿 ✗ —— 而它在界面上是真的坏了。
+ * 所以这里要求【该形写在该形的键上】（单数那一形允许写基名，见 selectedKey）。
+ */
+function selectedKey(table, base, lang, n) {
+  const form = pluralFormNS(lang, n);
+  // 【单数那一形允许写在基名上】表里有一条约定：像 rot.status.wait 这种
+  // "单数形直接写成基名"的键只有基名那一条。所以 one 这一形查两处。
+  if (table[base + "." + form] !== undefined) return base + "." + form;
+  if (form === "one" && table[base] !== undefined) return base;
+  return null;
+}
+/** 每种语言取一个代表性数字，覆盖它用得上的每一形。 */
+const PLURAL_SAMPLES = { zh: [1, 5], en: [1, 5], ja: [1, 5], ko: [1, 5], fr: [1, 5], ru: [1, 3, 5] };
+
+/**
+ * 这一组三条检查，是被一个真 bug 逼出来的。
+ *
+ * 第一轮翻译时，我用来生成清单的脚本只抓了 CORE_TEXT 里【单行】的条目，
+ * 多行写的那 22 条根本没进清单。后果不是报错、也不是留空 —— ct() 查不到就退到中文，
+ * 于是玩家看到"半句外语半句中文"（实测日语："黒が先手 · 先手（黒）须恰好 5 连，
+ * 6 连及以上判负"）。而当时的齐全性检查只查了【中文在不在】，那条路拦不住它。
+ *
+ * 三条分别是：界面静态文案（键 = 元素 id）、界面动态文案（含复数各形）、
+ * 内核文案（含复数各形）。中文不进表（它在 HTML 原文和调用点的表达式里），跳过。
+ */
+step("语言：六种语言的静态文案都齐（键 = 元素 id）", () => {
+  const keys = new Set();
+  for (const m of html.matchAll(/<\w+\b[^>]*\bdata-i18n(?:-html)?="([^"]+)"/g)) keys.add(m[1]);
+  if (keys.size < 30) throw new Error("只从 HTML 里抓到 " + keys.size + " 个 data-i18n 键，扫描漏了");
+  const bad = [];
+  for (const lang of LANGS_LIST) {
+    if (lang === "zh") continue;
+    const table = STATIC_ALL[lang];
+    if (!table) { bad.push(lang + "：整张表都没有"); continue; }
+    for (const k of keys) if (table[k] === undefined) bad.push(lang + " 缺 " + k);
+  }
+  if (bad.length) throw new Error("静态文案有 " + bad.length + " 处缺失：\n      " + bad.slice(0, 30).join("\n      "));
+});
+
+step("语言：六种语言的动态文案都齐（含复数的每一形）", () => {
+  const used = textKeysInSource(outsideKernel(fullScript));
+  const bad = [];
+  for (const lang of LANGS_LIST) {
+    if (lang === "zh") continue;
+    const table = TEXT_ALL[lang];
+    if (!table) { bad.push(lang + "：整张表都没有"); continue; }
+    for (const k of used.keys) if (table[k] === undefined) bad.push(lang + " 缺 " + k);
+    for (const b of used.bases) {
+      for (const n of PLURAL_SAMPLES[lang]) {
+        const k = selectedKey(table, b, lang, n);
+        if (k === null || table[k] === undefined)
+          bad.push(lang + " 缺 " + b + " 的第 " + n + " 形（会去读 " + k + "）");
+      }
+    }
+  }
+  if (bad.length) throw new Error("动态文案有 " + bad.length + " 处缺失：\n      " + bad.slice(0, 30).join("\n      "));
+});
+
+step("语言：内核文案六种语言都齐（含复数的每一形）", () => {
+  const core = textKeysInSource(
+    fullScript.slice(fullScript.indexOf("GOMOKU-CORE-BEGIN"), fullScript.indexOf("GOMOKU-CORE-END")));
+  const bad = [];
+  for (const lang of LANGS_LIST) {
+    if (lang === "zh") continue;
+    for (const k of core.keys) {
+      const e = CORE_TEXT[k];
+      if (!e || e[lang] === undefined) bad.push(lang + " 缺 " + k);
+    }
+    for (const b of core.bases) {
+      for (const n of PLURAL_SAMPLES[lang]) {
+        const k = selectedKey(CORE_TEXT, b, lang, n);
+        if (k === null || CORE_TEXT[k][lang] === undefined)
+          bad.push(lang + " 缺 " + (k || b) + " 的第 " + n + " 形（会去读 " + k + "）");
+      }
+    }
+  }
+  if (bad.length) throw new Error("内核文案有 " + bad.length + " 处缺失：\n      " + bad.slice(0, 30).join("\n      "));
+});
+
+/**
+ * 内核文案表（CORE_TEXT）走的是同一条检查。
+ *
+ * 【它坏起来更难发现】：内核缺一条时 ct() 会退到中文 —— 界面上表现为"日文界面里
+ * 冒出一句中文"，而那可能是任何一次操作才触发的一句话，靠点界面碰不到几条。
+ * 所以这里用和界面表一样的办法：扫描 + 两个方向都查。
+ *
+ * 【只查中文齐不齐是不够的】每条都得有 zh（默认语言 + 联机协议），
+ * 另外四种语言的齐全性由下面那条"逐语言"的检查负责（它读的是源码里的实际值）。
+ */
+step("语言：内核文案表的键和源码对得上，且每条都有中文", () => {
+  const used = textKeysInSource(fullScript);
+  const core = textKeysInSource(
+    fullScript.slice(fullScript.indexOf("GOMOKU-CORE-BEGIN"), fullScript.indexOf("GOMOKU-CORE-END")));
+  if (core.keys.size < 10) throw new Error("内核里只抓到 " + core.keys.size + " 个键，太少了 —— 扫描漏了");
+  const missing = [...core.keys].filter((k) => CORE_TEXT[k] === undefined);
+  if (missing.length) throw new Error("内核里用了但表里没有的键：" + missing.join(", "));
+  const badBase = [...core.bases].filter((b) => !baseExists(CORE_TEXT, b));
+  if (badBase.length) throw new Error("内核这些复数基名在表里既没有基名也没有任何一形：" + badBase.join(", "));
+  const noZh = Object.keys(CORE_TEXT).filter((k) => CORE_TEXT[k].zh === undefined);
+  if (noZh.length) throw new Error("内核文案这些键缺中文（默认语言 + 联机协议都要用）：" + noZh.join(", "));
+  // 内核表里没人用的键：内核区间扫出来的键和基名之外，全是死的
+  const deadCore = Object.keys(CORE_TEXT).filter((k) => !keyIsUsed(k, core));
+  if (deadCore.length) throw new Error("内核文案里这些键没人用（改名漏改？）：" + deadCore.join(", "));
 });
 
 step("语言：切到英文后界面真的变了，且状态行/信息行是英文", () => {
@@ -1904,8 +2074,10 @@ step("语言：切到英文后界面真的变了，且状态行/信息行是英�
     throw new Error("documentElement.lang 应为 en，实际 " + documentStub.documentElement.lang);
   if (!documentStub.documentElement.classList.contains("lang-en"))
     throw new Error("documentElement 上没有 .lang-en —— 英文排版那一段 CSS 不会生效");
-  if (Game.el.langBtn.textContent !== "中文")
-    throw new Error("英文界面下语言按钮应写「中文」，实际 " + JSON.stringify(Game.el.langBtn.textContent));
+  // 【按钮上写的是当前语言，不是"点了会变成什么"】—— 双态切换时写目标语言还行，
+  // 六种语言下就废了：那个 "EN" 是指"现在是英文"还是"点了变英文"，读不出来。
+  if (Game.el.langBtn.textContent !== "EN")
+    throw new Error("英文界面下语言按钮应写当前语言「EN」，实际 " + JSON.stringify(Game.el.langBtn.textContent));
   if (Game.el.startBtn.textContent !== "Start game")
     throw new Error("开始按钮应为英文，实际 " + JSON.stringify(Game.el.startBtn.textContent));
 
@@ -1965,7 +2137,9 @@ step("语言：切回中文后，每个静态元素都与 HTML 原文逐字节�
 });
 
 step("语言：未知语言名被夹回中文，不认识的键显示键名而不是 undefined", () => {
-  Game.setLang("fr");
+  // 【别拿 "fr" 当未知语言了】它从六语言那一版起是真语言 —— 这条断言会当场变红，
+  // 而红的原因（"我加了法语"）离现场很远。用真正不存在的代码。
+  Game.setLang("xx");
   if (Game.lang !== "zh") throw new Error("未知语言应退回 zh，实际 " + Game.lang);
   Game.setLang("en");
   // 缺键时必须显示键名 —— 显示 undefined 或空白会看起来像"界面坏了"，

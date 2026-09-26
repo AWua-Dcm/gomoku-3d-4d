@@ -445,7 +445,38 @@
      所以它不能进 data-i18n 快照表 —— 两种语言下是两个不同的字符串。
      min-width 让 "EN" 和 "中文" 的宽度一致：不设的话切一下语言按钮自己会变宽 8px，
      而它左边就是「具体规则」—— 那个按钮会跟着挪。这是这个工程反复在消的那类跳动。 */
-  #langBtn { font-size: 13px; padding: 7px 11px; min-width: 52px; }
+  /* 按钮宽度【写死成一个值】：它上面写的是当前语言，切换时不能自己变宽把右边的
+     「具体规则」挤走（这是这个工程反复在消的那类跳动）。
+
+     【为什么标签是 中 / EN / 日 / 한 / RU / FR 这种短写法】按钮和状态行抢同一行的宽度：
+     #statusRow 早先用 layoutTopRight() 实测出的留白给这两个按钮让位，按钮宽一寸、
+     状态行就窄一寸。实测（393×852）：按钮写完整语言名（日本語 / 한국어 / Русский）
+     时它要 64px，中文状态行"黑棋落子（第 1 手）"当场折成两行、行高 34 → 58px，
+     棋盘被往下推；法语更是排到三行 84px。短标签之后按钮回到 52px，
+     中文和英文都恢复到改动前的一行。
+     完整的语言名写在下拉列表里 —— 需要看清的地方是列表，不是这个按钮。 */
+  #langBtn { font-size: 13px; padding: 7px 11px; width: 52px; }
+
+  /* 语言列表。锚在 #langBtn 上（#topRight 是 fixed，所以绝对定位以它为参照），
+     往下展开；left:0 对齐按钮的左边缘 —— 按钮是 #topRight 的第一个孩子。
+     【为什么不塞进 #topRight 的流里】那是个 flex 行，塞进去会把「具体规则」挤走。
+     当前那种用 .sel 高亮：和界面上其它互斥选中（幽灵层/切片、只看黑/白）同一套视觉，
+     不为它单独发明一个"打勾"。 */
+  #langList {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 61;
+    display: flex; flex-direction: column; gap: 2px; padding: 5px;
+    min-width: 124px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 10px 28px rgba(60,44,22,.24);
+  }
+  #langList.off { display: none; }
+  #langList button {
+    display: block; width: 100%; text-align: left;
+    padding: 5px 9px; font-size: 13px; font-weight: 400;
+    background: transparent; border: 0; border-radius: 4px; color: var(--text);
+  }
+  #langList button:hover { background: var(--cell); }
+  #langList button.sel { background: var(--accent); color: #fdfaf2; font-weight: 600; }
   /* 对局时把状态行的右边留出来 —— 不然按钮会压在"黑棋落子（第 N 手）"上面。
      状态文字是左对齐的，右边本来就是空的，留白不影响观感。
      这个 104px 只是【JS 跑起来之前】的兜底值；真实值由 layoutTopRight() 实测写入。 */
@@ -518,11 +549,27 @@
      lang 是【外部的】属性：屏幕阅读器、连字、断词都认它，将来有人做"按浏览器语言
      自动选"或者用别的工具改它，都会顺带把这一整块排版改掉 —— 而"排版跟错了语言"
      没有任何症状，只表现为某一列窄了几像素。类是我们自己的开关，只有 applyLang 会写。 */
-  html.lang-en body {
-    /* 上面 html,body 的字体栈前三个全是中文字体，而它们在 Windows 上确实存在 ——
-       英文会落到 "Microsoft YaHei" 的拉丁字形上，那是它最弱的部分。
-       英文界面显式走拉丁 UI 字体。 */
+  /* 【拉丁和西里尔走同一套】法语、俄语用英文那套 UI 字体就行：system-ui / Segoe UI
+     都带西里尔字形。上面那个中文字体栈里，YaHei 的拉丁字形是它最弱的部分。 */
+  html.lang-en body,
+  html.lang-fr body,
+  html.lang-ru body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  /* 【日语必须单独一套，不是为了好看，是为了字形对】上面那套中文字体栈的前三个
+     是 "Microsoft YaHei" 这类【简体】字体，而汉字在中日两边写法不同：骨、直、画、
+     令、每 这些字，雅黑画的是简体字形，日本人一眼就看出"这不是日文"（Han unification
+     的老问题）。所以日语界面显式点名日文字体，前三名都是 Windows / macOS 上确实存在的。
+     顺序：Hiragino（macOS/iOS）→ Yu Gothic（Windows 10 起自带）→ Meiryo（旧 Windows）。 */
+  html.lang-ja body {
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", Meiryo,
+                 system-ui, sans-serif;
+  }
+  /* 【韩语同理】韩文是谚文，雅黑里没有谚文字形（会掉到某个回退字体上，行高和
+     字重都可能和旁边对不上）。点名副韩文字体；"Apple SD Gothic Neo" 覆盖 macOS/iOS。 */
+  html.lang-ko body {
+    font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR",
+                 system-ui, sans-serif;
   }
   /* 【这里原来有一条 html.lang-en .rowLabel { width: 138px }，已删除】——
      见上面 .rowLabel 的注释。留一个记号在这里，是因为 browser-check 里
@@ -635,7 +682,10 @@
        只有它们俩还是原尺寸，看着像没对齐。@langBtn 的 min-width 一收，
        状态行让给它们的留白（layoutTopRight 实测）也跟着小，正文能多占几像素。 */
     #rulesBtn { font-size: 12.5px; padding: 5px 10px; }
-    #langBtn { font-size: 12.5px; padding: 5px 9px; min-width: 46px; }
+    /* 【width 而不是 min-width】：上面那条按 id 写了 width: 52px，
+       光收 min-width 是收不下来的（width 更硬），而多这 6px 就足够把中文状态行
+       从一行挤成两行（实测 34px → 58px，棋盘跟着往下掉）。46px 是改动前那个值。 */
+    #langBtn { font-size: 12.5px; padding: 5px 9px; width: 46px; }
   }
 
   /* ---------- 再窄一档：320px 那类老小屏 ----------
@@ -1100,6 +1150,890 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 </script>
 <!-- RULES-EMBED-EN-END -->
 
+<!-- 另外四种语言的规则正文。**整块排在英文那对的 END 之后**，理由和上面英文那块一样：
+     重新生成是按"本条的 BEGIN 切到本条的 END"替换的，夹在别人那对中间的话，
+     生成一次就会把外面那半截吃掉。顺序必须和 _verify/embed-rules.mjs 里 DOCS 的顺序一致
+     （那个脚本自己会检查，顺序不对就报错退出）。四块内容都由脚本生成，不要手改。 -->
+<!-- RULES-EMBED-JA-BEGIN -->
+<!-- 由 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.ja.md 生成，不要手改。
+     改了 Web_Gomoku3D/RULES_SPEC.ja.md 之后跑：node _verify/embed-rules.mjs -->
+<script type="text/plain" id="rulesSrcJa">
+# 3D五目並べ · ルール
+
+N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同じ色の石を 5 つ並べた方が勝ち**。
+
+平面の五目並べと比べて最大の違いは、「直線」が増えること —— 全部で **13 方向**ある。
+だから正面を塞ぐだけでは足りない。斜めに貫く線、縦に貫く線、何層もまたぐ線が、どれも決め手になりうる。
+
+盤の上に重力はなく、**石は宙に浮いたままでよい**。支えは一切要らず、空いているマスならどこでも着手できる。
+
+---
+
+## 1. 盤
+
+| 項目 | 規定 |
+|---|---|
+| 形状 | 立方体の盤、N × N × N 個の着手できる位置 |
+| サイズ | 8 ≤ N ≤ 50 から選択、既定は 15 |
+| 座標 | `(x, y, z)`、3 つの軸とも 0 から N−1 まで |
+| レイヤー | `z` が同じ位置をまとめて「1 レイヤー」と呼び、「第 k レイヤー」は `z = k` のレイヤー |
+| 位置の状態 | 空 / 黒石 / 白石 |
+
+3 つの軸の向き：
+
+- `x`：右へ向かって増える
+- `y`：上へ向かって増える
+- `z`：画面の奥へ向かって増える
+
+そのため既定の視点では、**第 0 レイヤーが最も手前で、最も遮られにくい**。対局開始時も第 0 レイヤーに停まっている。
+
+3Dモードでは 3 つの軸の長さを別々にできる（たとえば 8×12×30 の直方体の盤）：
+「三軸連動」を切れば個別に設定できる。
+
+## 2. 着手
+
+- **空いているマス**ならどこでも着手できる。重力も、「下に石が支えていなければならない」といった条件もなく、石は宙に浮いたままでよい。
+- 1 手につき石を 1 つ打つ。打ったらすぐ相手の番になる。
+- 打った石を単独で取り消すことはできないが、待った（手を戻す）はできる。
+
+## 3. どちらが先手か
+
+- 対局前に「黒が先手」か「白が先手」を選び、選んだら**その対局では変わらない**。
+- **「先手」とはその対局の最初の 1 手を打つ側のこと**であり、黒を指す言葉ではない。
+- 対局中に先手を変えたいときは、「先手を入れ替え」を押すと新しい先手で**対局をやり直す** —— いま進んでいる盤の手番を入れ替えるのではない。
+
+## 4. 勝利方向：13 通り
+
+1 つの位置は、最大で同時に 13 方向の線に関わる：
+
+| 種類 | 数 | 方向 |
+|---|---|---|
+| 軸方向 | 3 | x / y / z の 3 つの軸に沿って 1 本ずつ |
+| 面対角 | 6 | 各座標平面の中の斜線（`(1,1,0)`、`(1,-1,0)` のたぐい） |
+| 体対角 | 4 | 3 つの軸を同時に貫く斜線（`(±1,±1,±1)`） |
+
+3 つの軸方向 + 6 つの面対角 + 4 つの体対角 = 13。
+
+判定では、**いま打った石**が通る 13 方向だけを見て、しかも各方向の**両側とも数える**：
+1 本の直線の長さ = 1 + 片側の連続する同色石の数 + もう片側の連続する同色石の数。
+片側だけ数えると、「1 手で離れた 2 つの並びをつなぐ」場合を見落とす。
+
+## 5. 勝敗
+
+### 5.1 後手：5 連以上で勝ち
+
+いま打った石を通る直線のいずれかに、同じ色の石が 5 つ以上あれば、即座に勝ち。
+
+### 5.2 先手：ちょうど 5 連でなければならない
+
+先手は**連が長すぎると負ける**：
+
+- いずれかの直線が**ちょうど 5 連** → 勝ち。
+- いずれかの直線が**6 連以上**（長連）→ **即座に負け**、相手の勝ち。
+
+**長連による負けは常に「先手」という立場に付いて回る**：黒が先手なら黒が背負い、白が先手なら白が背負い、
+その場合、黒のほうが自由になる（5 つ以上並べば勝ち）。
+
+### 5.3 1 手で 5 連と 6 連が同時にできる場合
+
+立体盤では、1 手が同時に 2 種類の線に当たることはよくある。その場合は**長連が優先**され、長連による負けとなる。
+
+### 5.4 役に立つ 1 つの帰結
+
+先手が一本の直線に 1 つずつ石を並べていくとき、**5 つ目に並べた時点ですでに勝ちが決まり、対局はその場で終わる**ので、
+6 つ目まで進むことはない。したがって：
+
+> 長連の反則は「1 手で 2 つの並びをつなぐ」ことによってしか起こらない —— たとえば `0,1,2` と `4,5` が
+> すでにあり、`3` に打って 6 連につなげた場合。少しずつ並べていては長連にはならない。
+
+## 6. 待った（手を戻す）
+
+- 対局開始前まで何手でも戻せる。
+- 手を戻すと勝敗の状態も一緒に消え、対局は「進行中」に戻り、取り消した 1 手を打った側の番になる。
+- ショートカットは `Z`。パネルの「待った Z」を押してもよい。
+
+## 7. 引き分け
+
+盤が埋まってもどちらも勝たなかった → 引き分け。
+15×15×15 なら 3375 の位置があり、実戦ではまず起きないが、規則上はこういう結末もありうる。
+
+## 8. なぜ先手に制限があるのか
+
+立体盤は平面よりはるかに線が多い。15×15×15 の盤では、長さがちょうど 5 の直線が全部で **23639 本**あり、
+同じ一辺の平面盤の **41 倍**にあたる。方向が増えると、「1 手で同時に 2 つの脅威を作り、相手は片方しか塞げない」
+という状況が平面よりずっと起こりやすい —— もし両者の規則がまったく同じなら、先手の有利が大きすぎて後手に勝ち目がなくなる。
+
+そこで先手は「ちょうど 5 連でなければならない」という制限を背負う。これがこのゲームと平面の五目並べの最も本質的な違い。
+
+## 9. 右側パネル：レイヤーごとに盤を見る
+
+右側パネルが描くのは、**第 k レイヤーを正面から見た**姿：
+
+- 横方向が `x` で、右へ向かって増える
+- 縦方向が `y` で、上へ向かって増える
+- レイヤー番号 `z` は奥行きで、`＜` `＞` で切り替える。下のサムネイル列をクリックしてもよい
+
+パネルと立体ビューの向きは完全に一致しているので、頭の中で回転させる必要はない。両者は常に同じレイヤーを表示する。
+
+## 10. 4Dモード：1 つのレイヤーを回転できる
+
+これは任意で選べる遊び方で、対局開始時に「4D · 回転可能」を選ぶと有効になる：**ルービックキューブのようにあるレイヤーを 90° 回す**と、
+そのレイヤーにすでに打たれている石も一緒に運ばれる。「4D」が指すのは時間 —— 盤そのものが変わり、
+座標は依然として 3 つの軸で、位置の総数も依然として N×N×N のまま。
+
+モードは対局開始時に決まり、**1 局の途中では変更できない**。選んでいなければ、この節はすべて当てはまらず、
+第 1 節から第 9 節までの規則もその影響を受けない。
+
+### 10.1 回し方
+
+| パラメータ | 値 |
+|---|---|
+| 軸 | x / y / z |
+| レイヤー | 何番目のレイヤーか（0 から N−1） |
+| 方向 | 時計回り / 反時計回り |
+| 回数 | 1 / 2 / 3 回転、つまり 90° / 180° / 270° |
+
+**「時計回り」を見る向きは、その軸の負の側から原点に向かって見た向き。**
+`z` 軸ではこれが画面上で見えている向きそのもので、換算は要らない。
+`x` 軸と `y` 軸の視点は、それぞれ盤の左側と下側にある。
+
+反時計回り 1 回転は時計回り 3 回転と同じ。4 回転は回さないのと同じなので、この選択肢は**用意していない**。
+
+### 10.2 回転の効果
+
+変わるのは回したレイヤーの中の位置だけで、レイヤーの外は一切動かない。
+レイヤー内の各位置の行き先は 1 つに定まり、2 つの石がぶつかることはない。したがって**石の総数は決して変わらない**。
+
+### 10.3 どのような回転が拒否されるか
+
+順番に検査し、1 つでも満たさなければその回転は丸ごと無効になる：盤は動かず、1 手とも数えられず、記録も残らない。
+
+| 検査 | 通らないとき |
+|---|---|
+| 4Dモードであること | 拒否 |
+| 対局がまだ進行中であること | 拒否 |
+| レイヤー番号が存在すること | 拒否 |
+| クールダウンが明けていること | 拒否 |
+| 回した盤が回す前と**違う**こと | 「変化なし」と表示し、1 手とも数えない |
+| 回した後の盤面に**5 連が現れない**こと | 回転を丸ごと巻き戻す |
+
+「回した結果が違うこと」という条件が見るのは**盤の見た目**であり、「何回転したか」ではない：
+もともとそのレイヤーが空だった場合も、模様がたまたま元の姿に戻る場合も、どちらも「変化なし」と判定される。
+この 2 つの場合は画面がそれぞれ理由を伝える。そうしないと、ボタンが壊れているように見えてしまうから。
+
+最後の条件は、**回転では決して勝負がつかない**ことを意味する：回転は攻めの手段には使えず、
+相手の線を崩すか、自分の形を整えるかにしか使えない。
+
+### 10.4 回転のクールダウン
+
+> 2 回の回転の間には、少なくとも石を 5 つ**着手**しなければならない。
+
+- **数えられるのは着手だけ**で、回転そのものは数えない —— さもないと「5 手のうち 1 手しか回転できない」ことになり、数えるのが面倒すぎる。
+- 3 / 5 / 8 / 10 に変更でき、既定は 5。
+- 最初の回転も同じ制約を受ける：対局開始後に石を 5 つ着手するまで回せない。
+- 待ったをするとクールダウンも一緒に戻るので、「カウンターと盤が食い違う」ことは起きない。
+
+### 10.5 回転の代償
+
+回転は**1 ターンまるごとを使う**：回したらすぐ相手の番になり、「回してから着手する」ことはできない。
+つまり毎手は「着手か回転か、どちらか一方」。
+
+回転は「第 N 手」には数えない。第 N 手は常に N 回目の着手を指す（画面では回転回数を別に表示する）。
+
+### 10.6 回転の取り消し
+
+| 操作 | 効果 |
+|---|---|
+| 待った `Z` | 最後の 1 手が回転なら回転を、着手なら着手を取り消す。対局開始前まで何手でも戻せる |
+| 回転を復元 `Y` | 「最後の 1 手がちょうど回転」のときだけ使える |
+
+いったん誰かが石を着手すると、その回転は確定してしまい、単独ではもう取り消せない —— さもないと多くの手にまたがるタイムマシンになってしまう。
+
+取り消したあとは、クールダウンも回転の前に戻る。
+
+### 10.7 サイズ
+
+| モード | 選べるサイズ | 既定 |
+|---|---|---|
+| 3D | 8 ≤ N ≤ 50、3 つの軸は等しくなくてよい | 15 |
+| 4D | 8 ≤ N ≤ 50、**立方体であること** | 8 |
+
+4Dモードで立方体が必須なのは手抜きではない：レイヤーを回すにはそのレイヤーの 2 辺の長さが等しい必要があり、
+3 つの軸すべてを回せるようにするには、3 軸とも同じ長さにするしかない。
+
+4D の既定サイズが 15 ではなく 8 なのは、**盤が大きいほど 1 レイヤーに入る石が減り、回転が目に見えなくなる**から ——
+15×15×15 の盤では 1 レイヤーに平均して 1 つも石がなく、ほとんどの回転が「変化なし」に当たる。
+
+## 11. 本作がやっていないこと
+
+- **三三禁・四四禁はない。** 伝統的な連珠（Renju）では、先手に「1 手で同時に 2 つの活三 / 2 つの四を作る」
+  といった禁手もあるが、本作が実装しているのは長連による負けの 1 つだけ。反則の判定は着手の後に行われ、「この点には打てない」ということはない。
+- **コンピュータの対戦相手はいない。** 2 人が同じ端末で交互に打つだけ。
+- **回転にアニメーションはない**。瞬時に移動し、回したレイヤーが一瞬ハイライトされるだけ。
+- **回転はパネルのボタンでしか行えない**。立体ビューの中で直接ドラッグすることはできない。
+</script>
+<!-- RULES-EMBED-JA-END -->
+
+<!-- RULES-EMBED-KO-BEGIN -->
+<!-- 由 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.ko.md 生成，不要手改。
+     改了 Web_Gomoku3D/RULES_SPEC.ko.md 之后跑：node _verify/embed-rules.mjs -->
+<script type="text/plain" id="rulesSrcKo">
+# 3D 오목 · 규칙
+
+N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같은 색 돌을 5개 먼저 늘어놓는 쪽이 승리합니다**.
+
+평면 오목과 비교했을 때 가장 큰 차이는 “직선”이 훨씬 많다는 것입니다 — 모두 **13개 방향**입니다.
+그래서 정면만 막아서는 소용이 없습니다: 비스듬히 지나가거나, 세로로 지나가거나, 심지어 여러 레이어를 관통하는 수도 모두 결정적인 한 수가 될 수 있습니다.
+
+판 위에는 중력이 없어 **돌이 공중에 뜬 채로 있을 수 있고**, 아무것도 받쳐 줄 필요 없이 어떤 빈 칸에든 둘 수 있습니다.
+
+---
+
+## 1. 판
+
+| 항목 | 규정 |
+|---|---|
+| 모양 | 정육면체 판, N × N × N개의 착수 가능한 위치 |
+| 크기 | 8 ≤ N ≤ 50 중 선택, 기본값 15 |
+| 좌표 | `(x, y, z)`, 세 축 모두 0부터 N−1까지 |
+| 레이어 | `z`가 같은 위치들을 “하나의 레이어”라고 하고, “k번째 레이어”는 `z = k`인 레이어입니다 |
+| 위치 상태 | 빈 칸 / 흑돌 / 백돌 |
+
+세 축의 방향:
+
+- `x`: 오른쪽으로 갈수록 커집니다
+- `y`: 위로 갈수록 커집니다
+- `z`: 화면 안쪽으로 갈수록 커집니다
+
+그래서 기본 시점에서는 **0번째 레이어가 가장 가까워서 가장 가려지기 어렵고**, 대국도 0번째 레이어에서 시작합니다.
+
+3D 모드에서는 세 축의 길이가 달라도 됩니다(예: 8×12×30 직육면체 판):
+“세 축 연동”을 끄면 각각 따로 입력할 수 있습니다.
+
+## 2. 착수
+
+- 어떤 **빈 칸**에든 착수할 수 있습니다. 중력도 없고 “아래에 받쳐 주는 돌이 있어야 한다” 같은 요구도 없어서, 돌은 공중에 떠 있을 수 있습니다.
+- 한 번에 돌 하나를 두고, 두자마자 곧바로 상대 차례가 됩니다.
+- 놓은 돌은 취소할 수 없지만, 무르기는 할 수 있습니다.
+
+## 3. 누가 선수인가
+
+- 대국 전에 “흑 선수” 또는 “백 선수”를 고르고, 고른 뒤에는 **이번 판에서 바뀌지 않습니다**.
+- **“선수”는 이번 판의 첫 수를 누가 두는지를 뜻하며**, 흑을 특별히 가리키는 말이 아닙니다.
+- 대국 중에 선수를 바꾸고 싶다면, “선수 교체”를 누르면 새 선수로 **판을 다시 시작합니다** — 지금 이 판의 진영을 바꾸는 것이 아닙니다.
+
+## 4. 승리 방향: 13개
+
+각 위치는 동시에 최대 13개 방향의 직선에 속합니다:
+
+| 종류 | 개수 | 방향 |
+|---|---|---|
+| 축 방향 | 3 | x / y / z 세 축을 따라 각각 하나 |
+| 면 대각선 | 6 | 각 좌표 평면 안의 대각선(`(1,1,0)`, `(1,-1,0)` 같은 것) |
+| 입체 대각선 | 4 | 세 축을 동시에 지나는 대각선(`(±1,±1,±1)`) |
+
+축 방향 3개 + 면 대각선 6개 + 입체 대각선 4개 = 13.
+
+판정할 때는 **방금 둔 그 돌**을 지나는 13개 방향만 보고, 각 방향의 **양쪽을 모두 셉니다**:
+직선 하나의 길이 = 1 + 한쪽으로 연속된 같은 색 개수 + 다른 쪽으로 연속된 같은 색 개수.
+한쪽만 세면 “한 수로 나뉜 두 토막을 이어 붙이는” 경우를 놓칩니다.
+
+## 5. 승패
+
+### 5.1 후수: 5개 이상 연속이면 승리
+
+방금 둔 그 돌을 지나는 직선 중 어느 하나에 같은 색 돌이 5개 이상 있으면 즉시 승리합니다.
+
+### 5.2 선수: 반드시 정확히 5개 연속
+
+선수는 **많이 이으면 오히려 집니다**:
+
+- 어떤 직선이든 **정확히 5개 연속** → 승리합니다.
+- 어떤 직선이든 **6개 연속 이상**(장련(長連)) → **즉시 패배**하며 상대가 승리합니다.
+
+**장련 패배는 언제나 “선수”라는 자격을 따라갑니다**: 흑 선수를 고르면 흑이 부담하고, 백 선수를 고르면 백이 부담하며,
+이때 흑은 오히려 자유롭습니다(5개 이상 연속이면 승리).
+
+### 5.3 한 수로 5개와 6개가 동시에 만들어질 때
+
+입체 판에서는 한 수가 동시에 두 가지 직선에 걸리는 일이 흔한데, 이런 경우 **장련이 우선합니다**: 장련 패배로 판정합니다.
+
+### 5.4 쓸모 있는 추론
+
+선수가 한 직선을 따라 돌을 하나씩 이어 나가면, **5번째 돌에 이르는 순간 이미 승리이고 대국은 그 자리에서 끝나서**,
+6번째 돌까지 갈 일이 없습니다. 그래서:
+
+> 장련 반칙은 “한 수로 두 토막을 이어 붙이는” 경우에만 생길 수 있습니다 — 예를 들어 이미 `0,1,2`와 `4,5`가 있고
+> `3`에 두어 6개로 이어지는 경우입니다. 천천히 놓아서는 장련이 나오지 않습니다.
+
+## 6. 무르기
+
+- 대국 시작 전까지 계속 무를 수 있습니다.
+- 무르면 승패 상태도 함께 지워지고, 대국은 “진행 중”으로 돌아가며, 취소된 그 수를 둔 쪽의 차례가 됩니다.
+- 단축키 `Z`, 패널의 “무르기 Z”를 눌러도 됩니다.
+
+## 7. 무승부
+
+판이 가득 찼는데 어느 쪽도 이기지 못하면 → 무승부입니다.
+15×15×15는 위치가 3375개라 실전에서는 거의 나오지 않지만, 규칙상으로는 이런 결말이 존재합니다.
+
+## 8. 선수에게 제한이 붙는 이유
+
+입체 판은 평면보다 직선이 훨씬 많습니다. 15×15×15 판에서 길이가 정확히 5인 직선은 모두 **23639개**로,
+같은 변 길이의 평면 판의 **41배**입니다. 방향이 이렇게 많으면 “한 수로 두 개의 위협을 동시에 만들고 상대는 하나만 막을 수 있는”
+경우가 평면보다 훨씬 쉽게 나옵니다 — 양쪽 규칙이 완전히 같다면 선수의 이점이 너무 커져서 후수는 해 볼 만한 게임이 되지 못합니다.
+
+그래서 선수는 “정확히 5개 연속”이라는 제한을 짊어집니다. 이것이 이 게임과 평면 오목의 가장 본질적인 차이입니다.
+
+## 9. 오른쪽 패널: 레이어로 판 보기
+
+오른쪽 패널이 그리는 것은 **정면에서 본 k번째 레이어**의 모습입니다:
+
+- 가로는 `x`, 오른쪽으로 갈수록 커집니다
+- 세로는 `y`, 위로 갈수록 커집니다
+- 레이어 번호 `z`는 깊이이며, `＜` `＞`로 바꾸고, 아래의 썸네일 열을 눌러도 됩니다
+
+패널과 입체 뷰의 방위는 완전히 같아서 머릿속으로 돌릴 필요가 없고, 양쪽은 항상 같은 레이어를 보여 줍니다.
+
+## 10. 4D 모드: 레이어를 회전할 수 있습니다
+
+이것은 선택형 방식으로, 대국 전에 “4D · 회전 가능”을 고르면 켜집니다: **루빅스 큐브처럼 어떤 레이어를 90° 회전**시키면,
+그 레이어에 이미 놓인 돌도 함께 옮겨집니다. “4D”가 뜻하는 것은 시간입니다 — 판 자체가 변하지만,
+좌표는 여전히 세 축이고 위치의 총개수도 여전히 N×N×N입니다.
+
+모드는 대국 시작 시에 정하고, **한 판 안에서는 바꿀 수 없습니다**. 고르지 않았다면 이 절은 전부 적용되지 않고,
+1절부터 9절까지의 규칙도 그것의 영향을 받지 않습니다.
+
+### 10.1 회전하는 방법
+
+| 매개변수 | 값 |
+|---|---|
+| 축 | x / y / z |
+| 레이어 | 몇 번째 레이어인지(0부터 N−1까지) |
+| 방향 | 시계 방향 / 반시계 방향 |
+| 횟수 | 1 / 2 / 3바퀴, 즉 90° / 180° / 270° |
+
+**“시계 방향”을 보는 관찰 방향은 해당 축의 음의 방향에서 원점을 향해 보는 것입니다.**
+`z`축이라면 이것은 화면에서 보이는 방향이라 따로 환산할 필요가 없고,
+`x`축과 `y`축은 관찰 지점이 각각 판의 왼쪽과 아래쪽입니다.
+
+반시계 방향 1바퀴는 시계 방향 3바퀴와 같습니다. 4바퀴는 돌지 않은 것과 같으므로 **이 선택지는 제공하지 않습니다**.
+
+### 10.2 회전의 효과
+
+회전한 그 레이어 안에서만 위치가 바뀌고, 레이어 밖의 모든 것은 움직이지 않습니다.
+레이어 안의 각 위치에는 가는 곳이 하나씩뿐이라 돌 두 개가 부딪히는 일이 없고, 따라서 **돌의 총개수는 절대 변하지 않습니다**.
+
+### 10.3 어떤 회전이 거부되는가
+
+순서대로 검사하고, 어느 하나라도 만족하지 못하면 일 전체가 무효가 됩니다: 판은 움직이지 않고, 한 수로도 세지 않으며, 기록도 남지 않습니다.
+
+| 검사 | 통과하지 못할 때 |
+|---|---|
+| 4D 모드여야 합니다 | 거부 |
+| 대국이 아직 진행 중이어야 합니다 | 거부 |
+| 레이어 번호가 존재해야 합니다 | 거부 |
+| 쿨다운이 이미 끝나 있어야 합니다 | 거부 |
+| 회전한 판이 회전 전과 **달라야 합니다** | “변화 없음” 안내, 한 수로 세지 않음 |
+| 회전한 뒤 판 위에 **5개 연속이 나타나면 안 됩니다** | 일 전체를 되돌림 |
+
+“회전한 뒤 달라야 한다”는 조건이 보는 것은 **판의 모양**이지 “몇 바퀴를 돌렸는지”가 아닙니다:
+이 레이어가 원래 비어 있었거나, 위의 무늬가 마침 원래대로 돌아온 경우는 모두 “변화 없음”으로 판정됩니다.
+이 두 경우에는 인터페이스가 각각 이유를 알려 줍니다. 그러지 않으면 버튼이 고장 난 것처럼 보이기 때문입니다.
+
+마지막 조건이 뜻하는 것은 **회전으로는 절대 승부가 나지 않는다**는 것입니다: 회전은 공격 수단으로 쓸 수 없고,
+상대의 직선을 부수거나 자기 구조를 조정하는 데만 쓸 수 있습니다.
+
+### 10.4 회전 쿨다운
+
+> 두 번의 회전 사이에는 적어도 **착수** 5개가 있어야 합니다.
+
+- **착수만 셉니다**, 회전 자체는 세지 않습니다 — 그렇지 않으면 “다섯 수 중 한 수만 회전일 수 있다”가 되어 셈하기가 너무 어렵습니다.
+- 3 / 5 / 8 / 10으로 조정할 수 있고, 기본값은 5입니다.
+- 첫 회전도 이 제약을 똑같이 받습니다: 대국이 시작된 뒤 5개를 채워야 회전할 수 있습니다.
+- 무르기를 하면 쿨다운도 함께 되돌아가서 “카운터와 판이 어긋나는” 일이 생기지 않습니다.
+
+### 10.5 회전의 대가
+
+회전은 **한 턴을 통째로 차지합니다**: 돌리면 곧바로 상대 차례가 되고, “돌린 뒤에 이어서 착수”할 수는 없습니다.
+즉 모든 턴은 “착수 아니면 회전, 둘 중 하나”입니다.
+
+회전은 “N번째 수”로 세지 않습니다. N번째 수는 언제나 N번째 착수를 뜻합니다(인터페이스에서 회전 횟수를 따로 알려 줍니다).
+
+### 10.6 회전 취소
+
+| 조작 | 효과 |
+|---|---|
+| 무르기 `Z` | 마지막 단계가 회전이면 회전을, 착수면 착수를 취소하며, 대국 시작 전까지 계속 무를 수 있습니다 |
+| 이번 회전 복구 `Y` | “마지막 단계가 정확히 회전일 때”만 쓸 수 있습니다 |
+
+누군가 착수를 해 버리면 그 회전은 이미 자리를 잡은 것이 되어 따로 취소할 수 없습니다 — 그러지 않으면 여러 수에 걸친 타임머신이 되어 버립니다.
+
+취소한 뒤에는 쿨다운도 회전 전으로 함께 돌아갑니다.
+
+### 10.7 크기
+
+| 모드 | 선택 가능한 크기 | 기본값 |
+|---|---|---|
+| 3D | 8 ≤ N ≤ 50, 세 축이 달라도 됨 | 15 |
+| 4D | 8 ≤ N ≤ 50, **반드시 정육면체** | 8 |
+
+4D가 반드시 정육면체여야 하는 것은 게으름이 아닙니다: 레이어 하나를 회전하려면 그 레이어의 두 변의 길이가 같아야 하고,
+세 축 모두 회전할 수 있어야 하니 세 축의 길이가 같을 수밖에 없습니다.
+
+4D의 기본 크기를 15가 아니라 8로 잡은 이유는 **판이 클수록 한 레이어에 담기는 돌이 적어서 회전이 잘 보이지 않기 때문**입니다 —
+15×15×15 판에서는 한 레이어에 평균적으로 돌이 한 개도 되지 않아, 대부분의 회전이 “변화 없음”에 걸립니다.
+
+## 11. 이 게임이 하지 않은 것
+
+- **쌍삼, 쌍사 금지가 없습니다.** 전통 렌주(Renju)에서는 선수에게 “한 수로 활삼 둘 / 사 둘을 만드는”
+  같은 금지가 더 있지만, 이 게임은 장련 패배 하나만 구현했습니다. 판정은 착수 뒤에 이루어지고, “이 점에는 둘 수 없다”는 것은 없습니다.
+- **컴퓨터 대수가 없습니다.** 같은 기기에서 두 사람이 번갈아 둘 수만 있습니다.
+- **회전에는 애니메이션이 없습니다**, 순간적으로 자리를 잡고, 회전한 레이어만 잠깐 강조 표시됩니다.
+- **회전은 패널의 버튼으로만 할 수 있습니다**, 입체 뷰에서 직접 끌어서 돌릴 수는 없습니다.
+</script>
+<!-- RULES-EMBED-KO-END -->
+
+<!-- RULES-EMBED-RU-BEGIN -->
+<!-- 由 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.ru.md 生成，不要手改。
+     改了 Web_Gomoku3D/RULES_SPEC.ru.md 之后跑：node _verify/embed-rules.mjs -->
+<script type="text/plain" id="rulesSrcRu">
+# 3D-гомоку · Правила
+
+Игра в гомоку (пять в ряд) на объёмной доске N×N×N: **побеждает тот, кто первым выстроит 5 камней одного цвета в одну прямую линию**.
+
+По сравнению с плоскими гомоку главное отличие в том, что «прямых линий» стало намного больше — всего **13 направлений**.
+Поэтому закрывать только переднюю сторону бесполезно: линия может прорезать доску по диагонали, пройти вертикально или даже через несколько слоёв — любой такой удар может решить партию.
+
+На доске нет гравитации: **камни могут висеть в воздухе**, опора им не нужна, и поставить камень можно в любую пустую позицию.
+
+---
+
+## 1. Доска
+
+| Пункт | Правило |
+|---|---|
+| Форма | Кубическая доска, N × N × N позиций для хода |
+| Размер | 8 ≤ N ≤ 50, по умолчанию 15 |
+| Координаты | `(x, y, z)`, все три оси нумеруются от 0 до N−1 |
+| Слой | все позиции с одинаковым `z` образуют «слой»; «k-й слой» — это слой, где `z = k` |
+| Состояние позиции | пусто / чёрный камень / белый камень |
+
+Направления трёх осей:
+
+- `x`: возрастает вправо
+- `y`: возрастает вверх
+- `z`: возрастает вглубь экрана
+
+Поэтому при взгляде по умолчанию **слой 0 ближе всего к вам и его меньше всего заслоняют**, и новая партия тоже начинается на слое 0.
+
+В режиме 3D длины трёх осей могут различаться (например, прямоугольная доска 8×12×30):
+выключите «Связь трёх осей», чтобы задать их по отдельности.
+
+## 2. Ход
+
+- Ходить можно в **любую пустую позицию**. Гравитации нет, и требований вроде «под камнем обязательно должна быть опора» тоже нет — камень может висеть в воздухе.
+- За ход ставится один камень, и сразу после этого ход переходит к сопернику.
+- Поставленный камень нельзя убрать по отдельности, но можно воспользоваться отменой хода.
+
+## 3. Кто ходит первым
+
+- Перед началом партии выберите «Чёрные первыми» или «Белые первыми»; после выбора **в этой партии это уже не меняется**.
+- **«Первый игрок» — это тот, кто делает первый ход в этой партии**, а не обязательно чёрные.
+- Если во время партии нужно сменить первого игрока, кнопка «Сменить первого игрока» **начнёт партию заново** с новым первым игроком — она не меняет стороны в текущей партии.
+
+## 4. Победные направления: 13
+
+Каждая позиция участвует одновременно не более чем в 13 линиях:
+
+| Категория | Количество | Направления |
+|---|---|---|
+| Осевые | 3 | по одной вдоль каждой из осей x / y / z |
+| Диагонали граней | 6 | диагонали внутри каждой координатной плоскости (такие, как `(1,1,0)`, `(1,-1,0)`) |
+| Пространственные диагонали | 4 | диагонали, проходящие сразу через все три оси (`(±1,±1,±1)`) |
+
+3 осевых + 6 диагоналей граней + 4 пространственные диагонали = 13.
+
+При проверке смотрят только на те 13 направлений, которые проходят через **только что поставленный камень**, причём по каждому направлению **считают в обе стороны**:
+длина всей линии = 1 + цепочка камней того же цвета с одной стороны + цепочка с другой стороны.
+Если считать только одну сторону, можно пропустить случай, когда «один ход соединяет две отдельные цепочки в одну».
+
+## 5. Победа и поражение
+
+### 5.1 Второй игрок: 5 в ряд и более — победа
+
+Если на любой прямой, проходящей через только что поставленный камень, стоит 5 или более камней одного цвета, этот игрок сразу побеждает.
+
+### 5.2 Первый игрок: ровно 5 в ряд
+
+Первый игрок **проигрывает от слишком длинной цепочки**:
+
+- **Ровно 5** на любой прямой → победа.
+- **6 и более** на любой прямой (перебор) → **сразу поражение**, побеждает соперник.
+
+**Поражение за перебор всегда следует за ролью «первого игрока»**: выбрали чёрных первыми — за перебор отвечают чёрные, выбрали белых первыми — отвечают белые,
+и тогда чёрные, наоборот, свободны (побеждают, выстроив 5 камней и более).
+
+### 5.3 Один ход даёт сразу и 5, и 6 камней
+
+На объёмной доске один ход часто попадает сразу в две линии; в таком случае **перебор имеет приоритет**: это поражение за перебор.
+
+### 5.4 Полезное следствие
+
+Когда первый игрок выстраивает линию камень за камнем, **уже на 5-м камне он побеждает и партия на этом заканчивается**,
+до 6-го камня дело просто не доходит. Поэтому:
+
+> Перебор может получиться только из «хода, соединяющего две цепочки» — например, если на доске уже есть `0,1,2` и `4,5`,
+> камень на `3` соединяет их в 6 камней. Выкладывая камни по одному, перебор не сделать.
+
+## 6. Отмена хода
+
+- Отменять ходы можно вплоть до самого начала партии.
+- Вместе с ходом сбрасывается и состояние победы/поражения: партия возвращается в состояние «идёт», и ход переходит к тому, чей ход был отменён.
+- Горячая клавиша `Z`, а также кнопка «Отмена хода Z» на панели.
+
+## 7. Ничья
+
+Доска заполнена, и никто не победил → ничья.
+На доске 15×15×15 есть 3375 позиций, так что на практике это почти не встречается, но правилами такой исход предусмотрен.
+
+## 8. Почему первый игрок ограничен
+
+На объёмной доске линий гораздо больше, чем на плоской. На доске 15×15×15 линий длиной ровно 5 — **23639**,
+это в **41 раз** больше, чем на плоской доске с той же длиной стороны. Когда направлений так много, «один ход создаёт сразу две угрозы, а соперник может закрыть только одну»
+получается куда легче, чем на плоскости, — и если бы обе стороны играли по одинаковым правилам, преимущество первого игрока оказалось бы настолько велико, что второму играть было бы невозможно.
+
+Поэтому на первого игрока наложено ограничение «ровно 5 в ряд». Это самое принципиальное отличие этой игры от плоских гомоку.
+
+## 9. Правая панель: доска по слоям
+
+Правая панель показывает **слой k, если смотреть на него спереди**:
+
+- по горизонтали — `x`, возрастает вправо
+- по вертикали — `y`, возрастает вверх
+- номер слоя `z` — это глубина; переключается кнопками `＜` `＞`, а также щелчком по полосе миниатюр внизу
+
+Панель ориентирована точно так же, как объёмный вид, ничего не нужно вращать в голове — обе стороны всегда показывают один и тот же слой.
+
+## 10. Режим 4D: можно повернуть слой
+
+Это необязательный режим; включите его при начале партии, выбрав «4D · Вращаемый слой»: **повернуть один слой на 90°, как в кубике Рубика**,
+и уже поставленные в этом слое камни переместятся вместе с ним. «Четвёртое измерение» — это время: сама доска меняется,
+координаты по-прежнему три оси, и общее число позиций по-прежнему N×N×N.
+
+Режим выбирается перед началом партии и **не может быть изменён в течение партии**. Если он не выбран, весь этот раздел не применяется,
+а правила разделов с 1 по 9 от него не зависят.
+
+### 10.1 Как поворачивать
+
+| Параметр | Значение |
+|---|---|
+| Ось | x / y / z |
+| Слой | номер слоя (от 0 до N−1) |
+| Направление | по часовой стрелке / против часовой стрелки |
+| Число оборотов | 1 / 2 / 3 оборота, то есть 90° / 180° / 270° |
+
+**«По часовой стрелке» — это взгляд с отрицательного конца оси в сторону начала координат.**
+Для оси `z` это то направление, которое вы видите на экране, без всяких пересчётов;
+для осей `x` и `y` точка обзора находится слева от доски и снизу от неё.
+
+Поворот на 1 оборот против часовой стрелки равен 3 оборотам по часовой. 4 оборота — это отсутствие поворота, поэтому такой вариант **не предлагается**.
+
+### 10.2 Что делает поворот
+
+Меняются только позиции внутри повёрнутого слоя; всё, что вне его, остаётся на месте.
+У каждой позиции в слое есть ровно одно место назначения, два камня никогда не сталкиваются, поэтому **общее число камней никогда не меняется**.
+
+### 10.3 Какие повороты отклоняются
+
+Проверки идут по порядку; если не выполнена хотя бы одна, всё действие отменяется: доска не двигается, ход не засчитывается, запись не сохраняется.
+
+| Проверка | Если не пройдена |
+|---|---|
+| Партия должна идти в режиме 4D | отказ |
+| Партия должна быть ещё в процессе | отказ |
+| Номер слоя должен существовать | отказ |
+| Перезарядка должна быть готова | отказ |
+| Доска после поворота должна **отличаться** от прежней | сообщение «изменений нет», ход не засчитывается |
+| После поворота на доске **не должно быть 5 в ряд** | всё действие откатывается |
+
+Пункт «после поворота доска должна отличаться» смотрит на **то, как выглядит доска**, а не на «сколько оборотов сделано»:
+если слой изначально пуст или узор на нём при повороте случайно возвращается к прежнему виду, это тоже будет признано «изменений нет».
+Интерфейс сообщает причину в каждом из этих случаев отдельно — иначе кнопка выглядела бы просто сломанной.
+
+Последний пункт означает, что **поворот никогда не решает исход партии**: его нельзя использовать для атаки,
+только чтобы разорвать линию соперника или перестроить свои камни.
+
+### 10.4 Перезарядка поворота
+
+> Между двумя поворотами нужно **поставить** не меньше 5 камней.
+
+- **Считаются только ходы с камнем**, сам поворот не считается — иначе получилось бы «на каждые 5 ходов допускается лишь один поворот», а это слишком сложно отслеживать.
+- Можно настроить на 3 / 5 / 8 / 10, по умолчанию 5.
+- Первый поворот подчиняется тому же правилу: повернуть можно, только поставив 5 камней после начала партии.
+- Отмена хода откатывает и перезарядку, так что «счётчик и доска не расходятся».
+
+### 10.5 Чего стоит поворот
+
+Поворот **занимает весь ход целиком**: сразу после него ход переходит к сопернику, и «повернуть, а потом поставить камень» нельзя.
+То есть каждый ход — это «камень или поворот, одно из двух».
+
+Поворот не считается «N-м ходом»: N-й ход всегда означает N-ю постановку камня (число поворотов интерфейс показывает отдельно).
+
+### 10.6 Отмена поворота
+
+| Действие | Эффект |
+|---|---|
+| Отмена хода `Z` | если последним был поворот — отменяется поворот, если камень — отменяется камень; можно отменять вплоть до начала партии |
+| Вернуть этот поворот `Y` | доступно только когда «последний ход — ровно поворот» |
+
+Как только кто-то поставил камень, тот поворот считается закреплённым и больше не отменяется отдельно — иначе он превратился бы в машину времени, растянутую на много ходов.
+
+После отмены перезарядка тоже возвращается к состоянию до поворота.
+
+### 10.7 Размеры
+
+| Режим | Доступные размеры | По умолчанию |
+|---|---|---|
+| 3D | 8 ≤ N ≤ 50, три оси могут различаться | 15 |
+| 4D | 8 ≤ N ≤ 50, **обязательно куб** | 8 |
+
+Требование куба в режиме 4D — не лень: чтобы повернуть слой, нужно равенство двух сторон этого слоя,
+а поскольку поворачиваться должны все три оси, все три оси обязаны быть одинаковой длины.
+
+В 4D по умолчанию берётся 8, а не 15, потому что **чем больше доска, тем меньше камней в одном слое и тем незаметнее поворот** —
+на доске 15×15×15 в слое в среднем меньше одного камня, и большинство поворотов упирается в «изменений нет».
+
+## 11. Чего в этой игре нет
+
+- **Нет запретов на двойную тройку и двойную четвёрку.** В традиционном рэндзю (Renju) у первого игрока есть ещё такие запреты, как «один ход образует две открытые тройки / две четвёрки»;
+  в этой игре реализовано только поражение за перебор. Наказание наступает после хода — запретных точек, куда нельзя ставить камень, не существует.
+- **Нет компьютерного соперника.** Играют двое по очереди на одном устройстве.
+- **У поворота нет анимации** — он происходит мгновенно, лишь на миг подсвечивается повёрнутый слой.
+- **Поворот выполняется только кнопками на панели**, его нельзя сделать перетаскиванием прямо в объёмном виде.
+</script>
+<!-- RULES-EMBED-RU-END -->
+
+<!-- RULES-EMBED-FR-BEGIN -->
+<!-- 由 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.fr.md 生成，不要手改。
+     改了 Web_Gomoku3D/RULES_SPEC.fr.md 之后跑：node _verify/embed-rules.mjs -->
+<script type="text/plain" id="rulesSrcFr">
+# Gomoku 3D · Règles
+
+Du gomoku (cinq en ligne) sur un plateau en volume N×N×N : **le premier à aligner 5 pions de même couleur sur toute une ligne droite gagne**.
+
+Par rapport au gomoku à plat, la grande différence est qu'il y a bien plus de « lignes droites » — **13 directions** en tout.
+Bloquer la face avant ne sert donc à rien : une percée en biais, une percée à la verticale, ou même une ligne qui traverse plusieurs couches, tout cela peut être le coup gagnant.
+
+Sur le plateau il n'y a pas de gravité : **les pions peuvent flotter**, sans aucun support, et on peut jouer sur n'importe quelle case vide.
+
+---
+
+## 1. Le plateau
+
+| Élément | Règle |
+|---|---|
+| Forme | Plateau cubique, N × N × N cases jouables |
+| Taille | 8 ≤ N ≤ 50 au choix, 15 par défaut |
+| Coordonnées | `(x, y, z)`, les trois axes numérotés de 0 à N−1 |
+| Couche | les cases de même `z` forment une « couche » ; la « k-ième couche » est celle où `z = k` |
+| État d'une case | vide / pion noir / pion blanc |
+
+Les directions des trois axes :
+
+- `x` : croît vers la droite
+- `y` : croît vers le haut
+- `z` : croît vers l'intérieur de l'écran
+
+Donc, depuis la vue par défaut, **la couche 0 est la plus proche de vous et la plus difficile à masquer**, et une nouvelle partie démarre elle aussi sur la couche 0.
+
+En mode 3D, les trois axes peuvent avoir des longueurs différentes (par exemple un plateau rectangulaire 8×12×30) :
+il suffit de désactiver « Liaison des trois axes » pour les saisir séparément.
+
+## 2. Poser un pion
+
+- On peut jouer sur **n'importe quelle case vide**. Ni gravité, ni obligation qu'un pion en soutienne un autre : un pion peut rester suspendu en l'air.
+- Un pion par coup, et le tour passe aussitôt à l'adversaire.
+- Un pion posé ne peut pas être annulé sur-le-champ, mais on peut annuler un coup.
+
+## 3. Qui joue en premier
+
+- Avant la partie, on choisit « Noir en premier » ou « Blanc en premier », et ce choix **ne change plus de toute la partie**.
+- **Le « premier joueur » est celui qui joue le premier coup de la partie** ; ce n'est pas le noir en particulier.
+- Pour en changer en cours de partie, « Changer de premier joueur » **relance une partie** avec le nouveau premier joueur — cela ne fait pas changer de camp dans la partie en cours.
+
+## 4. Directions gagnantes : 13
+
+Chaque case participe à au plus 13 lignes à la fois :
+
+| Catégorie | Nombre | Directions |
+|---|---|---|
+| Axiales | 3 | une le long de chacun des axes x / y / z |
+| Diagonales de face | 6 | les obliques de chaque plan de coordonnées (celles du type `(1,1,0)`, `(1,-1,0)`) |
+| Diagonales de volume | 4 | les obliques qui traversent les trois axes à la fois (`(±1,±1,±1)`) |
+
+3 axiales + 6 diagonales de face + 4 diagonales de volume = 13.
+
+Le contrôle ne regarde que les 13 directions qui traversent **le pion qui vient d'être posé**, et pour chacune il **compte des deux côtés** :
+la longueur d'une ligne entière = 1 + la suite de même couleur d'un côté + la suite de même couleur de l'autre côté.
+Ne compter qu'un seul côté laisserait échapper le cas où « un coup relie deux segments de ligne séparés ».
+
+## 5. Victoire et défaite
+
+### 5.1 Second joueur : 5 ou plus gagne
+
+Si une ligne traversant le pion qui vient d'être posé contient 5 pions de même couleur ou plus, la victoire est immédiate.
+
+### 5.2 Premier joueur : exactement 5 en ligne
+
+Le premier joueur **perd pour en avoir trop aligné** :
+
+- **Exactement 5** sur une ligne → victoire.
+- **6 ou plus** sur une ligne (alignement trop long) → **défaite immédiate**, l'adversaire gagne.
+
+**La défaite pour alignement trop long suit toujours le rôle de « premier joueur »** : si le noir commence, c'est le noir qui l'assume, si le blanc commence, c'est le blanc,
+et le noir devient alors libre (5 ou plus gagne).
+
+### 5.3 Un coup qui fait à la fois 5 et 6
+
+Sur un plateau en volume, il est courant qu'un coup touche deux lignes à la fois ; dans ce cas **l'alignement trop long l'emporte** : c'est une défaite pour alignement trop long.
+
+### 5.4 Une conséquence utile
+
+Quand le premier joueur aligne pion après pion le long d'une ligne, **au 5e pion il a déjà gagné et la partie s'arrête sur-le-champ**,
+il n'atteint jamais le 6e. Donc :
+
+> Un alignement trop long ne peut venir que d'« un coup qui relie deux segments » — par exemple avec `0,1,2` et `4,5`
+> déjà en place, jouer sur `3` les relie en 6 pions. On n'obtient pas d'alignement trop long en posant les pions un à un.
+
+## 6. Annuler un coup
+
+- On peut annuler jusqu'à revenir avant le début de la partie.
+- Annuler efface aussi l'état de victoire : la partie repasse à « en cours » et c'est au tour du camp dont le coup a été retiré.
+- Raccourci `Z`, ou le bouton « Annuler Z » sur le panneau.
+
+## 7. Match nul
+
+Le plateau est rempli sans qu'aucun camp n'ait gagné → match nul.
+Un 15×15×15 compte 3375 cases : en pratique cela n'arrive presque jamais, mais le règlement prévoit cette issue.
+
+## 8. Pourquoi le premier joueur est limité
+
+Le plateau en volume offre bien plus de lignes que le plateau à plat. Sur un plateau 15×15×15, il y a **23639** lignes de longueur exactement 5,
+soit **41 fois** plus que sur un plateau à plat de même côté. Avec autant de directions, « un coup qui crée deux menaces à la fois, l'adversaire ne pouvant en bloquer qu'une »
+est bien plus facile qu'à plat — si les deux camps jouaient avec des règles identiques, l'avantage du premier joueur serait trop grand pour que le second ait une partie.
+
+C'est pourquoi le premier joueur porte la restriction « exactement 5 en ligne ». C'est la différence la plus fondamentale entre ce jeu et le gomoku à plat.
+
+## 9. Le panneau de droite : le plateau vu par couches
+
+Le panneau de droite dessine **la couche k vue de face** :
+
+- en horizontal `x`, qui croît vers la droite
+- en vertical `y`, qui croît vers le haut
+- le numéro de couche `z` est la profondeur ; on le change avec `＜` `＞`, ou en cliquant sur la bande de vignettes en dessous
+
+Le panneau est orienté exactement comme la vue 3D : rien à faire tourner dans sa tête, les deux affichent toujours la même couche.
+
+## 10. Mode 4D : faire tourner une couche
+
+C'est une variante optionnelle ; on l'active en début de partie avec « 4D · Couche rotative » : **faire tourner une couche de 90° comme dans un Rubik's Cube**,
+et les pions déjà posés sur cette couche partent avec elle. « 4D » désigne le temps — le plateau lui-même change,
+alors que les coordonnées restent trois axes et que le nombre total de cases reste N×N×N.
+
+Le mode se choisit au début de la partie et **ne peut plus être changé dans la même partie**. Si vous ne l'avez pas choisi, toute cette section ne s'applique pas,
+et les règles des sections 1 à 9 n'en sont pas affectées.
+
+### 10.1 Comment tourner
+
+| Paramètre | Valeurs |
+|---|---|
+| Axe | x / y / z |
+| Couche | laquelle (0 à N−1) |
+| Sens | horaire / antihoraire |
+| Tours | 1 / 2 / 3, soit 90° / 180° / 270° |
+
+**Le sens « horaire » s'observe depuis le côté négatif de l'axe, en regardant vers l'origine.**
+Pour l'axe `z`, c'est le sens que vous voyez à l'écran, sans conversion à faire ;
+les axes `x` et `y` s'observent respectivement depuis la gauche et depuis le bas du plateau.
+
+Un tour en sens antihoraire équivaut à trois tours en sens horaire. Quatre tours équivalent à rien, donc **cette option n'est pas proposée**.
+
+### 10.2 L'effet d'une rotation
+
+Seules les cases de la couche tournée bougent ; tout ce qui est hors de la couche reste immobile.
+Chaque case de la couche a une destination unique, deux pions ne peuvent donc pas se percuter, et **le nombre total de pions ne change jamais**.
+
+### 10.3 Quelles rotations sont refusées
+
+Les contrôles s'enchaînent dans l'ordre ; si l'un d'eux échoue, toute l'opération est abandonnée : le plateau ne bouge pas, cela ne compte pas comme un coup, et rien n'est enregistré.
+
+| Contrôle | En cas d'échec |
+|---|---|
+| La partie doit être en mode 4D | refus |
+| La partie doit être encore en cours | refus |
+| Le numéro de couche doit exister | refus |
+| La recharge doit être prête | refus |
+| Le plateau tourné doit être **différent** d'avant | « aucun changement », ne compte pas comme un coup |
+| Après la rotation, le plateau **ne doit pas présenter 5 en ligne** | tout est remis en arrière |
+
+« Doit être différent » regarde **l'aspect du plateau**, et non « combien de tours » :
+une couche déjà vide, ou un motif qui retombe exactement sur lui-même, sont tous deux jugés « aucun changement ».
+L'interface vous dit laquelle des deux causes, sinon le bouton semblerait cassé.
+
+Le dernier contrôle signifie qu'**une rotation ne peut jamais décider du gain** : elle ne peut pas servir d'arme offensive,
+seulement à casser la ligne de l'adversaire ou à réajuster sa propre structure.
+
+### 10.4 Recharge de rotation
+
+> Entre deux rotations, il faut **poser** au moins 5 pions.
+
+- **Seules les poses comptent**, pas la rotation elle-même — sinon cela reviendrait à « un seul coup sur cinq peut être une rotation », trop difficile à suivre.
+- Elle se règle sur 3 / 5 / 8 / 10, 5 par défaut.
+- La première rotation y est soumise aussi : après le début de la partie, il faut poser 5 pions avant de pouvoir tourner.
+- Annuler un coup remet la recharge en arrière elle aussi : le compteur et le plateau ne peuvent pas se désaccorder.
+
+### 10.5 Le coût d'une rotation
+
+Une rotation **consomme tout le tour** : l'adversaire joue aussitôt après, impossible de « tourner puis poser ».
+Autrement dit, chaque coup est « poser un pion ou tourner, au choix ».
+
+Une rotation ne compte pas comme « le N-ième coup » ; le N-ième coup désigne toujours la N-ième pose de pion (l'interface indique séparément le nombre de rotations).
+
+### 10.6 Annuler une rotation
+
+| Action | Effet |
+|---|---|
+| Annuler `Z` | Si le dernier coup est une rotation, la rotation est retirée, si c'est une pose, la pose est retirée ; on peut annuler jusqu'avant le début de la partie |
+| Rétablir la rotation `Y` | Disponible seulement quand « le dernier coup est exactement une rotation » |
+
+Dès que quelqu'un pose un pion, cette rotation est acquise et ne peut plus être retirée à part — sinon elle deviendrait une machine à remonter le temps qui traverse plusieurs coups.
+
+Après une annulation, la recharge revient elle aussi à son état d'avant la rotation.
+
+### 10.7 Tailles
+
+| Mode | Tailles possibles | Par défaut |
+|---|---|---|
+| 3D | 8 ≤ N ≤ 50, les trois axes peuvent différer | 15 |
+| 4D | 8 ≤ N ≤ 50, **cubique obligatoire** | 8 |
+
+L'obligation du cube en 4D n'est pas de la paresse : faire tourner une couche exige que les deux côtés de cette couche soient égaux,
+et comme les trois axes doivent pouvoir tourner, les trois doivent avoir la même longueur.
+
+Si la taille par défaut en 4D est 8 et non 15, c'est que **plus le plateau est grand, moins une couche contient de pions et moins la rotation se voit** —
+sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la plupart des rotations tombent sur « aucun changement ».
+
+## 11. Ce que ce jeu ne fait pas
+
+- **Pas de double-trois ni de double-quatre.** Dans le renju traditionnel, le premier joueur a aussi des interdits comme
+  « un coup qui forme à la fois deux trois ouverts / deux quatre » ; ce jeu n'implémente que la défaite pour alignement trop long. La sanction tombe après la pose du pion : il n'existe pas de « cette case est interdite ».
+- **Pas d'adversaire informatique.** Seulement deux joueurs qui jouent à tour de rôle sur le même appareil.
+- **Les rotations n'ont pas d'animation** : elles se font instantanément, seule la couche tournée est brièvement mise en évidence.
+- **Les rotations ne se font qu'avec les boutons du panneau**, pas en glissant directement dans la vue 3D.
+</script>
+<!-- RULES-EMBED-FR-END -->
+
 <!-- class="preview" 在这里是【写死的初始状态】，对应「#setup 没有 off 类」：
      页面打开时起始界面就是开着的，所以模式条/提示框/横幅该藏、面板该 invisible、
      演示盘的纸纹该铺上 —— 这些都由 #stage.preview 那几条 CSS 管，写在 HTML 里
@@ -1189,9 +2123,33 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
      总宽随语言变，写死一个数就必然按不住。见 CSS 里 #topRight 的注释。
      语言按钮刻意排在前面：这样「具体规则」仍然贴着右边 14px，位置和加它之前一模一样。 -->
 <div id="topRight">
-  <!-- 按钮上写的是【点了会变成什么】：中文界面下写 EN，英文界面下写中文。
-       所以它不能走 data-i18n（那是"固定文案"表），由 applyLang() 单独处理。 -->
-  <button id="langBtn" class="mini" title="切换界面语言 / Switch language">EN</button>
+  <!-- 按钮上写的是【当前语言】的短标签（中文 / EN / 日本語 / 한국어 / РУ / FR），
+       点了弹下面那个列表。所以它不能走 data-i18n（那是"固定文案"表），
+       由 applyLang() 单独按语言写。
+       【为什么不写"点了会变成什么"】老版本是双态切换、写目标语言（中文界面下写 EN）——
+       那只在两种语言之间成立：语言一多，按钮上的 "EN" 到底是"现在是英文"还是
+       "点了变英文"，读不出来。
+       aria-haspopup/expanded 是给屏幕阅读器的：它得知道这个按钮是"展开一个列表"，
+       以及列表现在是开是关。 -->
+  <button id="langBtn" class="mini" title="切换界面语言 / Switch language"
+          aria-haspopup="listbox" aria-expanded="false">中文</button>
+
+  <!-- 语言列表。**六个按钮写在 HTML 里，不是 JS 建的**：
+       ① 内容是【本族名】，六种语言下都一样，所以它天然不需要任何翻译机制
+          （用字母代码对不懂那门语言的人等于没写；用国旗违反"语言不是国家"那条共识）；
+       ② node 桩里 document.createElement 造出来的元素不连 DOM，静态 HTML 才是
+          两套测试都看得见的写法；
+       ③ 首帧就是对的，不用等 JS 建元素。
+       每个按钮给一个 id（langZh…），是为了让 JS 不必用 querySelectorAll ——
+       桩只认固定几个选择器，加一个选择器就得同步改桩，而 id 是免费就有的。 -->
+  <div id="langList" class="off" role="listbox" aria-label="界面语言 / Interface language">
+    <button type="button" id="langZh" data-lang="zh" role="option">中文</button>
+    <button type="button" id="langEn" data-lang="en" role="option">English</button>
+    <button type="button" id="langJa" data-lang="ja" role="option">日本語</button>
+    <button type="button" id="langKo" data-lang="ko" role="option">한국어</button>
+    <button type="button" id="langRu" data-lang="ru" role="option">Русский</button>
+    <button type="button" id="langFr" data-lang="fr" role="option">Français</button>
+  </div>
   <!-- title 用双语写死：整个文件只有这一个 title 属性，
        为它单独搭一套 i18n 不值当，而双语反而是两种语言下都对的信息。 -->
   <button id="rulesBtn" title="查看完整规则 / Full rules" data-i18n="rulesBtn">具体规则</button>
@@ -1430,8 +2388,253 @@ function cnOf(s) { return s === BLACK ? "黑" : (s === WHITE ? "白" : "空"); }
    会让 .length 变成 2，那条断言当场红，而它想守的东西其实没坏。带默认值两头都成立：
    不传 lang 时行为逐字节等于从前，.length 也还是 1。
    -------------------------------------------------------------------------- */
-const EN_SIDE = { BLACK: "Black", WHITE: "White", EMPTY: "empty" };
-function enOf(s) { return s === BLACK ? EN_SIDE.BLACK : (s === WHITE ? EN_SIDE.WHITE : EN_SIDE.EMPTY); }
+/**
+ * 单复数的形体：语言 + 数字 → 该用哪一形。
+ *
+ * 【为什么这条规则住在内核里】两处都要用它：内核拼句子（"每落 N 子可转动一层"）
+ * 和界面查文案表（sayN）。内核那块区间会被原样抽出去给三个 node 测试和 server.js 跑，
+ * 它【调用不到】界面里的任何东西；反过来可以 —— 界面在同一个作用域里，调内核的函数没问题。
+ * 所以规则放在内核，两边共用这一份。复制一份到界面去的话，法语把 0 算单数、
+ * 俄语 11–19 归 many 这些细节就会从两处各漂一次，而漂了没有任何症状。
+ *
+ * 中文、日文、韩文没有复数变化 → 恒为 "many"（它们的表里只写 .many 一条）。
+ */
+/**
+ * 单复数的三形。键名写成 "基名.形"（info.moves.one / .few / .many）。
+ * 测试拿它枚举"这个基名到底有没有任何一形"，所以它是一份【声明出去的词汇表】，
+ * 不只是内部常量。
+ */
+const PLURAL_FORMS = ["one", "few", "many"];
+
+function pluralForm(lang, n) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  if (lang === "ru") {
+    if (a > 10 && a < 20) return "many";     // 11–19 一律 many（включая 11）
+    if (b === 1) return "one";
+    if (b >= 2 && b <= 4) return "few";
+    return "many";
+  }
+  if (lang === "en" || lang === "fr") return n <= 1 ? "one" : "many";  // 法语把 0 也算单数
+  return "many";
+}
+
+/**
+ * 内核文案表。**必须放在内核区间里**（见上面那段注释：这块区间被抽出去单独跑，
+ * 引不到外面的 STATIC_TEXT / TEXT）。
+ *
+ * 键按"这句话在哪儿用"起名；值按语言分。**每一格都是带占位符的整句模板**，
+ * 不是拼碎片 —— 词序在日语、俄语里和中文不同，"黑棋"+"先手"这种拼法换个语言就散架。
+ * 占位符写 {n} {who} {len} 这种，由 ct() 替换；缺参数时原样留着（{n} 挂在界面上好查）。
+ *
+ * 【中文那侧是原句搬进来的，一个字没改】—— "默认语言下输出逐字节不变"因此是结构性的，
+ * 不需要谁相信我抄对了。server.js 不传 lang，走的就是这条中文路径，
+ * 联机协议和 online.test.mjs 里的中文子串断言因此一条都没动。
+ *
+ * 【翻译得对不对，这里一个字都保证不了】断言能证明"是那种文字"，证明不了"是好文字"。
+ * 六种语言若有出入，以中文为准。
+ *
+ * 【不翻的：抛给开发者的异常】"棋盘尺寸必须是 >= 1 的整数"这类是参数校验，
+ * 玩家永远看不到（看到了说明代码写错了），翻了只会让日志和断言的字符集变乱。
+ */
+const CORE_TEXT = {
+  // ---- 黑白空。三处都用到：状态行、走子记录、转动记录
+  "side.black": { zh: "黑", en: "Black",
+      ja: "黒", ko: "흑", ru: "Чёрные", fr: "Noirs" },
+  "side.white": { zh: "白", en: "White",
+      ja: "白", ko: "백", ru: "Белые", fr: "Blancs" },
+  "side.empty": { zh: "空", en: "empty",
+      ja: "空", ko: "빈칸", ru: "пусто", fr: "vide" },
+
+  // ---- 走子记录："#3 黑(7,7,0)"。中文括号前不空格、英文要空格，所以是两条模板
+  "move.record": { zh: "#{n} {who}({x},{y},{z})", en: "#{n} {who} ({x},{y},{z})",
+      ja: "#{n} {who} ({x},{y},{z})", ko: "#{n} {who}({x},{y},{z})", ru: "#{n} {who}({x},{y},{z})", fr: "#{n} {who} ({x},{y},{z})" },
+
+  // ---- 规则摘要（状态行下面那一行）
+  "rules.prefix": { zh: "{who}先手 · ", en: "{who} first · ",
+      ja: "{who}が先手 · ", ko: "{who} 선수 · ", ru: "{who} ходят первыми · ", fr: "{who} en premier · " },
+  "rules.open": { zh: "双方 ≥{len} 连即胜（自由规则）",
+                  en: "either side wins with {len}+ in a row (open rules)",
+      ja: "どちらも{len}連以上で勝ち（自由ルール）", ko: "양쪽 모두 {len}개 이상 이으면 승리 (자유 규칙)", ru: "побеждает любой игрок с {len}+ в ряд (свободные правила)",
+      fr: "les deux joueurs gagnent avec {len} pions alignés ou plus (règles libres)" },
+  "rules.who.black": { zh: "黑棋", en: "Black",
+      ja: "黒", ko: "흑", ru: "Чёрные", fr: "Noirs" },
+  "rules.who.first": { zh: "先手({who})", en: "the first player ({who})",
+      ja: "先手（{who}）", ko: "선수({who})", ru: "первый игрок ({who})", fr: "le premier joueur ({who})" },
+  "rules.restricted": { zh: "{who}须恰好 {len} 连，{more} 连及以上判负",
+                        en: "{who} must make exactly {len} in a row; {more} or more loses",
+      ja: "{who}はちょうど{len}連を作る必要があり、{more}連以上は負け", ko: "{who}는 정확히 {len}개를 이어야 하며, {more}개 이상이면 패배합니다", ru: "{who} — ровно {len} в ряд; {more} и более — поражение",
+      fr: "{who} : il faut exactement {len} pions alignés ; {more} ou plus fait perdre" },
+  "rules.second": { zh: " · 后手 ≥{len} 连胜",
+                    en: " · the second player wins with {len}+ in a row",
+      ja: " · 後手は{len}連以上で勝ち", ko: " · 후수는 {len}개 이상 이으면 승리", ru: " · второй игрок побеждает при {len}+ в ряд",
+      fr: " · le second joueur gagne avec {len} pions alignés ou plus" },
+  "rules.precedence": { zh: " · 同手命中恰好{len}连时判胜",
+                        en: " · exactly {len} on the same move also wins",
+      ja: " · 同じ手でちょうど{len}連ができた場合も勝ち", ko: " · 같은 수로 정확히 {len}개가 완성되면 승리", ru: " · ровно {len} за один ход — тоже победа",
+      fr: " · exactement {len} sur le même coup gagne aussi" },
+  // 冷却为 1 时英文写 "every 1 moves" 是错的、俄语还有"少数形"，所以走 pluralForm
+  "rules.rotation.one": { zh: " · 四维：每落 {n} 子可转动一层",
+                          en: " · 4D: every move you may rotate one layer",
+      ko: " · 4D: {n}수마다 레이어 하나를 회전할 수 있습니다", ru: " · 4D: один слой можно повернуть раз в {n} ход",
+      fr: " · 4D : à chaque coup, vous pouvez tourner une couche" },
+  "rules.rotation.many": { zh: " · 四维：每落 {n} 子可转动一层",
+                           en: " · 4D: every {n} moves you may rotate one layer",
+      ja: " · 4D：{n}手ごとにレイヤーを1つ回転できます", ko: " · 4D: {n}수마다 레이어 하나를 회전할 수 있습니다", ru: " · 4D: один слой можно повернуть раз в {n} ходов",
+      fr: " · 4D : tous les {n} coups, vous pouvez tourner une couche" },
+  /* 【俄语的"少数形"】中英都没有这一形，所以中文和英文那一格是照抄 many 的 ——
+     它们永远不会被选中（pluralForm 里 zh 恒为 many、en 只有 one/many），
+     留着只是让"这一条有几形"在表里看得完整。 */
+  "rules.rotation.few": { zh: " · 四维：每落 {n} 子可转动一层", en: " · 4D: every {n} moves you may rotate one layer",
+      ru: " · 4D: один слой можно повернуть раз в {n} хода" },
+
+  // ---- 状态行
+  "status.turn": { zh: "{who}棋落子（第 {n} 手）", en: "{who} to move (move {n})",
+      ja: "{who}の手番（{n}手目）", ko: "{who} 차례 (제 {n} 수)", ru: "{who}: ход {n}", fr: "Au tour des {who} (coup {n})" },
+  "status.draw": { zh: "和局：棋盘已满", en: "Draw — the board is full",
+      ja: "引き分け：盤面満杯", ko: "무승부 — 판이 가득 참", ru: "Ничья: доска полна", fr: "Match nul : plateau plein" },
+  "status.overline": { zh: "长连犯规！{who}棋胜", en: "Overline! {who} wins",
+      ja: "長連反則！{who}の勝ち", ko: "장련 반칙! {who} 승리", ru: "Перебор! {who} побеждают", fr: "Alignement trop long ! Les {who} gagnent" },
+  "status.win": { zh: "{who}棋胜", en: "{who} wins",
+      ja: "{who}の勝ち", ko: "{who} 승리", ru: "{who} побеждают", fr: "Les {who} gagnent" },
+
+  // ---- 落子被拒的原因（UI 会 toast 出来）
+  "reject.over": { zh: "棋局已结束，请先悔棋或重开",
+                   en: "The game is over — undo or restart first",
+      ja: "対局は終了しました。先に元に戻すか、最初からやり直してください", ko: "게임이 끝났습니다 — 먼저 되돌리거나 다시 시작하세요", ru: "Игра окончена — отмените ход или начните заново",
+      fr: "La partie est terminée — annulez ou recommencez d'abord" },
+  "reject.bounds": { zh: "坐标越界 {x},{y},{z}", en: "Out of bounds: {x},{y},{z}",
+      ja: "座標が範囲外：{x},{y},{z}", ko: "좌표 범위 초과: {x},{y},{z}", ru: "Вне границ: {x},{y},{z}", fr: "Hors limites : {x},{y},{z}" },
+  "reject.taken": { zh: "该位置已有棋子 {x},{y},{z}", en: "That cell is taken: {x},{y},{z}",
+      ja: "既に石がある：{x},{y},{z}", ko: "이미 돌이 있는 자리: {x},{y},{z}", ru: "Клетка занята: {x},{y},{z}", fr: "Case occupée : {x},{y},{z}" },
+
+  // ---- 转动
+  "rot.move": { zh: "{axis}={layer} 顺时针{n}次",
+                en: "{axis}={layer}, {n} turn clockwise",
+      ko: "{axis}={layer} 시계 방향 {n}회", ru: "{axis}={layer}, {n} поворот по часовой",
+      fr: "{axis}={layer}, {n} tour dans le sens horaire" },
+  "rot.move.few": { zh: "{axis}={layer} 顺时针{n}次", en: "{axis}={layer}, {n} turn clockwise",
+      ru: "{axis}={layer}, {n} поворота по часовой" },
+  "rot.move.many": { zh: "{axis}={layer} 顺时针{n}次",
+                     en: "{axis}={layer}, {n} turns clockwise",
+      ja: "{axis}={layer} 時計回り{n}回", ko: "{axis}={layer} 시계 방향 {n}회", ru: "{axis}={layer}, {n} поворотов по часовой",
+      fr: "{axis}={layer}, {n} tours dans le sens horaire" },
+  "rot.cw90": { zh: "顺时针 90°", en: "90° clockwise",
+      ja: "時計回り 90°", ko: "시계 방향 90°", ru: "90° по часовой", fr: "90° sens horaire" },
+  "rot.ccw90": { zh: "逆时针 90°", en: "90° counterclockwise",
+      ja: "反時計回り 90°", ko: "반시계 방향 90°", ru: "90° против часовой", fr: "90° sens antihoraire" },
+  "rot.rotated": { zh: "已转动 {move}", en: "Rotated {move}",
+      ja: "回転しました：{move}", ko: "{move} 회전했습니다", ru: "Поворот: {move}", fr: "Rotation {move}" },
+  "rot.noChange": { zh: "转不动：{why}", en: "No change: {why}",
+      ja: "変化なし：{why}", ko: "변화 없음: {why}", ru: "Без изменений: {why}", fr: "Aucun changement : {why}" },
+  "rot.rolledBack": { zh: "已撤销：{why}", en: "Rolled back: {why}",
+      ja: "取り消しました：{why}", ko: "되돌림: {why}", ru: "Откат: {why}", fr: "Annulé : {why}" },
+  "rot.cant": { zh: "不能转动：{why}", en: "Can't rotate: {why}",
+      ja: "回転できません：{why}", ko: "회전 불가: {why}", ru: "Нельзя повернуть: {why}", fr: "Rotation impossible : {why}" },
+  "rot.record": { zh: "#{n}后 {who} {move}（本层 {stones} 子）",
+                  en: "after {n}: {who} {move} ({stones} stone in that layer)",
+      ko: "#{n} 후 {who} {move} (이 레이어에 돌 {stones}개)", ru: "после #{n}: {who} {move} (в этом слое {stones} камень)",
+      fr: "après {n} : {who} {move} ({stones} pion dans cette couche)" },
+  "rot.record.few": { zh: "#{n}后 {who} {move}（本层 {stones} 子）", en: "after {n}: {who} {move} ({stones} stone in that layer)",
+      ru: "после #{n}: {who} {move} (в этом слое {stones} камня)" },
+  "rot.record.many": { zh: "#{n}后 {who} {move}（本层 {stones} 子）",
+                       en: "after {n}: {who} {move} ({stones} stones in that layer)",
+      ja: "#{n}の後 {who} {move}（このレイヤーに石{stones}個）", ko: "#{n} 후 {who} {move} (이 레이어에 돌 {stones}개)", ru: "после #{n}: {who} {move} (в этом слое {stones} камней)",
+      fr: "après {n} : {who} {move} ({stones} pions dans cette couche)" },
+  "rot.status.over": { zh: "棋局已结束", en: "The game is over",
+      ja: "対局終了", ko: "게임이 끝났습니다", ru: "Игра окончена", fr: "La partie est terminée" },
+  "rot.status.ready": { zh: "可以转动（距上次转动已过 {n} 手）",
+                        en: "Ready to rotate ({n} moves since the last one)",
+      ja: "回転できます（前回の回転から{n}手）", ko: "회전 가능 (마지막 회전 후 {n}수 지남)", ru: "Можно повернуть (с прошлого поворота: {n})",
+      fr: "Rotation possible (coups depuis la dernière : {n})" },
+  "rot.status.wait": { zh: "距下次转动还需 {left} 手（已过 {since} 手）",
+                       en: "{left} more move before the next rotation ({since} since the last one)",
+      ko: "다음 회전까지 {left}수 남음 (지난 회전 후 {since}수)", ru: "До следующего поворота ещё {left} ход (с прошлого поворота: {since})",
+      fr: "Encore {left} coup avant la prochaine rotation (coups écoulés : {since})" },
+  "rot.status.wait.few": { zh: "距下次转动还需 {left} 手（已过 {since} 手）", en: "{left} more move before the next rotation ({since} since the last one)",
+      ru: "До следующего поворота ещё {left} хода (с прошлого поворота: {since})" },
+  "rot.status.wait.many": { zh: "距下次转动还需 {left} 手（已过 {since} 手）",
+                            en: "{left} more moves before the next rotation ({since} since the last one)",
+      ja: "回転まであと{left}手（前回から{since}手）", ko: "다음 회전까지 {left}수 남음 (지난 회전 후 {since}수)", ru: "До следующего поворота ещё {left} ходов (с прошлого поворота: {since})",
+      fr: "Encore {left} coups avant la prochaine rotation (coups écoulés : {since})" },
+  "rot.reject.not4d": { zh: "当前不是四维模式", en: "Not in 4D mode",
+      ja: "4Dモードではありません", ko: "현재 4D 모드가 아닙니다", ru: "Это не 4D-режим", fr: "Pas en mode 4D" },
+  "rot.reject.cube": { zh: "四维模式要求立方棋盘，当前是 {d}（转层要求两个自由轴等长）",
+                       en: "4D rotation needs a cube board; this one is {d} (the two free axes must be equal)",
+      ja: "4Dの回転には立方体の盤が必要です。現在は{d}です（レイヤーを回転するには他の2軸が等しい必要があります）", ko: "4D 회전은 정육면체 판이 필요합니다. 현재 {d} (두 자유 축이 같아야 합니다)", ru: "Для 4D нужна кубическая доска, а эта — {d} (две свободные оси должны быть равны)",
+      fr: "La rotation 4D exige un plateau cubique ; celui-ci est {d} (les deux axes libres doivent être égaux)" },
+  "rot.reject.layerRange": { zh: "层号越界 {layer}（棋盘 {n}³）",
+                             en: "Layer {layer} is out of range (board is {n}³)",
+      ja: "レイヤー番号が範囲外：{layer}（盤は{n}³）", ko: "레이어 번호 범위 초과: {layer} (판 {n}³)", ru: "Номер слоя вне диапазона: {layer} (доска {n}³)",
+      fr: "Couche {layer} hors limites (plateau {n}³)" },
+  "rot.reject.layerNeg": { zh: "层号不能为负 {layer}", en: "Layer number can't be negative: {layer}",
+      ja: "レイヤー番号は負にできません：{layer}", ko: "레이어 번호는 음수일 수 없습니다: {layer}", ru: "Отрицательный номер слоя: {layer}", fr: "Le numéro de couche ne peut pas être négatif : {layer}" },
+  "rot.reject.cooldown": { zh: "还要再落 {left} 子才能转动",
+                           en: "{left} more move before you can rotate",
+      ko: "회전하려면 {left}수를 더 두어야 합니다", ru: "До поворота нужен ещё {left} ход",
+      fr: "Encore {left} coup avant de pouvoir tourner" },
+  "rot.reject.cooldown.few": { zh: "还要再落 {left} 子才能转动", en: "{left} more move before you can rotate",
+      ru: "До поворота нужно ещё {left} хода" },
+  "rot.reject.cooldown.many": { zh: "还要再落 {left} 子才能转动",
+                                en: "{left} more moves before you can rotate",
+      ja: "回転するにはあと{left}手必要です", ko: "회전하려면 {left}수를 더 두어야 합니다", ru: "До поворота нужно ещё {left} ходов",
+      fr: "Encore {left} coups avant de pouvoir tourner" },
+  "rot.why.empty": { zh: "该层是空的，转动不改变任何东西",
+                     en: "this layer is empty — a rotation changes nothing",
+      ja: "このレイヤーは空で、回転しても何も変わりません", ko: "이 레이어는 비어 있습니다 — 회전해도 달라지는 것이 없습니다", ru: "Этот слой пуст — поворот ничего не меняет",
+      fr: "cette couche est vide — une rotation ne change rien" },
+  "rot.why.pattern": { zh: "该层的图案在这个转动下不变，等于没转",
+                       en: "this layer's pattern is unchanged by that rotation — nothing would move",
+      ja: "このレイヤーの模様はこの回転では変わらず、回転していないのと同じです", ko: "이 레이어의 배치는 이 회전으로 변하지 않습니다 — 아무것도 움직이지 않습니다", ru: "Узор этого слоя при таком повороте не меняется — ничего не сдвинется",
+      fr: "le motif de cette couche ne change pas sous cette rotation — rien ne bougerait" },
+  "rot.why.createsLine": { zh: "转动会让盘面上出现 {len} 连（{lines} 条），已整体撤销",
+                           en: "that rotation would create {len} in a row ({lines} line) — rolled back",
+      ko: "회전하면 판에 {len}개 연속이 생깁니다 ({lines}줄) — 전부 되돌렸습니다", ru: "Поворот создал бы {len} в ряд ({lines} линия) — откачено целиком",
+      fr: "cette rotation créerait {len} pions alignés ({lines} ligne) — annulée" },
+  "rot.why.createsLine.few": { zh: "转动会让盘面上出现 {len} 连（{lines} 条），已整体撤销", en: "that rotation would create {len} in a row ({lines} line) — rolled back",
+      ru: "Поворот создал бы {len} в ряд ({lines} линии) — откачено целиком" },
+  "rot.why.createsLine.many": { zh: "转动会让盘面上出现 {len} 连（{lines} 条），已整体撤销",
+                                en: "that rotation would create {len} in a row ({lines} lines) — rolled back",
+      ja: "回転で盤面に{len}連（{lines}本）ができてしまうため、全体を取り消しました", ko: "회전하면 판에 {len}개 연속이 생깁니다 ({lines}줄) — 전부 되돌렸습니다", ru: "Поворот создал бы {len} в ряд ({lines} линий) — откачено целиком",
+      fr: "cette rotation créerait {len} pions alignés ({lines} lignes) — annulée" },
+};
+
+/**
+ * 取内核文案。键不存在或该语言没写 → 退到中文（内核的默认语言，也是联机协议那一种），
+ * 中文也没有才返回键名（界面上挂着 "rot.cant" 一眼就能看出漏了）。
+ */
+function ct(key, lang, params) {
+  const e = CORE_TEXT[key];
+  if (!e) return key;
+  let s = e[lang];
+  if (s === undefined) s = e.zh;
+  if (!params) return s;
+  return s.replace(/\{(\w+)\}/g, function (m, k) {
+    return params[k] === undefined || params[k] === null ? m : String(params[k]);
+  });
+}
+
+/** 复数键：按 pluralForm 选形，退路依次是 many、不带形的基名。 */
+function ctPlural(base, lang, n, params) {
+  const form = pluralForm(lang, n);
+  // 【顺序要紧】基名排在 .many 之前：像 rot.status.wait 这种"单数那一形直接写成基名"的键
+  // 只有基名那一条，把 .many 排在前面会把单数请求喂给复数文案（实测："1 more moves"）。
+  const keys = [base + "." + form, base, base + ".many"];
+  for (const k of keys) if (CORE_TEXT[k] !== undefined) return ct(k, lang, params);
+  return base;
+}
+
+/**
+ * 某一方的名字（六种语言）。默认中文 —— 和内核其它文案一样。
+ * 【三个键写成三个字面量调用，不拼成三元表达式】dom-smoke 有一条扫描检查，
+ * 要求 ct() 的键是字符串字面量（拼出来的键它看不见，漏翻也就不会报警）。
+ * 写成三元的话那条检查会当场报红 —— 它是对的，这里就按它要求的样子写。
+ */
+function sideName(s, lang = "zh") {
+  if (s === BLACK) return ct("side.black", lang);
+  if (s === WHITE) return ct("side.white", lang);
+  return ct("side.empty", lang);
+}
+function enOf(s) { return sideName(s, "en"); }
 
 /** 走子记录 */
 function MoveRecord(x, y, z, player, moveNumber) {
@@ -1446,9 +2649,8 @@ function MoveRecord(x, y, z, player, moveNumber) {
                        { x: x, y: y, z: z, player: player, moveNumber: moveNumber });
 }
 MoveRecord.prototype.toString = function (lang = "zh") {
-  return lang === "en"
-    ? "#" + this.moveNumber + " " + enOf(this.player) + " (" + this.x + "," + this.y + "," + this.z + ")"
-    : "#" + this.moveNumber + " " + cnOf(this.player) + "(" + this.x + "," + this.y + "," + this.z + ")";
+  return ct("move.record", lang, { n: this.moveNumber, who: sideName(this.player, lang),
+                                   x: this.x, y: this.y, z: this.z });
 };
 
 /** 棋盘尺寸上下限。**UI 只有这一处定义**，输入框的 min/max、夹取、提示文案都从它取。 */
@@ -1689,41 +2891,29 @@ class RuleSet {
     return player === firstPlayer;
   }
   describe(firstPlayer, lang = "zh") {
-    // 中英写成【同一条分支】而不是"英文另起一段"，理由见上面内核文案那段注释：
-    // 分支结构只有一份，就不可能出现"加了条规则、英文那侧忘了跟"这种静默分叉。
-    // 代价是每个返回点上挂一个三元。值得。
-    const en = lang === "en";
-    let s = en ? enOf(firstPlayer) + " first · " : cnOf(firstPlayer) + "先手 · ";
+    // 六种语言走【同一条分支】+ 查表，而不是每种语言各起一段：
+    // 分支结构只有一份，就不可能出现"加了条规则、某种语言忘了跟"这种静默分叉。
+    let s = ct("rules.prefix", lang, { who: sideName(firstPlayer, lang) });
     if (!this.overlineLoses || this.restricted === RestrictionTarget.None) {
-      return s + (en ? "either side wins with " + this.winLength + "+ in a row (open rules)"
-                     : "双方 ≥" + this.winLength + " 连即胜（自由规则）") + this._rotationSuffix(lang);
+      return s + ct("rules.open", lang, { len: this.winLength }) + this._rotationSuffix(lang);
     }
     const who = this.restricted === RestrictionTarget.Black
-      ? (en ? "Black" : "黑棋")
-      : (en ? "the first player (" + enOf(firstPlayer) + ")" : "先手(" + cnOf(firstPlayer) + ")");
-    s += en ? who + " must make exactly " + this.winLength + " in a row; " + (this.winLength + 1) + " or more loses"
-            : who + "须恰好 " + this.winLength + " 连，" + (this.winLength + 1) + " 连及以上判负";
-    s += en ? " · the second player wins with " + this.winLength + "+ in a row"
-            : " · 后手 ≥" + this.winLength + " 连胜";
-    if (!this.overlineTakesPrecedence) {
-      s += en ? " · exactly " + this.winLength + " on the same move also wins"
-              : " · 同手命中恰好" + this.winLength + "连时判胜";
-    }
+      ? ct("rules.who.black", lang)
+      : ct("rules.who.first", lang, { who: sideName(firstPlayer, lang) });
+    s += ct("rules.restricted", lang, { who: who, len: this.winLength, more: this.winLength + 1 });
+    s += ct("rules.second", lang, { len: this.winLength });
+    if (!this.overlineTakesPrecedence) s += ct("rules.precedence", lang, { len: this.winLength });
     return s + this._rotationSuffix(lang);
   }
   /** 四维模式追加的一行规则描述。三维模式返回空串，描述文本一字不变。 */
   _rotationSuffix(lang = "zh") {
     if (!this.allowRotation) return "";
     const n = this.rotationCooldownPlacements;
-    // 冷却为 1 时英文写成 "every 1 moves" 是错的。界面那一侧有 sayN 可用，内核这一侧
-    // 没有 —— 内核里不能放文案表（它要被 node 和 server.js 原样抽出去单独跑），
-    // 所以就地判一次单复数。中文没有这个问题，下面那行一字不动。
-    // 单数时那个 "1" 直接不写（"every move"）—— 和起始界面小结里的说法保持一致，
-    // 两处指的是同一件事，措辞不该各写各的。
-    if (lang === "en") {
-      return " · 4D: every " + (n === 1 ? "move" : n + " moves") + " you may rotate one layer";
-    }
-    return " · 四维：每落 " + n + " 子可转动一层";
+    // 冷却为 1 时英文写成 "every 1 moves" 是错的、俄语的 2–4 又是另一形，
+    // 所以这里走内核自己的 pluralForm 选形（和界面那侧共用同一份规则）。
+    // 单数那一形里 {n} 根本不出现（英文写 "every move"）—— 和起始界面小结里的说法
+    // 保持一致，两处指的是同一件事，措辞不该各写各的。
+    return ctPlural("rules.rotation", lang, n, { n: n });
   }
 }
 
@@ -1849,15 +3039,14 @@ class GameSession {
     // lang 只影响【被拒时那句原因】。默认("zh")下每个字都和以前一样 ——
     // server.js 调 place 时不传 lang，线上协议因此仍然是中文，联机测试里的
     // 中文子串断言一条都不动。
-    const en = lang === "en";
     if (this.status !== "Playing") {
-      return this._reject(en ? "The game is over — undo or restart first" : "棋局已结束，请先悔棋或重开");
+      return this._reject(ct("reject.over", lang));
     }
     if (!this.board.inBounds(x, y, z)) {
-      return this._reject(en ? "Out of bounds: " + x + "," + y + "," + z : "坐标越界 " + x + "," + y + "," + z);
+      return this._reject(ct("reject.bounds", lang, { x: x, y: y, z: z }));
     }
     if (!this.board.isEmpty(x, y, z)) {
-      return this._reject(en ? "That cell is taken: " + x + "," + y + "," + z : "该位置已有棋子 " + x + "," + y + "," + z);
+      return this._reject(ct("reject.taken", lang, { x: x, y: y, z: z }));
     }
 
     const player = this.currentPlayer;
@@ -1948,19 +3137,19 @@ class GameSession {
   }
 
   describeStatus(lang = "zh") {
-    const en = lang === "en";
     if (this.status === "Decided") {
-      if (this.isDraw) return en ? "Draw — the board is full" : "和局：棋盘已满";
+      if (this.isDraw) return ct("status.draw", lang);
+      const who = sideName(this.winner, lang);
       if (this.lastOutcome.status === MoveStatus.LoseByOverline) {
-        return en ? "Overline! " + enOf(this.winner) + " wins"
-                  : "长连犯规！" + cnOf(this.winner) + "棋胜";
+        return ct("status.overline", lang, { who: who });
       }
-      return en ? enOf(this.winner) + " wins" : cnOf(this.winner) + "棋胜";
+      return ct("status.win", lang, { who: who });
     }
-    // 英文写得短是【有约束的】：#status 是 22px、#statusRow 只有 34px 高，长了会换行，
-    // 一换行整行变高就把下面的棋盘挤小（#boardWrap 是 flex:1 1 auto）。别加词。
-    return en ? enOf(this.currentPlayer) + " to move (move " + (this.history.length + 1) + ")"
-              : cnOf(this.currentPlayer) + "棋落子（第 " + (this.history.length + 1) + " 手）";
+    // 【每种语言都写得短是有约束的】：#status 是 22px、#statusRow 只有 34px 高，
+    // 长了会换行，一换行整行变高就把下面的棋盘挤小（#boardWrap 是 flex:1 1 auto）。
+    // 加语言时这一条的每种译文都要照这个长度挑词 —— 别加修饰。
+    return ct("status.turn", lang, { who: sideName(this.currentPlayer, lang),
+                                     n: this.history.length + 1 });
   }
 }
 
@@ -2054,9 +3243,8 @@ class RotationMove {
     return new RotationMove(axis, layer, cwTurns);
   }
   toString(lang = "zh") {
-    return axisName(this.axis) + "=" + this.layer + (lang === "en"
-      ? ", " + this.turns + (this.turns === 1 ? " turn clockwise" : " turns clockwise")
-      : " 顺时针" + this.turns + "次");
+    return ctPlural("rot.move", lang, this.turns,
+                    { axis: axisName(this.axis), layer: this.layer, n: this.turns });
   }
 }
 
@@ -2069,11 +3257,11 @@ function axisName(a) { return a === AXIS_X ? "x" : (a === AXIS_Y ? "y" : "z"); }
  * 180° 不分顺逆，单独一档。
  */
 function describeRotationMove(m, lang = "zh") {
-  // 180° 不分顺逆、两种语言也一样，所以这一档放在语言分支【之前】，只有一份。
+  // 180° 不分顺逆、六种语言也一样（就是个角度），所以这一档放在查表【之前】，只有一份。
   if (m.turns === 2) return "180°";
-  const en = lang === "en";
-  return m.turns === 1 ? (en ? "90° clockwise" : "顺时针 90°")
-                       : (en ? "90° counterclockwise" : "逆时针 90°");
+  // 两个键写成两个字面量调用，理由同 sideName：扫描检查要求键是字面量
+  if (m.turns === 1) return ct("rot.cw90", lang);
+  return ct("rot.ccw90", lang);
 }
 
 /** 一次转动的判定结果。 */
@@ -2087,11 +3275,15 @@ class RotateOutcome {
   }
   get accepted() { return this.status === RotateStatus.Rotated; }
   describe(lang = "zh") {
-    const en = lang === "en";
-    if (this.status === RotateStatus.Rotated) return (en ? "Rotated " : "已转动 ") + this.move.toString(lang);
-    if (this.status === RotateStatus.NoRotation) return (en ? "No change: " : "转不动：") + this.reason;
-    if (this.status === RotateStatus.CreatesLine) return (en ? "Rolled back: " : "已撤销：") + this.reason;
-    return (en ? "Can't rotate: " : "不能转动：") + this.reason;
+    if (this.status === RotateStatus.Rotated) {
+      return ct("rot.rotated", lang, { move: this.move.toString(lang) });
+    }
+    // 【reason 是内核在 rotate() 里就冻好的，已经带上了语言】——
+    // 这里只换前缀，不再翻译原因。少传一个 lang 的话，英文界面上会出现
+    // "No change: 该层是空的…" 这种半截句子（rotateBy 那条注释记着这个坑）。
+    if (this.status === RotateStatus.NoRotation) return ct("rot.noChange", lang, { why: this.reason });
+    if (this.status === RotateStatus.CreatesLine) return ct("rot.rolledBack", lang, { why: this.reason });
+    return ct("rot.cant", lang, { why: this.reason });
   }
 }
 
@@ -2110,12 +3302,9 @@ class RotationRecord {
     this.layerStones = layerStones;
   }
   toString(lang = "zh") {
-    const en = lang === "en";
-    return (en ? "after " + this.placementsBefore + ": " + enOf(this.player) + " " +
-                 this.move.toString(lang) + " (" + this.layerStones +
-                 (this.layerStones === 1 ? " stone" : " stones") + " in that layer)"
-               : "#" + this.placementsBefore + "后 " + cnOf(this.player) + " " + this.move.toString() +
-                 "（本层 " + this.layerStones + " 子）");
+    return ctPlural("rot.record", lang, this.layerStones,
+                    { n: this.placementsBefore, who: sideName(this.player, lang),
+                      move: this.move.toString(lang), stones: this.layerStones });
   }
 }
 
@@ -2209,20 +3398,16 @@ class FourDSession {
 
   /** 给 UI 用的一行转动状态。 */
   describeRotationStatus(lang = "zh") {
-    const en = lang === "en";
     if (!this.rotationEnabled) return "";
-    if (this.inner.status !== "Playing") return en ? "The game is over" : "棋局已结束";
+    if (this.inner.status !== "Playing") return ct("rot.status.over", lang);
     if (this.canRotate) {
-      return en ? "Ready to rotate (" + this.placementsSinceLastRotation + " moves since the last one)"
-                : "可以转动（距上次转动已过 " + this.placementsSinceLastRotation + " 手）";
+      return ct("rot.status.ready", lang, { n: this.placementsSinceLastRotation });
     }
-    // 只剩 1 手时英文要写 "1 more move" —— 内核里放不下文案表（它要被 server.js 和
-    // 三个测试原样抽出去跑），所以就地判一次，写法和上面 _rotationSuffix 那句一致。
+    // 只剩 1 手时英文要写 "1 more move"（俄语还有少数形），所以这一句也走 pluralForm。
     // 这一行是常显的 22px 状态行，界面上够得到（冷却 3 时落满 2 子就是 1）。
     const left = this.placementsUntilRotation;
-    return en ? left + " more " + (left === 1 ? "move" : "moves") + " before the next rotation (" +
-                  this.placementsSinceLastRotation + " since the last one)"
-              : "距下次转动还需 " + left + " 手（已过 " + this.placementsSinceLastRotation + " 手）";
+    return ctPlural("rot.status.wait", lang, left,
+                    { left: left, since: this.placementsSinceLastRotation });
   }
 
   // ---------------------------------------------------------------- 转动
@@ -2233,10 +3418,9 @@ class FourDSession {
    * 全部要点：玩家可以放心地去试，试错的代价永远是零。
    */
   rotate(move, lang = "zh") {
-    const en = lang === "en";
-    if (!this.rotationEnabled) return this._reject(move, en ? "Not in 4D mode" : "当前不是四维模式");
+    if (!this.rotationEnabled) return this._reject(move, ct("rot.reject.not4d", lang));
     if (this.inner.status !== "Playing") {
-      return this._reject(move, en ? "The game is over — undo or restart first" : "棋局已结束，请先悔棋或重开");
+      return this._reject(move, ct("reject.over", lang));
     }
 
     // 长方体棋盘上转层在数学上不存在（两个自由轴必须等长）。这是"拒绝"而不是抛异常 ——
@@ -2244,26 +3428,19 @@ class FourDSession {
     // 构造上走不到这里：UI 在四维模式下只给一个 N，但内核不依赖 UI 的约束来保证自己的前提。
     if (!this.inner.board.isCube) {
       const d = this.inner.board.dims;
-      return this._reject(move, en
-        ? "4D rotation needs a cube board; this one is " + d[0] + "×" + d[1] + "×" + d[2] +
-          " (the two free axes must be equal)"
-        : "四维模式要求立方棋盘，当前是 " + d[0] + "×" + d[1] + "×" + d[2] +
-          "（转层要求两个自由轴等长）");
+      return this._reject(move, ct("rot.reject.cube", lang, { d: d[0] + "×" + d[1] + "×" + d[2] }));
     }
 
     const n = this.inner.board.size;
     if (move.layer >= n) {
-      return this._reject(move, en ? "Layer " + move.layer + " is out of range (board is " + n + "³)"
-                                   : "层号越界 " + move.layer + "（棋盘 " + n + "³）");
+      return this._reject(move, ct("rot.reject.layerRange", lang, { layer: move.layer, n: n }));
     }
     if (move.layer < 0) {
-      return this._reject(move, en ? "Layer number can't be negative: " + move.layer
-                                   : "层号不能为负 " + move.layer);
+      return this._reject(move, ct("rot.reject.layerNeg", lang, { layer: move.layer }));
     }
     if (!this.canRotate) {
       const left = this.placementsUntilRotation;
-      return this._reject(move, en ? left + " more " + (left === 1 ? "move" : "moves") + " before you can rotate"
-                                   : "还要再落 " + left + " 子才能转动");
+      return this._reject(move, ctPlural("rot.reject.cooldown", lang, left, { left: left }));
     }
 
     const board = this.inner.board;
@@ -2272,10 +3449,8 @@ class FourDSession {
     // 真的转。changed === false 时棋盘逐格没变，所以直接返回就是"没留下痕迹"。
     const changed = board.rotateLayer(move.axis, move.layer, move.turns);
     if (!changed) {
-      const why = layerStones === 0
-        ? (en ? "this layer is empty — a rotation changes nothing" : "该层是空的，转动不改变任何东西")
-        : (en ? "this layer's pattern is unchanged by that rotation — nothing would move"
-              : "该层的图案在这个转动下不变，等于没转");
+      // 两个键写成两个分支，理由同 sideName：扫描检查要求键是字面量
+      const why = layerStones === 0 ? ct("rot.why.empty", lang) : ct("rot.why.pattern", lang);
       return new RotateOutcome(RotateStatus.NoRotation, move, layerStones, why);
     }
 
@@ -2289,10 +3464,9 @@ class FourDSession {
     if (runs.length > 0) {
       // 逆置换 = 顺时针再转 (4 - t) 次，不需要额外存原图
       board.rotateLayer(move.axis, move.layer, 4 - move.turns);
-      return new RotateOutcome(RotateStatus.CreatesLine, move, layerStones, en
-        ? "that rotation would create " + this.inner.rules.winLength + " in a row (" + runs.length +
-          " line" + (runs.length === 1 ? "" : "s") + ") — rolled back"
-        : "转动会让盘面上出现 " + this.inner.rules.winLength + " 连（" + runs.length + " 条），已整体撤销");
+      return new RotateOutcome(RotateStatus.CreatesLine, move, layerStones,
+        ctPlural("rot.why.createsLine", lang, runs.length,
+                 { len: this.inner.rules.winLength, lines: runs.length }));
     }
 
     const player = this.inner.currentPlayer;
@@ -2512,8 +3686,35 @@ function readCompact() {
    【为什么不把中文也搬进 TEXT，让两种语言并排好对照】：中文那侧被 40315 项断言钉着，
    而"一个字节都没动过"和"搬的时候很小心"是两种保证 —— 前者不需要任何人相信我抄对了。
    -------------------------------------------------------------------------- */
-const LANGS = ["zh", "en"];
+const LANGS = ["zh", "en", "ja", "ko", "ru", "fr"];
 let LANG = "zh";
+
+/**
+ * 每种语言的元信息。**加一种语言只动这一张表和两张文案表** ——
+ * 界面代码里不该再出现语言代码的字面量（`lang === "en"` 那种）。
+ *
+ *   tag    → html 的 lang 属性。屏幕阅读器、连字、断词都认它，所以写规范的 BCP 47。
+ *   cls    → 挂在 html 上的类，CSS 的排版修正按它选。和 tag 分开的理由见
+ *            ".lang-en" 那段 CSS 注释：lang 是【外部的】属性，将来有人拿别的工具
+ *            改它（自动检测、翻译插件），排版会跟着一起漂，而漂了没有任何症状。
+ *   locale → 数字千分位、单复数的地区。toLocaleString 用它。
+ *   name   → 语言选择列表里显示的名字。**用本族名，不用字母代码、不用国旗**
+ *            （"languages aren't countries"，也是各家 i18n 文档的通行建议）。
+ *   short  → 语言按钮上显示的短标签。选的都是【宽度接近】的写法：
+ *            按钮宽度写死成一个值（见 #langBtn 的 CSS），短标签换语言时不撑破它。
+ */
+const LANG_INFO = {
+  zh: { tag: "zh-CN", cls: "lang-zh", locale: "zh-CN", name: "中文", short: "中", rulesId: "rulesSrc" },
+  en: { tag: "en", cls: "lang-en", locale: "en-US", name: "English", short: "EN", rulesId: "rulesSrcEn" },
+  ja: { tag: "ja", cls: "lang-ja", locale: "ja-JP", name: "日本語", short: "日", rulesId: "rulesSrcJa" },
+  ko: { tag: "ko", cls: "lang-ko", locale: "ko-KR", name: "한국어", short: "한", rulesId: "rulesSrcKo" },
+  ru: { tag: "ru", cls: "lang-ru", locale: "ru-RU", name: "Русский", short: "RU", rulesId: "rulesSrcRu" },
+  fr: { tag: "fr", cls: "lang-fr", locale: "fr-FR", name: "Français", short: "FR", rulesId: "rulesSrcFr" },
+};
+
+/* 单复数的选形规则【不在这一层】—— 它在内核里（pluralForm），
+   因为内核拼句子时也要用，而内核抽出去单独跑的时候调用不到这里的任何东西。
+   界面这边只是调用它。 */
 
 /* 【默认语言无条件中文，不读 navigator.language】—— 这是硬要求，不是偏好。
    _verify/browser-check.mjs 用 --headless=new 起 Chrome，那种环境下
@@ -2691,8 +3892,8 @@ const TEXT = { en: {
   // 两句话拆成两条，因为只有第一句带那个会变的数（冷却）。冷却 = 1 时英文必须写
   // "every move" —— 写成 "every 1 moves" 是错的，而界面上选不到 1（按钮是 3/5/8/10），
   // 所以这条只在脚本把冷却调成 1 时才露出来，谁也不会顺手发现它。
-  "setup.fourD.everyOne": "\n4D: every move you may rotate one layer (it uses up the whole turn; the rotation itself doesn't count as a move).",
-  "setup.fourD.everyMany": "\n4D: every {cool} moves you may rotate one layer (it uses up the whole turn; the rotation itself doesn't count as a move).",
+  "setup.fourD.every.one": "\n4D: every move you may rotate one layer (it uses up the whole turn; the rotation itself doesn't count as a move).",
+  "setup.fourD.every.many": "\n4D: every {cool} moves you may rotate one layer (it uses up the whole turn; the rotation itself doesn't count as a move).",
   "setup.fourD.layer": "\nOne layer is {n}×{n} cells — 1/{n} of the board; at the end of a game a layer holds {perLayer} on average.",
   // 这一条的单复数看的是 {times}（最多转几次），不是中位手数 —— 冷却选 8 或 10 时
   // times 会被 Math.max(1, …) 兜成 1（5 路盘中位 15 手：floor(14/10) = 1），界面上够得到。
@@ -2714,6 +3915,419 @@ const TEXT = { en: {
     "The layer panel on the right still works.",
 } };
 
+/* --------------------------------------------------------------------------
+   其余四种语言的两张表。
+
+   【为什么分成四段追加、不并进上面那个大括号】六种语言并排写在一张字面量里
+   会有七八百行，改一条文案要在八百行里找六处。分开之后每种语言一段，
+   加语言就是加一段。
+   【缺一条会怎样】不会崩：查表退到英文、英文没有才退到中文快照（见 applyStatic
+   和 t 的注释）。所以这条通路上的错误长相是"某种语言里混着英文"。
+   靠不住眼睛，dom-smoke 里有一条逐语言、逐键的齐全性检查。
+   -------------------------------------------------------------------------- */
+STATIC_TEXT.ja = {
+  "previewTag": "デモ盤 · 10 × 10 × 10<br>左の設定とは無関係、対局には含まれません",
+  "hint": "ドラッグで回転 · スクロールでズーム · クリックで現在のレイヤーに着手<br>タッチ：ピンチでズーム/パン · 盤をダブルタップでリセット（どちらの盤でも有効）<br>Z 元に戻す · R 最初から · Q/E レイヤー切替 · G 表示モード · H グリッド線 · B 黒/白のみ · T 回転 · Y 回転を戻す<br>緑の枠 = 回転するレイヤー · 青の枠 = 現在のレイヤー（緑は 4D のみ）",
+  "modeGhost": "ゴースト表示",
+  "modeSlice": "スライス",
+  "modeGrid": "グリッド線",
+  "stoneAll": "両方",
+  "stoneBlack": "黒のみ",
+  "stoneWhite": "白のみ",
+  "bannerUndo": "元に戻す",
+  "bannerRestart": "もう一度プレイ",
+  "bannerClose": "閉じる Esc",
+  "rulesBtn": "ルール全文",
+  "rulesTitle": "ルール全文",
+  "rulesClose": "閉じる Esc",
+  "topLayer": "最上層",
+  "rotTitle": "レイヤーを回転",
+  "rotLabelAxis": "軸",
+  "rotLabelLayer": "レイヤー",
+  "rotLabelDir": "方向",
+  "rotLabelTurns": "回数",
+  "rotCW": "時計回り",
+  "rotCCW": "反時計回り",
+  "rotGo": "回転",
+  "rotRestore": "回転を戻す",
+  "undoBtn": "元に戻す Z",
+  "restartBtn": "最初から R",
+  "swapBtn": "先手を入れ替え",
+  "setupBtn": "設定",
+  "setupTitle": "3D五目並べ",
+  "setupSub": "13方向。3Dの盤では、正面を塞ぐだけでは足りません",
+  "rowLabelMode": "モード",
+  "rowLabelFirst": "先手",
+  "rowLabelSize3d": "盤のサイズ",
+  "rowLabelSize4d": "盤のサイズ",
+  "rowLabelCool": "回転のクールダウン",
+  "mode3d": "3D · クラシック",
+  "mode4d": "4D · 回転可能",
+  "firstBlack": "黒が先手",
+  "firstWhite": "白が先手",
+  "dimCube": "3軸を連動",
+  "cool3": "3手",
+  "cool5": "5手",
+  "cool8": "8手",
+  "cool10": "10手",
+  "startBtn": "対局開始",
+  "ruleNote": "ルール：空いているマスならどこにでも着手できます（重力はありません）。先手は<b>ちょうど5連</b>を作らなければならず、6連以上は長連で負けです。後手は5連以上で勝ちです。<br>勝ちの方向は13通り：3軸 + 面対角線6本 + 体対角線4本。右のパネルでレイヤーを切り替えて石を置きます。",
+};
+TEXT.ja = {
+  "info.moves.many": "{n}手経過",
+  "info.rotations.many": " · {n}回転",
+  "info.board": " · 盤 {x}×{y}×{z} · レイヤー {layer}/{n} (z={z0})",
+  "layer.label": "レイヤー {i} / {n}",
+  "slice.label": "z ≤ {i}/{n} まで描画",
+  "coords.hover": "({x},{y},{z}) に着手します",
+  "coords.idle": "盤の上でマウスを動かしてマスを選びます",
+  "hint.hide": "隠す",
+  "hint.show": "ヒント",
+  "banner.draw": "引き分け\n盤面満杯",
+  "banner.overline": "長連！\n先手が{n}連を作りました、{who}の勝ち",
+  "banner.overlineSub": "先手はちょうど5連を作る必要があります",
+  "banner.win": "{who}の勝ち\n{n}連",
+  "banner.winSub": "{n}手目",
+  "rot.layerLabel.many": "{axis} = {layer}（このレイヤーに石{n}個）",
+  "rot.hint.over": "対局は終了しました。",
+  "rot.hint.empty": "このレイヤーは空です。回転するものがありません。別のレイヤーを選ぶか、3D表示で石の位置を確認してください。",
+  "rot.hint.cool.many": "クールダウン中：あと{n}手。回転はその手番を丸ごと使うため、回転した直後には着手できません。",
+  "rot.hint.undo": "直前の手は回転でした。「回転を戻す」で取り消せます。",
+  "rot.hint.ready": "時計回りは、その軸の負の側から原点を見た向きです。回転で5連ができてしまう場合は取り消されます。回転はその手番を丸ごと使います。",
+  "toast.undone": "取り消しました：{move}",
+  "toast.rotated": "{move}",
+  "toast.rotUndone": "回転前に戻しました（{move} を取り消し）",
+  "toast.start": "{who}が先手、{x}×{y}×{z} で対局開始",
+  "toast.noRotUndo": "直前の手は回転ではありません。戻すものがありません",
+  "toast.noUndo": "取り消せる手がありません",
+  "toast.decided": "対局は終了しました。続けるには取り消してください",
+  "toast.restarted": "最初から始めました",
+  "toast.swapped": "{who}を先手にして最初から始めました",
+  "range.allowed": "指定できる範囲：{range}",
+  "range.cubicOnly": "{range} · 立方体のみ（レイヤーを回転するには他の2軸が等しい必要があります）",
+  "cool.usesTurn": "回転はその手番を丸ごと使います",
+  "cool.fourDOnly": "4Dモードのみ",
+  "setup.summary": "{x} × {y} × {z}（{cells}マス）· {who}が先手{rest}",
+  "setup.perLayer": "石{n}個",
+  "setup.perLayerEst": "石の総数 ÷ {n}",
+  "setup.fourD.every.many": "\n4D：{cool}手ごとにレイヤーを1つ回転できます（手番を丸ごと使いますが、回転自体は手数に数えません）。",
+  "setup.fourD.layer": "\n1つのレイヤーは {n}×{n} マスで、盤全体の 1/{n} です。終局時、1レイヤーの平均は {perLayer} です。",
+  "setup.fourD.times.many": "\n実測の中央値 {median} 手では、最大 {times} 回の回転になります（実際はもっと少なく、それより前に終局することが多い）。",
+  "setup.fourD.dense": "\n注意：この大きさの盤では、1つのレイヤーに石が1、2個しかないことが多く、ほとんどの回転は「変化なし」になります。",
+  "setup.rect": "\n直方体の盤（3軸がすべて異なる）は Web 版独自の拡張です。既存の整合性テストは立方体のみを対象にしており、これには対応していません。",
+  "setup.rect.big": "\n辺が {n} だと、3Dのグリッド線が非常に密になります（グリッド線を切るか、ゴースト表示を使うと改善します）。",
+  "setup.big": "\n注意：{n}³ = {cells} マス。石の描画はインスタンス描画で問題ありませんが、レイヤーが多いと全レイヤーの帯が占有バーと化し、3Dのグリッド線も非常に密になります（グリッド線を切るか、ゴースト表示を使うと改善します）。",
+  "setup.mid": "\n注意：{n}³ = {cells} マス。ゴースト表示の使用をおすすめします。",
+  "setup.small": "\n注意：盤が小さいほど5連を作りやすく、先手の有利も大きくなります。",
+  "hint.noWebgl2": "<b style='color:#c0392b'>このブラウザは WebGL2 に対応していないため、3Dの盤を表示できません。</b><br>右側のレイヤーパネルはそのまま使えます。",
+};
+STATIC_TEXT.ko = {
+  "previewTag": "데모 판 · 10 × 10 × 10<br>왼쪽 설정과 무관 — 게임에 포함되지 않습니다",
+  "hint": "드래그로 회전 · 스크롤로 확대/축소 · 클릭하면 현재 레이어에 착수<br>터치: 두 손가락으로 확대/이동 · 판을 더블탭하면 초기화 (두 판 모두 가능)<br>Z 되돌리기 · R 다시 시작 · Q/E 레이어 변경 · G 보기 모드 · H 격자선 · B 흑/백만 보기 · T 회전 · Y 회전 복원<br>초록 상자 = 곧 회전할 레이어 · 파란 상자 = 현재 레이어 (초록 상자는 4D 전용)",
+  "modeGhost": "고스트 레이어",
+  "modeSlice": "슬라이스",
+  "modeGrid": "격자선",
+  "stoneAll": "흑백 모두",
+  "stoneBlack": "흑만",
+  "stoneWhite": "백만",
+  "bannerUndo": "되돌리기",
+  "bannerRestart": "다시 하기",
+  "bannerClose": "닫기 Esc",
+  "rulesBtn": "전체 규칙",
+  "rulesTitle": "전체 규칙",
+  "rulesClose": "닫기 Esc",
+  "topLayer": "최상위 레이어",
+  "rotTitle": "레이어 회전",
+  "rotLabelAxis": "축",
+  "rotLabelLayer": "레이어",
+  "rotLabelDir": "방향",
+  "rotLabelTurns": "횟수",
+  "rotCW": "시계 방향",
+  "rotCCW": "반시계 방향",
+  "rotGo": "회전",
+  "rotRestore": "회전 복원",
+  "undoBtn": "되돌리기 Z",
+  "restartBtn": "다시 시작 R",
+  "swapBtn": "선수 교체",
+  "setupBtn": "설정",
+  "setupTitle": "3D 오목",
+  "setupSub": "13개 방향 — 3D 판에서는 앞만 막아서는 부족합니다",
+  "rowLabelMode": "모드",
+  "rowLabelFirst": "선수",
+  "rowLabelSize3d": "판 크기",
+  "rowLabelSize4d": "판 크기",
+  "rowLabelCool": "회전 쿨다운",
+  "mode3d": "3D · 클래식",
+  "mode4d": "4D · 회전 가능",
+  "firstBlack": "흑 선수",
+  "firstWhite": "백 선수",
+  "dimCube": "세 축 연동",
+  "cool3": "3수",
+  "cool5": "5수",
+  "cool8": "8수",
+  "cool10": "10수",
+  "startBtn": "게임 시작",
+  "ruleNote": "규칙: 빈칸이면 어디든 착수할 수 있습니다 — 중력은 없습니다. 선수는 <b>정확히 다섯</b>을 이어야 하며, 여섯 이상은 장련(長連) 반칙으로 패배합니다. 후수는 다섯 이상이면 승리합니다.<br>승리 방향은 13개입니다: 축 3 + 면 대각선 6 + 공간 대각선 4. 오른쪽 패널에서 레이어를 넘기며 돌을 놓으세요.",
+};
+TEXT.ko = {
+  "info.moves.many": "{n}수 착수",
+  "info.rotations.many": " · {n}회 회전",
+  "info.board": " · 판 {x}×{y}×{z} · 레이어 {layer}/{n} (z={z0})",
+  "layer.label": "레이어 {i} / {n}",
+  "slice.label": "z ≤ {i}/{n}까지 표시",
+  "coords.hover": "({x},{y},{z})에 착수합니다",
+  "coords.idle": "판 위로 마우스를 옮겨 칸을 고르세요",
+  "hint.hide": "숨기기",
+  "hint.show": "도움말",
+  "banner.draw": "무승부\n판이 가득 참",
+  "banner.overline": "장련 반칙!\n선수가 {n}개를 연속으로 이었습니다 — {who} 승리",
+  "banner.overlineSub": "선수는 정확히 5개를 이어야 합니다",
+  "banner.win": "{who} 승리\n{n}개 연속",
+  "banner.winSub": "{n}수",
+  "rot.layerLabel.many": "{axis} = {layer} (이 레이어에 돌 {n}개)",
+  "rot.hint.over": "게임이 끝났습니다.",
+  "rot.hint.empty": "이 레이어는 비어 있습니다 — 회전할 것이 없습니다. 다른 레이어를 고르거나 3D 보기에서 돌이 있는 곳을 확인하세요.",
+  "rot.hint.cool.many": "쿨다운: {n}수 남음. 회전은 한 수를 전부 사용하므로 회전 직후에는 착수할 수 없습니다.",
+  "rot.hint.undo": "마지막 수는 회전이었습니다 — \"복원\"으로 되돌릴 수 있습니다.",
+  "rot.hint.ready": "시계 방향 = 해당 축의 음수 끝에서 원점 쪽을 바라보는 방향입니다. 회전으로 5개가 이어지면 되돌려지며, 회전은 한 수를 전부 사용합니다.",
+  "toast.undone": "되돌림: {move}",
+  "toast.rotated": "{move}",
+  "toast.rotUndone": "회전 이전으로 복원했습니다 ({move} 되돌림)",
+  "toast.start": "{who} 선수, {x}×{y}×{z} — 게임 시작",
+  "toast.noRotUndo": "마지막 수는 회전이 아니었습니다 — 복원할 것이 없습니다",
+  "toast.noUndo": "되돌릴 수가 없습니다",
+  "toast.decided": "게임이 끝났습니다 — 계속하려면 되돌리세요",
+  "toast.restarted": "다시 시작했습니다",
+  "toast.swapped": "{who} 선수로 다시 시작했습니다",
+  "range.allowed": "허용 범위 {range}",
+  "range.cubicOnly": "허용 범위 {range} · 정육면체여야 합니다 (레이어를 회전하려면 나머지 두 축이 같아야 함)",
+  "cool.usesTurn": "회전은 한 수를 전부 사용합니다",
+  "cool.fourDOnly": "4D 모드 전용",
+  "setup.summary": "{x} × {y} × {z} ({cells}칸) · {who} 선수{rest}",
+  "setup.perLayer": "돌 {n}개",
+  "setup.perLayerEst": "전체 돌 ÷ {n}",
+  "setup.fourD.every.many": "\n4D: {cool}수마다 레이어 하나를 회전할 수 있습니다 (한 수를 전부 사용하며, 회전 자체는 수로 세지 않습니다).",
+  "setup.fourD.layer": "\n레이어 하나는 {n}×{n}칸 — 판의 1/{n}입니다. 한 판이 끝날 때 레이어당 평균 {perLayer}입니다.",
+  "setup.fourD.times.many": "\n측정된 중간값 {median}수 기준으로 최대 {times}회 회전입니다 (보통은 그보다 적습니다 — 대개 그 전에 게임이 끝납니다).",
+  "setup.fourD.dense": "\n참고: 이렇게 큰 판에서는 레이어에 돌이 한두 개뿐인 경우가 많아 대부분의 회전이 \"변화 없음\"이 됩니다.",
+  "setup.rect": "\n직육면체 판(세 축이 모두 다른 경우)은 웹 버전만의 확장입니다: 기존 일관성 벡터는 정육면체만 검증했고 이 경우는 다루지 않습니다.",
+  "setup.rect.big": "\n한 변이 {n}이면 3D 격자선이 매우 촘촘해집니다 (격자선을 끄거나 고스트 레이어 모드를 쓰면 모두 도움이 됩니다).",
+  "setup.big": "\n참고: {n}³ = {cells}칸. 인스턴스 렌더링은 돌을 잘 처리하지만, 레이어가 이렇게 많으면 전체 레이어 스트립이 점유 막대로 변하고 3D 격자선도 매우 촘촘해집니다 (격자선을 끄거나 고스트 레이어 모드를 쓰면 모두 도움이 됩니다).",
+  "setup.mid": "\n참고: {n}³ = {cells}칸. 고스트 레이어 모드를 권장합니다.",
+  "setup.small": "\n참고: 판이 작을수록 5개를 잇기 쉽고, 선수의 이점도 커집니다.",
+  "hint.noWebgl2": "<b style='color:#c0392b'>이 브라우저는 WebGL2를 지원하지 않아 3D 판을 표시할 수 없습니다.</b><br>오른쪽 레이어 패널은 그대로 사용할 수 있습니다.",
+};
+STATIC_TEXT.ru = {
+  "previewTag": "Демо-доска · 10 × 10 × 10<br>Не зависит от настроек слева — не часть игры",
+  "hint": "Перетаскивание — вращение вида · Прокрутка — масштаб · Клик — ход на текущем слое<br>Сенсор: двумя пальцами — масштаб и сдвиг · двойной тап по доске — сброс (работает на обеих досках)<br>Z — отменить · R — заново · Q/E — сменить слой · G — режим вида · H — линии сетки · B — только чёрные/белые · T — поворот слоя · Y — вернуть поворот<br>Зелёная рамка — слой, который повернётся · Синяя рамка — текущий слой (зелёная — только в 4D)",
+  "modeGhost": "Призрачные слои",
+  "modeSlice": "Срез",
+  "modeGrid": "Линии сетки",
+  "stoneAll": "Оба цвета",
+  "stoneBlack": "Только чёрные",
+  "stoneWhite": "Только белые",
+  "bannerUndo": "Отмена",
+  "bannerRestart": "Играть снова",
+  "bannerClose": "Закрыть (Esc)",
+  "rulesBtn": "Полные правила",
+  "rulesTitle": "Полные правила",
+  "rulesClose": "Закрыть (Esc)",
+  "topLayer": "Верхний слой",
+  "rotTitle": "Поворот слоя",
+  "rotLabelAxis": "Ось",
+  "rotLabelLayer": "Слой",
+  "rotLabelDir": "Направление",
+  "rotLabelTurns": "Повороты",
+  "rotCW": "По часовой",
+  "rotCCW": "Против часовой",
+  "rotGo": "Повернуть",
+  "rotRestore": "Вернуть поворот",
+  "undoBtn": "Отменить (Z)",
+  "restartBtn": "Заново (R)",
+  "swapBtn": "Сменить первого игрока",
+  "setupBtn": "Настройки",
+  "setupTitle": "3D Гомоку",
+  "setupSub": "Тринадцать направлений — на 3D-доске защиты спереди недостаточно",
+  "rowLabelMode": "Режим",
+  "rowLabelFirst": "Первый игрок",
+  "rowLabelSize3d": "Размер доски",
+  "rowLabelSize4d": "Размер доски",
+  "rowLabelCool": "Перезарядка поворота",
+  "mode3d": "3D · Классика",
+  "mode4d": "4D · С поворотом",
+  "firstBlack": "Первыми ходят чёрные",
+  "firstWhite": "Первыми ходят белые",
+  "dimCube": "Связать все три оси",
+  "cool3": "3 хода",
+  "cool5": "5 ходов",
+  "cool8": "8 ходов",
+  "cool10": "10 ходов",
+  "startBtn": "Начать игру",
+  "ruleNote": "Правила: ходить можно в любую пустую клетку — гравитации нет. Первый игрок должен собрать <b>ровно пять</b> в ряд; шесть и более — перебор и поражение. Второй игрок побеждает при пяти и более.<br>Победных направлений 13: 3 оси + 6 диагоналей граней + 4 диагонали куба. Переключайте слои на панели справа и ставьте камни.",
+};
+TEXT.ru = {
+  "info.moves.one": "сделан {n} ход",
+  "info.moves.few": "сделано {n} хода",
+  "info.moves.many": "сделано {n} ходов",
+  "info.rotations.one": " · {n} поворот",
+  "info.rotations.few": " · {n} поворота",
+  "info.rotations.many": " · {n} поворотов",
+  "info.board": " · доска {x}×{y}×{z} · слой {layer}/{n} (z={z0})",
+  "layer.label": "Слой {i} / {n}",
+  "slice.label": "Рисуем до z ≤ {i}/{n}",
+  "coords.hover": "Ход в ({x},{y},{z})",
+  "coords.idle": "Наведите курсор на доску, чтобы выбрать клетку",
+  "hint.hide": "Скрыть",
+  "hint.show": "Подсказки",
+  "banner.draw": "Ничья\nДоска заполнена",
+  "banner.overline": "Перебор!\nПервый игрок собрал {n} в ряд — {who} побеждают",
+  "banner.overlineSub": "Первый игрок должен собрать ровно 5 в ряд",
+  "banner.win": "{who} побеждают\n{n} в ряд",
+  "banner.winSub": "Ход {n}",
+  "rot.layerLabel.one": "{axis} = {layer} (1 камень в этом слое)",
+  "rot.layerLabel.few": "{axis} = {layer} ({n} камня в этом слое)",
+  "rot.layerLabel.many": "{axis} = {layer} ({n} камней в этом слое)",
+  "rot.hint.over": "Игра окончена.",
+  "rot.hint.empty": "В этом слое пусто — поворачивать нечего. Выберите другой слой или посмотрите 3D-вид, чтобы увидеть, где стоят камни.",
+  "rot.hint.cool.one": "Перезарядка: ещё 1 ход. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
+  "rot.hint.cool.few": "Перезарядка: ещё {n} хода. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
+  "rot.hint.cool.many": "Перезарядка: ещё {n} ходов. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
+  "rot.hint.undo": "Последний ход — поворот; отменить его можно кнопкой «Вернуть поворот».",
+  "rot.hint.ready": "По часовой — это взгляд с отрицательного конца оси к началу координат. Если поворот создаёт 5 в ряд, он откатывается; поворот занимает весь ход.",
+  "toast.undone": "Отменено: {move}",
+  "toast.rotated": "{move}",
+  "toast.rotUndone": "Возврат к состоянию до поворота (отменено: {move})",
+  "toast.start": "Первыми ходят {who}: {x}×{y}×{z} — играем",
+  "toast.noRotUndo": "Последний ход не был поворотом — возвращать нечего",
+  "toast.noUndo": "Отменять больше нечего",
+  "toast.decided": "Игра окончена — отмените ход, чтобы продолжить",
+  "toast.restarted": "Игра начата заново",
+  "toast.swapped": "Игра начата заново: первыми ходят {who}",
+  "range.allowed": "Допустимо: {range}",
+  "range.cubicOnly": "{range} · нужен куб (для поворота слоя две другие оси должны быть равны)",
+  "cool.usesTurn": "Поворот занимает весь ход",
+  "cool.fourDOnly": "Только в режиме 4D",
+  "setup.summary": "{x} × {y} × {z} ({cells} клеток) · первыми ходят {who}{rest}",
+  "setup.perLayer": "{n} камней",
+  "setup.perLayerEst": "всего камней ÷ {n}",
+  "setup.fourD.every.one": "\n4D: каждый ход можно повернуть один слой (это занимает весь ход; сам поворот не считается ходом).",
+  "setup.fourD.every.few": "\n4D: каждые {cool} хода можно повернуть один слой (это занимает весь ход; сам поворот не считается ходом).",
+  "setup.fourD.every.many": "\n4D: каждые {cool} ходов можно повернуть один слой (это занимает весь ход; сам поворот не считается ходом).",
+  "setup.fourD.layer": "\nОдин слой — это {n}×{n} клеток, то есть 1/{n} доски; к концу игры в слое в среднем {perLayer}.",
+  "setup.fourD.times.one": "\nПо замерам медиана партии — {median}; значит, максимум 1 поворот (обычно меньше: партии часто заканчиваются раньше).",
+  "setup.fourD.times.few": "\nПо замерам медиана партии — {median}; значит, максимум {times} поворота (обычно меньше: партии часто заканчиваются раньше).",
+  "setup.fourD.times.many": "\nПо замерам медиана партии — {median}; значит, максимум {times} поворотов (обычно меньше: партии часто заканчиваются раньше).",
+  "setup.fourD.dense": "\nПримечание: на такой большой доске в слое часто всего один-два камня, поэтому большинство поворотов попадает в случай «ничего не изменилось».",
+  "setup.rect": "\nПрямоугольная доска (три неравные оси) — расширение, уникальное для веб-версии: существующие векторы согласованности покрывают только кубы, не прямоугольные доски.",
+  "setup.rect.big": "\nПри ребре {n} линии 3D-сетки становятся очень плотными (помогает отключить линии сетки или включить режим призрачных слоёв).",
+  "setup.big": "\nПримечание: {n}³ = {cells} клеток. Инстансный рендеринг справляется с камнями, но при таком числе слоёв полоса всех слоёв вырождается в шкалу заполненности, а линии 3D-сетки становятся очень плотными (помогает отключить линии сетки или режим призрачных слоёв).",
+  "setup.mid": "\nПримечание: {n}³ = {cells} клеток. Рекомендуется режим призрачных слоёв.",
+  "setup.small": "\nПримечание: чем меньше доска, тем проще собрать 5 в ряд — и тем больше преимущество первого игрока.",
+  "hint.noWebgl2": "<b style='color:#c0392b'>Этот браузер не поддерживает WebGL2, поэтому 3D-доску показать нельзя.</b><br>Панель слоёв справа всё равно работает.",
+};
+STATIC_TEXT.fr = {
+  "previewTag": "Plateau de démo · 10 × 10 × 10<br>Indépendant des réglages à gauche — hors partie",
+  "hint": "Glisser pour tourner · Molette pour zoomer · Clic pour poser sur la couche courante<br>Tactile : pincer pour zoomer / faire glisser · double appui sur un plateau pour réinitialiser (valable sur les deux plateaux)<br>Z annuler · R recommencer · Q/E changer de couche · G mode d'affichage · H lignes de grille · B noir/blanc seulement · T tourner · Y restaurer la rotation<br>Cadre vert = couche sur le point de tourner · Cadre bleu = couche courante (vert seulement en 4D)",
+  "modeGhost": "Couches fantômes",
+  "modeSlice": "Tranche",
+  "modeGrid": "Lignes de grille",
+  "stoneAll": "Les deux",
+  "stoneBlack": "Noirs seulement",
+  "stoneWhite": "Blancs seulement",
+  "bannerUndo": "Annuler",
+  "bannerRestart": "Rejouer",
+  "bannerClose": "Fermer Échap",
+  "rulesBtn": "Règles complètes",
+  "rulesTitle": "Règles complètes",
+  "rulesClose": "Fermer Échap",
+  "topLayer": "Couche du haut",
+  "rotTitle": "Rotation d'une couche",
+  "rotLabelAxis": "Axe",
+  "rotLabelLayer": "Couche",
+  "rotLabelDir": "Sens",
+  "rotLabelTurns": "Tours",
+  "rotCW": "Sens horaire",
+  "rotCCW": "Sens antihoraire",
+  "rotGo": "Tourner",
+  "rotRestore": "Restaurer la rotation",
+  "undoBtn": "Annuler Z",
+  "restartBtn": "Recommencer R",
+  "swapBtn": "Échanger le premier joueur",
+  "setupBtn": "Réglages",
+  "setupTitle": "Gomoku 3D",
+  "setupSub": "Treize directions — sur un plateau 3D, bloquer l'avant ne suffit pas",
+  "rowLabelMode": "Mode",
+  "rowLabelFirst": "Premier joueur",
+  "rowLabelSize3d": "Taille du plateau",
+  "rowLabelSize4d": "Taille du plateau",
+  "rowLabelCool": "Recharge de rotation",
+  "mode3d": "3D · Classique",
+  "mode4d": "4D · Avec rotation",
+  "firstBlack": "Noirs en premier",
+  "firstWhite": "Blancs en premier",
+  "dimCube": "Lier les trois axes",
+  "cool3": "3 coups",
+  "cool5": "5 coups",
+  "cool8": "8 coups",
+  "cool10": "10 coups",
+  "startBtn": "Commencer la partie",
+  "ruleNote": "Règles : vous pouvez jouer sur n'importe quelle case vide — il n'y a pas de gravité. Le premier joueur doit aligner <b>exactement cinq</b> pions ; six ou plus est un alignement trop long, ce qui fait perdre. Le second joueur gagne avec cinq ou plus.<br>Il y a 13 directions gagnantes : 3 axes + 6 diagonales de face + 4 grandes diagonales. Utilisez le panneau de droite pour parcourir les couches et poser des pions.",
+};
+TEXT.fr = {
+  "info.moves.one": "{n} coup joué",
+  "info.moves.many": "{n} coups joués",
+  "info.rotations.one": " · {n} rotation",
+  "info.rotations.many": " · {n} rotations",
+  "info.board": " · plateau {x}×{y}×{z} · couche {layer}/{n} (z={z0})",
+  "layer.label": "Couche {i} / {n}",
+  "slice.label": "Affichage jusqu'à z ≤ {i}/{n}",
+  "coords.hover": "Sera posé en ({x},{y},{z})",
+  "coords.idle": "Survolez le plateau pour choisir une case",
+  "hint.hide": "Masquer",
+  "hint.show": "Aide",
+  "banner.draw": "Match nul\nPlateau plein",
+  "banner.overline": "Alignement trop long !\nLe premier joueur a aligné {n} pions — les {who} gagnent",
+  "banner.overlineSub": "Le premier joueur doit aligner exactement 5 pions",
+  "banner.win": "Les {who} gagnent\n{n} pions alignés",
+  "banner.winSub": "Coup {n}",
+  "rot.layerLabel.one": "{axis} = {layer} (1 pion dans cette couche)",
+  "rot.layerLabel.many": "{axis} = {layer} ({n} pions dans cette couche)",
+  "rot.hint.over": "La partie est terminée.",
+  "rot.hint.empty": "Cette couche est vide — rien à tourner. Choisissez une autre couche, ou regardez la vue 3D pour voir où sont les pions.",
+  "rot.hint.cool.one": "Recharge : encore 1 coup. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
+  "rot.hint.cool.many": "Recharge : encore {n} coups. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
+  "rot.hint.undo": "Le dernier coup était une rotation — vous pouvez l'annuler avec « Restaurer ».",
+  "rot.hint.ready": "Sens horaire = vu depuis l'extrémité négative de cet axe, en direction de l'origine. Si une rotation devait créer 5 pions alignés, elle est annulée ; une rotation consomme tout le tour.",
+  "toast.undone": "Annulé : {move}",
+  "toast.rotated": "{move}",
+  "toast.rotUndone": "Restauré avant la rotation ({move} annulé)",
+  "toast.start": "{who} en premier, {x}×{y}×{z} — c'est parti",
+  "toast.noRotUndo": "Le dernier coup n'était pas une rotation — rien à restaurer",
+  "toast.noUndo": "Aucun coup à annuler",
+  "toast.decided": "La partie est terminée — annulez pour continuer",
+  "toast.restarted": "Nouvelle partie",
+  "toast.swapped": "Nouvelle partie, {who} en premier",
+  "range.allowed": "{range} autorisé",
+  "range.cubicOnly": "{range} · doit être cubique (la rotation d'une couche exige que les deux autres axes soient égaux)",
+  "cool.usesTurn": "Une rotation consomme tout le tour",
+  "cool.fourDOnly": "Mode 4D uniquement",
+  "setup.summary": "{x} × {y} × {z} ({cells} cases) · {who} en premier{rest}",
+  "setup.perLayer": "{n} pions",
+  "setup.perLayerEst": "pions au total ÷ {n}",
+  "setup.fourD.every.one": "\n4D : à chaque coup, vous pouvez tourner une couche (cela consomme tout le tour ; la rotation elle-même ne compte pas comme un coup).",
+  "setup.fourD.every.many": "\n4D : tous les {cool} coups, vous pouvez tourner une couche (cela consomme tout le tour ; la rotation elle-même ne compte pas comme un coup).",
+  "setup.fourD.layer": "\nUne couche fait {n}×{n} cases — 1/{n} du plateau ; en fin de partie, une couche contient {perLayer} en moyenne.",
+  "setup.fourD.times.one": "\nÀ la médiane mesurée de {median} coups, cela fait au plus 1 rotation (souvent moins — les parties finissent souvent avant).",
+  "setup.fourD.times.many": "\nÀ la médiane mesurée de {median} coups, cela fait au plus {times} rotations (souvent moins — les parties finissent souvent avant).",
+  "setup.fourD.dense": "\nRemarque : sur un plateau aussi grand, une couche ne contient souvent qu'un ou deux pions, donc la plupart des rotations tombent dans le cas « aucun changement ».",
+  "setup.rect": "\nUn plateau rectangulaire (trois axes inégaux) est une extension propre à la version web : les vecteurs de cohérence existants ne couvrent que les cubes, pas ce cas.",
+  "setup.rect.big": "\nAvec une arête de {n}, les lignes de grille 3D deviennent très denses (désactiver les lignes de grille ou passer en mode Couches fantômes : les deux aident).",
+  "setup.big": "\nRemarque : {n}³ = {cells} cases. Le rendu instancié gère très bien les pions, mais avec autant de couches, la bande de toutes les couches se réduit à une barre d'occupation, et les lignes de grille 3D deviennent très denses (désactiver les lignes de grille ou passer en mode Couches fantômes : les deux aident).",
+  "setup.mid": "\nRemarque : {n}³ = {cells} cases. Le mode Couches fantômes est recommandé.",
+  "setup.small": "\nRemarque : plus le plateau est petit, plus il est facile d'aligner 5 pions — et plus l'avantage du premier joueur est grand.",
+  "hint.noWebgl2": "<b style='color:#c0392b'>Ce navigateur ne prend pas en charge WebGL2 : le plateau 3D ne peut pas s'afficher.</b><br>Le panneau des couches à droite fonctionne toujours.",
+};
+
 /** 把 {name} 换成 params[name]。缺参数时原样留着（{n} 挂在界面上比静默消失好查）。 */
 function fill(s, params) {
   if (!params) return s;
@@ -2722,38 +4336,56 @@ function fill(s, params) {
   });
 }
 
-/** 取英文文案。键不存在时返回键本身 —— 界面上显示一个键名（"info.moves"）
- *  一眼就能看出漏了，比显示 undefined 或空白强。中文路径不会走到这里。 */
-function t(key, params) {
-  const s = TEXT.en[key];
+/**
+ * 取当前语言的文案（也可以显式指定 lang）。键不存在时【退到英文】，英文也没有才返回键名 ——
+ * 界面上挂着一个键名（"info.moves"）一眼就能看出漏了，比 undefined 或空白强。
+ *
+ * 退到英文而不是中文：新加的语言缺一条时，英文总比中文更可能被读懂。
+ * 这条退路【有断言堵着】—— dom-smoke 里有一条逐语言、逐键的检查（六张表必须键键齐全），
+ * 所以它正常情况下永远走不到；留着是为了"漏了一条"的现场可读，而不是界面缺一块。
+ */
+function t(key, params, lang) {
+  const L = lang || LANG;
+  const table = TEXT[L] || TEXT.en;
+  let s = table[key];
+  if (s === undefined) s = TEXT.en[key];
   return s === undefined ? key : fill(s, params);
 }
 
 /**
- * 单复数。**英文只有"一个 / 不止一个"两形，中文没有复数**，所以选哪个键只能由
- * 调用点显式写出来。在表里用一个键配 | 分隔、再约定按 params.n 切的话，
- * 一旦 n 传错就静默选错形。
+ * 复数：按语言的规则选形（见 PLURAL），再拼成 "基名.形" 去查表。
+ * 退路是【先试选中的形，再试 many，最后试不带形的基名】—— 这样
+ * 没有复数变化的语言（日/韩）只写一条 `.many` 就能用，
+ * 而只有两形的语言（英/法）少写一条 `.few` 也不会挂。
  */
-function tn(keyOne, keyMany, n, params) {
-  return t(n === 1 ? keyOne : keyMany, params);
+function tPlural(base, n, params, lang) {
+  const L = lang || LANG;
+  const form = pluralForm(L, n);
+  // 【顺序要紧】基名排在 .many 之前：像 rot.status.wait 这种"单数形直接写成基名"的键，
+  // 只有基名那一条；把 .many 排在前面会把单数请求喂给复数文案（实测：
+  // 冷却剩 1 手时显示成 "1 more moves"）。
+  const keys = [base + "." + form, base, base + ".many"];
+  for (const k of keys) if (TEXT[L] && TEXT[L][k] !== undefined) return t(k, params, L);
+  for (const k of keys) if (TEXT.en[k] !== undefined) return t(k, params, L);
+  return base;
 }
 
 /**
- * 中文走 zhFn()，英文走表。JS 文案层唯一的入口。
+ * 中文走 zhFn()，其他语言走表。JS 文案层唯一的入口。
  *
- * zhFn 是【函数】不是字符串，故意的：切到英文时它根本不会被调用，所以中文那侧
- * 的拼接不会白算一遍。传字符串的话两种语言都得在调用点求值，中文那句就一直在算。
+ * zhFn 是【函数】不是字符串，故意的：切到别的语言时它根本不会被调用，所以中文那侧
+ * 的拼接不会白算一遍。传字符串的话所有语言都得在调用点求值，中文那句就一直在算。
  */
 function say(zhFn, key, params) {
-  return LANG === "en" ? t(key, params) : zhFn();
+  return LANG === "zh" ? zhFn() : t(key, params);
 }
 
-/** say 的复数版：n 自动进 params.n，调用点不用再塞一遍。 */
-function sayN(zhFn, keyOne, keyMany, n, params) {
-  if (LANG !== "en") return zhFn();
+/** say 的复数版：n 自动进 params.n；用哪一形由语言的规则决定，调用点只管给基名。 */
+function sayN(zhFn, keyBase, n, params) {
+  if (LANG === "zh") return zhFn();
   const p = { n: n };
   if (params) for (const k in params) p[k] = params[k];
-  return tn(keyOne, keyMany, n, p);
+  return tPlural(keyBase, n, p);
 }
 
 /* 静态文案的快照。init() 一开始就拍，那时候 HTML 原文还没被任何 JS 碰过。 */
@@ -2790,16 +4422,26 @@ function collectStatic() {
   return out;
 }
 
-/** 把静态文案刷成当前语言。两个方向都走这里：英文查表，中文写快照。 */
+/**
+ * 把静态文案刷成当前语言。六个方向都走这里：非中文查表，中文写快照。
+ *
+ * 表里查不到时【退到英文】，英文再查不到才【留着中文】（不是留空）。
+ * 少写一条的表现应该是"那一处还是另一种语言"，而不是"界面上缺了一块"——
+ * 前者一眼能看出漏了，后者看起来像坏了。dom-smoke 有一条逐语言的齐全性检查，
+ * 所以这条退路正常走不到。
+ */
 function applyStatic() {
   if (!staticEls) staticEls = collectStatic();
+  const table = STATIC_TEXT[LANG] || null;
   const en = STATIC_TEXT.en;
   for (let i = 0; i < staticEls.length; i++) {
     const s = staticEls[i];
-    const mapped = en[s.key];
-    // 英文表里没有这一条时【留着中文】，不是留空。少写一条英文的表现应该是
-    // "那一处还是中文"，而不是"界面上缺了一块"——前者一眼能看出漏了，后者看起来像坏了。
-    const want = LANG === "en" && mapped !== undefined ? mapped : s.zh;
+    let mapped;
+    if (LANG !== "zh") {
+      mapped = table ? table[s.key] : undefined;
+      if (mapped === undefined) mapped = en[s.key];
+    }
+    const want = LANG !== "zh" && mapped !== undefined ? mapped : s.zh;
     if (s.isHtml) s.el.innerHTML = want;
     else s.el.textContent = want;
   }
@@ -3578,12 +5220,14 @@ const Game = {
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
-      "rulesBtn","rulesPanel","rulesClose","rulesBody","rulesSrc","rulesSrcEn",
+      "rulesBtn","rulesPanel","rulesClose","rulesBody",
+      "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
       "dimRange","dimRange4d","coolNote",
       "rotPanel","rotStatus","rotLayerDown","rotLayerUp","rotLayerLabel",
       "rotCW","rotCCW","rotGo","rotRestore","rotHint",
-      "topRight","langBtn","statusRow"];
+      "topRight","langBtn","langList","langZh","langEn","langJa","langKo","langRu","langFr",
+      "statusRow"];
     for (const id of ids) this.el[id] = document.getElementById(id);
 
     /* ---- 触屏手势与"点了一下"的记账。都只在这里建一次，见各自的注释。
@@ -3668,11 +5312,22 @@ const Game = {
     //   lang      —— 语义。屏幕阅读器、连字、断词认它；中文写 zh-CN，和 HTML 里原本的值一致。
     // 分开的理由见 CSS 那段注释：布局不能是"别人改了 lang"的副作用。
     const root = document.documentElement;
-    root.classList.toggle("lang-en", LANG === "en");
-    root.lang = LANG === "en" ? "en" : "zh-CN";
-    // 语言按钮上写的是【点了会变成什么】，所以它不进 data-i18n 表：
-    // 它是两种语言下两个不同的字符串，不是同一句话的两种译法。
-    this.el.langBtn.textContent = LANG === "en" ? "中文" : "EN";
+    // 【六个类一起清，再挂当前那个】。只 toggle 自己那一个的话（原来就是
+    // toggle("lang-en", ...)），切两次之后两个语言类会同时挂在 html 上，
+    // 而 CSS 里那批排版修正是按类选的 —— 那时谁生效取决于样式表里的先后顺序，
+    // 而不是"当前是哪种语言"。症状只是"某个语言下排版怪怪的"，没有任何断言会指向它。
+    for (let i = 0; i < LANGS.length; i++) root.classList.remove(LANG_INFO[LANGS[i]].cls);
+    root.classList.add(LANG_INFO[LANG].cls);
+    root.lang = LANG_INFO[LANG].tag;
+    // 语言按钮上写的是【当前】语言（点了弹列表）。改之前写的是"点了会变成什么"
+    // （中文界面下写 EN）—— 那套只在两种语言之间成立：语言一多，
+    // 按钮上那个 "EN" 是指"现在是英文"还是"点了会变英文"，读不出来。
+    // 它仍然不进 data-i18n 表：它是随语言变的短标签，不是"同一句话的译法"。
+    this.el.langBtn.textContent = LANG_INFO[LANG].short;
+    // 列表里那一项高亮：开列表时和切完语言都要刷一遍，所以放在这里（applyLang 是
+    // 唯一的语言刷新入口）。列表本身不在这里关 —— 玩家点列表项时是"先关列表、再切语言",
+    // 关的动作在那个点击处理里。
+    this.syncLangList();
     applyStatic();
     // JS 拼出来的文案：挨个重刷。refreshTexts 要求有棋局，其余几个读的是设置页状态，
     // 没有棋局时也成立（起始界面就是那种情况）。
@@ -3692,6 +5347,38 @@ const Game = {
     this.rulesRendered = false;
     // 按钮宽度随语言变，状态行的留白要重新量。
     this.layoutTopRight();
+  },
+
+  /** 语言列表里那六个按钮的 id，顺序和 LANGS 一致（语言按钮的顺序就是列表的顺序）。 */
+  langItemIds: ["langZh", "langEn", "langJa", "langKo", "langRu", "langFr"],
+
+  /** 语言列表开着没有。和 setupOpen / rulesOpen 一样【从 DOM 派生】，不另存布尔值。 */
+  get langListOpen() {
+    return !!(this.el.langList && this.el.langList.classList &&
+              !this.el.langList.classList.contains("off"));
+  },
+
+  /** 开/关语言列表。不给参数就是"切换"。 */
+  toggleLangList(open) {
+    const box = this.el.langList, btn = this.el.langBtn;
+    if (!box || !btn) return;
+    const want = open === undefined ? !this.langListOpen : !!open;
+    box.classList.toggle("off", !want);
+    // aria-expanded 要跟着走：屏幕阅读器靠它知道列表是开是关，
+    // 漏了的话那个按钮在无障碍上就永远显示"没展开"
+    btn.setAttribute("aria-expanded", want ? "true" : "false");
+    if (want) this.syncLangList();
+  },
+
+  /** 把列表里"当前语言"那一项高亮出来。开列表时和切完语言都走它。 */
+  syncLangList() {
+    for (let i = 0; i < this.langItemIds.length; i++) {
+      const el = this.el[this.langItemIds[i]];
+      if (!el) continue;
+      const cur = el.getAttribute("data-lang") === LANG;
+      el.classList.toggle("sel", cur);
+      el.setAttribute("aria-selected", cur ? "true" : "false");
+    }
   },
 
   /**
@@ -3789,7 +5476,7 @@ const Game = {
     // 提示语和「恢复」那条用同一个说法，玩家才认得出"这是刚才那一步"。
     this.toast(say(() => cnOf(rec.player) + "棋转动 " + axisName(rec.move.axis) + " = " + rec.move.layer +
                          " · " + describeRotationMove(rec.move) + " · 本层原有 " + rec.layerStones + " 颗子",
-                   "toast.rotated", { move: rec.toString("en") }), true);
+                   "toast.rotated", { move: rec.toString(LANG) }), true);
   },
   onRotationUndone(rec) {
     this.onBoardChanged(false);
@@ -4259,7 +5946,9 @@ const Game = {
   openRules() {
     if (!this.el.rulesPanel) return;
     if (!this.rulesRendered) {
-      const el = LANG === "en" ? this.el.rulesSrcEn : this.el.rulesSrc;
+      // 六种语言各一份正文，按 LANG_INFO 里的 rulesId 取 —— 加一种语言只改那张表，
+      // 这里不用动。取不到就退回中文那份（总比空白强，而且齐全性有断言盯着）。
+      const el = this.el[LANG_INFO[LANG].rulesId] || this.el.rulesSrc;
       const src = el ? el.textContent : "";
       this.el.rulesBody.innerHTML = renderRulesMarkdown(src);
       this.rulesRendered = true;
@@ -4731,10 +6420,10 @@ const Game = {
     this.el.rule.textContent = s.rules.describe(s.firstPlayer, this.lang);
     // 转动不计入"手数"（冷却数的是落子），所以单独报一次，免得玩家以为转动没被记上
     let info = sayN(() => "已下 " + s.moveCount + " 手",
-                    "info.moves.one", "info.moves.many", s.moveCount);
+                    "info.moves", s.moveCount);
     if (s.rotationCount > 0) {
       info += sayN(() => " · 转动 " + s.rotationCount + " 次",
-                   "info.rotations.one", "info.rotations.many", s.rotationCount);
+                   "info.rotations", s.rotationCount);
     }
     const d = s.dims, nz = d[2];
     info += say(() => " · 棋盘 " + d[0] + "×" + d[1] + "×" + d[2] +
@@ -4770,13 +6459,13 @@ const Game = {
     } else if (s.lastOutcome.status === MoveStatus.LoseByOverline) {
       this.el.bannerTitle.textContent = say(
         () => "长连犯规\n先手连成 " + s.lastOutcome.longestRun + " 连，" + cnOf(s.winner) + "棋胜",
-        "banner.overline", { n: s.lastOutcome.longestRun, who: enOf(s.winner) });
+        "banner.overline", { n: s.lastOutcome.longestRun, who: sideName(s.winner, LANG) });
       this.el.bannerTitle.style.color = Palette.hex("--danger");
       this.el.bannerSub.textContent = say(() => "先手必须恰好 5 连", "banner.overlineSub");
     } else {
       this.el.bannerTitle.textContent = say(
         () => cnOf(s.winner) + "棋胜\n" + s.lastOutcome.longestRun + " 连",
-        "banner.win", { who: enOf(s.winner), n: s.lastOutcome.longestRun });
+        "banner.win", { who: sideName(s.winner, LANG), n: s.lastOutcome.longestRun });
       this.el.bannerTitle.style.color = Palette.hex("--gold");
       this.el.bannerSub.textContent = say(() => "第 " + s.moveCount + " 手", "banner.winSub", { n: s.moveCount });
     }
@@ -4812,8 +6501,28 @@ const Game = {
     on("restartBtn", () => this.restart());
     on("swapBtn", () => this.swapFirst());
     on("setupBtn", () => this.openSetup());
-    // 语言按钮上写的是【点了会变成什么】，所以点它 = 切到"另一种"，不是切到某个固定值。
-    on("langBtn", () => this.setLang(LANG === "en" ? "zh" : "en"));
+    // 语言按钮：点开/收起列表（列表里选一个才切语言）。
+    // 老版本是"点一下 = 切到另一种"，那套只在两种语言之间成立 —— 六种语言下，
+    // 循环着点要么点不到目标语言，要么根本看不出有哪些可选。
+    on("langBtn", () => this.toggleLangList());
+    for (const id of this.langItemIds) {
+      if (!this.el[id]) continue;
+      on(id, () => {
+        const code = this.el[id].getAttribute("data-lang");
+        this.toggleLangList(false);
+        if (code) this.setLang(code);   // setLang 在语言没变时是空操作，重复点同一项不会重刷
+      });
+    }
+    // 点别处收起来。挂在 window 的【pointerdown】上，不是 click：
+    // click 要等指针抬起才到，那时列表项自己的 click 已经先跑完了 ——
+    // 结果就是"选了一项，列表关了又被外面这一下重新打开"。
+    window.addEventListener("pointerdown", (e) => {
+      if (!this.langListOpen) return;
+      const box = this.el.langList, btn = this.el.langBtn;
+      const inside = (el) => !!(el && typeof el.contains === "function" && el.contains(e.target));
+      if (inside(box) || inside(btn)) return;
+      this.toggleLangList(false);
+    });
     on("rulesBtn", () => this.openRules());
     on("rulesClose", () => this.closeRules());
     // 点浮层空白处（不是卡片本身）也关掉。判 e.target 就是为了区分这两者 ——
@@ -4867,7 +6576,7 @@ const Game = {
       const d = this.fourD ? [this.setupSize, this.setupSize, this.setupSize] : this.setupDims;
       this.newGame(d, this.setupFirst);
       this.toast(say(() => cnOf(this.setupFirst) + "先手，" + d[0] + "×" + d[1] + "×" + d[2] + " 开局",
-                     "toast.start", { who: enOf(this.setupFirst), x: d[0], y: d[1], z: d[2] }), true);
+                     "toast.start", { who: sideName(this.setupFirst, LANG), x: d[0], y: d[1], z: d[2] }), true);
     });
 
     // 面板网格点击落子。走的是【和三维同一条点击通路】（双击复位、捏完那一拍不吃点击
@@ -4896,6 +6605,9 @@ const Game = {
       if (e.key === "Escape" && this.rulesOpen) { this.closeRules(); return; }
       // 规则的浮层在最上面，所以它先吃 Esc。关掉之后再按一次 Esc 才轮到终局横幅。
       if (e.key === "Escape" && this.bannerOpen) { this.hideBanner(); return; }
+      // 语言列表排在规则浮层和横幅【之后】：z-index 也是那个顺序（70 / 50 / 61 里
+      // 列表只在两者之上、在规则之下），Esc 的优先级得和"看得见谁在最上面"一致
+      if (e.key === "Escape" && this.langListOpen) { this.toggleLangList(false); return; }
       // 规则浮层开着时不吃任何快捷键 —— 否则"看规则时按了下 R 把棋局重开了"，
       // 而屏幕上唯一可见的东西是规则，玩家根本不会想到是自己按的
       if (this.rulesOpen) return;
@@ -5492,7 +7204,7 @@ const Game = {
     const layerStones = this.session.board.countLayerStones(this.rotAxis, this.rotLayer);
     this.el.rotLayerLabel.textContent = sayN(
       () => axisName(this.rotAxis) + " = " + this.rotLayer + "（本层 " + layerStones + " 子）",
-      "rot.layerLabel.one", "rot.layerLabel.many", layerStones,
+      "rot.layerLabel", layerStones,
       { axis: axisName(this.rotAxis), layer: this.rotLayer });
     this.el.rotStatus.textContent = this.session.describeRotationStatus(this.lang);
     this.el.rotGo.disabled = !this.session.canRotate;
@@ -5509,7 +7221,7 @@ const Game = {
       // 中文没有复数，那句一字未动。
       hint = sayN(
         () => "冷却中：还要再落 " + this.session.placementsUntilRotation + " 手。转动占掉一整个回合，转完不能立刻落子。",
-        "rot.hint.cool.one", "rot.hint.cool.many", this.session.placementsUntilRotation,
+        "rot.hint.cool", this.session.placementsUntilRotation,
         { n: this.session.placementsUntilRotation });
     } else if (this.session.canUndoLastRotation) {
       hint = say(() => "最后一步是转动，可以「恢复本次转动」退回去。", "rot.hint.undo");
@@ -5533,7 +7245,7 @@ const Game = {
     this.setupFirst = next;
     this.hideBanner();
     this.session.reset(this.session.board.dims, next, this.session.rules);
-    this.toast(say(() => "已重开，改为" + cnOf(next) + "先手", "toast.swapped", { who: enOf(next) }), true);
+    this.toast(say(() => "已重开，改为" + cnOf(next) + "先手", "toast.swapped", { who: sideName(next, LANG) }), true);
   },
 
   setSetupFirst(c) {
@@ -5706,7 +7418,7 @@ const Game = {
     // 【显式给 locale】：原来这里是 cells.toLocaleString()，用的是运行时默认值 ——
     // 界面语言和数字的分组方式本来就该是同一件事，而那不是"没写"能保证的。
     // zh-CN 和 en-US 的千位分隔符都是逗号，所以既有断言里的 125,000 / 3,375 / 2,880 不受影响。
-    const cellsText = cells.toLocaleString(this.lang === "en" ? "en-US" : "zh-CN");
+    const cellsText = cells.toLocaleString(LANG_INFO[this.lang].locale);
     let warn = "";
 
     // warn 的每一段自己就带语言：say() 直接产出当前语言的那一段，
@@ -5718,7 +7430,7 @@ const Game = {
                             : say(() => "全盘子数 ÷ " + n, "setup.perLayerEst", { n: n });
       let line = sayN(
         () => "\n四维：每落 " + this.setupCool + " 手可转动一层（占掉整个回合，转动本身不算一手）。",
-        "setup.fourD.everyOne", "setup.fourD.everyMany", this.setupCool,
+        "setup.fourD.every", this.setupCool,
         { cool: this.setupCool }) +
         say(() => "\n一层 = " + n + "×" + n + " 格，占全盘 1/" + n + "；一局结束时一层里平均 " + perLayer + "。",
             "setup.fourD.layer", { n: n, perLayer: perLayer });
@@ -5728,7 +7440,7 @@ const Game = {
         // 但占位符分开命名，理由见 TEXT 里 setup.fourD.times.* 的注释。
         line += sayN(
           () => "\n按实测中位 " + meas[0] + " 手算，这一局最多转 " + times + " 次（实际通常更少，棋局常在那之前就结束了）。",
-          "setup.fourD.times.one", "setup.fourD.times.many", times,
+          "setup.fourD.times", times,
           { median: meas[0], times: times });
       }
       if (n >= 15) {
@@ -5770,7 +7482,7 @@ const Game = {
 
     this.el.sizeSummary.textContent = say(
       () => nx + " × " + ny + " × " + nz + "（" + cellsText + " 格）· " + cnOf(this.setupFirst) + "先手" + warn,
-      "setup.summary", { x: nx, y: ny, z: nz, cells: cellsText, who: enOf(this.setupFirst), rest: warn });
+      "setup.summary", { x: nx, y: ny, z: nz, cells: cellsText, who: sideName(this.setupFirst, LANG), rest: warn });
   },
 
   resize() {

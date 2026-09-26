@@ -1616,6 +1616,240 @@ try {
     "单层棋盘双击 → 回到 1 倍、平移清零",
     "zoom2d=" + await ev(`Game.zoom2d`) + " pan=" + await ev(`JSON.stringify(Game.pan2d)`));
 
+  // ---- 9. 六种语言：逐屏扫一遍 + 语言列表 + 排版几何
+  //
+  // 【为什么日文不能复用上面那条"没有汉字"的扫描】日文本来就用汉字
+  // （「黒の手番」「回転」全是汉字），那条判据在日语界面上会满屏假红，
+  // 而假红比漏报更坏 —— 它会训练人忽略这条断言。所以按语言分两套判据：
+  //
+  //   ru / fr / ko → 沿用"没有 CJK 汉字"那条。俄语法语根本没有汉字，
+  //                  韩语是谚文（汉字只可能出现在「長連」这种刻意的术语里，
+  //                  所以韩语那侧允许这两个字，见下面的 extraAllow）。
+  //   ja           → 改用【简体专用字】黑名单：日语用的是日本字形（層/転/設/規/則/
+  //                  盤/請/説…），简体字出现在日文界面上基本只可能是中文漏翻。
+  //                  【名单是推出来的，不是拍脑袋】：把中文语料（HTML 里的 data-i18n
+  //                  原文 + CORE_TEXT 的 zh 值 + 界面里 say(() => "…") 的中文）里的
+  //                  汉字减去日语语料里的汉字，得到 196 个"只出现在中文里"的字，
+  //                  再【人工剔掉日语里也合法的那些】（三/下/不/会/里/只/和/才…），
+  //                  剩下面这些 —— 每一个都是简体专有形。
+  //                  这条判据窄，所以再补一条【正向】的：每个带 data-i18n 的元素，
+  //                  文字必须等于 ja 表里那一条 —— 那条能抓住所有"这块没换语言"。
+  //
+  // 【这一节是被一个真 bug 逼出来的】第一轮翻译漏了 22 条内核文案（提取脚本只抓了
+  // 单行条目），界面上表现为"半句外语半句中文"。中文那半句恰好落在汉字的判据外面
+  // （它就该是汉字），所以只有逐语言的扫描 + 正向比对才抓得住。
+  /**
+   * 日语的判据：**屏幕上的汉字串必须在该语言自己的译文语料里出现过**。
+   *
+   * 【为什么不用"有没有汉字"】日语本来就全是汉字，那条判据会满屏假红。
+   * 【为什么也不用"简体专有字"黑名单】那个名单是我从语料里挑的，能抓住
+   * 「须恰好」「及以上判负」这类，但抓不住**整句退回中文**的情况 ——
+   * 实测注入 e（把内核 status.turn 的日语译文删掉）之后界面上是
+   * 「黑棋落子（第 1 手）」，而这七个字**每一个日语里都有**（黑/棋/落/子/第/手
+   * 都是日语汉字），字符级判据看不见它。
+   *
+   * 所以改成语料比对：把该语言所有译文（三张表里那个语言的每一格）里的
+   * 汉字串收集成"允许集合"，再看屏幕上有没有 ≥4 字的汉字串不在这个集合里 ——
+   * 出现了就说明那一段不是这种语言的译文（退回中文、或者混了中文）。
+   * 这条判据不维护名单、跟着译文走，也不会因为某天译文里新用了某个汉字而假红。
+   *
+   * 韩语同理（韩文界面上出现 4 个以上汉字只可能是中文残留；「長連」这种
+   * 术语在它自己的语料里，不会被误判）。
+   */
+  const CORPUS_SWEEP = (lang) => `(() => {
+    const RUN = /[\\u4e00-\\u9fff]{4,}/g;
+    const corpus = new Set();
+    const eat = (s) => { const m = (s || "").match(RUN); if (m) for (const x of m) corpus.add(x); };
+    const table = (o) => { if (o) for (const k in o) if (typeof o[k] === "string") eat(o[k]); };
+    table(TEXT[${JSON.stringify(lang)}]);
+    table(STATIC_TEXT[${JSON.stringify(lang)}]);
+    for (const k in CORE_TEXT) eat(CORE_TEXT[k][${JSON.stringify(lang)}]);
+    const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal"),
+                           document.getElementById("langList")]);
+    const visible = (el) => {
+      if (el.getClientRects().length === 0) return false;
+      if (getComputedStyle(el).visibility === "hidden") return false;
+      let o = 1;
+      for (let e = el; e && e.nodeType === 1; e = e.parentElement) o *= parseFloat(getComputedStyle(e).opacity);
+      return o >= 0.05;
+    };
+    const out = [];
+    for (const el of document.querySelectorAll("*")) {
+      if (allow.has(el)) continue;
+      if (!document.body.contains(el)) continue;
+      const tag = el.tagName.toLowerCase();
+      if (tag === "script" || tag === "style") continue;
+      if (el.children.length) continue;
+      if (!visible(el)) continue;
+      const t = (el.textContent || "").trim();
+      if (!t) continue;
+      const where = el.id ? "#" + el.id : tag;
+      const runs = t.match(RUN) || [];
+      const bad = runs.filter((r) => !corpus.has(r));
+      if (bad.length) out.push(where + " = " + JSON.stringify(t.slice(0, 60)) + "（不在译文里：" + bad.join("/") + "）");
+      else if (/(?:^|[^A-Za-z0-9_.])[a-z][A-Za-z]*(?:\\.[A-Za-z][A-Za-z]*)+(?![A-Za-z0-9_.])/.test(t))
+        out.push(where + " = " + JSON.stringify(t.slice(0, 80)));
+    }
+    return out;
+  })()`;
+
+  const sweepWith = (judge, extraAllow) => `(() => {
+    const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal")]);
+    ${extraAllow || ""}
+    const visible = (el) => {
+      if (el.getClientRects().length === 0) return false;
+      if (getComputedStyle(el).visibility === "hidden") return false;
+      let o = 1;
+      for (let e = el; e && e.nodeType === 1; e = e.parentElement) o *= parseFloat(getComputedStyle(e).opacity);
+      return o >= 0.05;
+    };
+    const out = [];
+    for (const el of document.querySelectorAll("*")) {
+      if (allow.has(el)) continue;
+      if (!document.body.contains(el)) continue;
+      const tag = el.tagName.toLowerCase();
+      if (tag === "script" || tag === "style") continue;
+      if (el.children.length) continue;
+      if (!visible(el)) continue;
+      const t = (el.textContent || "").trim();
+      if (!t) continue;
+      const where = el.id ? "#" + el.id : tag;
+      if (${judge}.test(t)) out.push(where + " = " + JSON.stringify(t.slice(0, 60)));
+      else if (/(?:^|[^A-Za-z0-9_.])[a-z][A-Za-z]*(?:\\.[A-Za-z][A-Za-z]*)+(?![A-Za-z0-9_.])/.test(t))
+        out.push(where + " = " + JSON.stringify(t.slice(0, 80)));
+    }
+    return out;
+  })()`;
+
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+  await send("Emulation.clearDeviceMetricsOverride");
+  await sleep(200);
+
+  const OTHER_LANGS = ["ja", "ko", "ru", "fr"];
+  for (const lang of OTHER_LANGS) {
+    const setup = await ev(`(() => {
+      Game.openSetup();
+      Game.setSetupMode(false);
+      Game.setLang(${JSON.stringify(lang)});
+      return document.documentElement.lang + "|" + document.documentElement.className;
+    })()`);
+    const info = await ev(`JSON.stringify(LANG_INFO[${JSON.stringify(lang)}])`);
+    const meta = JSON.parse(info);
+    check(setup.indexOf(meta.tag) >= 0, lang + "：html 的 lang 属性切到了 " + meta.tag, setup);
+    check(setup.indexOf("lang-" + lang) >= 0, lang + "：html 上有 .lang-" + lang + "（那种语言的排版修正靠它）", setup);
+    const others = OTHER_LANGS.concat(["en"]).filter((l) => l !== lang);
+    check(others.every((l) => setup.indexOf("lang-" + l) < 0),
+      lang + "：其它语言的类都摘掉了（挂着两个类时排版会按样式表顺序随机生效）", setup);
+
+    // 逐屏扫。三种屏幕：起始界面（三维 / 四维）、对局、终局横幅
+    const screens = [
+      ["起始界面", `1`],
+      ["起始界面·四维", `Game.setSetupMode(true); 1`],
+      ["对局界面", `Game.closeSetup(); Game.newGame([15,15,15], 1); 1`],
+    ];
+    for (const [name, prep] of screens) {
+      await ev(`(() => { ${prep}; return 1; })()`);
+      await sleep(150);
+      // 日语和韩语走语料比对（它们本来就用汉字，CJK 判据在它们身上会满屏假红）；
+      // 俄语和法语根本没有汉字，直接用"没有 CJK"那条，最省事也最硬。
+      const bad = await ev(lang === "ja" || lang === "ko"
+        ? CORPUS_SWEEP(lang)
+        : sweepWith(`/[\\u4e00-\\u9fff]/`, `allow.add(document.getElementById("langList"));`));
+      check(bad.length === 0, lang + " 界面上（" + name + "）没有中文残留、也没有漏翻的键名", bad.join("；"));
+    }
+
+    // 正向：带 data-i18n 的元素必须等于该语言的表值（这条能抓住"这块根本没换语言"）
+    const positive = await ev(`(() => {
+      const bad = [];
+      for (const el of document.querySelectorAll("[data-i18n]")) {
+        if (el.getClientRects().length === 0) continue;
+        const key = el.getAttribute("data-i18n") || el.id;
+        const want = (STATIC_TEXT[${JSON.stringify(lang)}] || {})[key];
+        if (want === undefined) { bad.push(key + "（表里没有）"); continue; }
+        if (el.textContent !== want) bad.push(el.id + " 显示的是别的语言");
+      }
+      return bad;
+    })()`);
+    check(positive.length === 0, lang + "：每个带 data-i18n 的元素都写上了该语言的文案", positive.join("；"));
+
+    // 语言列表：点开 → 六项都在、写的是本族名、当前项高亮；点另一种 → 真的切过去
+    const list = await ev(`(() => {
+      Game.toggleLangList(true);
+      const items = Game.langItemIds.map((id) => {
+        const el = Game.el[id];
+        return { code: el.getAttribute("data-lang"), text: el.textContent,
+                 sel: el.classList.contains("sel"), vis: el.getClientRects().length > 0 };
+      });
+      const openState = { open: Game.langListOpen, expanded: Game.el.langBtn.getAttribute("aria-expanded") };
+      Game.toggleLangList(false);
+      const closed = { open: Game.langListOpen, expanded: Game.el.langBtn.getAttribute("aria-expanded") };
+      return JSON.stringify({ items: items, openState: openState, closed: closed, btn: Game.el.langBtn.textContent,
+                              names: LANGS.map((l) => LANG_INFO[l].name) });
+    })()`);
+    const L = JSON.parse(list);
+    check(L.items.length === 6 && L.items.every((x) => x.vis),
+      lang + "：语言列表点开后六种语言都在、都看得见", JSON.stringify(L.items.map((x) => x.text)));
+    check(L.items.every((x, i) => x.text === L.names[i]),
+      lang + "：列表里写的是各语言的【本族名】，不是字母代码", JSON.stringify(L.items.map((x) => x.text)));
+    check(L.items.filter((x) => x.sel).length === 1 &&
+          L.items.filter((x) => x.sel)[0].code === lang,
+      lang + "：列表里当前语言那一项高亮、且只有一项", JSON.stringify(L.items.map((x) => [x.code, x.sel])));
+    check(L.openState.open && L.openState.expanded === "true" && !L.closed.open && L.closed.expanded === "false",
+      lang + "：列表的开合状态和 aria-expanded 一致（屏幕阅读器靠它）", JSON.stringify([L.openState, L.closed]));
+    check(L.btn === meta.short, lang + "：语言按钮上写的是当前语言的短标签 " + meta.short, L.btn);
+
+    // 排版几何：模式行一行、冷却 2×2、行标不折行、没有横向滚动
+    const geo = await ev(`(() => {
+      Game.openSetup(); Game.setSetupMode(false); Game.setLang(${JSON.stringify(lang)});
+      const tops = (els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().top)))].length;
+      const cols = (els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().left)))].length;
+      const lines = (el) => { const rg = document.createRange(); rg.selectNodeContents(el); return rg.getClientRects().length; };
+      const mode = [document.getElementById("mode3d"), document.getElementById("mode4d")];
+      const cool = [...document.querySelectorAll(".coolBtn")];
+      const s = document.getElementById("setup");
+      const status = document.getElementById("status");
+      return JSON.stringify({
+        modeLines: tops(mode), coolLines: tops(cool), coolCols: cols(cool),
+        labelLines: [...document.querySelectorAll(".rowLabel")].map(lines),
+        docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        setupOver: s.scrollWidth - s.clientWidth,
+        statusLines: lines(status), statusText: status.textContent,
+      });
+    })()`);
+    const g = JSON.parse(geo);
+    check(g.modeLines === 1, lang + "：3D / 4D 两个模式键在同一行", JSON.stringify(g.modeLines));
+    check(g.coolLines === 2 && g.coolCols === 2, lang + "：冷却键是 2 行 2 列", g.coolLines + "行" + g.coolCols + "列");
+    check(g.labelLines.every((n) => n <= 1), lang + "：行标都没有折行", JSON.stringify(g.labelLines));
+    check(g.docOver <= 1, lang + "：整个页面没有横向滚动", "溢出 " + g.docOver + "px");
+    // 【状态行那一条是"记录现状"不是"保证"】中文基线本来就折成两行（202.7px 文字
+    // 塞进 183px，改动前就是这样，拿今天早些时候的副本对拍过）。所以这里钉的是
+    // "不比中文更差"：任何语言都不许超过两行。
+    check(g.statusLines <= 2, lang + "：状态行不超过两行（中文基线就是两行）",
+      g.statusLines + " 行：" + JSON.stringify(g.statusText));
+  }
+  // 【复数真的换了形没有】这是"机制还在不在"的检查。把俄语的 .few 形和 .many 形
+  // 摆在一起比：如果 pluralForm 退化成"永远 many"、或者查表顺序错了，
+  // 3 手那一句就会用 many 形 —— 中文和英文都看不出这个区别（中英没有这一形）。
+  const ruPlural = await ev(`(() => {
+    Game.setLang("ru");
+    Game.closeSetup();
+    Game.newGame([15,15,15], 1);
+    Game.tryPlace(7,7); Game.tryPlace(8,7); Game.tryPlace(9,7);   // 3 手
+    const info = document.getElementById("info").textContent;
+    const fill = (s) => (s || "").split("{n}").join("3");
+    const few = fill(TEXT.ru["info.moves.few"]), many = fill(TEXT.ru["info.moves.many"]);
+    Game.setLang("zh");
+    return JSON.stringify({ info: info, few: few, many: many });
+  })()`);
+  const RP = JSON.parse(ruPlural);
+  check(RP.few !== RP.many && RP.info.indexOf(RP.few) >= 0,
+    "俄语的「3 手」用的是少数形（.few），不是 many 形 —— 复数机制真的在选形",
+    "界面：" + JSON.stringify(RP.info.slice(0, 60)) + " · few=" + JSON.stringify(RP.few) +
+    " · many=" + JSON.stringify(RP.many));
+
+  await ev(`Game.setLang("zh"); Game.closeSetup();`);
+
   const consoleAfterTouch = drainConsole();
   check(consoleAfterTouch.length === 0,
     "触屏手势过程中控制台没有报错", consoleAfterTouch.join("\n      "));

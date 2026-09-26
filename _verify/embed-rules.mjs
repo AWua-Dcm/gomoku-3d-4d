@@ -54,6 +54,21 @@ export const DOCS = [
     end: "<!-- RULES-EMBED-EN-END -->",
     id: "rulesSrcEn",
   },
+  // 【六种语言各一份】界面能切六种语言，规则浮层就得有六份正文 ——
+  // 少一份的表现是"切到那种语言后点「具体规则」，看到的是英文/中文"，
+  // 而不是报错。顺序必须和 index.html 里那六对标记的出现顺序一致（脚本会检查）。
+  { key: "ja", srcPath: path.join(HERE, "..", "Web_Gomoku3D", "RULES_SPEC.ja.md"),
+    srcRel: "Web_Gomoku3D/RULES_SPEC.ja.md",
+    begin: "<!-- RULES-EMBED-JA-BEGIN -->", end: "<!-- RULES-EMBED-JA-END -->", id: "rulesSrcJa" },
+  { key: "ko", srcPath: path.join(HERE, "..", "Web_Gomoku3D", "RULES_SPEC.ko.md"),
+    srcRel: "Web_Gomoku3D/RULES_SPEC.ko.md",
+    begin: "<!-- RULES-EMBED-KO-BEGIN -->", end: "<!-- RULES-EMBED-KO-END -->", id: "rulesSrcKo" },
+  { key: "ru", srcPath: path.join(HERE, "..", "Web_Gomoku3D", "RULES_SPEC.ru.md"),
+    srcRel: "Web_Gomoku3D/RULES_SPEC.ru.md",
+    begin: "<!-- RULES-EMBED-RU-BEGIN -->", end: "<!-- RULES-EMBED-RU-END -->", id: "rulesSrcRu" },
+  { key: "fr", srcPath: path.join(HERE, "..", "Web_Gomoku3D", "RULES_SPEC.fr.md"),
+    srcRel: "Web_Gomoku3D/RULES_SPEC.fr.md",
+    begin: "<!-- RULES-EMBED-FR-BEGIN -->", end: "<!-- RULES-EMBED-FR-END -->", id: "rulesSrcFr" },
 ];
 
 /**
