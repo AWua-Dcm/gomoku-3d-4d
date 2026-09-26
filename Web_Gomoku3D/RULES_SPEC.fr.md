@@ -204,10 +204,31 @@ et comme les trois axes doivent pouvoir tourner, les trois doivent avoir la mêm
 Si la taille par défaut en 4D est 8 et non 15, c'est que **plus le plateau est grand, moins une couche contient de pions et moins la rotation se voit** —
 sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la plupart des rotations tombent sur « aucun changement ».
 
-## 11. Ce que ce jeu ne fait pas
+## 11. Jouer contre l'ordinateur
+
+- **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil) /
+  ordinateur · facile / moyen / difficile. Les trois niveaux sont **volontairement faibles** : ils ne
+  regardent qu'un coup d'avance, et même le plus difficile ne calcule pas plus loin. Un adversaire
+  « facile » qui bat les débutants à tous les coups est le défaut habituel de cette fonction, donc
+  tout est tiré vers le bas.
+- **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
+  aussi la défaite pour alignement trop long) ; « Qui commence » choisit **lequel des deux** joue cette
+  couleur. Ainsi « Noirs en premier + Ordinateur » : l'ordinateur joue Noirs et ouvre, vous jouez
+  Blancs. La ligne sous les réglages indique votre couleur.
+- **L'ordinateur est soumis lui aussi à la règle de l'alignement trop long** — il évite les cases qui
+  lui donneraient six alignés et la défaite. Il rate quand même des trois ouverts et ne voit pas les
+  menaces doubles : c'est délibéré, pas un bug.
+- **Annuler retire votre coup et la réponse de l'ordinateur ensemble.** « Restaurer la rotation » est
+  indisponible contre l'ordinateur : utilisez Annuler.
+- **En 4D, l'ordinateur tourne aussi des couches**, mais rarement (au niveau facile, environ une fois
+  sur dix), et une rotation ne fait jamais gagner.
+
+## 12. Ce que ce jeu ne fait pas
 
 - **Pas de double-trois ni de double-quatre.** Dans le renju traditionnel, le premier joueur a aussi des interdits comme
   « un coup qui forme à la fois deux trois ouverts / deux quatre » ; ce jeu n'implémente que la défaite pour alignement trop long. La sanction tombe après la pose du pion : il n'existe pas de « cette case est interdite ».
-- **Pas d'adversaire informatique.** Seulement deux joueurs qui jouent à tour de rôle sur le même appareil.
+- **Pas d'ordinateur qui calcule.** Les trois niveaux ne regardent qu'un coup d'avance : ils ne
+  reconnaissent pas les figures à trou, ne voient pas les menaces doubles, et même le plus difficile ne
+  fait aucune recherche sur plusieurs coups. Une vraie force demanderait une implémentation avec recherche.
 - **Les rotations n'ont pas d'animation** : elles se font instantanément, seule la couche tournée est brièvement mise en évidence.
 - **Les rotations ne se font qu'avec les boutons du panneau**, pas en glissant directement dans la vue 3D.

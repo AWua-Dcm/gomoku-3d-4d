@@ -207,11 +207,31 @@ be rotatable, so all three must be the same length.
 4D defaults to 8 rather than 15 because **the bigger the board, the fewer stones a layer holds, and the less a rotation shows** —
 on a 15×15×15 board a layer holds less than one stone on average, and most rotations hit the "nothing changed" case.
 
-## 11. What this game does not do
+## 11. Playing the computer
+
+- **The start screen has an "Opponent" row**: Human (two players, one device) / CPU · easy /
+  CPU · medium / CPU · hard. All three tiers are **deliberately weak**: they look one move ahead, and
+  even the hardest tier does not search any deeper. An "easy" opponent that beats beginners every time
+  is the usual failure of this feature, so the whole thing errs on the weak side.
+- **Two choices, two different jobs.** "First player" picks the **colour** that goes first (which is
+  also the colour that carries the overline loss); "Who starts" picks **which of the two** plays that
+  colour. So "Black first + Computer" means the computer plays Black and opens, and you play White.
+  The summary line at the bottom of the settings spells out which colour you are.
+- **The computer is bound by the overline rule too** — it avoids the cells that would give it six in a
+  row and lose. It still misses open threes and does not see double threats; that is deliberate,
+  not a bug.
+- **Undo takes back your move and the computer's reply together.** "Restore this rotation" is not
+  available against the computer — use Undo instead.
+- **In 4D the computer rotates layers too**, but not often (the easy tier considers it about once in
+  ten), and a rotation can never win the game.
+
+## 12. What this game does not do
 
 - **No double-three or double-four restrictions.** In traditional Renju (Gomoku's competitive form) the first player is also
   barred from "one move making two open threes / two fours" and the like; this game implements the overline loss only. The
   penalty falls after the move — there is no cell you are forbidden to play.
-- **No computer opponent.** Two people take turns on the same device.
+- **No computer opponent that searches.** All three tiers look one move ahead: they do not recognise
+  gapped shapes, they do not see double threats, and even the hardest tier does no multi-move search.
+  Real strength would need a searching implementation.
 - **Rotations are not animated**; they land instantly, with only a brief highlight on the rotated layer.
 - **Rotations can only be made with the panel buttons**, not by dragging in the 3D view.

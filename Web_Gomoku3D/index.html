@@ -1015,11 +1015,26 @@
 四维的默认尺寸取 8 而不是 15，是因为**棋盘越大，一层里的棋子越少，转动就越看不出来** ——
 15×15×15 的棋盘上，一层里平均还不到一颗子，多数转动都会撞上"没有变化"。
 
-## 11. 本作没有做的事
+## 11. 人机对战
+
+- **起始界面可以选「对手」**：人类（同机轮流）/ 电脑 · 弱 / 电脑 · 中 / 电脑 · 强。
+  三档都是**刻意做弱**的：只算眼前一步，最高档也不会再多算。低级难度把玩家打得没脾气
+  是这类功能最常见的毛病，所以宁可做弱。
+- **两个选择各管一件事**：「谁先手」选的是**哪个颜色**先走（顺带也就定了谁背长连判负），
+  「谁先下」选的是**哪个人**执那个颜色。所以「黑棋先手 + 电脑」= 电脑执黑走第一手、你执白。
+  起始界面底下那句总结会把「你执哪个色」写出来。
+- **电脑一样受长连判负约束**，它也会躲开让自己连成 6 个的点。但它照样会漏堵活三、
+  看不见双威胁 —— 这是刻意的，不是 bug。
+- **悔棋一次退回你落子之前**：电脑的应手会一并撤掉。人机对战里「恢复本次转动」不对玩家开放，
+  要退回去请用「悔棋」。
+- **四维模式下电脑也会转动层**，但转得不多（弱档大约十次里才考虑一次），而且转动永远赢不了棋。
+
+## 12. 本作没有做的事
 
 - **没有双三、双四禁手。** 传统连珠（Renju）里，先手还有"一手同时形成两个活三 / 两个四"
   这类禁手，本作只实现了长连判负这一条。判罚发生在落子之后，不存在"这个点不能落"。
-- **没有电脑对手。** 只能两个人轮流在同一台设备上走。
+- **没有会搜索的电脑对手。** 三档都只看眼前一步，认不出跳子形状、看不见双威胁，
+  最高档也不做多步搜索。想要真正的棋力得换成会搜索的实现。
 - **转动没有动画**，是瞬间到位，只会高亮一下被转的那一层。
 - **转动只能用面板上的按钮完成**，不能在立体视图里直接拖动。
 </script>
@@ -1242,12 +1257,32 @@ be rotatable, so all three must be the same length.
 4D defaults to 8 rather than 15 because **the bigger the board, the fewer stones a layer holds, and the less a rotation shows** —
 on a 15×15×15 board a layer holds less than one stone on average, and most rotations hit the "nothing changed" case.
 
-## 11. What this game does not do
+## 11. Playing the computer
+
+- **The start screen has an "Opponent" row**: Human (two players, one device) / CPU · easy /
+  CPU · medium / CPU · hard. All three tiers are **deliberately weak**: they look one move ahead, and
+  even the hardest tier does not search any deeper. An "easy" opponent that beats beginners every time
+  is the usual failure of this feature, so the whole thing errs on the weak side.
+- **Two choices, two different jobs.** "First player" picks the **colour** that goes first (which is
+  also the colour that carries the overline loss); "Who starts" picks **which of the two** plays that
+  colour. So "Black first + Computer" means the computer plays Black and opens, and you play White.
+  The summary line at the bottom of the settings spells out which colour you are.
+- **The computer is bound by the overline rule too** — it avoids the cells that would give it six in a
+  row and lose. It still misses open threes and does not see double threats; that is deliberate,
+  not a bug.
+- **Undo takes back your move and the computer's reply together.** "Restore this rotation" is not
+  available against the computer — use Undo instead.
+- **In 4D the computer rotates layers too**, but not often (the easy tier considers it about once in
+  ten), and a rotation can never win the game.
+
+## 12. What this game does not do
 
 - **No double-three or double-four restrictions.** In traditional Renju (Gomoku's competitive form) the first player is also
   barred from "one move making two open threes / two fours" and the like; this game implements the overline loss only. The
   penalty falls after the move — there is no cell you are forbidden to play.
-- **No computer opponent.** Two people take turns on the same device.
+- **No computer opponent that searches.** All three tiers look one move ahead: they do not recognise
+  gapped shapes, they do not see double threats, and even the hardest tier does no multi-move search.
+  Real strength would need a searching implementation.
 - **Rotations are not animated**; they land instantly, with only a brief highlight on the rotated layer.
 - **Rotations can only be made with the panel buttons**, not by dragging in the 3D view.
 </script>
@@ -1467,11 +1502,29 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 4D の既定サイズが 15 ではなく 8 なのは、**盤が大きいほど 1 レイヤーに入る石が減り、回転が目に見えなくなる**から ——
 15×15×15 の盤では 1 レイヤーに平均して 1 つも石がなく、ほとんどの回転が「変化なし」に当たる。
 
-## 11. 本作がやっていないこと
+## 11. コンピュータとの対戦
+
+- **開始画面に「対戦相手」の行がある**：人間（同じ端末で交互に）/ コンピュータ · 弱 / 中 / 強。
+  3 段階とも**わざと弱く**作ってあり、読むのは常に一手先まで —— 最上位でもそれ以上は読みません。
+  「簡単」な相手が初心者を毎回負かしてしまうのはこの手の機能でありがちな失敗なので、
+  弱い側に振ってあります。
+- **2 つの選択は役割が違う**：「誰が先手」は**どの色**が先に打つか（＝長連による負けを負う側）を選び、
+  「誰が先に打つか」は**2 人のどちら**がその色を持つかを選びます。つまり
+  「黒が先手 + コンピュータ」ならコンピュータが黒で初手を打ち、あなたは白です。
+  設定の下の要約に「あなたがどちらの色か」が書いてあります。
+- **コンピュータも長連の規則に縛られます** —— 自分が 6 連になる点は避けます。
+  それでも活三を止め損ねたり、二重の脅威を見落としたりします。これは意図的です。
+- **「取り消し」はあなたの手とコンピュータの応手をまとめて戻します。**
+  コンピュータ対戦では「この回転を戻す」は使えません —— 取り消しを使ってください。
+- **4D ではコンピュータも層を回します**が、頻度は低めです（弱では十回に一回程度しか検討しません）。
+  そして回転で勝つことはできません。
+
+## 12. 本作がやっていないこと
 
 - **三三禁・四四禁はない。** 伝統的な連珠（Renju）では、先手に「1 手で同時に 2 つの活三 / 2 つの四を作る」
   といった禁手もあるが、本作が実装しているのは長連による負けの 1 つだけ。反則の判定は着手の後に行われ、「この点には打てない」ということはない。
-- **コンピュータの対戦相手はいない。** 2 人が同じ端末で交互に打つだけ。
+- **読むコンピュータはいない。** 3 段階とも一手先しか見ません：跳びの形は認めず、
+  二重の脅威も見えず、最上位でも複数手の探索はしません。本当の棋力には探索する実装が要ります。
 - **回転にアニメーションはない**。瞬時に移動し、回したレイヤーが一瞬ハイライトされるだけ。
 - **回転はパネルのボタンでしか行えない**。立体ビューの中で直接ドラッグすることはできない。
 </script>
@@ -1687,11 +1740,28 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 4D의 기본 크기를 15가 아니라 8로 잡은 이유는 **판이 클수록 한 레이어에 담기는 돌이 적어서 회전이 잘 보이지 않기 때문**입니다 —
 15×15×15 판에서는 한 레이어에 평균적으로 돌이 한 개도 되지 않아, 대부분의 회전이 “변화 없음”에 걸립니다.
 
-## 11. 이 게임이 하지 않은 것
+## 11. 컴퓨터와의 대국
+
+- **시작 화면에 「상대」 줄이 있습니다**: 사람(같은 기기에서 번갈아) / 컴퓨터 · 하 / 중 / 상.
+  세 단계 모두 **일부러 약하게** 만들어졌고, 한 수 앞만 봅니다 — 가장 높은 단계도 더 읽지 않습니다.
+  "쉬움" 상대가 초보자를 매번 이기는 것은 이런 기능에서 흔한 실패라서, 약한 쪽으로 맞췄습니다.
+- **두 선택은 역할이 다릅니다**: 「누가 선수인가」는 **어느 색**이 먼저 두는지(곧 장련 패배를 지는 쪽)를,
+  「누가 먼저 두는가」는 **두 사람 중 누가** 그 색을 잡는지를 고릅니다. 즉
+  「흑 선수 + 컴퓨터」면 컴퓨터가 흑으로 첫 수를 두고 당신은 백입니다.
+  설정 아래 요약에 당신이 어느 색인지 적혀 있습니다.
+- **컴퓨터도 장련 규칙에 묶입니다** — 자기가 6연이 되는 자리는 피합니다.
+  그래도 활삼을 놓치거나 두 겹 위협을 보지 못합니다. 이는 의도된 것입니다.
+- **「되돌리기」는 당신의 수와 컴퓨터의 응수를 함께 되돌립니다.**
+  컴퓨터 대국에서는 「이번 회전 되돌리기」를 쓸 수 없습니다 — 되돌리기를 쓰세요.
+- **4D에서는 컴퓨터도 층을 돌립니다**, 다만 자주는 아닙니다(하 단계는 열 번에 한 번 정도만 따집니다).
+  그리고 회전으로 이길 수는 없습니다.
+
+## 12. 이 게임이 하지 않은 것
 
 - **쌍삼, 쌍사 금지가 없습니다.** 전통 렌주(Renju)에서는 선수에게 “한 수로 활삼 둘 / 사 둘을 만드는”
   같은 금지가 더 있지만, 이 게임은 장련 패배 하나만 구현했습니다. 판정은 착수 뒤에 이루어지고, “이 점에는 둘 수 없다”는 것은 없습니다.
-- **컴퓨터 대수가 없습니다.** 같은 기기에서 두 사람이 번갈아 둘 수만 있습니다.
+- **탐색하는 컴퓨터는 없습니다.** 세 단계 모두 한 수 앞만 봅니다: 띈 모양을 알아보지 못하고,
+  두 겹 위협도 보지 못하며, 가장 높은 단계도 여러 수를 탐색하지 않습니다. 진짜 기력에는 탐색 구현이 필요합니다.
 - **회전에는 애니메이션이 없습니다**, 순간적으로 자리를 잡고, 회전한 레이어만 잠깐 강조 표시됩니다.
 - **회전은 패널의 버튼으로만 할 수 있습니다**, 입체 뷰에서 직접 끌어서 돌릴 수는 없습니다.
 </script>
@@ -1907,11 +1977,31 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 В 4D по умолчанию берётся 8, а не 15, потому что **чем больше доска, тем меньше камней в одном слое и тем незаметнее поворот** —
 на доске 15×15×15 в слое в среднем меньше одного камня, и большинство поворотов упирается в «изменений нет».
 
-## 11. Чего в этой игре нет
+## 11. Игра с компьютером
+
+- **На стартовом экране есть строка «Соперник»**: человек (двое по очереди на одном устройстве) /
+  компьютер · слабый / средний / сильный. Все три уровня **намеренно слабые**: они смотрят на один ход
+  вперёд, и даже сильнейший не считает дальше. «Лёгкий» соперник, обыгрывающий новичка каждый раз, —
+  обычная беда таких функций, поэтому всё смещено в слабую сторону.
+- **Два выбора делают разное.** «Первый игрок» выбирает **цвет**, который ходит первым (он же несёт
+  поражение за перебор); «Кто ходит» выбирает, **кто из двоих** играет этим цветом. То есть
+  «Первыми ходят чёрные + Компьютер» — компьютер играет чёрными и начинает, а вы белыми.
+  Строка под настройками прямо говорит, какого цвета вы.
+- **Компьютер тоже связан правилом перебора** — он не станет играть туда, где получит шесть в ряд и
+  проиграет. Но открытые тройки он всё равно пропускает и двойных угроз не видит. Это сделано
+  намеренно, а не является ошибкой.
+- **Отмена возвращает и ваш ход, и ответ компьютера.** «Вернуть этот поворот» в игре с компьютером
+  недоступно — пользуйтесь отменой.
+- **В 4D компьютер тоже поворачивает слои**, но нечасто (на слабом уровне — примерно один раз из
+  десяти), и поворот никогда не приносит победу.
+
+## 12. Чего в этой игре нет
 
 - **Нет запретов на двойную тройку и двойную четвёрку.** В традиционном рэндзю (Renju) у первого игрока есть ещё такие запреты, как «один ход образует две открытые тройки / две четвёрки»;
   в этой игре реализовано только поражение за перебор. Наказание наступает после хода — запретных точек, куда нельзя ставить камень, не существует.
-- **Нет компьютерного соперника.** Играют двое по очереди на одном устройстве.
+- **Нет компьютера, который считает.** Все три уровня смотрят на один ход вперёд: они не узнают
+  разорванные фигуры, не видят двойных угроз, и даже сильнейший не перебирает несколько ходов.
+  Для настоящей силы нужна реализация с поиском.
 - **У поворота нет анимации** — он происходит мгновенно, лишь на миг подсвечивается повёрнутый слой.
 - **Поворот выполняется только кнопками на панели**, его нельзя сделать перетаскиванием прямо в объёмном виде.
 </script>
@@ -2127,11 +2217,32 @@ et comme les trois axes doivent pouvoir tourner, les trois doivent avoir la mêm
 Si la taille par défaut en 4D est 8 et non 15, c'est que **plus le plateau est grand, moins une couche contient de pions et moins la rotation se voit** —
 sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la plupart des rotations tombent sur « aucun changement ».
 
-## 11. Ce que ce jeu ne fait pas
+## 11. Jouer contre l'ordinateur
+
+- **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil) /
+  ordinateur · facile / moyen / difficile. Les trois niveaux sont **volontairement faibles** : ils ne
+  regardent qu'un coup d'avance, et même le plus difficile ne calcule pas plus loin. Un adversaire
+  « facile » qui bat les débutants à tous les coups est le défaut habituel de cette fonction, donc
+  tout est tiré vers le bas.
+- **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
+  aussi la défaite pour alignement trop long) ; « Qui commence » choisit **lequel des deux** joue cette
+  couleur. Ainsi « Noirs en premier + Ordinateur » : l'ordinateur joue Noirs et ouvre, vous jouez
+  Blancs. La ligne sous les réglages indique votre couleur.
+- **L'ordinateur est soumis lui aussi à la règle de l'alignement trop long** — il évite les cases qui
+  lui donneraient six alignés et la défaite. Il rate quand même des trois ouverts et ne voit pas les
+  menaces doubles : c'est délibéré, pas un bug.
+- **Annuler retire votre coup et la réponse de l'ordinateur ensemble.** « Restaurer la rotation » est
+  indisponible contre l'ordinateur : utilisez Annuler.
+- **En 4D, l'ordinateur tourne aussi des couches**, mais rarement (au niveau facile, environ une fois
+  sur dix), et une rotation ne fait jamais gagner.
+
+## 12. Ce que ce jeu ne fait pas
 
 - **Pas de double-trois ni de double-quatre.** Dans le renju traditionnel, le premier joueur a aussi des interdits comme
   « un coup qui forme à la fois deux trois ouverts / deux quatre » ; ce jeu n'implémente que la défaite pour alignement trop long. La sanction tombe après la pose du pion : il n'existe pas de « cette case est interdite ».
-- **Pas d'adversaire informatique.** Seulement deux joueurs qui jouent à tour de rôle sur le même appareil.
+- **Pas d'ordinateur qui calcule.** Les trois niveaux ne regardent qu'un coup d'avance : ils ne
+  reconnaissent pas les figures à trou, ne voient pas les menaces doubles, et même le plus difficile ne
+  fait aucune recherche sur plusieurs coups. Une vraie force demanderait une implémentation avec recherche.
 - **Les rotations n'ont pas d'animation** : elles se font instantanément, seule la couche tournée est brièvement mise en évidence.
 - **Les rotations ne se font qu'avec les boutons du panneau**, pas en glissant directement dans la vue 3D.
 </script>
