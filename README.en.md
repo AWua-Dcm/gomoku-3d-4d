@@ -5,7 +5,13 @@
 **3D & 4D Gomoku** — one HTML file, double-click to play, zero dependencies.
 *三维与四维五子棋 —— 单文件网页版，双击即玩，零依赖。*
 
-**▶ Play online: <https://awua-dcm.github.io/gomoku-3d-4d/>** — the same single file, hosted on GitHub Pages.
+[![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
+[![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
+[![Assertions](https://img.shields.io/badge/assertions-40466_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
+
+The online demo serves the very same `index.html` that is in this repository, hosted on
+GitHub Pages — there is no build step, and the deployed file is the file you can double-click.
 
 The game's interface switches between English and Chinese too: the button in the top-right
 corner. It starts in Chinese.
@@ -14,7 +20,7 @@ corner. It starts in Chinese.
 
 ---
 
-## What this is
+## 🎯 What this is
 
 Gomoku (five-in-a-row) played on an **N×N×N board**. The big difference from the flat game
 is that there are far more ways to line stones up — **13 directions** in all (3 axes +
@@ -31,14 +37,14 @@ Three things you don't see every day:
 
 ---
 
-## How to play
+## 🕹️ How to play
 
 **Double-click `Web_Gomoku3D/index.html`** and it opens in any modern browser.
 
 No server, no network, nothing to install.
 To confirm nothing is broken: press `F12` → Console and look for red text.
 
-### Controls
+### ⌨️ Controls
 
 | Action | What it does |
 |---|---|
@@ -53,12 +59,18 @@ To confirm nothing is broken: press `F12` → Console and look for red text.
 | `H` | Hide / show the grid lines (same as the top-left button) |
 | `Q` `E` or `[` `]` | Change the current layer |
 | `T` / `Y` | (4D) Rotate a layer / undo that rotation |
+| Touch: pinch in / out | Zoom the board. **Works on both the 3D board and the single-layer board** (on a phone a cell of the layer board is only about 10px across, so zooming is the only way to aim) |
+| Touch: two-finger drag | Pan the board — it follows your fingers |
+| Touch: double-tap a board | Reset — the 3D board returns to its start framing, the layer board to 1×, pan cleared. **The angle you rotated to is left alone** |
+
+> While zoomed in, a single tap places its stone after a ~300ms double-tap window.
+> **At 1× with no panning there is no such delay** — placing is as immediate as it always was.
 
 The **Full rules** button in the top-right corner opens the complete rule text.
 
 ---
 
-## Running the tests
+## 🧪 Running the tests
 
 ```bash
 bash _verify/run-all.sh
@@ -67,7 +79,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Eight steps; expected result:
 
 ```
-11733 + 19408 + 98 + 77 + 8845 + 115 + 124 = 40400 assertions, all green
+11733 + 19408 + 98 + 89 + 8845 + 115 + 178 = 40466 assertions, all green
 ```
 
 Step 8 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -80,10 +92,10 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 77 | UI against a DOM stub (includes the language switch) |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 89 | UI against a DOM stub (includes the language switch, gesture and reset edge cases) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
-| `node _verify/browser-check.mjs` | 124 | Real browser (GLSL compilation, layout geometry, console errors, English layout) |
+| `node _verify/browser-check.mjs` | 178 | Real browser (GLSL compilation, layout geometry, console errors, English layout, synthesized multi-touch) |
 
 The two networking tests run inside step 7 and **cannot be skipped**.
 
@@ -106,7 +118,7 @@ each deliberately breaks the code and requires that the tests catch every case:
 (One caveat: the assertion total above is hard-coded, so it always lags a little behind.
 The real total is whatever `bash _verify/run-all.sh` prints.)
 
-### About the "frozen vectors"
+### 🔒 About the "frozen vectors"
 
 `tests/vectors.json` and `tests/rotation-vectors.json` were **exported from a C# kernel
 that has since been deleted**. The export script and the C# source are both gone. That means:
@@ -121,7 +133,7 @@ See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
 
 ---
 
-## Repository layout
+## 📁 Repository layout
 
 ```
 .
@@ -146,7 +158,7 @@ See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
 └── LICENSE
 ```
 
-### A deliberate design choice: one file
+### 🧩 A deliberate design choice: one file
 
 The section of `index.html` between `/* GOMOKU-CORE-BEGIN */` and `/* GOMOKU-CORE-END */`
 is a **pure rule kernel** — it touches no DOM, no WebGL, no browser API. So the same source
@@ -161,7 +173,7 @@ to happen.
 
 ---
 
-## English and Chinese
+## 🌐 English and Chinese
 
 The button in the top-right corner switches the interface between Chinese and English.
 It **starts in Chinese** — it does not read `navigator.language`. That is switching, not guessing.
@@ -181,7 +193,7 @@ Three things worth knowing:
   English and sweeps the whole rendered tree, screen by screen; no visible text may be Chinese,
   and none may be a leaked translation key like `info.moves.one`
 
-### Which documents are English?
+### 📚 Which documents are English?
 
 The player-facing material is bilingual: this README, the full rules (`RULES_SPEC.en.md`),
 and the whole interface. The **deep engineering documentation is Chinese only** —
@@ -191,7 +203,7 @@ and it is stated here rather than papered over.
 
 ---
 
-## Known limitations
+## ⚠️ Known limitations
 
 - **No computer opponent.** Two people take turns on the same device.
   (Cross-machine networking: the **server and protocol are implemented and tested**
@@ -213,6 +225,45 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ---
 
-## License
+## 📝 Changelog
+
+> Newest first. The entry marked "in progress" has not been released yet.
+
+### 2026.09.26
+
+- 🌐 **v2.8.0** Japanese, Korean, Russian and French — **in progress, not released yet**
+- 🐛 **v2.7.4** Fixed the board being impossible to zoom on phones: pinch to zoom and pan, double-tap to reset
+- 🎨 **v2.7.3** Moved the language and rules buttons to the top of the setup screen
+- 🐛 **v2.7.2** Fixed misplaced buttons in the English layout in portrait
+
+### 2026.09.25
+
+- 🐛 **v2.7.1** Fixed a few bugs
+- 📱 **v2.7.0** Portrait support — playable in a phone or tablet browser
+- ✨ **v2.6.0** Added a "black only / white only" filter, to make a position easier to read
+
+### 2026.09.24
+
+- ✨ **v2.5.0** Added a switch for the 3D grid lines, to make a position easier to read
+- 🌐 **v2.4.0** Added the English / Chinese switch
+- 🐛 **v2.3.3** Fixed a few bugs; the project was published on GitHub
+- 📝 **v2.3.2** Planned the online multiplayer feature — not fully implemented yet
+- 🎨 **v2.3.1** Moved the buttons on the setup screen
+- 🎨 **v2.3.0** Reworked the setup screen so it no longer feels split in two
+- 📝 **v2.2.1** Revised the rule text
+- ✨ **v2.2.0** Added the rules panel in the top-right corner
+- 🎨 **v2.1.0** Changed the game UI and fixed some details
+- ✨ **v2.0.0** Added 4D gomoku ("4D" here means a board whose layers can be rotated like a Rubik's cube; more gameplay to come)
+
+### 2026.09.23
+
+- 🐛 **v1.1.1** Fixed a few bugs
+- ✨ **v1.1.0** Added the hover lines that mark a cell's position
+- 🐛 **v1.0.1** Fixed a few bugs
+- 🎉 **v1.0.0** First working 3D gomoku prototype
+
+---
+
+## 📄 License
 
 [MIT](LICENSE)
