@@ -7,14 +7,14 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-40466_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-40539_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
 GitHub Pages — there is no build step, and the deployed file is the file you can double-click.
 
-The game's interface switches between English and Chinese too: the button in the top-right
-corner. It starts in Chinese.
+The game's interface switches between six languages too — the button in the top-right corner
+opens the list. It starts in Chinese.
 
 ![Setup screen](_verify/shots/6-起始界面-英文.png)
 
@@ -61,6 +61,7 @@ To confirm nothing is broken: press `F12` → Console and look for red text.
 | `T` / `Y` | (4D) Rotate a layer / undo that rotation |
 | Touch: pinch in / out | Zoom the board. **Works on both the 3D board and the single-layer board** (on a phone a cell of the layer board is only about 10px across, so zooming is the only way to aim) |
 | Touch: two-finger drag | Pan the board — it follows your fingers |
+| Language button, top-right | Opens a list of the six languages (中文 / English / 日本語 / 한국어 / Русский / Français); the current one is highlighted |
 | Touch: double-tap a board | Reset — the 3D board returns to its start framing, the layer board to 1×, pan cleared. **The angle you rotated to is left alone** |
 
 > While zoomed in, a single tap places its stone after a ~300ms double-tap window.
@@ -79,7 +80,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Eight steps; expected result:
 
 ```
-11733 + 19408 + 98 + 89 + 8845 + 115 + 178 = 40466 assertions, all green
+11733 + 19408 + 98 + 93 + 8845 + 115 + 247 = 40539 assertions, all green
 ```
 
 Step 8 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -92,10 +93,10 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 89 | UI against a DOM stub (includes the language switch, gesture and reset edge cases) |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 93 | UI against a DOM stub (includes the language switch, gesture and reset edge cases) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
-| `node _verify/browser-check.mjs` | 178 | Real browser (GLSL compilation, layout geometry, console errors, English layout, synthesized multi-touch) |
+| `node _verify/browser-check.mjs` | 247 | Real browser (GLSL compilation, layout geometry, console errors, English layout, synthesized multi-touch) |
 
 The two networking tests run inside step 7 and **cannot be skipped**.
 
@@ -105,7 +106,7 @@ each deliberately breaks the code and requires that the tests catch every case:
 | Command | What it does |
 |---|---|
 | `python _verify/inject-rulenote.py` | Breaks the on-screen rule summary 3 ways; both suites must catch 3/3 |
-| `python _verify/inject-i18n.py` | Breaks the language switching 4 ways; both suites must catch 4/4 |
+| `python _verify/inject-i18n.py` | Breaks the language handling 8 ways (a missing translation in each of the three tables, a broken switch-back to Chinese, an unhighlighted list, a plural form that never changes…) and names, per case, which suite has to catch it |
 | `node _verify/inject-online.mjs` | Breaks the networking code 25 ways; every case must turn a test red (slow, not part of `run-all.sh`) |
 
 > The first two temporarily break `index.html` and restore it in a `finally` block.
@@ -143,13 +144,17 @@ See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
 │   ├── server.js               ← the networking server (zero dependencies). Protocol and tests are in place; the page is not wired to it yet
 │   ├── README.md               ← engineering notes: architecture, evidence boundaries, known limits (Chinese only — much deeper than this file)
 │   ├── RULES_SPEC.md           ← full rules, for players (Chinese). This is what "Full rules" shows
-│   ├── RULES_SPEC.en.md        ← the same rules in English. This is what "Full rules" shows in English
+│   ├── RULES_SPEC.en.md        ← the rules in English / Japanese / Korean / Russian / French:
+│   ├── RULES_SPEC.ja.md        ←   picking a language shows that language's copy
+│   ├── RULES_SPEC.ko.md
+│   ├── RULES_SPEC.ru.md
+│   ├── RULES_SPEC.fr.md
 │   ├── ONLINE.md               ← design for two-player networking (Chinese only)
 │   └── tests/                  ← offline tests + the two frozen vector files
 ├── _verify/
 │   ├── run-all.sh              ← one command runs every offline check
 │   ├── browser-check.mjs       ← headless Chrome/Edge: GLSL, console, layout geometry, screenshots
-│   ├── embed-rules.mjs         ← generator that embeds both RULES_SPEC files into index.html
+│   ├── embed-rules.mjs         ← generator that embeds all six RULES_SPEC files into index.html
 │   ├── inject-rulenote.py      ← injection check: proves the rule-summary assertions can fail
 │   ├── inject-i18n.py          ← injection check: proves the language-switch assertions can fail
 │   ├── inject-online.mjs       ← injection check: proves the networking assertions can fail (slow, 25 cases)
@@ -173,25 +178,40 @@ to happen.
 
 ---
 
-## 🌐 English and Chinese
+## 🌐 Six languages
 
-The button in the top-right corner switches the interface between Chinese and English.
+The language button in the top-right corner opens a list of six:
+**中文 / English / 日本語 / 한국어 / Русский / Français**. Each entry is written in its own
+language (an endonym — no letter codes, no flags), and the current one is highlighted.
 It **starts in Chinese** — it does not read `navigator.language`. That is switching, not guessing.
+The choice is remembered in `localStorage`.
 
-Three things worth knowing:
+The full rule text exists in all six (`RULES_SPEC.md` / `.en` / `.ja` / `.ko` / `.ru` / `.fr`)
+and follows the language you pick.
 
-- **The Chinese text stays in the HTML; English lives in a string table.** Switching back to
-  Chinese writes the original HTML text back, so there is exactly one copy of the Chinese —
-  the two languages can't quietly drift apart
-- **The rule kernel contains English text as well.** The kernel was already building Chinese
+Four things worth knowing:
+
+- **The Chinese text stays in the HTML; the other languages live in string tables.** Switching
+  back to Chinese writes the original HTML text back, so there is exactly one copy of the
+  Chinese — the languages can't quietly drift apart
+- **The rule kernel carries six languages too.** The kernel was already building Chinese
   sentences (`黑`/`白`, status descriptions), and there was no way around translating it: it has
   to be extractable verbatim by `server.js` and three test files, so it cannot reference an
-  outside string table. The cost is that the kernel is no longer purely an algorithm. Every
-  text-building function takes a trailing `lang = "zh"` argument; called without it, the output
-  is byte-for-byte what it always was
-- **Leftover Chinese in the English UI is guarded by assertions.** `browser-check` switches to
-  English and sweeps the whole rendered tree, screen by screen; no visible text may be Chinese,
-  and none may be a leaked translation key like `info.moves.one`
+  outside string table — it keeps its own (`CORE_TEXT`). Called without `lang`, the output is
+  byte-for-byte what it always was; the networking protocol is therefore still Chinese
+- **Plurals are chosen per language.** Chinese, Japanese and Korean have none; English and
+  French have two forms (French counts 0 as singular); Russian has three (1 / 2–4 / 5+, with
+  11–19 falling into the third). The rule lives in exactly one place — inside the kernel,
+  because the UI needs it too and the kernel cannot call into the UI
+- **Leftover Chinese in a translated UI is guarded by assertions.** `browser-check` sweeps the
+  rendered tree screen by screen: any CJK character in the Russian or French UI, any Chinese
+  character run that is **not part of that language's own translations** in the Japanese or
+  Korean UI, and any leaked key name — all of those fail the check
+
+> On translation quality: every string and all four new rule documents were checked
+> string-by-string for placeholders, HTML tags and structure — but **"does it read naturally"
+> is not something an assertion can prove**. Where the six disagree, the Chinese is the source
+> of truth.
 
 ### 📚 Which documents are English?
 
@@ -227,11 +247,13 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ## 📝 Changelog
 
-> Newest first. The entry marked "in progress" has not been released yet.
+> Newest first.
 
 ### 2026.09.26
 
-- 🌐 **v2.8.0** Japanese, Korean, Russian and French — **in progress, not released yet**
+- 🌐 **v2.8.0** Japanese, Korean, Russian and French: the UI now switches between six languages
+  (the top-right button opens a list, each entry in its own language), and four more full rule
+  translations; plurals are chosen per language (three forms in Russian)
 - 🐛 **v2.7.4** Fixed the board being impossible to zoom on phones: pinch to zoom and pan, double-tap to reset
 - 🎨 **v2.7.3** Moved the language and rules buttons to the top of the setup screen
 - 🐛 **v2.7.2** Fixed misplaced buttons in the English layout in portrait

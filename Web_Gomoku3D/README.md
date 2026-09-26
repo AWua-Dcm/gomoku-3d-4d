@@ -274,9 +274,10 @@ UI 上四维模式只给一个 N，切模式时强制立方；`newGame` 里再�
 - `tests/dom-smoke.test.mjs` 断言**页面里那段逐字节等于源文件**，不一致时报出第一处差在哪一行。
 - `_verify/run-all.sh` 第 1 步跑 `embed-rules.mjs --check`，改了文档忘了重新生成会当场失败。
 
-**界面能切语言之后，这段变成了两个源文件、两对标记**：
+**界面能切六种语言之后，这段变成了六个源文件、六对标记**：
 [RULES_SPEC.md](RULES_SPEC.md)（zh，`#rulesSrc`）和 [RULES_SPEC.en.md](RULES_SPEC.en.md)
-（en，`#rulesSrcEn`），`openRules()` 按当前语言取那一段。`readRules()` 两份都要查
+（en / ja / ko / ru / fr，`#rulesSrcEn` … `#rulesSrcFr`），`openRules()` 按当前语言取那一段。
+`readRules()` 六份都要查
 CRLF 和 `</script`（一份变成 CRLF，"逐字节相等"就失去了意义；出现 `</script`
 浏览器会把 script 块当场截断，而页面只是规则少了一半、不报错）。
 
@@ -364,10 +365,11 @@ BEGIN 和 END **中间**，生成一次就会把英文块整段删掉 —— 而
 |---|---|---|
 | `server.js` | `o.reason` / `o.describe()` 直接上线，线上格式要改 | 一个字节不用动 |
 | 两个联机测试 | 11 条中文子串断言要跟着改 | 一条不用改 |
-| 内核的性质 | 纯算法 | **算法 + 两种语言的文案** |
+| 内核的性质 | 纯算法 | **算法 + 六种语言的文案** |
 
 选了后者，因为前者是"为了翻译去动线上协议和 11 条断言"。代价要写在这里：
-**内核不再只是算法**。这不是新性质（它本来就在产 `黑`/`白`），但现在它装着两种语言。
+**内核不再只是算法**。这不是新性质（它本来就在产 `黑`/`白`），但现在它装着一张
+`CORE_TEXT` 表、每种文案 × 六种语言。
 
 做法是每个文案函数尾部加一个**带默认值**的可选参数 `lang = "zh"`。三个要点：
 
@@ -391,7 +393,7 @@ BEGIN 和 END **中间**，生成一次就会把英文块整段删掉 —— 而
 `browser-check` 里有一条用 `Range.getClientRects().length` 数每个行标占几个行盒的断言钉着它
 ——**那条断言自己先红过一次**（红的就是 `rowLabelCool`），才有的这个值。
 
-`.seal` 里的「弈」**两种语言都不换**：它是装饰性的古风印章，换成拉丁字母和那圈楷体边框更不搭。
+`.seal` 里的「弈」**六种语言都不换**：它是装饰性的古风印章，换成拉丁字母和那圈楷体边框更不搭。
 `browser-check` 的"英文界面上不许有中文"扫描里，它和语言按钮一起在允许名单里。
 
 ### 英文界面上"还剩中文"这件事是有断言的
@@ -424,7 +426,7 @@ BEGIN 和 END **中间**，生成一次就会把英文块整段删掉 —— 而
 | 和局 | Draw |
 | 具体规则 | Full rules |
 
-`×`（`8 × 12 × 30`）两种语言都保留；`#dimRange` 的范围分隔符保留 EN DASH `–`（`8 – 50`），
+`×`（`8 × 12 × 30`）六种语言都保留；`#dimRange` 的范围分隔符保留 EN DASH `–`（`8 – 50`），
 `online-http.test.mjs` 的断言就是靠这个字符。
 
 ### 注入验证
@@ -450,7 +452,7 @@ BEGIN 和 END **中间**，生成一次就会把英文块整段删掉 —— 而
 node Web_Gomoku3D/tests/rules.test.mjs     # 11733 项断言（三维模式基线）
 node Web_Gomoku3D/tests/rotation.test.mjs  # 19408 项断言（四维转动一致性）
 node Web_Gomoku3D/tests/dims.test.mjs      #   98 项断言（长方体 + 尺寸约束）
-node Web_Gomoku3D/tests/dom-smoke.test.mjs #   77 项断言（含中英双语切换）
+node Web_Gomoku3D/tests/dom-smoke.test.mjs #   93 项断言（含六语言文案齐全性）
 node Web_Gomoku3D/tests/online.test.mjs    # 8845 项断言（联机内核：和网页版逐格对拍 1156 组）
 node Web_Gomoku3D/tests/online-http.test.mjs #  115 项断言（联机 HTTP 层，本机 loopback）
 node _verify/browser-check.mjs             #  124 项断言（真实浏览器：GLSL 编译 + 布局几何 + 英文排版 + 截图）
