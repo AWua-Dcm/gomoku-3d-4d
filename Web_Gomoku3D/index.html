@@ -3508,11 +3508,18 @@ class FourDSession {
   // ---------------------------------------------------------------- 转动
 
   /**
-   * 转一层。四种结果见 RotateStatus。
-   * **除了 Rotated，其它三种都不改变棋盘、不消耗回合、不留下任何痕迹** —— 这一条是这套实现的
-   * 全部要点：玩家可以放心地去试，试错的代价永远是零。
+   * 转动判定的【唯一实现】。四种结果见 RotateStatus。
+   *
+   * 只有 Rotated 会改动棋盘，而且**改动留在盘上**，由调用方决定留不留：
+   * `rotate()` 靠它记账所以留着，`probeRotate()` 靠它还回去。其它三种结果本来就不碰棋盘、
+   * 不消耗回合、不留下任何痕迹。
+   *
+   * 【为什么判定要单独一段】电脑对手必须只挑引擎一定接受的动作：挑错了那一手会被拒、
+   * 回合不消耗，表现就是**电脑卡住不动**。让探针和 rotate 共用这一段，是唯一能保证两边
+   * 判据【永不漂移】的写法 —— 任何"照着写一遍过滤条件"的写法，迟早会在某次改规则时漏改
+   * 一处，而那种漏改的症状是偶发卡死，极难倒查。
    */
-  rotate(move, lang = "zh") {
+  _tryRotate(move, lang = "zh") {
     if (!this.rotationEnabled) return this._reject(move, ct("rot.reject.not4d", lang));
     if (this.inner.status !== "Playing") {
       return this._reject(move, ct("reject.over", lang));
@@ -3564,15 +3571,45 @@ class FourDSession {
                  { len: this.inner.rules.winLength, lines: runs.length }));
     }
 
+    return new RotateOutcome(RotateStatus.Rotated, move, layerStones, null);
+  }
+
+  /**
+   * 转一层。四种结果见 RotateStatus。
+   * **除了 Rotated，其它三种都不改变棋盘、不消耗回合、不留下任何痕迹** —— 这一条是这套实现的
+   * 全部要点：玩家可以放心地去试，试错的代价永远是零。
+   */
+  rotate(move, lang = "zh") {
+    const outcome = this._tryRotate(move, lang);
+    if (outcome.status !== RotateStatus.Rotated) return outcome;
+
+    // 【顺序要紧】出子权必须在 passTurnForRotation 之前读 —— 它会把出子权翻过去，
+    // 转动的记账要记在"谁转的"头上，不是记在转完之后轮到谁头上。
     const player = this.inner.currentPlayer;
-    const record = new RotationRecord(move, player, this.inner.moveCount, layerStones);
+    const record = new RotationRecord(move, player, this.inner.moveCount, outcome.layerStones);
     this.rotations.push(record);
 
     // 转动占掉整个回合：不能"转完再落子"。冷却数的是落子，所以这里不动落子计数。
     this.inner.passTurnForRotation();
 
-    const outcome = new RotateOutcome(RotateStatus.Rotated, move, layerStones, null);
     for (const fn of this.onRotationApplied) fn(this, record, outcome);
+    return outcome;
+  }
+
+  /**
+   * 【电脑对手专用】试转一手：走的是和 rotate() **同一段** _tryRotate 判定，
+   * 但无论成不成，棋盘都还原、不记账、不占回合、不发任何事件。
+   * 返回值和 rotate() 逐字段相同（status / move / layerStones / reason）。
+   *
+   * 【为什么必须共用判定而不是自己写过滤】见 _tryRotate 的注释：判据漂移的症状是偶发卡死。
+   * 探针永远不会走到 onRotationApplied —— 那是"试错的代价为零"这条不变量在电脑对手身上的延续。
+   */
+  probeRotate(move, lang = "zh") {
+    const outcome = this._tryRotate(move, lang);
+    if (outcome.status === RotateStatus.Rotated) {
+      // 逆置换 = 顺时针再转 (4 - t) 次，和 CreatesLine 回滚用的是同一个式子
+      this.inner.board.rotateLayer(move.axis, move.layer, 4 - move.turns);
+    }
     return outcome;
   }
 
