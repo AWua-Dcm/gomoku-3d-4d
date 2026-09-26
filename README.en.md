@@ -247,48 +247,40 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ## 📝 Changelog
 
-> Newest first.
+> Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
 ### 2026.09.26
 
-- 🐛 **v2.8.1** Four phone fixes: (1) on the French/Russian setup screen the buttons overlapped and
-  the "link all three axes" button was pushed off the right edge (rows were being squeezed, and the
-  hidden 4D row widened the grid cell); (2) the "White only" button in a game slid off the screen and
-  could not be tapped (the mode bar now wraps whole buttons, so no language overflows);
-  (3) **the vertical drag was inverted** — both axes now move the board with your finger
-  (drag down to look at the top face), matching the two-finger pan; (4) the language button
-  reads 中文 instead of 中
-- 🌐 **v2.8.0** Japanese, Korean, Russian and French: the UI now switches between six languages
-  (the top-right button opens a list, each entry in its own language), and four more full rule
-  translations; plurals are chosen per language (three forms in Russian)
-- 🐛 **v2.7.4** Fixed the board being impossible to zoom on phones: pinch to zoom and pan, double-tap to reset
-- 🎨 **v2.7.3** Moved the language and rules buttons to the top of the setup screen
-- 🐛 **v2.7.2** Fixed misplaced buttons in the English layout in portrait
+- 🐛 **v2.8.1** Four phone fixes: setup-screen buttons overlapped, "White only" slid off the screen, the vertical drag moved against your finger, and the language button now reads 中文
+- 🌐 **v2.8.0** Added Japanese, Korean, Russian and French: six UI languages, four more full rule translations, plurals chosen per language (three forms in Russian)
+- 🐛 **v2.7.4** Fixed zooming on phones: pinch to zoom and pan, double-tap to reset
+- 🎨 **v2.7.3** Moved the language and rules buttons to the top-right of the setup screen
+- 🐛 **v2.7.2** Fixed misplaced buttons in the English portrait layout
 
 ### 2026.09.25
 
-- 🐛 **v2.7.1** Fixed a few bugs
-- 📱 **v2.7.0** Portrait support — playable in a phone or tablet browser
-- ✨ **v2.6.0** Added a "black only / white only" filter, to make a position easier to read
+- 🐛 **v2.7.1** Fixed a few problems
+- 📱 **v2.7.0** Added portrait support — playable in a phone or tablet browser
+- ✨ **v2.6.0** Added the "black only / white only" buttons
 
 ### 2026.09.24
 
-- ✨ **v2.5.0** Added a switch for the 3D grid lines, to make a position easier to read
+- ✨ **v2.5.0** Added the grid-lines switch, which hides the 3D lattice
 - 🌐 **v2.4.0** Added the English / Chinese switch
-- 🐛 **v2.3.3** Fixed a few bugs; the project was published on GitHub
-- 📝 **v2.3.2** Planned the online multiplayer feature — not fully implemented yet
+- 🐛 **v2.3.3** Fixed a few problems; published the project on GitHub
+- 📝 **v2.3.2** Planned online multiplayer (not finished yet)
 - 🎨 **v2.3.1** Moved the buttons on the setup screen
 - 🎨 **v2.3.0** Reworked the setup screen so it no longer feels split in two
 - 📝 **v2.2.1** Revised the rule text
-- ✨ **v2.2.0** Added the rules panel in the top-right corner
-- 🎨 **v2.1.0** Changed the game UI and fixed some details
-- ✨ **v2.0.0** Added 4D gomoku ("4D" here means a board whose layers can be rotated like a Rubik's cube; more gameplay to come)
+- ✨ **v2.2.0** Added the rules overlay in the top-right corner
+- 🎨 **v2.1.0** Adjusted the game screen and a few details
+- ✨ **v2.0.0** Added 4D mode: the board can be rotated like a Rubik's cube (more gameplay to come)
 
 ### 2026.09.23
 
-- 🐛 **v1.1.1** Fixed a few bugs
-- ✨ **v1.1.0** Added the hover lines that mark a cell's position
-- 🐛 **v1.0.1** Fixed a few bugs
+- 🐛 **v1.1.1** Fixed a few problems
+- ✨ **v1.1.0** Added the hover lines that mark a cell
+- 🐛 **v1.0.1** Fixed a few problems
 - 🎉 **v1.0.0** First working 3D gomoku prototype
 
 ---
