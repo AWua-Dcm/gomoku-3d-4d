@@ -4,16 +4,18 @@
 # 这个工程【只有网页版】—— 原 Unity/C# 实现已经删除。
 # 所以这些检查既不需要 Unity，也不需要 .NET，只要有 node。
 #
-# 八步（第 8 步可选）：
+# 九步（第 9 步可选）：
 #   1. 规则正文自检           —— 页面里嵌的规则全文 == RULES_SPEC.md
 #   2. 向量文件完整性          —— 见下面【冻结的向量】
 #   3. 网页版规则内核测试      —— 回放 vectors.json + 自身断言
 #   4. 网页版转动一致性测试    —— 回放 rotation-vectors.json + MapCoord/RotateLayer 互校
 #   5. 网页版长方体棋盘测试    —— 网页版独有的扩展，向量不覆盖它，证据只有这一份
-#   6. 网页版 DOM 冒烟测试     —— 桩环境里真的把界面跑一遍
-#   7. 联机协议测试            —— 进程内直调逐格对拍（不经过网络）
+#   6. 电脑对手测试            —— 两条硬规则（能赢必赢、绝不自尽）、三档强弱关系、
+#                                自对局逐手真喂给引擎（保证它永远不会卡住）、计算量上界
+#   7. 网页版 DOM 冒烟测试     —— 桩环境里真的把界面跑一遍
+#   8. 联机协议测试            —— 进程内直调逐格对拍（不经过网络）
 #                                + 真 HTTP / 真 SSE（自己起服务器，绑 127.0.0.1）
-#   8. 真实浏览器检查（可选）  —— 无头 Chrome/Edge：GLSL 编译、控制台报错、布局几何
+#   9. 真实浏览器检查（可选）  —— 无头 Chrome/Edge：GLSL 编译、控制台报错、布局几何
 #                                本机没装浏览器就自动跳过，不算失败
 #
 # ============================================================================
@@ -53,13 +55,13 @@ ROTATION_MD5_EXPECT="33d638c973e4f4a5ccb2be67ad475ae4"
 
 banner() { echo; echo "################ $1 ################"; echo; }
 
-banner "1/8  规则正文自检"
+banner "1/9  规则正文自检"
 # 网页版把 RULES_SPEC.md 全文嵌进了 index.html 给"具体规则"按钮用。
 # 正文只此一份，页面上那段是生成物 —— 这里先确认它没被改脏，
 # 不然规则文档改了两边，玩家看到的和代码执行的就会不一致。
 node "$HERE/embed-rules.mjs" --check || FAIL=1
 
-banner "2/8  向量文件完整性（冻结锁）"
+banner "2/9  向量文件完整性（冻结锁）"
 for pair in "vectors.json:$VECTORS_MD5_EXPECT" \
             "rotation-vectors.json:$ROTATION_MD5_EXPECT"; do
   f="${pair%%:*}"; want="${pair##*:}"
@@ -80,26 +82,30 @@ for pair in "vectors.json:$VECTORS_MD5_EXPECT" \
   fi
 done
 
-banner "3/8  网页版规则内核测试"
+banner "3/9  网页版规则内核测试"
 ( cd "$PROJ" && node Web_Gomoku3D/tests/rules.test.mjs ) || FAIL=1
 
-banner "4/8  网页版转动一致性测试"
+banner "4/9  网页版转动一致性测试"
 ( cd "$PROJ" && node Web_Gomoku3D/tests/rotation.test.mjs ) || FAIL=1
 
-banner "5/8  网页版长方体棋盘测试"
+banner "5/9  网页版长方体棋盘测试"
 ( cd "$PROJ" && node Web_Gomoku3D/tests/dims.test.mjs ) || FAIL=1
 
-banner "6/8  网页版 DOM 冒烟测试"
+# 电脑对手。它跑的是内核区间里的那一段，所以排在 DOM 冒烟之前（内核测试在前、界面测试在后）。
+banner "6/9  电脑对手测试"
+( cd "$PROJ" && node Web_Gomoku3D/tests/ai.test.mjs ) || FAIL=1
+
+banner "7/9  网页版 DOM 冒烟测试"
 ( cd "$PROJ" && node Web_Gomoku3D/tests/dom-smoke.test.mjs ) || FAIL=1
 
 # 【这一步不可跳过】它和上面几步一样是硬失败，没有"没装就跳过"的说法 ——
 # 它只依赖 node，任何能跑这个脚本的机器都跑得了它。
-banner "7/8  联机协议测试"
+banner "8/9  联机协议测试"
 ( cd "$PROJ" && node Web_Gomoku3D/tests/online.test.mjs ) || FAIL=1
 # 真 HTTP + 真 SSE：自己起一台服务器，绑 127.0.0.1（绑 0.0.0.0 在 Windows 上会弹防火墙框）
 ( cd "$PROJ" && node Web_Gomoku3D/tests/online-http.test.mjs ) || FAIL=1
 
-banner "8/8  真实浏览器检查（可选，没装浏览器就跳过）"
+banner "9/9  真实浏览器检查（可选，没装浏览器就跳过）"
 ( cd "$PROJ" && node _verify/browser-check.mjs ) || FAIL=1
 
 echo
@@ -109,7 +115,9 @@ if [ $FAIL -eq 0 ]; then
   echo "=================================================="
   echo
   echo "仍未验证的部分："
-  echo "  · 配色好不好看、三维观感、交互手感（第 8 步只验到「能编译 / 没报错 / 布局几何」）"
+  echo "  · 配色好不好看、三维观感、交互手感（第 9 步只验到「能编译 / 没报错 / 布局几何」）"
+  echo "  · 电脑对手的棋力手感（弱/中/强三档实际下起来像不像人、弱档是不是真的能被新手赢）"
+  echo "    第 6 步只验到「合法、不卡死、算得快、三档的强弱关系是对的」，棋力只能自己下几局感觉"
   echo "  · 四维转动的手感（转层是否直观、提示是否看得懂）"
   echo "  · 联机在**真实跨网**下的表现（心跳、代理缓冲、移动网络切换）"
   echo "    第 7 步只验到本机 loopback，跨网必须真人异地实测"

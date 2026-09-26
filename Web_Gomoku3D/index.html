@@ -3603,10 +3603,17 @@ class FourDSession {
    *
    * 【为什么必须共用判定而不是自己写过滤】见 _tryRotate 的注释：判据漂移的症状是偶发卡死。
    * 探针永远不会走到 onRotationApplied —— 那是"试错的代价为零"这条不变量在电脑对手身上的延续。
+   *
+   * @param evaluate 可选。转成功时**在转后的盘面上**被调用一次，用来给这一手估值；
+   *                 返回前一定会还原。**还原走 finally** —— 求值函数抛异常也不能把
+   *                 棋盘留在转过的状态上，那样整局棋就毁了。
    */
-  probeRotate(move, lang = "zh") {
-    const outcome = this._tryRotate(move, lang);
-    if (outcome.status === RotateStatus.Rotated) {
+  probeRotate(move, evaluate) {
+    const outcome = this._tryRotate(move);
+    if (outcome.status !== RotateStatus.Rotated) return outcome;
+    try {
+      if (evaluate) evaluate(outcome);
+    } finally {
       // 逆置换 = 顺时针再转 (4 - t) 次，和 CreatesLine 回滚用的是同一个式子
       this.inner.board.rotateLayer(move.axis, move.layer, 4 - move.turns);
     }
@@ -3667,6 +3674,479 @@ class FourDSession {
     return this.rotations.length > 0 &&
       this.rotations[this.rotations.length - 1].placementsBefore === this.inner.moveCount;
   }
+}
+
+/* --------------------------------------------------------------------------
+   电脑对手：**刻意做弱**的人工智能。
+
+   【算法为什么是"深度 0 打分 + 优先级链"，不是 minimax，也不是 MCTS】
+   13³ 的棋盘有 2197 个合法点。公开实测里，随机 playout 的 MCTS 在分支因子超过约 49 之后
+   胜率掉到 0%（退化成乱下）—— 这个棋盘的分支因子比那个阈值大一个数量级。
+   minimax 则相反：它的问题是**太强**，而"简单档把玩家打得没脾气"是有大量玩家抱怨的常见毛病
+   （把深度调低来变弱，效果既不好预测也不可控）。
+   打分 + 优先级链的好处是：强度**天然有限**（只看眼前一步），而且"弱"是几个直观旋钮调出来的。
+
+   【全项目唯一一处随机源】下面那个种子 PRNG，**代码里一处 Math.random 都没有**。
+   理由只有一条但足够：测试要能复现。同一局面 + 同一种子必须给出同一动作，
+   否则"电脑偶尔走坏棋"这类断言根本没写法。
+   （ai.test.mjs 用字符串查找钉着这一条，所以注释里也别把那个调用写成带括号的样子。）
+
+   【这一整段一个字的中文都没有】文案全部由界面层决定：电脑只返回坐标或转动参数。
+   于是内核的文案表 CORE_TEXT 一个字都不用动。
+   -------------------------------------------------------------------------- */
+
+/** 三档难度。参数表按这三档取 —— 别在别处写 if (level === ...)。 */
+const AI_LEVELS = ["weak", "medium", "strong"];
+
+/**
+ * 三档的参数。**调强弱只调这一张表。**
+ *
+ * 【"弱"是怎么来的】不是"偶尔改走一个随机点" —— 那样会做出明显像 bug 的棋，
+ * 玩家的观感是"这程序坏了"而不是"这电脑很菜"。真正的三个旋钮是：
+ *   · defWeight  防守权重。小于 1 就是"偏进攻、防守不足"，这是弱档的第一来源
+ *   · pOpenThree 对方做出活三时真的去堵的概率。弱档只有三成会堵 —— 这是最有效的那个旋钮
+ *   · topK/topProb  从前几名里随机挑，错得像新手而不是像坏掉
+ * noise 是打分的乘性抖动，让它偶尔算错同一批候选的先后。
+ *
+ * 【两条硬规则任何一档都不许破，所以它们不在这张表里，而是判断链的第 1、3 步】
+ *   · 能立刻赢就必须赢
+ *   · 绝不主动走成"长连自尽"（本作先手连 6 是负，不是胜）
+ */
+const AI_PARAMS = {
+  weak: { topK: 4, topProb: 0.40, noise: 0.55, defWeight: 0.50,
+          pOpenThree: 0.30, wantGapped: false, rotChance: 0.15, rotProbe: 6 },
+  medium: { topK: 2, topProb: 0.72, noise: 0.28, defWeight: 0.80,
+            pOpenThree: 0.70, wantGapped: false, rotChance: 0.50, rotProbe: 10 },
+  strong: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 1.05,
+            pOpenThree: 1.00, wantGapped: true, rotChance: 1.00, rotProbe: 14 },
+};
+
+/**
+ * 棋型分的档位。**量级差才是全部意义**，绝对值随便。
+ * 两个刻意相等的地方：冲四 ≈ 活三（活三下一步能变活四，冲四只差一手），
+ * 眠三 ≈ 活二（都还差得远）。
+ */
+const AI_W = {
+  FOUR_OPEN: 1e5,      // 活四：两头都能成五，挡不住
+  FOUR_BLOCKED: 1e4,   // 冲四：一头能成五 —— 它其实由第 3 步兜底，这里只是排序用
+  THREE_OPEN: 1e3,     // 活三：弱/中档"偶尔不堵"就堵在这一档上
+  THREE_BLOCKED: 1e2,
+  TWO_OPEN: 1e2,
+};
+
+/** 候选点数的上界。真实对局远到不了；到了就用等距抽样，见 aiCandidates。 */
+const AI_CANDIDATE_CAP = 20000;
+
+const AI_AXES = [AXIS_X, AXIS_Y, AXIS_Z];
+
+/** 负方向的预计算。省掉每个候选点 13 次数组分配。 */
+const DIRS13_NEG = DIRS13.map((d) => [-d[0], -d[1], -d[2]]);
+
+/** countRun 只读 c.x/c.y/c.z 且立刻返回，所以这个点对象可以复用。 */
+const AI_PT = { x: 0, y: 0, z: 0 };
+
+/**
+ * mulberry32。**全项目唯一一处随机源。**
+ * 同一局面 + 同一种子必须给出同一动作，否则"电脑偶尔走坏棋"这类断言没法写。
+ */
+function aiRng(seed) {
+  let s = (seed >>> 0) || 0x9e3779b9;
+  return function next() {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let x = s;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * 候选点：半径 1 的谢比雪夫邻域（3D 26 格）里的所有空格，扁平三元组返回。
+ *
+ * 【三维里半径 1 就是完备的，不能照搬平面棋谱的"半径 2"】
+ * 平面教程推荐半径 2，是因为那能把 15×15 的分支从 225 压到 30 以下。
+ * 可 2D 半径 2 只有 5²−1 = 24 格，而 3D 半径 2 是 5³−1 = **124 格** —— 直接搬过来是白算五倍。
+ * 更关键的是半径 1 对"只看一步"的算法**已经完备**：DIRS13 里每个方向的分量都在 {−1,0,1}，
+ * 所以任何"再放一颗就能接上某个已有形状"的点，必定落在某颗已有子的 26 邻域里。
+ *
+ * 【绝不走扁平下标加减】`index(x,y,z) = x + nx*(y + ny*z)`，x=0 时减 1 会绕到上一行的末尾。
+ * 一律 x/y/z 逐个夹取，代价是几次比较，换来的是不会在棋盘左右两端之间下出一手莫名其妙的棋。
+ */
+function aiCandidates(board, cap) {
+  const out = [];
+  if (board.stoneCount === 0) {
+    // 空盘：天元。和 UI 的默认层一致（(n-1)>>1 而不是 n>>1，8 和 15 都落在正中偏小那一格）
+    out.push((board.nx - 1) >> 1, (board.ny - 1) >> 1, (board.nz - 1) >> 1);
+    return out;
+  }
+  const seen = new Uint8Array(board.cellCount);
+  board.forEachStone((x, y, z) => {
+    for (let dz = -1; dz <= 1; dz++) {
+      const nz = z + dz;
+      if (nz < 0 || nz >= board.nz) continue;
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= board.ny) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0 && dz === 0) continue;
+          const nx = x + dx;
+          if (nx < 0 || nx >= board.nx) continue;
+          const i = nx + board.nx * (ny + board.ny * nz);
+          if (seen[i] || board.cells[i] !== EMPTY) continue;
+          seen[i] = 1;
+          out.push(nx, ny, nz);
+        }
+      }
+    }
+  });
+  const count = out.length / 3;
+  if (count <= cap) return out;
+  // 极端局面（50³ 且子很密）的耗时上界：等距抽样。
+  // 代价是可能漏掉远处的点 —— 对刻意做弱的对手可以接受，而且真实对局到不了这一档。
+  const stride = Math.ceil(count / cap);
+  const cut = [];
+  for (let i = 0; i < count; i += stride) cut.push(out[i * 3], out[i * 3 + 1], out[i * 3 + 2]);
+  return cut;
+}
+
+/** 棋盘中心距（谢比雪夫）。只当 tie-break 用，绝不进分数。 */
+function aiCenterDist(board, x, y, z) {
+  const dx = Math.abs(x - (board.nx - 1) / 2);
+  const dy = Math.abs(y - (board.ny - 1) / 2);
+  const dz = Math.abs(z - (board.nz - 1) / 2);
+  const m = dx > dy ? dx : dy;
+  return m > dz ? m : dz;
+}
+
+/**
+ * 一个"连续子长度 + 活头数"值多少分。
+ * **按 winLength 相对取值，不许写死 5** —— winLength 是可配的（测试里就跑 4 和 6）。
+ */
+function aiRunValue(run, openEnds, winLength) {
+  if (run >= winLength) return AI_W.FOUR_OPEN * 100;      // 1e7：真的成五了
+  if (run === winLength - 1) {
+    if (openEnds === 2) return AI_W.FOUR_OPEN;
+    return openEnds === 1 ? AI_W.FOUR_BLOCKED : 0;
+  }
+  if (run === winLength - 2) {
+    if (openEnds === 2) return AI_W.THREE_OPEN;
+    return openEnds === 1 ? AI_W.THREE_BLOCKED : 0;
+  }
+  if (run === winLength - 3) return openEnds === 2 ? AI_W.TWO_OPEN : 0;
+  return 10 * openEnds + run;
+}
+
+/**
+ * 一个点对 player 的形状分。**只用于排序，不用于判胜负** —— 胜负一律问 judge。
+ *
+ * 【为什么复用 countRun】它已经同时数了正反两个方向，这正是"落子把两段接起来时会漏算"
+ * 那个经典 bug 的解药。自己再写一遍就是第二份会漂移的实现。
+ *
+ * 【两头必须先 inBounds 再取值】getOrDefault 对越界返回 EMPTY，直接拿它当"这一头是空的"，
+ * 会把棋盘边上的一片死路算成活路。
+ */
+function aiShapeAt(board, x, y, z, player, winLength) {
+  let total = 0, best = 0;
+  for (let i = 0; i < DIRS13.length; i++) {
+    const d = DIRS13[i];
+    const nd = DIRS13_NEG[i];
+    AI_PT.x = x; AI_PT.y = y; AI_PT.z = z;
+    const neg = RuleEngine.countRun(board, AI_PT, nd, player);
+    const pos = RuleEngine.countRun(board, AI_PT, d, player);
+    const run = 1 + neg + pos;
+    const ax = x - (neg + 1) * d[0], ay = y - (neg + 1) * d[1], az = z - (neg + 1) * d[2];
+    const bx = x + (pos + 1) * d[0], by = y + (pos + 1) * d[1], bz = z + (pos + 1) * d[2];
+    const openA = board.inBounds(ax, ay, az) && board.get(ax, ay, az) === EMPTY;
+    const openB = board.inBounds(bx, by, bz) && board.get(bx, by, bz) === EMPTY;
+    const v = aiRunValue(run, (openA ? 1 : 0) + (openB ? 1 : 0), winLength);
+    total += v;
+    if (v > best) best = v;
+  }
+  return { total: total, best: best };
+}
+
+/**
+ * 跳形（X_XXX / XX_XX）的附加分。**只有强档用得上**。
+ *
+ * 【先把话说清楚，别把它说成"弱档看不见跳子"】countRun 本来就两头都数，
+ * 所以当**空档本身就是候选点**时，弱档也看得见（那正是"我这一手能不能成五"，
+ * 由第 1 步的 judge 兜底，与这里无关）。这一项管的是另一种情况：
+ * 对方已经摆着 XXX_X 这种形状、**我此刻要不要提前去搅它**。
+ * 弱/中档不提前反应，只在他真要成五的那一手才动手 —— 这才是"不会下跳"的电脑该有的样子。
+ *
+ * 做法：沿每个方向枚举所有覆盖该点的 winLength 长窗口，窗内没有对方子（也没有出界格）
+ * 才算数，然后看"加上本点之后窗内我方有几颗"。
+ */
+function aiGappedBonus(board, x, y, z, player, winLength) {
+  let bonus = 0;
+  const wl = winLength;
+  for (let i = 0; i < DIRS13.length; i++) {
+    const d = DIRS13[i];
+    for (let s = -(wl - 1); s <= 0; s++) {
+      let mine = 0, foe = 0, ok = true;
+      for (let k = 0; k < wl; k++) {
+        const px = x + (s + k) * d[0], py = y + (s + k) * d[1], pz = z + (s + k) * d[2];
+        if (!board.inBounds(px, py, pz)) { ok = false; break; }
+        if (s + k === 0) continue;                       // 本点在窗内，算自己那一颗
+        const v = board.cells[px + board.nx * (py + board.ny * pz)];
+        if (v === player) mine++;
+        else if (v !== EMPTY) { foe++; break; }
+      }
+      if (!ok || foe > 0) continue;
+      const filled = mine + 1;                           // 含本点
+      if (filled === wl - 1) bonus += AI_W.THREE_OPEN - AI_W.THREE_BLOCKED;   // 跳四
+      else if (filled === wl - 2) bonus += AI_W.THREE_BLOCKED;                // 跳三
+    }
+  }
+  return bonus;
+}
+
+/**
+ * 把 player 临时放上去、问引擎、再原样还原。**全项目唯一一处"假设落子"。**
+ *
+ * 【为什么必须走 judge 而不是自己数连子】本作的判胜不是"数出 ≥winLength 就赢"：
+ *   · 先手（规则身份，不是颜色）必须**恰好 winLength** 连，多了当场判负
+ *   · 一手同时做出 winLength 和更长时，长连优先级更高
+ *   · 后手 ≥winLength 即胜
+ * 任何 `run >= winLength → 赢` 的写法在这里都是错的，而且错得很隐蔽：
+ * 电脑会主动走一手自尽的长连，而玩家一眼就看得出来。
+ */
+function aiOutcomeAt(session, x, y, z, player, stats) {
+  const b = session.board;
+  if (!b.inBounds(x, y, z) || b.get(x, y, z) !== EMPTY) return null;
+  b.set(x, y, z, player);
+  AI_PT.x = x; AI_PT.y = y; AI_PT.z = z;
+  const o = RuleEngine.judge(b, AI_PT, player, session.firstPlayer, session.rules);
+  b.set(x, y, z, EMPTY);            // set 会维护 stoneCount，所以这一来一回不留痕
+  if (stats) stats.judgeCalls++;
+  return o;
+}
+
+/** 用转动轴之外的两个自由度筛出"该层 ±1"那一带。转动只动一层，带外前后完全一样。 */
+function aiBand(cand, axis, layer) {
+  const out = [];
+  for (let i = 0; i < cand.length; i += 3) {
+    const v = axis === AXIS_X ? cand[i] : (axis === AXIS_Y ? cand[i + 1] : cand[i + 2]);
+    if (v >= layer - 1 && v <= layer + 1) out.push(cand[i], cand[i + 1], cand[i + 2]);
+  }
+  return out;
+}
+
+/** 一条带里"我最好的一手"值多少 —— 净掉对方的威胁。转动前后的差值就是这一转的价值。 */
+function aiBandBest(board, band, mover, foe, params, winLength) {
+  let best = 0;
+  for (let i = 0; i < band.length; i += 3) {
+    const x = band[i], y = band[i + 1], z = band[i + 2];
+    const mine = aiShapeAt(board, x, y, z, mover, winLength);
+    if (mine.best >= AI_W.FOUR_OPEN * 100) return mine.total;   // 已经能成五，不用再算
+    const theirs = aiShapeAt(board, x, y, z, foe, winLength);
+    const v = mine.total + params.defWeight * theirs.total;
+    if (v > best) best = v;
+  }
+  return best;
+}
+
+/**
+ * 四维：挑一个转动，挑不出就返回 null。
+ *
+ * 【转动永远赢不了棋】引擎会整体回滚任何"转出 winLength 连线"的转动（它不能区分是谁的线），
+ * 所以转动的价值只可能在"拆对手的结构 / 调自己的结构"上。这也意味着**它绝不该排在
+ * "能赢的一手"和"必须堵的一手"前面** —— 那两步在调用方已经先走过了。
+ *
+ * 【判据】只有"转完之后我在受影响的那一带能拿到的最好一手"确实**变高**了才转。
+ * 一进一出用的是同一个 aiBandBest，所以差值的单位和落子的分数是同一把尺子。
+ */
+function aiPickRotation(session, params, winLength, mover, foe, cand, stats) {
+  const board = session.board;
+  if (!board.isCube) return null;          // 转动在数学上不存在，引擎也会拒 —— 别浪费探针
+  const n = board.size;
+
+  // 枚举 3 轴 × n 层 × 3 个顺时次数，两层免费预筛（都只 O(n²)）：
+  //   1) 层里一颗子都没有 → rotateLayer 必定返回 false → 白探
+  //   2) 全序排序：子多的层优先，同分按 axis/layer/turns 升序。
+  //      排序必须完全确定，否则同一种子在不同引擎上会排出不同的候选顺序。
+  const list = [];
+  for (let ai = 0; ai < 3; ai++) {
+    const axis = AI_AXES[ai];
+    for (let layer = 0; layer < n; layer++) {
+      const stones = board.countLayerStones(axis, layer);
+      if (stones === 0) continue;
+      for (let turns = 1; turns <= 3; turns++) list.push([axis, layer, turns, stones]);
+    }
+  }
+  list.sort((a, b) => (b[3] - a[3]) || (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b[2]));
+
+  const limit = params.rotProbe < list.length ? params.rotProbe : list.length;
+  let best = null;
+  for (let i = 0; i < limit; i++) {
+    const axis = list[i][0], layer = list[i][1], turns = list[i][2];
+    const band = aiBand(cand, axis, layer);
+    const before = aiBandBest(board, band, mover, foe, params, winLength);
+    let after = before;
+    // 判定和旋转都在 probeRotate 里，求值夹在中间，还原走它的 finally
+    const o = session.probeRotate(RotationMove.fromClockwiseTurns(axis, layer, turns), () => {
+      after = aiBandBest(board, band, mover, foe, params, winLength);
+    });
+    if (stats) stats.rotProbes++;
+    if (!o.accepted) continue;                        // 被拒 / 没变化 / 会造线
+    if (after > before && (!best || after - before > best.gain)) {
+      best = { kind: "rotate", axis: axis, layer: layer, turns: turns, gain: after - before };
+    }
+  }
+  return best;
+}
+
+/** 打分排序：分数降序，然后中心距升序，最后按坐标升序 —— 全序，同分也确定。 */
+function aiCompare(a, b) {
+  if (b.score !== a.score) return b.score - a.score;
+  if (a.d !== b.d) return a.d - b.d;
+  if (a.x !== b.x) return a.x - b.x;
+  if (a.y !== b.y) return a.y - b.y;
+  return a.z - b.z;
+}
+
+/**
+ * 电脑走一步。**唯一的对外入口**，界面只调这一个。
+ *
+ * 【为什么返回"动作描述"而不是自己去改会话】电脑不碰任何状态，于是它能在测试里被反复调用、
+ * 也能在真局上被调用，两者跑的是同一段代码。落子/转动一律由调用方走 session.place /
+ * session.rotate —— 那两条路才带判胜、占回合、发事件。这里重复一遍只会多出一份会漂移的实现。
+ *
+ * 【绝不出抛】任何一条守卫不成立都返回 {kind:"none"}。抛异常会让整页停在那一帧上，
+ * 而"控制台一个字符都不许有"是 browser-check 的硬断言。
+ *
+ * @param session  三维模式下是没有转动记录的透明壳，四维是 FourDSession
+ * @param opts     { level, seed, noRotation, stats }
+ *   level        三档之一，缺省 medium
+ *   seed         喂给内部 PRNG。**不读 Math.random**
+ *   noRotation   true = 这一手不考虑转动（兜底路径用）
+ *   stats        可选；累加 {candidates, judgeCalls, rotProbes}，只给测试量计算量
+ * @returns {kind:"place", x, y, z} | {kind:"rotate", axis, layer, turns} | {kind:"none"}
+ *          turns 是**顺时针次数** 1..3，构造用 RotationMove.fromClockwiseTurns
+ */
+function aiChooseMove(session, opts) {
+  const o = opts || {};
+  // ---- 0. 守卫
+  if (!session || !session.board || session.status !== "Playing") return { kind: "none" };
+  const board = session.board;
+  if (board.isFull) return { kind: "none" };
+
+  const winLength = session.rules.winLength;
+  const mover = session.currentPlayer;
+  const foe = opponentOf(mover);
+  const params = AI_PARAMS[o.level] || AI_PARAMS.medium;
+  const rng = aiRng(o.seed === undefined ? 1 : o.seed);
+  const stats = o.stats || null;
+
+  // stats 只给测试量计算量用：它是"耗时上界"这类断言的抓手，用计数器而不是墙钟，
+  // 免得测试在慢机器上随机变红。
+  if (stats) { stats.candidates = 0; stats.judgeCalls = 0; stats.rotProbes = 0; }
+
+  const cand = aiCandidates(board, AI_CANDIDATE_CAP);
+  if (stats) stats.candidates = cand.length / 3;
+  if (cand.length === 0) return { kind: "none" };
+
+  // ---- 1. 我能立刻赢就直接赢。【硬规则，任何一档都不许跳过】
+  // 顺序上必须排在"堵对方"前面（我先走，我当然赢），也必须排在转动前面
+  // （转动永远赢不了棋，先转就是把胜手让掉）。
+  for (let i = 0; i < cand.length; i += 3) {
+    const r = aiOutcomeAt(session, cand[i], cand[i + 1], cand[i + 2], mover, stats);
+    if (r && r.status === MoveStatus.Win) {
+      return { kind: "place", x: cand[i], y: cand[i + 1], z: cand[i + 2] };
+    }
+  }
+
+  // ---- 2. 分类：我会自尽的点剔除；对方下了能赢的点记下来
+  const safe = [];
+  const foeWin = [];
+  for (let i = 0; i < cand.length; i += 3) {
+    const x = cand[i], y = cand[i + 1], z = cand[i + 2];
+    const mine = aiOutcomeAt(session, x, y, z, mover, stats);
+    if (mine && mine.status === MoveStatus.LoseByOverline) continue;   // 自尽点，堵它毫无意义
+    safe.push(x, y, z);
+    const theirs = aiOutcomeAt(session, x, y, z, foe, stats);
+    if (theirs && theirs.status === MoveStatus.Win) foeWin.push(x, y, z);
+  }
+
+  // ---- 3. 对方下一步能赢就去堵。【硬规则】
+  // 借 judge 白拿一个反直觉的情报：对方是先手方时，他"即将成五"的那一手如果会变成六连，
+  // 他反而判负 —— judge 会返回 LoseByOverline，那种点根本不会进 foeWin。
+  // 自己数连子的写法永远发现不了这件事，会白白去堵一个对方根本不敢下的点。
+  if (foeWin.length > 0) {
+    let bi = 0, bd = Infinity;
+    for (let i = 0; i < foeWin.length; i += 3) {
+      const d = aiCenterDist(board, foeWin[i], foeWin[i + 1], foeWin[i + 2]);
+      if (d < bd) { bd = d; bi = i; }
+    }
+    return { kind: "place", x: foeWin[bi], y: foeWin[bi + 1], z: foeWin[bi + 2] };
+  }
+
+  // 到达这里说明一个能赢的点都没有。理论上 safe 不可能为空（那要求整盘几乎全被一种颜色
+  // 填满，而那种局面早就终局了），但真为空时也只能认输 —— 返回 none 会变成"电脑不动了"。
+  if (safe.length === 0) return { kind: "place", x: cand[0], y: cand[1], z: cand[2] };
+
+  // ---- 4. 打分排序。
+  // 候选顺序固定 → 每个候选恰好消耗两次随机数 → 同一种子必然给出同一结果。
+  const scored = [];
+  for (let i = 0; i < safe.length; i += 3) {
+    const x = safe[i], y = safe[i + 1], z = safe[i + 2];
+    const mine = aiShapeAt(board, x, y, z, mover, winLength);
+    const theirs = aiShapeAt(board, x, y, z, foe, winLength);
+    if (params.wantGapped) theirs.total += aiGappedBonus(board, x, y, z, foe, winLength);
+    // 每个候选恰好消耗一次随机数 —— 消耗顺序是"同种子必然同结果"那条契约的一部分
+    const jitter = 1 + params.noise * (rng() * 2 - 1);
+    scored.push({ x: x, y: y, z: z, atk: mine.total, def: theirs.total, defBest: theirs.best,
+                  jitter: jitter, score: (mine.total + params.defWeight * theirs.total) * jitter,
+                  d: aiCenterDist(board, x, y, z) });
+  }
+
+  // ---- 5. 对方有活三：按 pOpenThree 决定堵还是不堵。
+  //
+  // 【档位别认错】"对方有活三"在形状分里的长相是 **defBest >= FOUR_OPEN** ——
+  // 因为那里量的是"对方在那个点落一子会做出什么"，活三的堵点正是对方做**活四**的点。
+  // 第一版按 `defBest === THREE_OPEN` 判，结果一个活三都认不出来，三档全都百分百去堵。
+  // 同理，"对方已经有四连"的堵点量出来是 WIN，那一类在第 3 步就已经返回了，走不到这里。
+  //
+  // 【为什么这里是一个显式分支，而不是给防守项乘一个系数】系数是调不出来的 ——
+  // 压小了等于根本不堵，压大了等于必堵，中间没有能用的档位。这不是推理，是实测：
+  // 第一版用"以 1-p 的概率把 def 项乘 0.15"，弱档照样七成都在堵
+  // （0.15 × 活三分 × 防守权重 仍然高于棋盘上其他所有点）。显式分支的比例才是精确可控的。
+  //
+  // 【堵活三排在转动前面】有活三必须先处理，先转一手把回合让掉是不合理的。
+  // 代价是强档在四维下遇到活三时不会去考虑"转一手把它拆掉"—— 这条取舍是刻意的：
+  // 对刻意做弱的对手来说，"该堵就堵"比"偶尔想出妙手"重要得多。
+  let blockAt = null;
+  for (let i = 0; i < scored.length; i++) {
+    const c = scored[i];
+    if (c.defBest < AI_W.FOUR_OPEN) continue;
+    if (!blockAt || c.defBest > blockAt.defBest ||
+        (c.defBest === blockAt.defBest && c.def > blockAt.def)) blockAt = c;
+  }
+  if (blockAt) {
+    if (rng() < params.pOpenThree) {
+      return { kind: "place", x: blockAt.x, y: blockAt.y, z: blockAt.z };
+    }
+    // 决定不堵：那就得把这一手的吸引力**真的**拿掉。
+    // 只把防守项压小是不够的 —— 压完它还是比棋盘上其他点高，结果还是堵。
+    for (let i = 0; i < scored.length; i++) {
+      if (scored[i].defBest >= AI_W.FOUR_OPEN) scored[i].score = scored[i].atk * scored[i].jitter;
+    }
+    scored.sort(aiCompare);
+  }
+
+  // ---- 6. 四维：把转动当成另一个候选动作，只有它确实更能改善局面时才占掉这一手
+  if (!o.noRotation && params.rotChance > 0 &&
+      typeof session.probeRotate === "function" &&
+      session.rotationEnabled && session.canRotate && rng() < params.rotChance) {
+    const rot = aiPickRotation(session, params, winLength, mover, foe, cand, stats);
+    if (rot) return rot;
+  }
+
+  // ---- 7. 在最优和"前几名"之间随机 —— 让它错得像个新手，而不是像个 bug
+  const k = params.topK < scored.length ? params.topK : scored.length;
+  let pick = scored[0];
+  if (k > 1 && rng() > params.topProb) pick = scored[(rng() * k) | 0];
+  return { kind: "place", x: pick.x, y: pick.y, z: pick.z };
 }
 
 /**
@@ -7711,7 +8191,8 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = { Board3D, RuleSet, RuleEngine, GameSession, DIRS13, MoveStatus, RestrictionTarget,
                      EMPTY, BLACK, WHITE, opponentOf, cnOf, fingerprint,
                      AXIS_X, AXIS_Y, AXIS_Z, RotationDirection, RotateStatus,
-                     RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName };
+                     RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName,
+                     aiChooseMove, aiCandidates, aiShapeAt, aiRng, AI_LEVELS, AI_PARAMS };
 }
 </script>
 </body>
