@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40541_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40548_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -47,7 +47,8 @@
 | 操作 | 说明 |
 |---|---|
 | 左侧按住左键拖拽 | 旋转棋盘。左右能一直转；上下**拖到底是正俯视 / 正仰视**（89.5°）。**棋盘跟着手指走**：往下拖看到顶面，往上拖看到底面 |
-| 滚轮 | 缩放 |
+| 左侧按住**右键**拖拽（或 `Shift` + 左键） | 平移棋盘：整块画面跟着指针走。夹取和触屏两指平移共用一套（最多推出半个视口，至少留一半看得见） |
+| 滚轮 / 触控板双指 | 缩放。**往下滚 = 缩小**，往上滚 = 放大；触控板上双指张开 = 放大、合拢 = 缩小（两者走同一套符号） |
 | 单击 | 在当前层落子 |
 | 鼠标悬停 | 红线标出落点的 x / y / z 三条贯穿线 |
 | 右侧面板 | 逐层查看盘面，点空格子直接落子 |
@@ -79,7 +80,7 @@ bash _verify/run-all.sh
 八步，期望结果：
 
 ```
-11733 + 19408 + 98 + 94 + 8845 + 115 + 248 = 40541 项断言全绿
+11733 + 19408 + 98 + 96 + 8845 + 115 + 253 = 40548 项断言全绿
 ```
 
 第 8 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -92,10 +93,10 @@ bash _verify/run-all.sh
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 三维规则基线（回放冻结向量） |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 四维转动一致性 |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 94 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值、拖拽方向约定） |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 96 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值、拖拽方向约定） |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | 联机内核：和网页版逐格对拍 1156 组 |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | 联机 HTTP 层（本机 loopback） |
-| `node _verify/browser-check.mjs` | 248 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸） |
+| `node _verify/browser-check.mjs` | 253 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸） |
 
 后两项联机测试在第 7 步里跑，**不可跳过**（端口是随机挑的空闲端口）。
 另有三个注入验证脚本，专门证明上面那些检查**真的会红**：
@@ -219,6 +220,7 @@ bash _verify/run-all.sh
 
 ### 2026.09.26
 
+- 🐛 **v2.8.2** 电脑版新增右键拖动（与 Shift + 左键）平移立体棋盘；修复触控板双指放大实际缩小（鼠标滚轮方向一并改正）
 - 🐛 **v2.8.1** 修复手机版四处问题：起始界面按钮互相压住、「只看白」跑出屏幕、上下拖拽方向与手指相反、语言键改为「中文」
 - 🌐 **v2.8.0** 新增日韩俄法语言：界面六种语言可切，规则全文补四份译文，单复数按语言选形（俄语三形）
 - 🐛 **v2.7.4** 修复手机版无法放大棋盘：支持两指缩放平移与双击复位

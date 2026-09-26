@@ -2569,6 +2569,74 @@ step("相机拖拽：垂直方向不会在极点附近震荡（这是被砍掉�
     throw new Error("应该稳定停在上限，实际 " + cam.pitch);
 });
 
+step("相机拖拽：右键（和 Shift + 左键）平移 —— 内容跟手、不转视角、不落子", () => {
+  const cam = Game.camera;
+  // 【本步骤只碰 pan3d / yaw / pitch，别的一律原样放回去】这一组步骤是【顺序敏感】的：
+  // 后面那两条断言读的是 cam.distance === 22（构造值），中途调一次 newGame 就会让它
+  // 变成 frameBoard 算出来的取景距离，而红的地方离现场很远。
+  const keep = { distance: cam.distance, home: cam.homeDistance,
+                 min: cam.minDistance, max: cam.maxDistance, yaw: cam.yaw, pitch: cam.pitch };
+  const move = (x, y) => { for (const fn of (windowStubListeners.pointermove || []))
+    fn({ pointerId: 7, clientX: x, clientY: y }); };
+  const up = (x, y, button) => { for (const fn of (windowStubListeners.pointerup || []))
+    fn({ button: button, pointerId: 7, clientX: x, clientY: y }); };
+  const drag = (button, shiftKey, dx, dy) => {
+    const x0 = 300, y0 = 300;
+    Game.el.gl.dispatch("pointerdown", { button: button, shiftKey: !!shiftKey, pointerId: 7, clientX: x0, clientY: y0 });
+    move(x0 + dx, y0 + dy);
+    up(x0 + dx, y0 + dy, button);
+  };
+  const reset = () => { cam.yaw = -32; cam.pitch = 24; Game.pan3d = [0, 0]; };
+
+  reset();
+  // 有棋局就顺带验"右键不落子"；没有也不算漏（这一步的重点是平移本身）
+  const moves0 = Game.session ? Game.session.moveCount : null;
+  drag(2, false, 60, 40);                       // 右键拖 60×40
+  if (Math.abs(Game.pan3d[0] - 60) > 1e-9 || Math.abs(Game.pan3d[1] - 40) > 1e-9)
+    throw new Error("右键拖 60×40 应当让 pan3d 正好跟着走 60×40，实际 " +
+      JSON.stringify(Game.pan3d) + "（和触屏那侧同一个方向：内容跟着指针走）");
+  if (cam.yaw !== -32 || cam.pitch !== 24)
+    throw new Error("平移不该动视角，实际 yaw=" + cam.yaw + " pitch=" + cam.pitch);
+  if (moves0 !== null && Game.session.moveCount !== moves0)
+    throw new Error("右键拖动不该落子（右键松开绝不能放一颗子）");
+
+  reset();
+  drag(0, true, -30, 20);                       // Shift + 左键拖
+  if (Math.abs(Game.pan3d[0] + 30) > 1e-9 || Math.abs(Game.pan3d[1] - 20) > 1e-9)
+    throw new Error("Shift + 左键拖动应当和右键一样平移，实际 " + JSON.stringify(Game.pan3d));
+  if (cam.pitch !== 24) throw new Error("Shift + 左键拖动不该转视角");
+
+  // 【这条盯的是记账不对称】右键按下也走了 trackPointer，抬起时若不对称地删掉，
+  // pointers 里就永远留着一个 id —— 下一次左键按下会被当成"两根指针"，
+  // 于是 pinch.surface 立起来，鼠标再也转不动棋盘。表现是"拖了一次右键之后旋转就失灵了"。
+  reset();
+  drag(0, false, 50, 0);                        // 普通左键拖，应当照常旋转
+  if (Math.abs(cam.yaw - (-32 + 50 * camConst("CAM_DEG_PER_PX"))) > 1e-9)
+    throw new Error("右键拖过一次之后，左键旋转就不灵了（pointers 记账不对称）：yaw=" + cam.yaw);
+  if (Math.abs(Game.pan3d[0]) > 1e-9) throw new Error("左键旋转不该顺带平移");
+  reset();
+  Object.assign(cam, keep);        // 相机原样放回去，别影响后面那两条读 distance===22 的断言
+});
+
+step("滚轮 / 触控板捏合：往下滚与双指合拢都是【缩小】，两套符号同一套约定", () => {
+  const cam = Game.camera;
+  const keep = cam.distance;       // 见上一条：这一组是顺序敏感的，量完必须原样放回
+  const fire = (deltaY, ctrl) => {
+    for (const fn of (Game.el.gl._listeners.wheel || []))
+      fn({ deltaY: deltaY, ctrlKey: !!ctrl, preventDefault() {} });
+  };
+  const base = 22;
+  const at = (deltaY, ctrl) => { cam.distance = base; fire(deltaY, ctrl); return cam.distance; };
+  // 鼠标滚轮：往下滚一格 = 拉远 = 变小（three.js OrbitControls / Google Maps 同向）
+  if (!(at(100, false) > base)) throw new Error("鼠标往下滚应当缩小（相机拉远）");
+  if (!(at(-100, false) < base)) throw new Error("鼠标往上滚应当放大（相机拉近）");
+  // 触控板：捏合被浏览器报成带 ctrlKey 的 wheel，手指张开 = deltaY < 0
+  if (!(at(-60, true) < base))
+    throw new Error("触控板上双指【张开】应当放大 —— 这一条就是用户报的'双指放大实际缩小'");
+  if (!(at(60, true) > base)) throw new Error("触控板上双指【合拢】应当缩小");
+  cam.distance = keep;
+});
+
 step("相机拖拽：任意猛拖都不会出 NaN、不会越界、不会改 distance", () => {
   const cam = Game.camera;
   const pole = camConst("CAM_POLE");

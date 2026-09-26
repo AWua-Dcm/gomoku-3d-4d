@@ -43,6 +43,7 @@
 | 操作 | 效果 |
 |---|---|
 | 左侧按住左键拖拽 | 旋转立体棋盘。左右无界；**上下拖到底是正俯视 / 正仰视（pitch = ±89.5°）**。**棋盘跟着手指走**（和双指平移同一个隐喻）：往下拖 → 正俯视，往上拖 → 正仰视 |
+| 左侧按住右键拖拽（或 `Shift` + 左键） | 平移立体棋盘（`pan3dBy`，和触屏两指平移同一个函数、同一套夹取）。**右键单独一路**：不转视角、不落子 |
 | 左侧滚轮 | 缩放 |
 | 左侧单击 | 在当前层落子（位移 < 6 像素才算点击） |
 | 左侧悬停 | **红线标出即将落子的格点所在的 x / y / z 三条贯穿线** |
@@ -452,7 +453,7 @@ BEGIN 和 END **中间**，生成一次就会把英文块整段删掉 —— 而
 node Web_Gomoku3D/tests/rules.test.mjs     # 11733 项断言（三维模式基线）
 node Web_Gomoku3D/tests/rotation.test.mjs  # 19408 项断言（四维转动一致性）
 node Web_Gomoku3D/tests/dims.test.mjs      #   98 项断言（长方体 + 尺寸约束）
-node Web_Gomoku3D/tests/dom-smoke.test.mjs #   94 项断言（含六语言文案齐全性）
+node Web_Gomoku3D/tests/dom-smoke.test.mjs #   96 项断言（含六语言文案齐全性）
 node Web_Gomoku3D/tests/online.test.mjs    # 8845 项断言（联机内核：和网页版逐格对拍 1156 组）
 node Web_Gomoku3D/tests/online-http.test.mjs #  115 项断言（联机 HTTP 层，本机 loopback）
 node _verify/browser-check.mjs             #  124 项断言（真实浏览器：GLSL 编译 + 布局几何 + 英文排版 + 截图）

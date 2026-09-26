@@ -1118,6 +1118,93 @@ try {
     "往下拖 → 相机抬高（pitch 增加）、往右拖 → yaw 增加：两轴都是「内容跟着手指走」",
     dragDir + "（dy 取反的话 downPitch 会是负的，表现就是「上拉棋盘、棋盘却往下转」）");
 
+  // ---- 7d-2. 真鼠标事件：右键/Shift 拖动平移、滚轮与触控板捏合的方向
+  //
+  // 【为什么非要用真事件】上面几条都是【直接调 applyDrag】的，验的是"角度怎么算"。
+  // 而"哪颗键走哪条路、事件有没有被浏览器吃掉"一条都没验到 —— 右键那两条尤其：
+  // contextmenu 不挡住的话，真实的右键拖动会在按下的那一拍被系统菜单打断，
+  // 而"直接调函数"的写法永远看不见这件事（合成事件绕过了整条输入通路）。
+  const cam0 = JSON.parse(await ev(`(() => {
+    const c = Game.camera;
+    Game.pan3d = [0, 0];
+    const r = document.getElementById("gl").getBoundingClientRect();
+    return JSON.stringify({ cx: Math.round(r.left + r.width / 2), cy: Math.round(r.top + r.height / 2),
+      distance: c.distance, yaw: c.yaw, pitch: c.pitch, min: c.minDistance, max: c.maxDistance });
+  })()`));
+  const mouseAt = (type, x, y, extra) => send("Input.dispatchMouseEvent", Object.assign(
+    { type: type, x: x, y: y, button: "none", clickCount: 0, pointerType: "mouse" }, extra || {}));
+  const mouseDrag = async (button, dx, dy, steps) => {
+    await mouseAt("mousePressed", cam0.cx, cam0.cy, { button: button, buttons: button === "right" ? 2 : 1, clickCount: 1 });
+    for (let i = 1; i <= steps; i++) {
+      await mouseAt("mouseMoved", cam0.cx + dx * i / steps, cam0.cy + dy * i / steps,
+        { button: button, buttons: button === "right" ? 2 : 1 });
+      await sleep(16);
+    }
+    await mouseAt("mouseReleased", cam0.cx + dx, cam0.cy + dy, { button: button, buttons: 0, clickCount: 1 });
+    await sleep(150);
+  };
+  const wheelAt = (deltaY, ctrl) => mouseAt("mouseWheel", cam0.cx, cam0.cy,
+    { deltaX: 0, deltaY: deltaY, modifiers: ctrl ? 2 : 0 });
+
+  // 右键拖动 = 平移（3D 查看器的通行分工，OrbitControls 的 RIGHT = PAN）
+  await mouseDrag("right", 80, 40, 8);
+  const panRes = JSON.parse(await ev(`JSON.stringify({ pan: Game.pan3d.map((v) => +v.toFixed(1)),
+    yaw: +Game.camera.yaw.toFixed(3), pitch: +Game.camera.pitch.toFixed(3) })`));
+  check(Math.abs(panRes.pan[0] - 80) < 6 && Math.abs(panRes.pan[1] - 40) < 6 &&
+        Math.abs(panRes.yaw - cam0.yaw) < 1e-6 && Math.abs(panRes.pitch - cam0.pitch) < 1e-6,
+    "真鼠标右键拖 80×40 → 棋盘整体跟着走 80×40，视角一点没动",
+    JSON.stringify(panRes) + "（改之前右键什么都不做）");
+
+  const ctxBlocked = await ev(`(() => {
+    const e = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    document.getElementById("gl").dispatchEvent(e);
+    return e.defaultPrevented;
+  })()`);
+  check(ctxBlocked === true, "画布上的右键菜单被挡住了 —— 不挡的话真实的右键拖动会被它打断");
+
+  // Shift + 左键 = 平移（触控板上按不出右键拖动时的那条退路）
+  await ev(`Game.pan3d = [0, 0]; "ok"`);
+  await mouseAt("mousePressed", cam0.cx, cam0.cy, { button: "left", buttons: 1, clickCount: 1, modifiers: 8 });
+  for (let i = 1; i <= 6; i++) {
+    await mouseAt("mouseMoved", cam0.cx - i * 8, cam0.cy + i * 4, { button: "left", buttons: 1, modifiers: 8 });
+    await sleep(16);
+  }
+  await mouseAt("mouseReleased", cam0.cx - 48, cam0.cy + 24, { button: "left", buttons: 0, clickCount: 1, modifiers: 8 });
+  await sleep(150);
+  const shiftPan = JSON.parse(await ev(`JSON.stringify({ pan: Game.pan3d.map((v) => +v.toFixed(1)),
+    yaw: +Game.camera.yaw.toFixed(3) })`));
+  check(Math.abs(shiftPan.pan[0] + 48) < 6 && Math.abs(shiftPan.pan[1] - 24) < 6 &&
+        Math.abs(shiftPan.yaw - cam0.yaw) < 1e-6,
+    "真 Shift + 左键拖 48×24 → 同样是平移（触控板上按不出右键拖动时的退路）",
+    JSON.stringify(shiftPan));
+
+  // 滚轮 / 触控板捏合：往下滚与双指合拢都是缩小
+  //
+  // 【触控板的捏合走的就是 wheel】浏览器把它报成带 ctrlKey 的 wheel 事件，手指张开 = deltaY < 0。
+  // 所以这里两条一起量：鼠标滚轮那条是惯例（three.js / Google Maps 同向），
+  // 触控板那条是用户直接报上来的（"双指放大实际缩小"）。
+  const wheelDist = async (deltaY, ctrl) => {
+    await ev(`Game.camera.distance = 30; "ok"`);
+    await wheelAt(deltaY, ctrl);
+    await sleep(120);
+    return ev(`Game.camera.distance`);
+  };
+  const dDown = await wheelDist(120, false);
+  const dUp = await wheelDist(-120, false);
+  const dOut = await wheelDist(-60, true);
+  const dIn = await wheelDist(60, true);
+  check(dDown > 30 && dUp < 30,
+    "鼠标滚轮：往下滚 = 缩小（相机拉远）、往上滚 = 放大",
+    JSON.stringify({ 往下滚: dDown, 往上滚: dUp }));
+  check(dOut < 30 && dIn > 30,
+    "触控板双指捏合：张开 = 放大、合拢 = 缩小（改之前是反的）",
+    JSON.stringify({ 张开: dOut, 合拢: dIn }));
+
+  // 收尾：相机和取景复位，别把状态留给下面的触屏一节
+  await ev(`(() => { const c = Game.camera;
+    c.distance = ${cam0.distance}; c.yaw = ${cam0.yaw}; c.pitch = ${cam0.pitch};
+    c.minDistance = ${cam0.min}; c.maxDistance = ${cam0.max}; Game.pan3d = [0, 0]; return "ok"; })()`);
+
   // ---- 7e. 触屏加固：拖动面必须禁掉浏览器手势
   const ta = await ev(`(() => {
     const g = getComputedStyle(document.getElementById("gl"));

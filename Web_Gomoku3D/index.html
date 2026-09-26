@@ -128,6 +128,10 @@
      拖拽行程变长，触屏上被浏览器手势抢走的概率也跟着变大。 */
   #gl { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
   #gl.dragging { cursor: grabbing; }
+  /* 平移用 move 而不是 grabbing：和终局横幅那颗"可以拖着走"的光标同一套语义 ——
+     旋转是"抓着棋盘转"，平移是"把整块画面搬走"，两者分开比统一更有信息量。
+     它也顺便成了"右键能拖"的可见提示（桌面上看不出一个画布支不支持右键拖动）。 */
+  #gl.panning { cursor: move; }
 
   #modebar {
     position: absolute; left: 14px; top: 14px;
@@ -2177,7 +2181,7 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
         <div id="coords">把鼠标移到棋盘上以选择落点</div>
         <button id="hintToggle" class="mini">收起</button>
       </div>
-      <div id="hint" data-i18n-html="hint">左键拖拽旋转 · 滚轮缩放 · 单击当前层落子<br>
+      <div id="hint" data-i18n-html="hint">左键拖拽旋转 · 右键拖拽平移 · 滚轮缩放 · 单击当前层落子<br>
         触屏：两指缩放 / 平移 · 双击棋盘复位（立体和单层都可以）<br>
         Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · H 格线 · B 只看黑/白 · T 转动 · Y 恢复本次转动<br>
         绿框 = 待转的那一层 · 蓝框 = 当前层（四维模式下才有绿框）</div>
@@ -3849,7 +3853,7 @@ function storeSet(key, value) {
 const STATIC_TEXT = { en: {
   // ---- 左侧舞台
   "previewTag": "Demo board · 10 × 10 × 10<br>Independent of the settings on the left — not part of the game",
-  "hint": "Drag to rotate · Scroll to zoom · Click to place on the current layer<br>" +
+  "hint": "Drag to rotate · Right-drag to pan · Scroll to zoom · Click to place on the current layer<br>" +
     "Touch: pinch to zoom / pan · double-tap a board to reset (works on both boards)<br>" +
     "Z undo · R restart · Q/E change layer · G view mode · H grid lines · B black/white only · T rotate · Y restore rotation<br>" +
     "Green box = the layer about to rotate · Blue box = current layer (green only in 4D)",
@@ -4018,7 +4022,7 @@ const TEXT = { en: {
    -------------------------------------------------------------------------- */
 STATIC_TEXT.ja = {
   "previewTag": "デモ盤 · 10 × 10 × 10<br>左の設定とは無関係、対局には含まれません",
-  "hint": "ドラッグで回転 · スクロールでズーム · クリックで現在のレイヤーに着手<br>タッチ：ピンチでズーム/パン · 盤をダブルタップでリセット（どちらの盤でも有効）<br>Z 元に戻す · R 最初から · Q/E レイヤー切替 · G 表示モード · H グリッド線 · B 黒/白のみ · T 回転 · Y 回転を戻す<br>緑の枠 = 回転するレイヤー · 青の枠 = 現在のレイヤー（緑は 4D のみ）",
+  "hint": "ドラッグで回転 · 右ドラッグで平行移動 · スクロールでズーム · クリックで現在のレイヤーに着手<br>タッチ：ピンチでズーム/パン · 盤をダブルタップでリセット（どちらの盤でも有効）<br>Z 元に戻す · R 最初から · Q/E レイヤー切替 · G 表示モード · H グリッド線 · B 黒/白のみ · T 回転 · Y 回転を戻す<br>緑の枠 = 回転するレイヤー · 青の枠 = 現在のレイヤー（緑は 4D のみ）",
   "modeGhost": "ゴースト表示",
   "modeSlice": "スライス",
   "modeGrid": "グリッド線",
@@ -4114,7 +4118,7 @@ TEXT.ja = {
 };
 STATIC_TEXT.ko = {
   "previewTag": "데모 판 · 10 × 10 × 10<br>왼쪽 설정과 무관 — 게임에 포함되지 않습니다",
-  "hint": "드래그로 회전 · 스크롤로 확대/축소 · 클릭하면 현재 레이어에 착수<br>터치: 두 손가락으로 확대/이동 · 판을 더블탭하면 초기화 (두 판 모두 가능)<br>Z 되돌리기 · R 다시 시작 · Q/E 레이어 변경 · G 보기 모드 · H 격자선 · B 흑/백만 보기 · T 회전 · Y 회전 복원<br>초록 상자 = 곧 회전할 레이어 · 파란 상자 = 현재 레이어 (초록 상자는 4D 전용)",
+  "hint": "드래그로 회전 · 오른쪽 드래그로 이동 · 스크롤로 확대/축소 · 클릭하면 현재 레이어에 착수<br>터치: 두 손가락으로 확대/이동 · 판을 더블탭하면 초기화 (두 판 모두 가능)<br>Z 되돌리기 · R 다시 시작 · Q/E 레이어 변경 · G 보기 모드 · H 격자선 · B 흑/백만 보기 · T 회전 · Y 회전 복원<br>초록 상자 = 곧 회전할 레이어 · 파란 상자 = 현재 레이어 (초록 상자는 4D 전용)",
   "modeGhost": "고스트 레이어",
   "modeSlice": "슬라이스",
   "modeGrid": "격자선",
@@ -4210,7 +4214,7 @@ TEXT.ko = {
 };
 STATIC_TEXT.ru = {
   "previewTag": "Демо-доска · 10 × 10 × 10<br>Не зависит от настроек слева — не часть игры",
-  "hint": "Перетаскивание — вращение вида · Прокрутка — масштаб · Клик — ход на текущем слое<br>Сенсор: двумя пальцами — масштаб и сдвиг · двойной тап по доске — сброс (работает на обеих досках)<br>Z — отменить · R — заново · Q/E — сменить слой · G — режим вида · H — линии сетки · B — только чёрные/белые · T — поворот слоя · Y — вернуть поворот<br>Зелёная рамка — слой, который повернётся · Синяя рамка — текущий слой (зелёная — только в 4D)",
+  "hint": "Перетаскивание — вращение вида · Правая кнопка — сдвиг · Прокрутка — масштаб · Клик — ход на текущем слое<br>Сенсор: двумя пальцами — масштаб и сдвиг · двойной тап по доске — сброс (работает на обеих досках)<br>Z — отменить · R — заново · Q/E — сменить слой · G — режим вида · H — линии сетки · B — только чёрные/белые · T — поворот слоя · Y — вернуть поворот<br>Зелёная рамка — слой, который повернётся · Синяя рамка — текущий слой (зелёная — только в 4D)",
   "modeGhost": "Призрачные слои",
   "modeSlice": "Срез",
   "modeGrid": "Линии сетки",
@@ -4318,7 +4322,7 @@ TEXT.ru = {
 };
 STATIC_TEXT.fr = {
   "previewTag": "Plateau de démo · 10 × 10 × 10<br>Indépendant des réglages à gauche — hors partie",
-  "hint": "Glisser pour tourner · Molette pour zoomer · Clic pour poser sur la couche courante<br>Tactile : pincer pour zoomer / faire glisser · double appui sur un plateau pour réinitialiser (valable sur les deux plateaux)<br>Z annuler · R recommencer · Q/E changer de couche · G mode d'affichage · H lignes de grille · B noir/blanc seulement · T tourner · Y restaurer la rotation<br>Cadre vert = couche sur le point de tourner · Cadre bleu = couche courante (vert seulement en 4D)",
+  "hint": "Glisser pour tourner · Clic droit pour déplacer · Molette pour zoomer · Clic pour poser sur la couche courante<br>Tactile : pincer pour zoomer / faire glisser · double appui sur un plateau pour réinitialiser (valable sur les deux plateaux)<br>Z annuler · R recommencer · Q/E changer de couche · G mode d'affichage · H lignes de grille · B noir/blanc seulement · T tourner · Y restaurer la rotation<br>Cadre vert = couche sur le point de tourner · Cadre bleu = couche courante (vert seulement en 4D)",
   "modeGhost": "Couches fantômes",
   "modeSlice": "Tranche",
   "modeGrid": "Lignes de grille",
@@ -5254,6 +5258,9 @@ const Game = {
   layerCounts: null,
   toastTimer: 0,
   dragging: false,
+  /** 右键（或 Shift + 左键）拖动 = 平移视图。和 dragging 互斥：一次只可能是其中一种，
+   *  旋转改角度、平移改 pan3d，两个一起动的话手感是"边转边飘"。 */
+  panning: false,
   dragMoved: 0,
   lastMouse: [0, 0],
   pressInView: false,
@@ -7036,13 +7043,24 @@ const Game = {
     const gl = this.el.gl;
 
     gl.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) return;
+      /* 左键 = 旋转，右键 = 平移。右键平移是 3D 查看器的通行分工
+         （OrbitControls 的 mouseButtons 里 RIGHT 就是 PAN，Google Maps / Sketchfab 同款），
+         触屏那侧不需要它 —— 那边两指已经在做同一件事（见 pinchApply）。
+         另外收 Shift + 左键：触控板上"按住右键拖动"不是每台机器都做得出来
+         （有的机器是两指轻点出菜单、按不出右键拖动），而 Shift + 拖动在 2D 工具里
+         是通行的"平移"手势，两边都留着比只留一条稳。 */
+      const wantPan = e.button === 2 || (e.button === 0 && e.shiftKey);
+      if (!wantPan && e.button !== 0) return;      // 中键等一概不管
       this.trackPointer(e, "down", "gl");
-      this.pressInView = true;
-      this.dragging = true;
+      this.panning = wantPan;
+      this.dragging = !wantPan;
+      // 【平移不算落子】pressInView 只在"左键旋转"那条路上立起来，
+      // 于是 pointerup 里那段落子逻辑（要求 pressInView）对平移天然不成立 ——
+      // 右键松开绝不能在棋盘上放一颗子。
+      this.pressInView = !wantPan;
       this.dragMoved = 0;
       this.lastMouse = [e.clientX, e.clientY];
-      gl.classList.add("dragging");
+      gl.classList.add(wantPan ? "panning" : "dragging");
     });
 
     window.addEventListener("pointermove", (e) => {
@@ -7052,12 +7070,15 @@ const Game = {
       // 两指手势进行中：不转视角、也不算悬停 —— 那两根手指在缩放和平移，
       // 顺带再转一下视角或者选中一个格子都不是玩家要的
       if (this.pinch.surface) return;
-      if (this.dragging) {
+      if (this.dragging || this.panning) {
         const dx = e.clientX - this.lastMouse[0];
         const dy = e.clientY - this.lastMouse[1];
         this.lastMouse = [e.clientX, e.clientY];
         this.dragMoved += Math.hypot(dx, dy);
-        this.applyDrag(dx, dy);
+        // 平移和触屏那侧同一个函数、同一个方向（内容跟手），也因此共用同一套夹取
+        // （最多推出去半个视口，至少留一半棋盘看得见）。
+        if (this.panning) this.pan3dBy(dx, dy);
+        else this.applyDrag(dx, dy);
       }
 
       // 悬停拾取：只有在三维视口上方才算
@@ -7074,12 +7095,15 @@ const Game = {
     const dropPointer = (e) => this.trackPointer(e, "up", "gl");
 
     window.addEventListener("pointerup", (e) => {
-      if (e.button !== 0) return;
+      // 右键也要记账收尾：pressInView 保证它落不了子，但 trackPointer 那本账
+      // 必须【对称地加、对称地减】—— 只加不减的话 pointers 里会永远留着一个 id，
+      // 下一次左键按下就成了"两根指针"，当场被当成两指手势、鼠标旋转再也转不动。
+      if (e.button !== 0 && e.button !== 2) return;
       // 【先看是不是两指手势】两指里的任意一根松开都必须先记账，
       // 而且这一下【不能】当成点击 —— 捏完松手就在棋盘上落一子是最典型的误操作
       const wasPinch = !!this.pinch.surface;
       dropPointer(e);
-      gl.classList.remove("dragging");
+      gl.classList.remove("dragging", "panning");
       if (this.pressInView && !wasPinch && this.dragMoved < 6) {
         // 位移小于 6 像素才算"点击"，否则是拖拽旋转
         const r = gl.getBoundingClientRect();
@@ -7090,12 +7114,27 @@ const Game = {
       }
       this.pressInView = false;
       this.dragging = false;
+      this.panning = false;
     });
     window.addEventListener("pointercancel", dropPointer);
 
+    // 右键菜单要吃掉：下面右键拖动是平移，不挡住的话菜单会在按下的那一拍弹出来，
+    // 把这次拖动当场打断（Windows 上尤其明显）。只挡画布上这一处，
+    // 别处（比如选中规则正文再右键复制）不受影响。
+    gl.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    /* 滚轮 / 触控板缩放的【方向】。deltaY > 0（往下滚、触控板上双指合拢）→ f > 1 →
+       相机拉远 → 棋盘变小。这一处符号【同时管着两件事】，而它们共用一套约定：
+         · 鼠标滚轮：往下滚 = 缩小，和 three.js 的 OrbitControls（onMouseWheel 里
+           deltaY < 0 → dollyIn）、Google Maps、model-viewer 一致；
+         · 触控板双指捏合：浏览器把它报成【带 ctrlKey 的 wheel 事件】，deltaY 的符号
+           和滚轮同一套（手指张开 = deltaY < 0）。所以"双指放大"要落到 f < 1（拉近）上。
+       改之前是 `1 - deltaY * …`，于是两个都反着：鼠标往下滚反而放大，
+       最刺眼的是触控板上【双指张开、棋盘却缩小】—— 那是用户直接报上来的。
+       翻过来之后两件事一起对，不需要为触控板单开一条分支。 */
     gl.addEventListener("wheel", (e) => {
       e.preventDefault();
-      const f = 1 - Math.max(-1, Math.min(1, e.deltaY * 0.0012)) * 0.9;
+      const f = 1 + Math.max(-1, Math.min(1, e.deltaY * 0.0012)) * 0.9;
       this.camera.distance = Math.max(this.camera.minDistance,
         Math.min(this.camera.maxDistance, this.camera.distance * f));
     }, { passive: false });
