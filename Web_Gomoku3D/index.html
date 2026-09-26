@@ -152,8 +152,21 @@
     background: var(--overlay); border: 1px solid var(--border); border-radius: 6px;
     padding: 10px 13px; line-height: 1.75; max-width: 560px;
   }
-  #coords { color: var(--accent); font-size: 15px; margin-bottom: 5px; }
+  /* 坐标行和折叠按钮并排，**不把按钮绝对定位到右上角**：那样它会压在第一行文字上，
+     要让它就得给 #coords 写一个按"收起/隐藏"两种语言分别量出来的 padding-right ——
+     又是一个随语言漂移的写死值。并排不需要任何留白数学，英文界面下按钮宽几像素
+     也只是把坐标行挤窄一点。整块原来是 141px 高（360×640 上占三维视图 61%），
+     所以下面那个折叠态不是锦上添花。 */
+  #hintHead { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+  #coords { color: var(--accent); font-size: 15px; flex: 1 1 auto; }
   #hint { color: var(--dim); font-size: 12.5px; }
+  #hintToggle { flex: 0 0 auto; }
+  /* 折叠态：整块只剩那个按钮，缩成左下角一颗胶囊，点它展开。
+     **不写宽度**——#hintbox 是绝对定位，宽度是 shrink-to-fit，内容一走开它自己
+     就缩到按钮那么宽。写死一个数反而会在换语言（"收起"↔"Hide"）时不匹配。 */
+  #hintbox.folded { padding: 5px 7px; }
+  #hintbox.folded #hintHead { margin-bottom: 0; }
+  #hintbox.folded #coords, #hintbox.folded #hint { display: none; }
 
   /* 终局横幅。**可以拖动**（见 Game.bindBannerDrag），所以它是这一版里
      唯一一个"位置会被 JS 改"的浮层。
@@ -527,6 +540,42 @@
        百分比参照的是视口，两者在 iOS Safari 上正好差一个地址栏的高度。差了这一下，
        按钮就会往下窜出状态行、压到底下的文字上。上面那行 % 是给不认 dvh 的浏览器兜底。 */
     #topRight { top: calc(42% + 14px); top: calc(42dvh + 14px); }
+  }
+
+  /* ---------- 小屏 / 触屏：按键整体收一档 ----------
+     扳机是【触屏设备 或 窄窗口】，两者取并集：
+
+       · 只按宽度不行 —— 手机【横屏】时视口是 844×390，比不少平板还宽，
+         而它恰恰是最挤的一档（面板只剩 390px 高）。所以必须有 pointer: coarse 兜住。
+       · 只看触屏也不行 —— 窄的桌面窗口（拖到 700px 以内）是一模一样的空间问题。
+
+     收的幅度是【中等】：普通按钮 38→30px、mini 31→25px。25px 是"还能稳稳点中"的下限，
+     不再往下走 —— 手指点不准的话省出来的那几像素不值。实测省下的高度：
+     三维下约 16px，四维下约 46px（转动面板有 5 排按钮）。
+
+     --compact 这个变量不是给 CSS 用的，是给 JS 用的：提示框"手机上默认折叠"要 JS 说了算，
+     而"手机"的判定只写在上面这个媒体查询里一处，JS 读这个变量。两处各写一遍同一个
+     条件的话，漂移了没有任何东西会报警，只表现为"某个尺寸下默认状态不对"。
+     （读法见 JS 里的 readCompact，和 Palette 读颜色变量是同一条路。） */
+  :root { --compact: 0; }
+  @media (pointer: coarse), (max-width: 700px) {
+    :root { --compact: 1; }
+
+    button { padding: 6px 10px; font-size: 12.5px; }
+    button.mini { padding: 4px 8px; font-size: 12px; }
+    .rotRow button { padding: 4px 7px; font-size: 12px; }
+    .rotRow button.mini { padding: 4px 9px; }
+    /* 主按钮和输入框是【按 id 写字号的】，元素选择器盖不住，得单独点名。
+       输入框跟着一起收：尺寸那几行是输入框和按钮混排的，只收按钮会让同一行
+       高矮不齐 —— 这正是"界面乱"的一种。 */
+    #startBtn { font-size: 16px; padding: 10px 34px; }
+    .dimInput { width: 54px; padding: 6px 5px; font-size: 14px; }
+    #dimCube { min-width: 80px; }
+    /* 右上角这两个也是按 id 写的字号，不点名就缩不到 —— 于是面板里的按钮都小了、
+       只有它们俩还是原尺寸，看着像没对齐。@langBtn 的 min-width 一收，
+       状态行让给它们的留白（layoutTopRight 实测）也跟着小，正文能多占几像素。 */
+    #rulesBtn { font-size: 12.5px; padding: 5px 10px; }
+    #langBtn { font-size: 12.5px; padding: 5px 9px; min-width: 46px; }
   }
 </style>
 </head>
@@ -1017,8 +1066,15 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
       </div>
     </div>
 
+    <!-- 提示框。**手机上默认折叠**（判定见 CSS 的 --compact 与 JS 的 readCompact）：
+        它原来在 360×640 上要占掉三维视图 61% 的高度。折叠按钮上的字是【这个按钮的
+         两个状态】（展开时写"收起"、收起时写"提示"），不是同一句话的两种译法，
+        所以它不进 data-i18n —— 和右上角那个语言按钮同一条理由，由 syncHintFold() 写。 -->
     <div id="hintbox">
-      <div id="coords">把鼠标移到棋盘上以选择落点</div>
+      <div id="hintHead">
+        <div id="coords">把鼠标移到棋盘上以选择落点</div>
+        <button id="hintToggle" class="mini">收起</button>
+      </div>
       <div id="hint" data-i18n-html="hint">左键拖拽旋转 · 滚轮缩放 · 单击当前层落子<br>
         Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · H 格线 · B 只看黑/白 · T 转动 · Y 恢复本次转动<br>
         绿框 = 待转的那一层 · 蓝框 = 当前层（四维模式下才有绿框）</div>
@@ -2314,6 +2370,26 @@ const Palette = {
   rgba(name, alpha) { const c = this.rgb(name); return [c[0], c[1], c[2], alpha]; },
 };
 
+/* --------------------------------------------------------------------------
+   「小屏 / 触屏」的判定。**放在内核区间之外**，理由和上面 Palette 一样：它要读
+   getComputedStyle，而内核区间被抽出来在纯 node 里跑。
+
+   【为什么是读 CSS 变量，而不是在这里再 matchMedia 一遍】：按键尺寸那条规则写在 CSS
+   的媒体查询里，而"提示框默认收起还是展开"必须由 JS 说 —— 同一个条件写两遍迟早会
+   漂移，而漂移的症状只是"某个尺寸下默认状态不对"，没有任何东西会报警。所以条件只写
+   在 CSS 一处（--compact），这里读它。和调色板读颜色变量是同一条路。
+
+   读不到就按【大屏】处理：node 桩里没有 getComputedStyle，而桩的 window.innerWidth
+   是 1600（见 dom-smoke），大屏正是它要模拟的场景。
+   -------------------------------------------------------------------------- */
+function readCompact() {
+  if (typeof getComputedStyle !== "function") return false;
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--compact");
+    return !!(v && v.trim() === "1");
+  } catch (e) { return false; }
+}
+
 
 /* --------------------------------------------------------------------------
    界面语言。**同样放在内核区间之外** —— 内核那边碰不得 DOM，而这一层全是 DOM。
@@ -2467,6 +2543,10 @@ const TEXT = { en: {
   "slice.label": "Drawing up to z ≤ {i}/{n}",
   "coords.hover": "Will place at ({x},{y},{z})",
   "coords.idle": "Move the mouse over the board to pick a cell",
+  // 提示框那个折叠按钮的【两个状态】。它不是一句话的两种译法，所以同一时刻只会用到一个 ——
+  // 但它仍然是"由 JS 拼出来、没有 HTML 原文可依"的文案，所以按 TEXT 的规矩来，中文在调用点。
+  "hint.hide": "Hide",
+  "hint.show": "Hints",
 
   // ---- 终局横幅。#bannerTitle 是 white-space:pre-line，\n 是排版，位置要和中文对齐
   "banner.draw": "Draw\nBoard full",
@@ -3293,7 +3373,7 @@ const Game = {
   init() {
     const ids = ["gl","modeGhost","modeSlice","modeGrid","stoneAll","stoneBlack","stoneWhite",
       "sliceGroup","sliceDown","sliceUp","sliceLabel",
-      "coords","hint","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
+      "coords","hint","hintbox","hintToggle","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
@@ -3330,6 +3410,9 @@ const Game = {
     // **刻意不强制打开**：init 去改 DOM 的类，"初始显示哪个界面"就变成 JS 说了算，
     // 而它其实是 HTML 说了算（node 桩里 #setup 是带 off 的，那种情况下不能把它扳回来）。
     if (this.setupOpen) this.openSetup();
+    // 提示框的初始折叠态。**只在这里定一次**，之后既不跟 resize 也不跟转屏重算 ——
+    // 玩家手动展开过一次之后再因为窗口变了被收回去，就是"它自己乱动"。
+    this.hintFolded = readCompact();
     this.resize();
     window.addEventListener("resize", () => this.resize());
     // 语言放在【最后】：先把上次的选择读回来（读不到就是默认的中文），
@@ -3386,6 +3469,9 @@ const Game = {
     // refreshHint 只在 WebGL2 失败时动手，正常情况下它直接返回。
     this.refreshCoords();
     this.refreshHint();
+    // 折叠按钮上的字也是 JS 写的（"收起"/"提示"是它的两个状态，不是一句译文），
+    // applyStatic 管不到。类名也一并在这里落上，见 syncHintFold。
+    this.syncHintFold();
     // 规则浮层渲染一次就缓存。不失效的话，切语言后它仍挂着上一种语言的正文，
     // 而且因为"已经渲染过"这个标志还在，重新打开也不会修。
     this.rulesRendered = false;
@@ -4504,6 +4590,7 @@ const Game = {
         if (e.target === this.el.rulesPanel) this.closeRules();
       });
     }
+    on("hintToggle", () => this.toggleHint());
     on("bannerUndo", () => this.undo());
     on("bannerRestart", () => this.restart());
     on("bannerClose", () => this.hideBanner());
@@ -4755,10 +4842,50 @@ const Game = {
   /** WebGL2 起不来时替换 #hint 的内容。正常情况不动它（那是 HTML 里的静态文案）。 */
   refreshHint() {
     if (!this.glFailed) return;
+    // WebGL2 起不来时【强制展开】：手机上的默认状态是折叠，而这条故障说明正是
+    // 手机玩家最需要看到的一句（他只会看到一块什么都不画的黑板）。
+    // 必须在写 innerHTML 之前展开——折叠态下 #hint 是 display:none，
+    // 玩家点开胶囊才会看到字，中间那一下是"点了没反应"。
+    this.setHintFolded(false);
     this.el.hint.innerHTML = say(
       () => "<b style='color:#c0392b'>这个浏览器不支持 WebGL2，三维棋盘无法显示。</b><br>" +
             "右侧的分层面板仍然可以正常使用。",
       "hint.noWebgl2");
+  },
+
+  /**
+   * 提示框的折叠。真值源是 this.hintFolded，DOM 上的 .folded 类只是它的投影 ——
+   * 和 ghostMode / gridVisible 同一个套路。
+   *
+   * 【刻意不跟 newGame 复位】那两个是"这一局怎么看"的视图开关，这个是"这块说明要不要
+   * 占地方"。玩家收起来之后点一次「再来一局」又弹回来，只会让人再收一次。
+   *
+   * 【状态故意不落盘】默认值由屏幕决定：小屏/触屏进来是折叠的，桌面是展开的。
+   * 记到 localStorage 的话，"在手机上收起来过一次"会跟着跑到桌面上去，
+   * 而玩家在桌面上根本没做过这个选择。要改成记住也不难，改这里一处即可。
+   */
+  setHintFolded(folded) {
+    this.hintFolded = !!folded;
+    this.syncHintFold();
+  },
+
+  toggleHint() { this.setHintFolded(!this.hintFolded); },
+
+  /**
+   * 把 this.hintFolded 投影到 DOM：类名 + 按钮上的字。
+   *
+   * 按钮文字<b>走 say() 而不是 data-i18n</b>：它写的是【这个按钮的两个状态】
+   * （展开时"收起"、收起时"提示"），不是同一句话的两种译法 —— 和右上角那个语言按钮
+   * 一模一样的理由。所以它必须由 applyLang 主动重刷，静态文案那条通路管不到它。
+   * 类名在这里一起给，是为了让 init 那条路只需要读一次 readCompact() ——
+   * 初始化时 applyLang 一定会跑，类就跟着落上了。
+   */
+  syncHintFold() {
+    if (this.el.hintbox) this.el.hintbox.classList.toggle("folded", this.hintFolded);
+    if (!this.el.hintToggle) return;
+    this.el.hintToggle.textContent = this.hintFolded
+      ? say(() => "提示", "hint.show")
+      : say(() => "收起", "hint.hide");
   },
 
   refreshCoords() {

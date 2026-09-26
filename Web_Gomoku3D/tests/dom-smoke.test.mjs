@@ -625,6 +625,56 @@ step("悬停状态切换会更新坐标文字", () => {
   Game.setHover(null);
 });
 
+step("提示框：折叠开关翻转类和按钮文字，切语言也跟着走", () => {
+  // 桩里没有 getComputedStyle，readCompact() 返回 false —— 也就是【大屏 = 默认展开】。
+  // 这一条同时钉住了那个兜底：哪天 readCompact 在桩里意外返回 true，这里会先红。
+  if (Game.hintFolded) throw new Error("桩环境是大屏，提示框不该默认折叠");
+  if (Game.el.hintbox.classList.contains("folded"))
+    throw new Error("大屏下不该带 .folded 类");
+  if (Game.el.hintToggle.textContent !== "收起")
+    throw new Error("展开态按钮应写「收起」，实际 " + JSON.stringify(Game.el.hintToggle.textContent));
+
+  Game.toggleHint();
+  if (!Game.hintFolded) throw new Error("toggleHint 之后 hintFolded 应为 true");
+  if (!Game.el.hintbox.classList.contains("folded"))
+    throw new Error("折叠后 #hintbox 应带 .folded（CSS 靠它把整块收成一颗胶囊）");
+  if (Game.el.hintToggle.textContent !== "提示")
+    throw new Error("折叠态按钮应写「提示」，实际 " + JSON.stringify(Game.el.hintToggle.textContent));
+
+  // 按钮文字是 JS 写的，applyStatic 那条静态通路管不到它 —— 切语言必须能重刷。
+  Game.setLang("en");
+  if (Game.el.hintToggle.textContent !== "Hints")
+    throw new Error("英文界面下折叠态按钮应为 Hints，实际 " + JSON.stringify(Game.el.hintToggle.textContent));
+  Game.toggleHint();
+  if (Game.el.hintToggle.textContent !== "Hide")
+    throw new Error("英文界面下展开态按钮应为 Hide，实际 " + JSON.stringify(Game.el.hintToggle.textContent));
+  Game.setLang("zh");
+  if (Game.el.hintToggle.textContent !== "收起") throw new Error("切回中文后按钮文字没跟着回去");
+
+  if (Game.hintFolded || Game.el.hintbox.classList.contains("folded"))
+    throw new Error("展开了还留着 .folded");
+});
+
+step("提示框：WebGL2 起不来时强制展开（折叠态会把故障说明藏起来）", () => {
+  // #hint 是 data-i18n-html 元素，内容有快照；这一段跑完必须原样放回去，
+  // 否则后面那条"切回中文后每个静态元素与 HTML 原文逐字节相等"会被这里改脏。
+  const savedHint = Game.el.hint.innerHTML;
+  const savedFailed = Game.glFailed;
+  try {
+    Game.setHintFolded(true);
+    Game.glFailed = true;
+    Game.refreshHint();
+    if (Game.hintFolded) throw new Error("WebGL2 故障时提示框必须强制展开");
+    if (Game.el.hintbox.classList.contains("folded")) throw new Error("强制展开后 .folded 应被摘掉");
+    if (Game.el.hint.innerHTML.indexOf("WebGL2") < 0)
+      throw new Error("故障说明没写进 #hint：" + Game.el.hint.innerHTML.slice(0, 60));
+  } finally {
+    Game.glFailed = savedFailed;
+    Game.el.hint.innerHTML = savedHint;
+    Game.setHintFolded(false);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 四维模式：转动面板
 // ---------------------------------------------------------------------------

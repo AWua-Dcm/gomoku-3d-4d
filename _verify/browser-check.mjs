@@ -1226,6 +1226,120 @@ try {
   await send("Emulation.clearDeviceMetricsOverride");
   await ev("(() => { Game.closeSetup(); return 1; })()");
 
+  // ---- 7h. 小屏 / 触屏：提示框默认收起，按键整体收一档
+  //
+  // 【为什么必须重新加载】提示框的默认折叠态只在 init 里算一次 —— 之后既不跟 resize
+  // 也不跟转屏重算（否则玩家手动展开过之后会被窗口变化收回去）。所以"手机上打开就是
+  // 收起的"这件事，只有真的以那个尺寸重新加载一次才验得到。
+  //
+  // 【触屏模拟必须显式打开】实测：CDP 的 setDeviceMetricsOverride({mobile:true})
+  // 【不会】让 CSS 的 pointer: coarse 生效。不打开的话，844×390（手机横屏）那一档
+  // 只能靠 max-width:700px 命中 —— 而它命不中，按键一个都不缩。而那一档恰恰是最挤的
+  // 一档（面板只剩 390px 高），所以这是这个媒体查询里最要紧的一条，必须验到。
+  await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await send("Page.navigate", { url: PAGE });
+  await sleep(1600);
+  const reloadConsole = drainConsole();
+  check(reloadConsole.length === 0,
+    "以小屏档重新加载页面时控制台没有报错", reloadConsole.join("\n      "));
+  // 重载后落地在起始界面，而 #stage.preview #hintbox 是 display:none —— 不关掉设置页
+  // 就直接量，量到的是 0×0，下面那几条"提示框占多大"会全部空转通过（实测踩过）：
+  // 折叠态 0% ≤ 15% 成立，展开后 0% > 0% 不成立，一红一绿全是假的。
+  await ev("(() => { Game.closeSetup(); Game.newGame([15,15,15],1); return 1; })()");
+  await sleep(500);
+
+  const SMALL_PROBE = `(() => {
+    const R = (id) => { const e = document.getElementById(id); return e ? e.getBoundingClientRect() : null; };
+    const v = R("view"), hb = R("hintbox");
+    return {
+      coarse: matchMedia("(pointer: coarse)").matches,
+      compact: getComputedStyle(document.documentElement).getPropertyValue("--compact").trim(),
+      folded: Game.hintFolded,
+      cls: document.getElementById("hintbox").className,
+      txt: document.getElementById("hintToggle").textContent,
+      hintH: Math.round(hb.height), hintShare: Math.round(hb.height / v.height * 100),
+      bigBtn: Math.round(R("undoBtn").height),      // 普通按钮
+      miniBtn: Math.round(R("prevLayer").height),   // mini 按钮
+      modeBtn: R("modeGhost") ? Math.round(R("modeGhost").height) : null,
+      docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  })()`;
+  const small = await ev(SMALL_PROBE);
+  check(small.coarse && small.compact === "1",
+    "390×844 触屏：CSS 认得出这是小屏/触屏档（--compact=1）", JSON.stringify(small));
+  check(small.folded && small.cls.indexOf("folded") >= 0 && small.txt === "提示",
+    "小屏档下提示框【默认就是收起的】，胶囊按钮写「提示」",
+    JSON.stringify({ folded: small.folded, cls: small.cls, txt: small.txt }));
+  // hintH > 0 是防空转的前提：元素被 display:none 时高度是 0，而 0 ≤ 15 恒成立 ——
+  // 少了这半边，提示框就算整个没渲染，这条也照样绿。
+  check(small.hintH > 0 && small.hintShare <= 15,
+    "收起后的提示框只占三维视图一小块（实测从 40% 降到 11%，这正是它挡棋盘的那个问题）",
+    "占 " + small.hintShare + "%（高 " + small.hintH + "px）");
+  check(small.bigBtn <= 32 && small.miniBtn <= 28 && small.modeBtn <= 28,
+    "小屏档下按键整体收了一档（实测 38→30 / 31→26）",
+    "普通 " + small.bigBtn + " · mini " + small.miniBtn + " · 模式条 " + small.modeBtn);
+  check(small.docOver <= 1, "小屏档下整个页面没有横向溢出", "溢出 " + small.docOver + "px");
+
+  // 点一下胶囊：这是玩家恢复说明的唯一入口，必须真的能点开
+  const opened = await ev(`(() => {
+    document.getElementById("hintToggle").click();
+    const v = document.getElementById("view").getBoundingClientRect();
+    const hb = document.getElementById("hintbox").getBoundingClientRect();
+    return { folded: Game.hintFolded, cls: document.getElementById("hintbox").className,
+             txt: document.getElementById("hintToggle").textContent,
+             share: Math.round(hb.height / v.height * 100),
+             coordsVisible: document.getElementById("coords").getBoundingClientRect().height > 0 };
+  })()`);
+  check(!opened.folded && opened.cls.indexOf("folded") < 0 && opened.txt === "收起" && opened.coordsVisible,
+    "点一下胶囊就展开：坐标行和帮助正文都回来了，按钮改写成「收起」",
+    JSON.stringify(opened));
+  check(opened.share > small.hintShare, "展开后提示框确实变大了（折叠不是个空开关）",
+    small.hintShare + "% → " + opened.share + "%");
+
+  const reclosed = await ev(`(() => {
+    document.getElementById("hintToggle").click();
+    return { folded: Game.hintFolded, txt: document.getElementById("hintToggle").textContent };
+  })()`);
+  check(reclosed.folded && reclosed.txt === "提示", "再点一下又收回去（开与关都走得通）",
+    JSON.stringify(reclosed));
+
+  // ---- 7i. 手机横屏：宽度 844 > 700，只能靠 pointer: coarse 命中
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 844, height: 390, deviceScaleFactor: 1, mobile: true });
+  await sleep(200);
+  const landPhone = await ev(SMALL_PROBE);
+  check(landPhone.coarse && landPhone.compact === "1" && landPhone.bigBtn <= 32 && landPhone.miniBtn <= 28,
+    "手机横屏（844×390）：宽度超了 700px，靠 pointer:coarse 命中，按键照样收一档",
+    "宽度 844 · --compact=" + landPhone.compact + " · 普通 " + landPhone.bigBtn + " · mini " + landPhone.miniBtn);
+  check(landPhone.docOver <= 1, "手机横屏下页面没有横向溢出", "溢出 " + landPhone.docOver + "px");
+
+  // 关掉触屏模拟、回到桌面尺寸：这一档必须【一点都没变】
+  await send("Emulation.setTouchEmulationEnabled", { enabled: false, maxTouchPoints: 1 });
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false });
+  await send("Page.navigate", { url: PAGE });
+  await sleep(1600);
+  const desktopConsole = drainConsole();
+  check(desktopConsole.length === 0,
+    "以桌面尺寸重新加载页面时控制台没有报错", desktopConsole.join("\n      "));
+  await ev("(() => { Game.closeSetup(); Game.newGame([15,15,15],1); return 1; })()");
+  await sleep(500);
+  const desk = await ev(SMALL_PROBE);
+  // 桌面的三维视图有 900px 高，按"占百分之几"写会很难看（展开的提示框只占 16%）。
+  // 这里要钉的是"它是展开的"，所以直接比高度：展开态是三行正文，收起来只有一颗胶囊。
+  check(desk.hintH > 100,
+    "桌面下提示框是展开的（三行正文都在），和改动前的行为一致",
+    "高 " + desk.hintH + "px");
+  check(desk.compact === "0" && !desk.folded && desk.txt === "收起",
+    "桌面（1600×900）：--compact=0，提示框【默认展开】、按钮写「收起」——这一档一点没变",
+    JSON.stringify({ compact: desk.compact, folded: desk.folded, txt: desk.txt }));
+  check(desk.bigBtn >= 36 && desk.miniBtn >= 30,
+    "桌面的按键尺寸和改动前一致（没有被小屏那一档漏过去）",
+    "普通 " + desk.bigBtn + " · mini " + desk.miniBtn);
+  await send("Emulation.clearDeviceMetricsOverride");
+
   const consoleAfter7 = drainConsole();
   check(consoleAfter7.length === 0,
     "第 7 节交互过程中控制台没有报错", consoleAfter7.join("\n      "));
