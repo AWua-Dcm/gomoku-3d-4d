@@ -7,7 +7,7 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-40548_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-40650_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
@@ -78,13 +78,13 @@ The **Full rules** button in the top-right corner opens the complete rule text.
 bash _verify/run-all.sh
 ```
 
-**All you need is node** — no Unity, no .NET, no npm packages. Eight steps; expected result:
+**All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
 
 ```
-11733 + 19408 + 98 + 96 + 8845 + 115 + 253 = 40548 assertions, all green
+11733 + 19408 + 98 + 66 + 107 + 8845 + 115 + 278 = 40650 assertions, all green
 ```
 
-Step 8 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
+Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
 skipped rather than failed. It also writes screenshots to `_verify/shots/`.
 
 To run one piece on its own:
@@ -94,12 +94,13 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 96 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 66 | The computer opponent (both hard rules, the three tiers' relative strength, self-play fed to the engine move by move, compute ceiling) |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 107 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
-| `node _verify/browser-check.mjs` | 253 | Real browser (GLSL compilation, layout geometry, console errors, English layout, synthesized multi-touch) |
+| `node _verify/browser-check.mjs` | 278 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
 
-The two networking tests run inside step 7 and **cannot be skipped**.
+The two networking tests run inside step 8 and **cannot be skipped**.
 
 Three more scripts exist to prove the checks above actually fail when they should —
 each deliberately breaks the code and requires that the tests catch every case:
@@ -226,9 +227,13 @@ and it is stated here rather than papered over.
 
 ## ⚠️ Known limitations
 
-- **No computer opponent.** Two people take turns on the same device.
+- **The computer opponent only looks one move ahead.** Three tiers (easy / medium / hard), and all
+  three count a single move: they do not recognise gapped shapes, they do not see double threats, and
+  even the hardest tier does no multi-move search. That is deliberate — an "easy" opponent that beats
+  beginners every time is the usual failure of this feature — not unfinished work. Real strength
+  would need a searching implementation.
   (Cross-machine networking: the **server and protocol are implemented and tested**
-  — `Web_Gomoku3D/server.js`, 8960 assertions in step 7 — but the page is not wired to it,
+  — `Web_Gomoku3D/server.js`, 8960 assertions in step 8 — but the page is not wired to it,
   so you cannot actually play across machines yet. Design and trade-offs:
   [ONLINE.md](Web_Gomoku3D/ONLINE.md))
 - **No saved games.**
@@ -250,10 +255,14 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
+### 2026.09.27
+
+- ✨ **v2.10.0** Added a computer opponent: easy / medium / hard on the start screen; in 4D it rotates layers too
+- 🐛 **v2.9.1** Desktop: right-drag (or Shift + left-drag) now pans the 3D board; fixed the trackpad pinch zooming the wrong way (the mouse wheel direction was wrong too)
+
 ### 2026.09.26
 
-- 🐛 **v2.8.2** Desktop: right-drag (or Shift + left-drag) now pans the 3D board; fixed the trackpad pinch zooming the wrong way (the mouse wheel direction was wrong too)
-- 🐛 **v2.8.1** Four phone fixes: setup-screen buttons overlapped, "White only" slid off the screen, the vertical drag moved against your finger, and the language button now reads 中文
+- 🐛 **v2.9.0** Four phone fixes: setup-screen buttons overlapped, "White only" slid off the screen, the vertical drag moved against your finger, and the language button now reads 中文
 - 🌐 **v2.8.0** Added Japanese, Korean, Russian and French: six UI languages, four more full rule translations, plurals chosen per language (three forms in Russian)
 - 🐛 **v2.7.4** Fixed zooming on phones: pinch to zoom and pan, double-tap to reset
 - 🎨 **v2.7.3** Moved the language and rules buttons to the top-right of the setup screen
