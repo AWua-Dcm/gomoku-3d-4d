@@ -1090,8 +1090,14 @@ try {
   // 而关闭按钮恰好钉在右上角。那样返回的是"悔棋/再来一局（居中）点得到、
   // 关闭（靠右）点不到"，也就是又变回"关不掉"，正好是这次要修的问题。
   // 900×700 那道窄屏检查（第 5 节）触发不到这个：900 宽时 #view = 378px > 300px。
+  //
+  // 【高度是 500 不是 700】这一条原来写的是 600×700。网页版加了"竖屏改上下分栏"之后，
+  // 600×700 是竖屏（高 > 宽），#view 变成整幅 600px 宽、横幅 300px —— 比 #view 窄得多，
+  // 上面那条 `bannerW <= viewW` 就永远成立，等于把这条断言变成空断言（正是第 5 节那段
+  // 注释里点名的失败模式）。600×500 仍然是横屏，#view = 42% × 600 = 252px，
+  // 和改动前的几何完全一致，验的还是原来那件事。
   await send("Emulation.setDeviceMetricsOverride",
-    { width: 600, height: 700, deviceScaleFactor: 1, mobile: false });
+    { width: 600, height: 500, deviceScaleFactor: 1, mobile: false });
   const tiny = await ev(`(() => {
     Game.closeSetup(); Game.newGame([15, 15, 15], 1);
     const P = Game.session;
@@ -1115,6 +1121,110 @@ try {
     "窄窗口下关闭按钮完整落在 #view 里（不被 overflow:hidden 裁掉，否则就是'关不掉'）",
     "关闭按钮 " + JSON.stringify(tiny.c) + " vs #view " + JSON.stringify(tiny.v));
   await send("Emulation.clearDeviceMetricsOverride");
+
+  // ---- 7g. 竖屏：左右分栏必须变成上下分栏
+  //
+  // 上面两道窄屏检查（900×700、600×500）都是横屏，触发不到这一支 —— 竖屏那条分支
+  // 只有 CSS 媒体查询在管，没有任何 JS 参与，离线桩一个字都验不到，所以必须在这里量。
+  //
+  // 【为什么先验 matchMedia】下面几条断言本身在横屏下也照样能成立（横屏只是把
+  // "上/下"换成"左/右"，比大小的写法一样）。不先钉住"这一档确实是竖屏"，
+  // 哪天媒体查询的条件被改坏（比如写成 min-aspect-ratio），整节就会悄悄退化成
+  // "又在横屏下量了一遍"，而且全绿。
+  //
+  // 【两档尺寸都要量】大屏那档（390×844）所有东西都装得下，兜底那三条 CSS 等于没生效；
+  // 小屏那档（360×640）才真正走到"面板装不下、靠滚动救回来"那条路。只量前者的话，
+  // 把 overflow-y/min-height 那三条全删掉也照样全绿。
+  let portCamDist = 0;
+  for (const vp of [{ w: 390, h: 844, tag: "390×844" }, { w: 360, h: 640, tag: "360×640" }]) {
+    await send("Emulation.setDeviceMetricsOverride",
+      { width: vp.w, height: vp.h, deviceScaleFactor: 1, mobile: false });
+    // 等一下 resize 事件。布局那几条断言不等也行（getBoundingClientRect 会同步重排），
+    // 但 camDist 是【事件监听器】里改的，事件是异步任务 —— 不等的话读到的是上一档的值，
+    // 下面"转屏后相机重算了"那条断言就会时红时绿。实测确实红过一次。
+    await sleep(200);
+    const port = await ev(`(() => {
+      const R = (id) => document.getElementById(id).getBoundingClientRect();
+      const v = R("view"), p = R("panel"), btn = R("buttons"), mb = R("modebar"), tr = R("topRight");
+      const panelEl = document.getElementById("panel");
+      // 底部按钮排要么直接看得见，要么滚一下能够到。360×640 实测走的是后者：
+      // 面板里不可压缩的几块加起来 417px，而它只分到 371px。
+      const byScroll = () => {
+        const before = panelEl.scrollTop;
+        panelEl.scrollTop = panelEl.scrollHeight;
+        const ok = R("buttons").bottom <= innerHeight + 0.5;
+        panelEl.scrollTop = before;
+        return ok;
+      };
+      return {
+        isPortrait: matchMedia("(orientation: portrait)").matches,
+        viewBottom: Math.round(v.bottom), panelTop: Math.round(p.top),
+        stacked: v.bottom <= p.top + 0.5,                     // 三维视图整个在面板上方
+        fullWidth: Math.abs(v.left - p.left) < 1 && Math.abs(v.width - p.width) < 1,
+        btnReachable: btn.bottom <= innerHeight + 0.5 || byScroll(),
+        modebarClear: mb.right <= tr.left || tr.right <= mb.left ||
+                      mb.bottom <= tr.top || tr.bottom <= mb.top,
+        // 相机取景距离。竖屏和横屏的 #view 高宽比不同，frameBoard() 会算出不同的值
+        // （竖屏受竖边限制、横屏受横边限制），下面拿它反向印证"转屏之后 resize 真的跑了"。
+        camDist: Game.camera.distance,
+        mb: { r: Math.round(mb.right), b: Math.round(mb.bottom) },
+        tr: { l: Math.round(tr.left), t: Math.round(tr.top) },
+      };
+    })()`);
+    if (vp.tag === "390×844") portCamDist = port.camDist;
+    check(port.isPortrait, vp.tag + " 确实是竖屏（先钉住这一档，否则下面几条会在横屏下空转）");
+    check(port.stacked && port.fullWidth,
+      vp.tag + " 下三维视图和面板是【上下】两块、且都占满整幅宽度（不是左右分栏）",
+      JSON.stringify({ viewBottom: port.viewBottom, panelTop: port.panelTop }));
+    check(port.btnReachable,
+      vp.tag + " 下底部那排按钮够得着（直接可见，或滚动面板后可见）");
+    check(port.modebarClear,
+      vp.tag + " 下左上角的模式条不压住右上角的 EN / 具体规则（横屏时两者分处两侧，不会碰）",
+      "模式条右下角 " + JSON.stringify(port.mb) + " vs 右上角按钮左上角 " + JSON.stringify(port.tr));
+  }
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+
+  // 起始界面那块盖板：横屏写的是 left:42%（跟 #view 的 flex-basis 对齐），竖屏必须
+  // 翻成 top:42%，否则盖板和三维画布错开 —— 表现是中间裂出一条缝，而且缝里露出来的
+  // 是演示棋盘的一角（#setup 在竖屏下不再盖住它）。
+  const seam = await ev(`(() => {
+    Game.openSetup();
+    const v = document.getElementById("view").getBoundingClientRect();
+    const s = document.getElementById("setup").getBoundingClientRect();
+    return { viewBottom: v.bottom, setupTop: s.top, setupBottom: s.bottom, vh: innerHeight,
+             gap: Math.abs(s.top - v.bottom) };
+  })()`);
+  check(seam.gap < 1.5,
+    "竖屏下 #setup 的上边缘和 #view 的下边缘对齐（42% 那两处没有错开）",
+    "view.bottom=" + Math.round(seam.viewBottom) + " setup.top=" + Math.round(seam.setupTop));
+  check(seam.setupBottom <= seam.vh + 0.5,
+    "竖屏下 #setup 没有伸出视口底部（伸出去的那截会被 body 的 overflow:hidden 切掉）",
+    "setup.bottom=" + Math.round(seam.setupBottom) + " vs 视口高 " + seam.vh);
+
+  // 反过来钉住横屏：媒体查询绝不能在横屏下生效
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(200);   // 同上：等 resize 事件，否则 camera 那一条读到的是竖屏的值
+  const land = await ev(`(() => {
+    const R = (id) => document.getElementById(id).getBoundingClientRect();
+    const v = R("view"), p = R("panel");
+    return { isPortrait: matchMedia("(orientation: portrait)").matches,
+             sideBySide: v.right <= p.left + 0.5,
+             camDist: Game.camera.distance,
+             viewTop: Math.round(v.top), panelTop: Math.round(p.top) };
+  })()`);
+  check(!land.isPortrait && land.sideBySide && land.viewTop === land.panelTop,
+    "1600×900 是横屏，仍然是左右分栏（媒体查询没有漏到横屏上）",
+    JSON.stringify(land));
+  // 从竖屏转回横屏：相机必须重算过。转屏只走 window 的 resize 那条路，
+  // 一旦那条路断了，相机就会停在竖屏的取景距离上（棋盘被裁掉一角），
+  // 而布局几何那边照样全绿 —— 所以这条单独钉。
+  check(Math.abs(land.camDist - portCamDist) > 0.01,
+    "转屏（竖→横）之后相机重算了取景距离，没有停在竖屏那档",
+    "竖屏 " + portCamDist.toFixed(3) + " vs 横屏 " + land.camDist.toFixed(3));
+  await send("Emulation.clearDeviceMetricsOverride");
+  await ev("(() => { Game.closeSetup(); return 1; })()");
 
   const consoleAfter7 = drainConsole();
   check(consoleAfter7.length === 0,

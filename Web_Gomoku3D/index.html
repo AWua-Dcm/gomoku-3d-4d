@@ -72,7 +72,12 @@
   .serif {
     font-family: "KaiTi", "STKaiti", "Kaiti SC", "Songti SC", "SimSun", serif;
   }
-  #stage { display: flex; height: 100vh; width: 100vw; }
+  /* 高度写两遍不是笔误：100vh 在手机浏览器上指的是【地址栏收起时】的视口高度，
+     而本页 overflow:hidden、根本不会滚动，地址栏永远不会收起 —— 于是底部那一条
+     （竖屏下正好是按钮排）被地址栏压住。100dvh 是当前真实可见高度。
+     不认 dvh 的浏览器（Safari < 15.4、Chrome < 108、Firefox < 101）沿用上面那行，
+     行为和改动前一模一样，是兜底不是回归。 */
+  #stage { display: flex; height: 100vh; height: 100dvh; width: 100vw; }
   /* 起始界面打开时，三维视图正在当"演示棋盘"用：那三个浮层（模式条、提示框、结束横幅）
      都属于对局，压在演示画面上既挡视线又自相矛盾，整个藏掉。
      #panel（右侧对局面板）也要藏：它被 #setup 完整盖住，但盖板只要有一点透明，
@@ -478,6 +483,51 @@
      这里可以放宽（它只影响总高，不影响"两种模式高度相等"——那个不变量靠的是
      这块高度【恒定】，而不是靠它恰好是 92）。 */
   html.lang-en #sizeSummary { height: 108px; }
+
+  /* ---------- 竖屏：左右分栏翻成上下分栏 ----------
+     判据用 CSS 的 orientation，不用 JS 量 innerWidth/innerHeight：纯 CSS 在 JS 跑起来
+     之前就已经生效，首帧不会先画一个横屏版再跳一下；而且所有目标浏览器
+     （Safari / 360 / Firefox / Chromium 系）都支持它，没有兼容性分支要维护。
+
+     orientation 看的是【视口】的高宽比，不是设备。所以桌面窗口被拉成竖长条时这里也会
+     生效 —— 那是极少数情况，而且那种窗口本来就该上下分栏，不为它加例外。 */
+  @media (orientation: portrait) {
+    /* 只改 flex-direction 这一条就够：#view 的 `flex: 0 0 42%` 里的百分比是【主轴】上的，
+       主轴一变成纵向，42% 自然就变成"视口高的 42%"，上下比例和横屏完全一致。
+       但 #setup 是 position:fixed、写死的是 left:42%，fixed 定位不吃 flex-direction，
+       必须单独翻一次 —— 这两个 42% 仍然必须是同一个数（见上面 #setup 的注释）。 */
+    #stage { flex-direction: column; }
+    #setup { left: 0; right: 0; top: 42%; bottom: 0; }
+
+    /* 下面三条是【小屏兜底】，不是审美调整。
+
+       实测：面板里不可压缩的那几块（状态行 + 层导航 + 缩略条 132px + 按钮排）
+       加起来就要 417px，而 360×640 竖屏只分给面板 371px。面板在纵向的最小高度默认是
+       min-height:auto（= 内容高度），它不会收缩，于是整块溢出 #stage —— 而 body 是
+       overflow:hidden，多出来的部分直接看不见：表现就是【底部那排"悔棋/重开/提示"
+       被推出屏幕、点不到】。
+
+       min-height:0 让它肯收缩到那 58%，overflow-y:auto 让装不下的部分能滚到。
+       正常手机（390×844 起）用不到滚动条：实测面板内容 490px、分到 490px，正好装满。
+       #boardWrap 的保底高度是为了别让它先被压成 0（它自己是 flex:1 1 auto + min-height:0，
+       不保底的话小屏上二维棋盘会先塌掉，滚下去也只看到一条缝）。
+       缩略条 132 → 84 是拿最大的一块固定高度开刀，84px 正好是四维模式已经在用的值。 */
+    #panel { min-height: 0; overflow-y: auto; }
+    #boardWrap { min-height: 150px; }
+    #stripWrap { height: 84px; }
+
+    /* 右上角那两个按钮（EN / 具体规则）在对局里是【面板那一侧】的东西：横屏时它们落在
+       右侧面板的右上角，而 #statusRow 早就用 layoutTopRight() 实测出的 padding-right
+       给它们留好了位置。竖屏下"页面的右上角"恰好变成三维视图的右上角，于是和左上角的
+       模式条撞在一起（实测 390×844：模式条 376px 宽占满整行，右上角按钮从 236px 开始，
+       叠了 140px，把"黑/白"那组盖掉一半）。所以这里把它挪回面板的右上角，恢复和横屏
+       一样的位置关系 —— 一行，而且不用去猜模式条该缩到多窄。
+
+       用 dvh 而不是 %：#stage 的高度是 100dvh（见文件上面的注释），而固定定位的
+       百分比参照的是视口，两者在 iOS Safari 上正好差一个地址栏的高度。差了这一下，
+       按钮就会往下窜出状态行、压到底下的文字上。上面那行 % 是给不认 dvh 的浏览器兜底。 */
+    #topRight { top: calc(42% + 14px); top: calc(42dvh + 14px); }
+  }
 </style>
 </head>
 <body class="paper">
