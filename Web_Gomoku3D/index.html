@@ -230,6 +230,15 @@
   #layerBase, #layerOverlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
   #layerOverlay { pointer-events: none; }
 
+  /* 单层棋盘上的触摸交给谁。【pan-y 这个值是把话说清楚，不是随手写的】：
+       · 单指竖拖 = 允许 —— 那是"滚面板"。小屏上面板本来就要滚（实测 360×640：
+         417px 内容塞进 371px），而棋盘占掉面板一大半，在棋盘上不能滚会很难用。
+       · 浏览器自己的双指缩放 = 关掉（pan-y 不含 pinch-zoom）。不关的话双指一撑，
+         整个页面跟着放大，我们自己的缩放根本收不到那两个指针 —— 而"放大棋盘
+         看清楚一格"正是这次要加的东西。
+       · 两指的平移仍然会派发 pointer 事件给我们：pan-y 只让浏览器接管单指竖拖。 */
+  #layerBase { touch-action: pan-y; }
+
   #navRow { display: flex; align-items: center; gap: 8px; }
   #layerLabel { flex: 1 1 auto; text-align: center; font-size: 14px; }
 
@@ -347,7 +356,21 @@
      固定成粗体之后，按钮宽度只由文字内容决定，和选没选中无关。
      （#startBtn 不在任何 .row 里，所以它保留 .sel 的粗体，主按钮的分量不受影响。） */
   #setup .row button { font-weight: 600; }
-  .rowLabel { color: var(--dim); width: 96px; text-align: right; flex: 0 0 auto; }
+  /* 行标宽度【贴着文字算】，不写死。
+     【改之前是 width: 96px（英文 138px）】：那个数照最长的那一行（「转动冷却」/
+     "Rotation cooldown"）量，然后对每一行都生效 —— 于是 "Mode" 白占 100px
+     （实测它只要 39.5px），英文的模式行因此被撑到 365.7px，而 393px 竖屏只给得起
+     333px，3D / 4D 两个键折成两行。这就是手机版英文界面"按钮错位"的根因。
+
+     【为什么自适应在这里是安全的】那两条写死宽度原本的理由是"宽度必须恒定"，
+     怕的是"窄了宽了让整列输入框左右错位"。但行标是 HTML 里的静态文案，
+     两种模式下【一个字都不变】（变的是哪条尺寸行可见、以及 #coolNote 的长度），
+     所以自适应量出来的宽度本身就是常量 —— 和写死一样稳，只是不再白占。
+     顺带实测：那些写死的宽度其实也没换来跨行对齐 —— 面板里每一行各自居中，
+     四个行标的右边缘实测是 143.3 / 162.5 / 127.4 / 128.8，本来就不在一条竖线上。
+
+     nowrap 是必须的：不写的话行标自己会折行、把那一行撑高一截。 */
+  .rowLabel { color: var(--dim); text-align: right; flex: 0 0 auto; white-space: nowrap; }
 
   /* 尺寸输入。原来是两排固定尺寸按钮（三维 15/20/25/30/40/50、四维 5/6/8/10/15/20），
      现在改成直接填数字：范围由 BoardLimits 统一约束，越界在失焦时夹回来并给一行提示。 */
@@ -369,6 +392,20 @@
      "转动冷却"四个字会跟着左右挪。写死了，两种模式下它一个像素都不动。 */
   #coolNote { width: 11em; }
 
+  /* 冷却那四个键排成 2×2，两列各自对齐。
+     【为什么要包一层 grid】原来四个键是 .row 的直接子项（.row 是 flex-wrap 的），
+     装不下就折行 —— 而折行是"整行居中"的结果：实测 393px 英文下第一行
+     [3 moves][5 moves] 从 191 开始、第二行 [8 moves][10 moves] 从 113.2 开始，
+     四个键落在两个互不对齐的列上。包成 grid 之后列宽由内容决定（每列取该列最宽的那个），
+     两行两列必然对齐，而且这个结论和语言、和窗口宽度都无关 —— 不用再为每种语言量一次。
+
+     【两列不等宽是故意的】"3 手/8 手" 和 "5 手/10 手" 本来就不同宽（实测 45.9 vs 53.6）。
+     做成等宽只有两条路：写死一个数（又是照某一种语言量的，换个语言就得重量），
+     或者用 1fr 让整块跟着容器宽度变（那四个键会随窗口宽度伸缩）。
+
+     gap 和 .row 的 gap 一样是 10px，所以它嵌在行里看不出接缝。 */
+  #coolGrid { display: grid; grid-template-columns: repeat(2, auto); gap: 10px; }
+
   /* 固定高度。【这是按钮跳动的第二个根因，比行数变化更隐蔽】：
      这段文案的长度在两种模式下差一倍以上 —— 三维 15³ 是 2 行，四维 8³ 因为有实测数据
      会加到 4 行，15³ 再加"一层里常常只有一两颗子"那条能到 5~6 行。
@@ -384,6 +421,11 @@
   /* ---------- 右上角：语言切换 +「具体规则」，以及规则浮层 ---------- */
   /* 这两个按钮放在 #stage 外面、用 fixed：起始界面（#setup，z-index:50）和对局界面
      都要点得到。放进任何一侧的容器里，另一侧就会看不到它。
+
+     top: 14px 是【横屏和桌面】的位置：那里它俩落在右侧面板的右上角，
+     和起始界面盖板的右上角也是同一处，两种状态下一个像素都不动。
+     【竖屏要分两种状态】见后面 @media (orientation: portrait) 那一段：
+     起始界面开着时钉在视口右上角，对局时退回面板右上角（顶端那条被模式条占满了）。
 
      【为什么包一层容器】原来只有 #rulesBtn 自己 fixed，状态行的留白在 CSS 里
      写死 104px（按中文「具体规则」四个字量的）。现在多了一个语言按钮，而且两种语言
@@ -461,10 +503,16 @@
      「转动冷却」宽），而同样信息量的句子比中文【长】。下面这几条就是逐个改掉
      那些"写死了、且是按中文量的"值。
 
-     为什么不干脆把上面那些 width 都改成 min-width / 自适应：那几条 width 存在的理由
-     恰恰是【宽度必须恒定】—— `.rowLabel` 窄了宽了会让整列输入框左右错位，`#coolNote`
-     窄了宽了会让居中的那一行在两种模式下左右挪。所以这里不是"取消写死"，
+     为什么不干脆把上面那些 width 都改成 min-width / 自适应：`#coolNote` 那条 width
+     存在的理由恰恰是【宽度必须恒定】—— 它的字数是随模式变的（三维写"四维模式才有"、
+     四维写"转动要占掉一整手"），窄了宽了会让居中的那一行左右挪。所以那不是"取消写死"，
      是"每种语言各写死一个正确的值"。
+
+     【但 `.rowLabel` 那条已经不在这里了】它原来写作 html.lang-en .rowLabel { width: 138px }：
+     照最长的一行（"Rotation cooldown"）量，然后对每一行都生效。问题不在"按中文量错了"，
+     而在"用最长的那一行代表所有行"—— "Mode" 实测只要 39.5px，白占 100px，
+     把英文的模式行撑到折行（详见上面 .rowLabel 的注释）。行标的文字不随模式变，
+     "宽度必须恒定"这条理由在它身上不成立，所以它改成了贴合文字。
 
      选择器挂在 html 的 .lang-en 类上，而不是 [lang="en"] 属性上。
      lang 是【外部的】属性：屏幕阅读器、连字、断词都认它，将来有人做"按浏览器语言
@@ -476,11 +524,10 @@
        英文界面显式走拉丁 UI 字体。 */
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
-  /* 英文行标比四个汉字宽。118px 是"看着差不多"估出来的，量出来不够：
-     最长的 "Rotation cooldown" 会折成两行 —— 而它一折，那一行就比别的行高一截，
-     整块面板的对齐节奏就断了。138px 是照最长那条量出来的值，
-     browser-check 里"每个行标只占一个行盒"那条断言钉着它（它自己就先红过一次）。 */
-  html.lang-en .rowLabel { width: 138px; }
+  /* 【这里原来有一条 html.lang-en .rowLabel { width: 138px }，已删除】——
+     见上面 .rowLabel 的注释。留一个记号在这里，是因为 browser-check 里
+     曾经有一条"英文 .rowLabel 宽 138px"的断言，它现在改成了"行标贴合自己的文字"。
+     删掉的是那条规则，不是那条不变量：行标仍然必须各占一个行盒、不能折行。 */
   /* "Direction" 在 34px 里放不下（要 ~56px）。 */
   html.lang-en .rotLabel { width: 62px; }
   /* 同上：这一条也必须是【固定值】，理由见上面 #coolNote 的注释。
@@ -529,17 +576,30 @@
     #boardWrap { min-height: 150px; }
     #stripWrap { height: 84px; }
 
-    /* 右上角那两个按钮（EN / 具体规则）在对局里是【面板那一侧】的东西：横屏时它们落在
-       右侧面板的右上角，而 #statusRow 早就用 layoutTopRight() 实测出的 padding-right
-       给它们留好了位置。竖屏下"页面的右上角"恰好变成三维视图的右上角，于是和左上角的
-       模式条撞在一起（实测 390×844：模式条 376px 宽占满整行，右上角按钮从 236px 开始，
-       叠了 140px，把"黑/白"那组盖掉一半）。所以这里把它挪回面板的右上角，恢复和横屏
-       一样的位置关系 —— 一行，而且不用去猜模式条该缩到多窄。
+    /* 右上角那两个按钮（语言 / 具体规则）在竖屏下有两处落点，按【起始界面是否开着】分。
+       判据就是 #stage 上的 preview 类 —— 它本来就是"起始界面开着"的唯一事实源
+       （.preview 还管着模式条/提示框/横幅的显示与面板的 visibility）。
+
+       起始界面开着：模式条、提示框、终局横幅这时全被藏掉了，顶端那一条是空的，
+       两键就钉在视口右上角 —— 这正是"不要再压住标题"要的效果（改之前它俩在
+       y=42dvh+14 那一行，实测 393×852 下正好落在 y=371.8~399.8，压着
+       y=383.8 起的标题块）。env(safe-area-inset-top) 用来躲开全面屏手机的状态栏和电量；
+       微信内置浏览器里页面本来就始于状态栏下方，这一项量到 0，位置不变。
+
+       对局中：顶端那条被模式条占满了 —— 实测 393×852 下模式条 379×56、右边缘正好顶到
+       屏幕边，两键放上去会盖住最后一个「只看白」，那不是难看，是把下棋要用的按钮盖住。
+       所以退回面板右上角，恢复和横屏一样的位置关系（#statusRow 早就用
+       layoutTopRight() 实测出的 padding-right 给它俩留好了位置）。
+
+       用后代选择器（#topRight 在 #stage 里面，见那条 HTML 注释），不用 :has()：
+       :has() 在 Chrome 105 / Safari 15.4 就有了，但 Firefox 要到 121 ——
+       本工程的目标里有 Firefox，而 :has() 不被支持时整条规则会被丢掉。
 
        用 dvh 而不是 %：#stage 的高度是 100dvh（见文件上面的注释），而固定定位的
        百分比参照的是视口，两者在 iOS Safari 上正好差一个地址栏的高度。差了这一下，
        按钮就会往下窜出状态行、压到底下的文字上。上面那行 % 是给不认 dvh 的浏览器兜底。 */
-    #topRight { top: calc(42% + 14px); top: calc(42dvh + 14px); }
+    #stage.preview #topRight { top: calc(env(safe-area-inset-top, 0px) + 14px); }
+    #stage:not(.preview) #topRight { top: calc(42% + 14px); top: calc(42dvh + 14px); }
   }
 
   /* ---------- 小屏 / 触屏：按键整体收一档 ----------
@@ -576,6 +636,17 @@
        状态行让给它们的留白（layoutTopRight 实测）也跟着小，正文能多占几像素。 */
     #rulesBtn { font-size: 12.5px; padding: 5px 10px; }
     #langBtn { font-size: 12.5px; padding: 5px 9px; min-width: 46px; }
+  }
+
+  /* ---------- 再窄一档：320px 那类老小屏 ----------
+     实测英文的模式行要 267.2px（"Mode" 39.5 + 两个键 94.4 / 113.3 + 两个 10px 间距），
+     而 320px 竖屏只给得起 260px，差 7.2px 还是要折行。这里【只放宽可用宽度】
+     （面板左右内边距 30 → 20，多出 20px），不动字号档位：字号一改，
+     行高、按钮高度、"两种模式总高恒等"那条不变量全要重新验一遍，
+     而这里缺的只是 7 个像素。
+     360px 走不到这一档 —— 那里可用宽度 300px 已经够了。 */
+  @media (max-width: 340px) {
+    #setup { padding-left: 20px; padding-right: 20px; }
   }
 </style>
 </head>
@@ -1029,7 +1100,13 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 </script>
 <!-- RULES-EMBED-EN-END -->
 
-<div id="stage">
+<!-- class="preview" 在这里是【写死的初始状态】，对应「#setup 没有 off 类」：
+     页面打开时起始界面就是开着的，所以模式条/提示框/横幅该藏、面板该 invisible、
+     演示盘的纸纹该铺上 —— 这些都由 #stage.preview 那几条 CSS 管，写在 HTML 里
+     首帧就是对的，不用等 JS 跑到 openSetup() 再补一下（那一下会让竖屏上的
+     右上角两键先画在下面、再跳到视口顶上去）。
+     JS 这边不受影响：openSetup() 是"加上"（幂等），closeSetup() 是"去掉"。 -->
+<div id="stage" class="preview">
 
   <div id="view">
     <canvas id="gl"></canvas>
@@ -1076,6 +1153,7 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
         <button id="hintToggle" class="mini">收起</button>
       </div>
       <div id="hint" data-i18n-html="hint">左键拖拽旋转 · 滚轮缩放 · 单击当前层落子<br>
+        触屏：两指缩放 / 平移 · 双击棋盘复位（立体和单层都可以）<br>
         Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · H 格线 · B 只看黑/白 · T 转动 · Y 恢复本次转动<br>
         绿框 = 待转的那一层 · 蓝框 = 当前层（四维模式下才有绿框）</div>
     </div>
@@ -1092,9 +1170,20 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
   </div>
 
 
-  <!-- 右上角：语言切换 +「具体规则」。刻意放在 #stage 外面、用 position:fixed：
+  <!-- 右上角：语言切换 +「具体规则」。用 position:fixed：
      起始界面（#setup 是 fixed 且 z-index:50）和对局界面都要能点到它，
-     放在任何一侧的容器里都会在另一侧消失。
+     放进 #view 或 #panel 里就会在另一侧消失。
+
+     【它其实在 #stage 里面】这一条的上一版注释写着"刻意放在 #stage 外面"，
+     而实际嵌套是 #stage > [#view, #topRight, #rulesPanel] —— #stage 一直关到
+     下面那个 </div>。以实测为准（真浏览器里读 topRight.parentElement 得到
+     DIV#stage）。竖屏下那两条"位置随起始界面分两处"的 CSS 用的正是后代选择器
+     #stage.preview #topRight / #stage:not(.preview) #topRight，所以：
+     别再往上挪它，挪出 #stage 那两条规则就全部失效 ——
+     而症状只是"竖屏下位置回到了改动前"，不会报任何错。
+
+     fixed 不受这个嵌套影响：#stage 上没有任何 transform / filter / perspective /
+     contain，不会成为 fixed 的包含块，量出来的位置确实贴着视口。
 
      两个按钮包在一个容器里，是为了让对局时的状态行能按【实测总宽】给它们让位 ——
      总宽随语言变，写死一个数就必然按不住。见 CSS 里 #topRight 的注释。
@@ -1254,13 +1343,22 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
        禁用而不是隐藏还有一个好处：三维下这块不会留下一片说不清是什么的空白，
        而且"四维还有个转动冷却可以选"这件事变得可见。
        HTML 里先写死 disabled：默认就是三维，JS 还没跑起来之前状态也得是对的。
-       #coolNote 的宽度在 CSS 里写死，理由见那条规则。 -->
+       #coolNote 的宽度在 CSS 里写死，理由见那条规则。
+
+       四个键包在 #coolGrid 里排 2×2，理由见 #coolGrid 那条 CSS。
+       【别把这一层去掉】：交给 .row 自己折行的话，第二行是"整行居中"的结果，
+       和第一行对不齐（实测 393px 英文下 191 vs 113.2）。
+       类名和 data-cool 的顺序也别换：dom-smoke 按"coolBtn 这个类名紧跟 data-cool"
+       的形状从源码里数这四个键（而且要连注释一起数 —— 上面这段里就别再出现那个
+       属性写法，否则分母会多出一个）。 -->
   <div class="row" id="coolRow">
     <div class="rowLabel" id="rowLabelCool" data-i18n="rowLabelCool">转动冷却</div>
-    <button class="coolBtn" data-cool="3" disabled id="cool3" data-i18n="cool3">3 手</button>
-    <button class="coolBtn sel" data-cool="5" disabled id="cool5" data-i18n="cool5">5 手</button>
-    <button class="coolBtn" data-cool="8" disabled id="cool8" data-i18n="cool8">8 手</button>
-    <button class="coolBtn" data-cool="10" disabled id="cool10" data-i18n="cool10">10 手</button>
+    <div id="coolGrid">
+      <button class="coolBtn" data-cool="3" disabled id="cool3" data-i18n="cool3">3 手</button>
+      <button class="coolBtn sel" data-cool="5" disabled id="cool5" data-i18n="cool5">5 手</button>
+      <button class="coolBtn" data-cool="8" disabled id="cool8" data-i18n="cool8">8 手</button>
+      <button class="coolBtn" data-cool="10" disabled id="cool10" data-i18n="cool10">10 手</button>
+    </div>
     <span id="coolNote" class="hint"></span>
   </div>
 
@@ -2460,6 +2558,7 @@ const STATIC_TEXT = { en: {
   // ---- 左侧舞台
   "previewTag": "Demo board · 10 × 10 × 10<br>Independent of the settings on the left — not part of the game",
   "hint": "Drag to rotate · Scroll to zoom · Click to place on the current layer<br>" +
+    "Touch: pinch to zoom / pan · double-tap a board to reset (works on both boards)<br>" +
     "Z undo · R restart · Q/E change layer · G view mode · H grid lines · B black/white only · T rotate · Y restore rotation<br>" +
     "Green box = the layer about to rotate · Blue box = current layer (green only in 4D)",
   "modeGhost": "Ghost layers",
@@ -2717,6 +2816,23 @@ function applyStatic() {
  */
 function cellSize(dims) { return 10 / Math.max(dims[0], dims[1], dims[2]); }
 
+/**
+ * 单层棋盘的平移边界（CSS 像素）。
+ *
+ *   · 棋盘比画布【小】的时候一律不许平移（返回 0）—— 那正是没缩放时的样子，
+ *     也是"居中最舒服"这条直觉的代码化。
+ *   · 大的时候最多拖到"棋盘边缘和画布边缘对齐"：也就是永远看得见棋盘，拖不丢。
+ *     不做"无限平移"：拖丢之后屏幕上什么都没有，玩家只会以为界面坏了。
+ *
+ * 抽成模块级函数是为了能被直接测 —— 不必造一个 Game、也不必真的去合成触摸事件
+ * 就能把边界值逐个钉住（0、刚好不越界、越界回夹三种情况）。
+ */
+function clampPan2d(w, h, extX, extY, p) {
+  const limX = Math.max(0, (extX - w) / 2), limY = Math.max(0, (extY - h) / 2);
+  return [Math.max(-limX, Math.min(limX, p[0])),
+          Math.max(-limY, Math.min(limY, p[1]))];
+}
+
 /* 起始界面左侧那张演示棋盘的参数。 */
 /** 边长 10 —— 需求点名的大小。它和对局用的尺寸完全无关，改这里不影响任何规则。 */
 const PREVIEW_N = 10;
@@ -2799,6 +2915,44 @@ const CAM_DEG_PER_PX = 0.32;
  * 89.5° 只剩 0.0087×距离（偏 0.5°），顶面和底面才是真的正对。
  */
 const CAM_POLE = 89.5;
+
+/* --------------------------------------------------------------------------
+   触屏手势的三个常量。都是【量出来的】，不是拍的。
+   -------------------------------------------------------------------------- */
+
+/**
+ * 单层棋盘最多放大到几倍。**看的是一格多少像素，不是"几倍"好不好听**：
+ * 15 路棋盘在 393×852 竖屏下面板只有 355×157，一格实测 10.47px ——
+ * 6 倍是 62.8px，落点看得清、又能一眼看到 5~6 路见方（判断连五够用）。
+ * 再大就只剩两三格，反而不好判断全局，而且两指稍微一动就跑出棋盘。
+ */
+const ZOOM2D_MAX = 6;
+
+/**
+ * 双击的判定窗口（毫秒）和"两次点击算同一个位置"的半径（CSS 像素）。
+ *
+ * 300ms 是各家系统的通行值（Android 的 double-tap timeout）。
+ * 半径必须一起看：50px 之外的第二下【不算双击】，于是"在两个不同的格子上快速连下
+ * 两手"不会被误判成复位 —— 这是这个窗口最要紧的一条，因为落子是这个游戏的主操作。
+ */
+const TAP_WINDOW_MS = 300;
+const TAP_NEAR_PX = 50;
+
+/**
+ * 两指手势结束后多久之内的"点击"要吃掉（毫秒）。
+ *
+ * 【实测依据】无头 Chrome + CDP 合成触摸下，两指手势结束时浏览器【没有】补发 click
+ * （在 #layerBase 和 #gl 上各装了一次探针：touchend 各 2 次、click 各 0 次）。
+ * 也就是说这条闸在本机这个环境里不是必需的 —— 但它留着，因为：
+ *   1. iOS Safari 上没法在本机验证（这个工程的目标里有 Safari）；
+ *   2. 代价极小 —— 人不可能在松开两指后 100ms 内再故意点一下。
+ *
+ * 【为什么不能长】这条闸和"双击复位"是冲突的：捏完立刻双击复位时，
+ * 第一下会被吃掉，于是复位不生效、第二下反而变成"等一个窗口然后落子"。
+ * 实测用 260ms 时我自己在验证脚本里踩了两次，才把值收到这里。
+ * 哪天在真机上确认了确实没有补发的 click，这条可以整个删掉。
+ */
+const PINCH_TAIL_MS = 100;
 
 
 /* --------------------------------------------------------------------------
@@ -3001,11 +3155,57 @@ class OrbitCamera {
     this.minDistance = 6; this.maxDistance = 70;
     this.fov = 42 * Math.PI / 180;
     this.boardSpan = 10;
+    // "开局取景"那个距离，由 frameBoard 每次算出来。双击复位回到它，
+    // "这个视图被放大过没有"也拿它当基准（见 Game.viewMoved）—— 是同一个数，
+    // 所以这两处不会各说各话。
+    this.homeDistance = this.distance;
   }
-  eye() {
+  /** 相机位置。t 省略 = 注视原点（没平移过），和加平移之前一模一样。 */
+  eye(t) {
     const y = this.yaw * Math.PI / 180, p = this.pitch * Math.PI / 180;
     const dir = [Math.cos(p) * Math.sin(y), Math.sin(p), -Math.cos(p) * Math.cos(y)];
-    return [dir[0]*this.distance, dir[1]*this.distance, dir[2]*this.distance];
+    const c = t || [0, 0, 0];
+    return [c[0] + dir[0]*this.distance, c[1] + dir[1]*this.distance, c[2] + dir[2]*this.distance];
+  }
+
+  /**
+   * 屏幕像素平移 → 世界的注视点（两指拖动用的就是它）。
+   *
+   * 换算标尺：注视点距离相机 this.distance，那里的可视半高是 distance·tan(fov/2)，
+   * 所以一个像素 = 2·distance·tan(fov/2)/视口高 个世界单位 —— 棋盘就在注视点上，
+   * 手指拖多少它就跟着走多少，是 1:1 跟手的。
+   *
+   * 【为什么不干脆把平移并进投影矩阵】投影矩阵里的平移会被透视除法按深度缩放：
+   * 近处的子挪得比远处的子多，看着像棋盘被剪歪了。改注视点则是真的"相机平移"。
+   *
+   * 方向：手指往右拖（dx>0）画面内容要跟着往右走，所以相机得往左移；
+   * 屏幕 y 向下、世界 y 向上，所以往下拖（dy>0）是相机往上移。
+   * 屏幕的右/上两个方向向量的算法与 M4.lookAt 里那两条【必须一致】
+   * （它内部就是 x = up × z、y = z × x，z 是注视点指向相机的单位向量，也就是这里的 dir）——
+   * 两边各推一遍很容易符号相反，而症状是"往左拖棋往右跑"，所以 browser-check 里
+   * 拿真的合成触摸事件量了方向（"拖到哪儿棋子就往哪儿走"）。
+   */
+  targetFor(panPx, viewportH) {
+    if (!panPx || (!panPx[0] && !panPx[1])) return [0, 0, 0];
+    const k = 2 * this.distance * Math.tan(this.fov / 2) / Math.max(1, viewportH);
+    const y = this.yaw * Math.PI / 180, p = this.pitch * Math.PI / 180;
+    const dir = [Math.cos(p) * Math.sin(y), Math.sin(p), -Math.cos(p) * Math.cos(y)];
+    // 屏幕右 = up × dir，屏幕上也一样要归一化（cos p 已经约掉了）
+    const rx = -Math.cos(y), ry = 0, rz = -Math.sin(y);
+    // 屏幕上 = dir × 右
+    const ux = dir[1]*rz - dir[2]*ry, uy = dir[2]*rx - dir[0]*rz, uz = dir[0]*ry - dir[1]*rx;
+    const ax = -panPx[0] * k, ay = panPx[1] * k;
+    return [rx*ax + ux*ay, ry*ax + uy*ay, rz*ax + uz*ay];
+  }
+
+  /**
+   * 视图矩阵。**只有这一个入口** —— 拾取（pick）和绘制（draw3D）都走它。
+   * 两处各写一份 M4.lookAt 的话，平移之后"看到的"和"点到的"就会差一个偏移，
+   * 而且没有任何断言会红（这个工程在"面板用格心、三维用格点"上踩过一次同类的坑）。
+   */
+  view(panPx, viewportH) {
+    const t = this.targetFor(panPx, viewportH);
+    return M4.lookAt(this.eye(t), t, [0, 1, 0]);
   }
   frameBoard(aspect, resetDistance) {
     const halfV = this.fov / 2;
@@ -3014,6 +3214,7 @@ class OrbitCamera {
     const need = half / Math.tan(Math.min(halfV, halfH));
     this.minDistance = need * 0.40;
     this.maxDistance = need * 3.0;
+    this.homeDistance = need;
     this.distance = Math.max(this.minDistance, Math.min(this.maxDistance, resetDistance ? need : this.distance));
     return need;
   }
@@ -3384,6 +3585,20 @@ const Game = {
       "rotCW","rotCCW","rotGo","rotRestore","rotHint",
       "topRight","langBtn","statusRow"];
     for (const id of ids) this.el[id] = document.getElementById(id);
+
+    /* ---- 触屏手势与"点了一下"的记账。都只在这里建一次，见各自的注释。
+       平移量记的是【CSS 像素】而不是世界单位：手指走的本来就是 CSS 像素，
+       两个棋盘（三维的那台相机、单层的那个格子布局）也因此能共用同一套记法。 */
+    this.pointers = new Map();     // pointerId → [x, y]，见 trackPointer
+    this.pinch = { surface: null, dist: 0, mid: [0, 0] };
+    // 初值要"早得不可能挡住第一下点击"：取负无穷而不是 0
+    this.pinchEndedAt = -1e9;
+    this.pan3d = [0, 0];           // 三维视图的平移（CSS 像素）
+    this.zoom2d = 1;               // 单层棋盘的缩放倍数（1 = 整盘刚好放进画布）
+    this.pan2d = [0, 0];           // 单层棋盘的平移（CSS 像素）
+    this.lastTap = { gl: null, layer: null };   // 每条点击通路各记各的，互不干扰
+    this.pendingTap = null;        // 被双击窗口扣住的那一子，见 handleTap
+    this.pendingToken = null;
 
     // 静态文案的中文快照必须在【这个位置】拍：再往下走，这些元素就有被 JS 写上的值了，
     // 拍晚了会把 JS 写进去的当成"HTML 原文"，切回中文时写回的就是个中间态。
@@ -4066,8 +4281,9 @@ const Game = {
     if (this.setupOpen) return null;
     const rect = this.el.gl.getBoundingClientRect();
     const w = rect.width, h = rect.height;
-    const eye = this.camera.eye();
-    const view = M4.lookAt(eye, [0,0,0], [0,1,0]);
+    // 平移要一起进去 —— 和 draw3D 走的是同一个 camera.view()，
+    // 不然"看到的位置"和"点到的位置"会差一个平移量
+    const view = this.camera.view(this.pan3d, h);
     const proj = M4.perspective(this.camera.fov, w / Math.max(1, h), 0.1, 800);
     const vp = M4.multiply(proj, view);
     const inv = M4.invert(vp);
@@ -4112,8 +4328,9 @@ const Game = {
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    const eye = this.camera.eye();
-    const view = M4.lookAt(eye, [0,0,0], [0,1,0]);
+    // 【注意这里传的是 CSS 像素高，不是设备像素高】：平移量是按 CSS 像素记的
+    // （手指走的就是 CSS 像素），用设备像素去换算的话，dpr=2 的手机上拖一格会跑两格。
+    const view = this.camera.view(this.pan3d, canvas.clientHeight);
     const proj = M4.perspective(this.camera.fov, w / h, 0.1, 800);
     const vp = M4.multiply(proj, view);
 
@@ -4226,10 +4443,26 @@ const Game = {
    *  cs 取 min(w/nx, h/ny) —— 两个方向各按自己的边长算，再取小的那个。
    *  用 min(w,h)/max(nx,ny) 之类的写法在长方体下会让棋盘贴不到边、整体缩在角落里。
    *  立方时退化成原来的 min(w,h)/n。 */
+  /**
+   * 单层棋盘的格距与原点。**面板的坐标约定只有这一个出口** ——
+   * drawLayerBase / drawLayerOverlay / cellFromEvent 三处都调它。
+   * 两指缩放和平移就加在这里，于是三处同时生效，而且"看到的"和"点到的"
+   * 必然一致（第三处是拾取，另两处是绘制 —— 分开写就一定会差一个偏移）。
+   *
+   * cs0 是"整盘刚好放进画布"的格距：zoom2d = 1、pan2d = [0,0] 时
+   * 这里的返回值和加缩放之前【逐字节相同】。
+   */
   gridLayout(w, h, nx, ny) {
-    const cs = Math.min(w / Math.max(1, nx), h / Math.max(1, ny));
-    const extX = cs * (nx - 1), extY = cs * (ny - 1);
-    return { cs: cs, ox: (w - extX) / 2, oy: (h - extY) / 2 };
+    const g = this.gridMetrics(w, h, nx, ny);
+    const p = clampPan2d(w, h, g.extX, g.extY, this.pan2d || [0, 0]);
+    return { cs: g.cs, ox: (w - g.extX) / 2 + p[0], oy: (h - g.extY) / 2 + p[1] };
+  },
+
+  /** 格距和棋盘占多大（不含原点）。gridLayout 和"平移边界"两处共用同一套算法 ——
+   *  各写一份的话，缩放之后"画出来的边界"和"能拖到哪儿"会各说各话。 */
+  gridMetrics(w, h, nx, ny) {
+    const cs = Math.min(w / Math.max(1, nx), h / Math.max(1, ny)) * (this.zoom2d || 1);
+    return { cs: cs, extX: cs * (nx - 1), extY: cs * (ny - 1) };
   },
 
   setCanvasSize(canvas, ctx) {
@@ -4637,10 +4870,13 @@ const Game = {
                      "toast.start", { who: enOf(this.setupFirst), x: d[0], y: d[1], z: d[2] }), true);
     });
 
-    // 面板网格点击落子
+    // 面板网格点击落子。走的是【和三维同一条点击通路】（双击复位、捏完那一拍不吃点击
+    // 都只有一份实现），差别只在"怎么拿到格子"和 surface 的名字。
+    // 只挂 pointerdown 用来记账（两指手势的归属），move/up 由 window 上那两个兜住。
+    this.el.layerBase.addEventListener("pointerdown", (e) => this.trackPointer(e, "down", "layer"));
     this.el.layerBase.addEventListener("click", (e) => {
       const cell = this.cellFromEvent(e, this.el.layerBase);
-      if (cell) this.tryPlace(cell.x, cell.y);
+      if (cell) this.handleTap("layer", e.clientX, e.clientY, () => this.tryPlace(cell.x, cell.y));
     });
     this.el.layerBase.addEventListener("mousemove", (e) => {
       const cell = this.cellFromEvent(e, this.el.layerBase);
@@ -4770,11 +5006,220 @@ const Game = {
       : "";
   },
 
+  // ---------------------------------------------------------------- 触屏手势与视图复位
+  //
+  // 【两指包办缩放和平移，两个棋盘一套规则】三维棋盘的单指拖拽已经是"旋转视角"，
+  // 单层棋盘的单指竖拖在小屏上又是"滚面板"（#panel 在 360×640 上装不下：实测
+  // 417px 内容塞进 371px）—— 单指没有空位了，两指是唯一不打架的地方。
+  //
+  // 【判定不看设备类型】条件是"同时按下的指针数 ≥ 2"。鼠标永远只有一个指针，
+  // 所以桌面路径一步都不会走到；触摸屏笔记本、平板则自动覆盖。
+
+  /** 只读时钟。抽成方法是为了能被测（桩里没有可换的时钟，而双击判定必须能控时间）。 */
+  nowMs() { return Date.now(); },
+
+  /**
+   * 指针记账。**是这套东西唯一的入口** —— pointerdown/move/up/cancel 都走它。
+   * phase: "down" | "move" | "up"。
+   *
+   * 为什么要自己记账：pointerdown 是【一个指针一个事件】，
+   * "现在屏幕上有几根手指"没有任何现成的 API（PointerEvent 没有 touchCount）。
+   */
+  trackPointer(e, phase, surface) {
+    const ps = this.pointers;
+    if (!ps) return;
+    if (phase === "up") {
+      ps.delete(e.pointerId);
+      // 剩不到两根就算这次两指手势结束。记下时间：随后那一下点击要吃掉（见 handleTap），
+      // 因为浏览器在两指松开后可能补一个 click —— 不挡的话"捏一下就在棋盘上落了一子"。
+      if (ps.size < 2 && this.pinch.surface) {
+        this.pinch.surface = null;
+        this.pinchEndedAt = this.nowMs();
+      }
+      return;
+    }
+    ps.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ps.size < 2) return;
+    const it = [...ps.values()];
+    const dist = Math.hypot(it[0][0] - it[1][0], it[0][1] - it[1][1]);
+    const mid = [(it[0][0] + it[1][0]) / 2, (it[0][1] + it[1][1]) / 2];
+    const g = this.pinch;
+    if (!g.surface) {
+      // 第二根手指落下的那一拍：从这里起算，并把单指那套状态全部作废 ——
+      // 不作废的话，两指里先松开一根之后，剩下那根还在转视角（或还在算落点）。
+      // surface 在这里【定一次就冻结】：手势归"第二根手指落在哪个画布上"，
+      // 之后手指滑到哪儿都不改判 —— 两个画布的缩放互不影响。
+      // 不在每一拍重新判定：那会让 surface 来回翻，而每翻一次都会把基准重置，
+      // 结果就是手势一路走下来什么都没动（scale 永远是 1/1）。
+      g.surface = surface || "gl";
+      g.dist = dist; g.mid = mid;
+      this.dragging = false;
+      this.pressInView = false;
+      this.setHover(null);
+      return;
+    }
+    // 增量式：每拍只应用"这一拍相对上一拍"的变化。不用"起点 vs 当前"的绝对量 ——
+    // 两指里换掉一根手指时，绝对量会跳一下，而增量不会。
+    // 【surface 用记下来的那个，不用传进来的】：pointermove 是挂在 window 上的，
+    // 它并不知道手指在哪个画布上；而手势一开始就已经归属定了。
+    if (g.dist > 0 && dist > 0) {
+      this.pinchApply(g.surface, dist / g.dist, mid[0] - g.mid[0], mid[1] - g.mid[1]);
+    }
+    g.dist = dist; g.mid = mid;
+  },
+
+  /** scale = 两指距离变成原来的几倍；dx/dy = 中点移动了多少 CSS 像素。 */
+  pinchApply(surface, scale, dx, dy) {
+    // 起始界面（左边那张演示盘）上两指什么都不做，和 pick()/悬停 是同一条约定。
+    // 【不能让它"照做"】：演示盘的取景每帧都被 drawPreview 强制重设成
+    // 自己的 yaw/pitch/distance，所以捏了根本看不见效果 —— 但相机状态会被改掉，
+    // 开局之后棋盘是歪的、而且没有任何线索指向"刚才在设置页捏过一下"。
+    if (this.setupOpen) return;
+    if (surface === "gl") {
+      this.zoom3dBy(scale);
+      this.pan3dBy(dx, dy);
+    } else {
+      this.zoom2dBy(scale);
+      this.pan2dBy(dx, dy);
+      // 单层棋盘是【按需绘制】的（不像三维那样有个每帧跑的循环），所以这里要主动重画。
+      // 缩略条不受影响，不用重画。
+      this.drawLayerBase();
+      this.drawLayerOverlay();
+    }
+  },
+
+  /** 两指撑开 = 放大：和滚轮同一个变量（相机到注视点的距离）、同一对上下限。 */
+  zoom3dBy(scale) {
+    if (!(scale > 0) || !this.camera) return;
+    this.camera.distance = Math.max(this.camera.minDistance,
+      Math.min(this.camera.maxDistance, this.camera.distance / scale));
+  },
+
+  /** 三维视图的平移量（CSS 像素）。夹在半个视口内 —— 至少留一半棋盘看得见。 */
+  pan3dBy(dx, dy) {
+    const r = this.el.gl.getBoundingClientRect();
+    const limX = Math.max(0, r.width / 2), limY = Math.max(0, r.height / 2);
+    this.pan3d = [Math.max(-limX, Math.min(limX, this.pan3d[0] + dx)),
+                  Math.max(-limY, Math.min(limY, this.pan3d[1] + dy))];
+  },
+
+  /** 单层棋盘的缩放。下限锁在 1：比"整盘刚好放进画布"还小没有任何意义。 */
+  zoom2dBy(scale) {
+    if (!(scale > 0)) return;
+    this.zoom2d = Math.max(1, Math.min(ZOOM2D_MAX, (this.zoom2d || 1) * scale));
+    this.clampPan2dNow();   // 缩小之后原来的平移可能已经越界（棋盘变小了）
+  },
+
+  /** 单层棋盘的平移（CSS 像素）。手指拖多少就走多少，和三维那侧同一个手感。 */
+  pan2dBy(dx, dy) {
+    this.pan2d = [(this.pan2d || [0, 0])[0] + dx, (this.pan2d || [0, 0])[1] + dy];
+    this.clampPan2dNow();
+  },
+
+  /** 用【当前】缩放和画布尺寸把的单层平移夹回边界内。缩放或棋盘尺寸一变就要调一次。 */
+  clampPan2dNow() {
+    const c = this.el.layerBase;
+    if (!c || !this.session) return;
+    const dims = this.session.board.dims;
+    const g = this.gridMetrics(c.clientWidth, c.clientHeight, dims[0], dims[1]);
+    this.pan2d = clampPan2d(c.clientWidth, c.clientHeight, g.extX, g.extY, this.pan2d || [0, 0]);
+  },
+
+  /**
+   * 这个视图被"动过"没有（放大或平移过）。**双击复位只在动过之后才有意义**，
+   * 而这一条同时决定了"要不要把落子扣一个双击窗口"（见 handleTap）——
+   * 1 倍下每一次落子都要晚 300ms 生效，是这个游戏最不该付的代价。
+   */
+  viewMoved(key) {
+    if (key === "gl") {
+      const cam = this.camera;
+      return Math.abs(this.pan3d[0]) > 1 || Math.abs(this.pan3d[1]) > 1 ||
+             Math.abs(cam.distance - cam.homeDistance) > cam.homeDistance * 0.005;
+    }
+    return (this.zoom2d || 1) > 1.001 ||
+           Math.abs(this.pan2d[0]) > 1 || Math.abs(this.pan2d[1]) > 1;
+  },
+
+  /**
+   * 双击复位。三维那侧回到"开局取景"那个距离（resize/开局时算出的 homeDistance）、
+   * 平移清零；单层那侧回到 1 倍、平移清零。
+   *
+   * 【刻意不动 yaw / pitch】：玩家问的是"放大之后怎么回到原样"，
+   * 而转到的那个角度是他自己选的 —— 顺手把视角也掰回去是自作主张。
+   */
+  resetView(key) {
+    if (key === "gl") {
+      const cam = this.camera;
+      cam.distance = Math.max(cam.minDistance, Math.min(cam.maxDistance, cam.homeDistance));
+      this.pan3d = [0, 0];
+    } else {
+      this.zoom2d = 1;
+      this.pan2d = [0, 0];
+      this.drawLayerBase();
+      this.drawLayerOverlay();
+    }
+  },
+
+  /** 这一下点击和上一次算不算"同一处的双击"：时间和距离两道门槛，缺一不可。 */
+  isDoubleTap(key, x, y, nowMs) {
+    const prev = this.lastTap[key];
+    return !!(prev && nowMs - prev.t < TAP_WINDOW_MS &&
+              Math.hypot(x - prev.x, y - prev.y) < TAP_NEAR_PX);
+  },
+
+  /**
+   * 两个棋盘共同的"点击"入口。commit 是"真的落子时干什么"（两个画布拿到格子的方式不同）。
+   *
+   * 【距离门槛是这里最要紧的一条】50px 之外的第二下【不算双击】，
+   * 于是"在两个不同的格子上快速连下两手"不会被误判成复位。
+   *
+   * 【扣住的落子必须能补上】'wait' 那一支把落子延后一个窗口，所以：
+   *   · 窗口内来了新的一下（不是双击）→ 先把扣着的那子立刻补上，再处理新的（flushPendingTap）；
+   *   · 窗口过了 → 定时器把它补上。
+   * 少任何一条都会"吞子"，而吞子比延迟严重得多 —— 玩家会以为是自己没点到。
+   */
+  handleTap(key, x, y, commit) {
+    const now = this.nowMs();
+    if (now - this.pinchEndedAt < PINCH_TAIL_MS) return;
+    if (this.isDoubleTap(key, x, y, now)) {
+      this.lastTap[key] = null;   // 双击只认一次：接着点第三下不该再复位一次
+      this.cancelPendingTap();
+      this.resetView(key);
+      return;
+    }
+    this.flushPendingTap();
+    this.lastTap[key] = { x: x, y: y, t: now };
+    if (!this.viewMoved(key)) { commit(); return; }
+    const token = {};
+    this.pendingToken = token;
+    const timer = setTimeout(() => {
+      if (this.pendingToken !== token) return;
+      this.pendingToken = null; this.pendingTap = null;
+      commit();
+    }, TAP_WINDOW_MS);
+    this.pendingTap = { timer: timer, commit: commit };
+  },
+
+  /** 把"扣着的那一子"现在就补上（玩家的动作表明那不是双击）。 */
+  flushPendingTap() {
+    const p = this.pendingTap;
+    if (!p) return;
+    this.pendingTap = null; this.pendingToken = null;
+    clearTimeout(p.timer);
+    p.commit();
+  },
+
+  cancelPendingTap() {
+    if (this.pendingTap) clearTimeout(this.pendingTap.timer);
+    this.pendingTap = null; this.pendingToken = null;
+  },
+
   bindInput() {
     const gl = this.el.gl;
 
     gl.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
+      this.trackPointer(e, "down", "gl");
       this.pressInView = true;
       this.dragging = true;
       this.dragMoved = 0;
@@ -4783,6 +5228,12 @@ const Game = {
     });
 
     window.addEventListener("pointermove", (e) => {
+      // 不传 surface：pointermove 挂在 window 上，本来也判断不出手指在哪个画布上，
+      // 而手势一开场就已经归属定了（见 trackPointer）
+      this.trackPointer(e, "move");
+      // 两指手势进行中：不转视角、也不算悬停 —— 那两根手指在缩放和平移，
+      // 顺带再转一下视角或者选中一个格子都不是玩家要的
+      if (this.pinch.surface) return;
       if (this.dragging) {
         const dx = e.clientX - this.lastMouse[0];
         const dy = e.clientY - this.lastMouse[1];
@@ -4800,18 +5251,29 @@ const Game = {
       }
     });
 
+    // pointercancel 也要记账：浏览器接管了这次触摸（比如识别成滚动）时会派发它，
+    // 不删掉这根指针的话，手指数会一直虚高，之后再也进不了两指模式。
+    const dropPointer = (e) => this.trackPointer(e, "up", "gl");
+
     window.addEventListener("pointerup", (e) => {
       if (e.button !== 0) return;
+      // 【先看是不是两指手势】两指里的任意一根松开都必须先记账，
+      // 而且这一下【不能】当成点击 —— 捏完松手就在棋盘上落一子是最典型的误操作
+      const wasPinch = !!this.pinch.surface;
+      dropPointer(e);
       gl.classList.remove("dragging");
-      if (this.pressInView && this.dragMoved < 6) {
+      if (this.pressInView && !wasPinch && this.dragMoved < 6) {
         // 位移小于 6 像素才算"点击"，否则是拖拽旋转
         const r = gl.getBoundingClientRect();
         const cell = this.pick(e.clientX - r.left, e.clientY - r.top);
-        if (cell) this.tryPlace(cell.x, cell.y);
+        // 格子在这里就算出来、扣在闭包里 —— 双击窗口里相机可能被别的操作动过，
+        // 到时候再 pick 一次算出来的可能已经是另一格了
+        if (cell) this.handleTap("gl", e.clientX, e.clientY, () => this.tryPlace(cell.x, cell.y));
       }
       this.pressInView = false;
       this.dragging = false;
     });
+    window.addEventListener("pointercancel", dropPointer);
 
     gl.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -5314,6 +5776,9 @@ const Game = {
   resize() {
     const r = this.el.view.getBoundingClientRect();
     this.camera.frameBoard(r.width / Math.max(1, r.height), true);
+    // 平移量的边界是"半个视口"，转屏会改视口尺寸 —— 不重新夹一次的话，
+    // 横屏里拖出来的平移量在竖屏下可能已经越界（棋盘贴边甚至露不出一半）
+    this.pan3dBy(0, 0);
     this.drawLayerBase();
     this.drawLayerOverlay();
     this.drawStrip();

@@ -307,6 +307,7 @@ let Game = null;
 let PALETTE = null, FALLBACK_COLORS = null, cellSize = null, BoardLimits = null, CoreNS = null;
 let renderRulesMarkdown = null, escapeHtmlNS = null;
 let TEXT_EN = null, STATIC_EN = null, t = null;
+let clampPan2d = null, OrbitCameraNS = null, GESTURE = null;
 let RendererNS = null;
 // 相机拖拽的两个常量。**从源码里抓，不在这里抄一份** —— 抄了就会各自漂移，
 // 而"夹取到底是 85 还是 89.95"正是这几条测试要钉的东西。
@@ -331,6 +332,12 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
       // 是普通 JS 方法，可以整体换成记录器。不露出来的话，"关闭格线时确实不画 static 线"
       // 就只剩"读代码确认"这一条路。
       " Renderer: Renderer," +
+      // 触屏手势那几个纯函数/常量。露出来是为了"平移边界、双击窗口、手柄标尺"
+      // 这些能被逐个边界值钉住 —— 靠合成触摸事件只能验到几条主路径，
+      // 而越界回夹、"刚好等于窗口"这种边界恰恰是合成事件最难构造的。
+      " clampPan2d: clampPan2d, OrbitCamera: OrbitCamera," +
+      " GESTURE: { ZOOM2D_MAX: ZOOM2D_MAX, TAP_WINDOW_MS: TAP_WINDOW_MS," +
+      "            TAP_NEAR_PX: TAP_NEAR_PX, PINCH_TAIL_MS: PINCH_TAIL_MS }," +
       " CoreNS: { GameSession: GameSession, FourDSession: FourDSession, RuleSet: RuleSet," +
       "           RotateStatus: RotateStatus, MoveStatus: MoveStatus } };"
   );
@@ -342,6 +349,8 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   renderRulesMarkdown = NS.renderRulesMarkdown; escapeHtmlNS = NS.escapeHtml;
   TEXT_EN = NS.TEXT_EN; STATIC_EN = NS.STATIC_EN; t = NS.t;
   RendererNS = NS.Renderer;
+  clampPan2d = NS.clampPan2d; OrbitCameraNS = NS.OrbitCamera; GESTURE = NS.GESTURE;
+  if (!clampPan2d || !OrbitCameraNS || !GESTURE) throw new Error("触屏手势那几个量没有暴露出来");
   if (!TEXT_EN || !STATIC_EN || !t) throw new Error("英文文案表没有暴露出来");
   if (!RendererNS) throw new Error("Renderer 没有暴露出来");
   if (!Game) throw new Error("Game 对象没有暴露出来");
@@ -2406,6 +2415,255 @@ step("相机拖拽：任意猛拖都不会出 NaN、不会把 pitch 放到 90", 
   }
   // 收尾复位，别把状态留给后面的步骤
   cam.yaw = -32; cam.pitch = 24;
+});
+
+// ---------------------------------------------------------------------------
+// 触屏手势：两指缩放 / 平移 / 双击复位
+//
+// 这一组全是【纯函数和纯状态】的边界值。真正的多点触摸在 browser-check 里验
+// （CDP 合成真触摸）；这里钉的是合成事件最难构造的那些格子：
+// 越界回夹、"刚好等于窗口"、1 倍下的零延迟。
+// ---------------------------------------------------------------------------
+
+step("单层棋盘平移边界（clampPan2d）：棋盘小于画布时不许动", () => {
+  // 棋盘 300×200 放进 400×300 的画布 —— 四周都有富余，平移量只能是 0
+  const p = clampPan2d(400, 300, 300, 200, [50, -80]);
+  if (p[0] !== 0 || p[1] !== 0)
+    throw new Error("棋盘比画布小时不该能平移，实际 " + JSON.stringify(p));
+  // 刚好一样大：边界是 0，也不能动
+  const q = clampPan2d(300, 200, 300, 200, [10, 10]);
+  if (q[0] !== 0 || q[1] !== 0)
+    throw new Error("棋盘和画布一样大时不该能平移，实际 " + JSON.stringify(q));
+});
+
+step("单层棋盘平移边界（clampPan2d）：不越界时原样，越界时夹到边界", () => {
+  // 棋盘 600×400 放进 400×300：每边能富余 (600-400)/2=100 / (400-300)/2=50
+  const inside = clampPan2d(400, 300, 600, 400, [60, -30]);
+  if (inside[0] !== 60 || inside[1] !== -30)
+    throw new Error("没越界就该原样返回，实际 " + JSON.stringify(inside));
+  const over = clampPan2d(400, 300, 600, 400, [999, -999]);
+  if (over[0] !== 100 || over[1] !== -50)
+    throw new Error("越界应夹到 ±(ext-canvas)/2，实际 " + JSON.stringify(over));
+  // 负数方向同样夹
+  const over2 = clampPan2d(400, 300, 600, 400, [-999, 999]);
+  if (over2[0] !== -100 || over2[1] !== 50)
+    throw new Error("负方向越界应夹到 -100/50，实际 " + JSON.stringify(over2));
+});
+
+step("单层棋盘：缩放上下限（1 倍到 ZOOM2D_MAX，缩不回去也放不到天上）", () => {
+  const keepZoom = Game.zoom2d, keepPan = Game.pan2d;
+  Game.newGame(15, 1);
+  Game.zoom2d = 1; Game.pan2d = [0, 0];
+  Game.zoom2dBy(3);
+  if (Math.abs(Game.zoom2d - 3) > 1e-9) throw new Error("放大 3 倍应得 3，实际 " + Game.zoom2d);
+  Game.zoom2dBy(1000);
+  if (Game.zoom2d !== GESTURE.ZOOM2D_MAX)
+    throw new Error("应夹在上限 " + GESTURE.ZOOM2D_MAX + "，实际 " + Game.zoom2d);
+  Game.zoom2dBy(0.0001);
+  if (Game.zoom2d !== 1) throw new Error("缩到 1 倍就该停住，实际 " + Game.zoom2d);
+  Game.zoom2dBy(0);            // 0 或负数是非法输入，不该把状态搞坏
+  Game.zoom2dBy(-5);
+  if (Game.zoom2d !== 1) throw new Error("非法比例不该改状态，实际 " + Game.zoom2d);
+  Game.zoom2d = keepZoom; Game.pan2d = keepPan;
+});
+
+step("单层棋盘：缩放和平移只走 gridLayout 一个出口（1 倍时与改动前逐值相同）", () => {
+  const keepZoom = Game.zoom2d, keepPan = Game.pan2d;
+  const w = 355, h = 157, n = 15;
+  Game.zoom2d = 1; Game.pan2d = [0, 0];
+  const lay = Game.gridLayout(w, h, n, n);
+  // 没缩放没平移时就是老公式：cs = min(w/n, h/n)，原点居中
+  const cs = Math.min(w / n, h / n);
+  if (Math.abs(lay.cs - cs) > 1e-12) throw new Error("1 倍时格距应等于老公式，实际 " + lay.cs + " vs " + cs);
+  if (Math.abs(lay.ox - (w - cs * (n - 1)) / 2) > 1e-12)
+    throw new Error("1 倍时原点应居中，实际 ox=" + lay.ox);
+  // 放大 4 倍：格距正好 4 倍，而且仍然居中
+  Game.zoom2d = 4;
+  const big = Game.gridLayout(w, h, n, n);
+  if (Math.abs(big.cs - cs * 4) > 1e-12) throw new Error("4 倍时格距应是 4 倍，实际 " + big.cs);
+  if (Math.abs(big.ox - (w - cs * 4 * (n - 1)) / 2) > 1e-9)
+    throw new Error("4 倍且没平移时棋盘应仍然居中，实际 ox=" + big.ox);
+  // 平移越界：会被夹回来，而不是真的挪出边界
+  Game.pan2d = [1e6, 1e6];
+  const clamped = Game.gridLayout(w, h, n, n);
+  const lim = (cs * 4 * (n - 1) - w) / 2;
+  if (Math.abs(clamped.ox - ((w - cs * 4 * (n - 1)) / 2 + lim)) > 1e-9)
+    throw new Error("越界的平移应被夹到边界，实际 ox=" + clamped.ox + "（边界值 " + lim + "）");
+  Game.zoom2d = keepZoom; Game.pan2d = keepPan;
+});
+
+step("单层棋盘：放大之后 cellFromEvent 仍然命中【同一格】", () => {
+  const keepZoom = Game.zoom2d, keepPan = Game.pan2d;
+  Game.newGame(15, 1);
+  const c = Game.el.layerBase;
+  const r = c.getBoundingClientRect();
+  const w = r.width, h = r.height;
+  for (const zoom of [1, 2.5, GESTURE.ZOOM2D_MAX]) {
+    Game.zoom2d = zoom; Game.pan2d = [0, 0];
+    const lay = Game.gridLayout(w, h, 15, 15);
+    // 把某几格的【交织点】按当前布局换算成屏幕坐标，再交给 cellFromEvent，
+    // 必须拿回同一格。放大之后坐标系变了，这条是"看到的 = 点到的"的离线版
+    for (const [cx, cy] of [[0, 0], [7, 7], [14, 0], [3, 11]]) {
+      const sx = r.left + lay.ox + cx * lay.cs;
+      const sy = r.top + (h - (lay.oy + cy * lay.cs));   // canvas 的 y 向下
+      const got = Game.cellFromEvent({ clientX: sx, clientY: sy }, c);
+      if (!got || got.x !== cx || got.y !== cy)
+        throw new Error("zoom=" + zoom + " 时 (" + cx + "," + cy + ") 应命中同一格，实际 " + JSON.stringify(got));
+    }
+  }
+  Game.zoom2d = keepZoom; Game.pan2d = keepPan;
+});
+
+step("双击判定：同一处 + 够快 才算，两道门槛缺一不可", () => {
+  const keep = Game.lastTap;
+  const W = GESTURE.TAP_WINDOW_MS, R = GESTURE.TAP_NEAR_PX;
+  Game.lastTap = { gl: null, layer: null };
+  Game.lastTap.gl = { x: 100, y: 100, t: 1000 };
+  if (!Game.isDoubleTap("gl", 100, 100, 1000 + W - 1)) throw new Error("窗口内同一处应算双击");
+  if (Game.isDoubleTap("gl", 100, 100, 1000 + W)) throw new Error("刚好到窗口边界就不该算（< 不是 <=）");
+  if (Game.isDoubleTap("gl", 100, 100, 1000 + W + 50)) throw new Error("窗口外不该算双击");
+  // 距离门槛：这是"在两个不同格子上快速连下两手"不被误判成复位的那一条
+  Game.lastTap.gl = { x: 100, y: 100, t: 1000 };
+  if (!Game.isDoubleTap("gl", 100 + R - 1, 100, 1000 + 10)) throw new Error("半径内应算双击");
+  if (Game.isDoubleTap("gl", 100 + R, 100, 1000 + 10)) throw new Error("刚好到半径边界就不该算");
+  if (Game.isDoubleTap("gl", 100 + R + 1, 100, 1000 + 10)) throw new Error("半径外不该算双击");
+  // 两条通路各记各的：三维上的双击不该影响单层棋盘
+  if (Game.isDoubleTap("layer", 100, 100, 1000 + 10)) throw new Error("两条点击通路必须互不干扰");
+  Game.lastTap = keep;
+});
+
+step("视图复位：只清缩放和平移，不动旋转（转到的角度是玩家自己选的）", () => {
+  const cam = Game.camera;
+  const keepDist = cam.distance, keepYaw = cam.yaw, keepPitch = cam.pitch;
+  const keepPan3 = Game.pan3d, keepZoom = Game.zoom2d, keepPan2 = Game.pan2d;
+  cam.yaw = -32; cam.pitch = 24;
+  cam.homeDistance = 18.9;
+  cam.distance = 8; Game.pan3d = [40, -25];
+  if (!Game.viewMoved("gl")) throw new Error("放大过就该算'动过'");
+  Game.resetView("gl");
+  if (Math.abs(cam.distance - 18.9) > 1e-9) throw new Error("应回到 homeDistance，实际 " + cam.distance);
+  if (Game.pan3d[0] !== 0 || Game.pan3d[1] !== 0) throw new Error("平移应清零");
+  if (cam.yaw !== -32 || cam.pitch !== 24) throw new Error("复位不该动 yaw/pitch");
+  if (Game.viewMoved("gl")) throw new Error("复位之后就不该再算'动过'（否则落子会一直被扣一个窗口）");
+  // 只平移、没缩放，也算"动过"
+  cam.distance = cam.homeDistance; Game.pan3d = [5, 0];
+  if (!Game.viewMoved("gl")) throw new Error("平移过也要算'动过'");
+  Game.pan3d = [0, 0];
+  // 单层那侧
+  Game.zoom2d = 3; Game.pan2d = [12, 0];
+  if (!Game.viewMoved("layer")) throw new Error("单层放大过要算'动过'");
+  Game.resetView("layer");
+  if (Game.zoom2d !== 1 || Game.pan2d[0] !== 0 || Game.pan2d[1] !== 0)
+    throw new Error("单层复位应回到 1 倍且平移清零");
+  if (Game.viewMoved("layer")) throw new Error("单层复位之后不该再算'动过'");
+  cam.distance = keepDist; cam.yaw = keepYaw; cam.pitch = keepPitch;
+  Game.pan3d = keepPan3; Game.zoom2d = keepZoom; Game.pan2d = keepPan2;
+});
+
+step("点击判定：1 倍下立即落子，放大后先扣一个窗口，双击则复位且不落子", () => {
+  const keepTap = Game.lastTap, keepPinch = Game.pinchEndedAt;
+  Game.lastTap = { gl: null, layer: null };
+  Game.pinchEndedAt = -1e9;
+  Game.camera.homeDistance = Game.camera.distance;   // 1 倍
+  Game.pan3d = [0, 0];
+  Game.cancelPendingTap();
+  let placed = 0;
+  const place = () => { placed++; };
+  Game.handleTap("gl", 10, 10, place);
+  if (placed !== 1) throw new Error("1 倍下点一下应当场落子，实际落子 " + placed);
+  if (Game.pendingTap) throw new Error("1 倍下不该留下扣住的落子");
+
+  // 放大之后：第一下不落子，等窗口
+  Game.camera.distance = Game.camera.homeDistance * 0.5;
+  let n2 = 0;
+  const place2 = () => { n2++; };
+  Game.handleTap("gl", 100, 100, place2);
+  if (n2 !== 0) throw new Error("放大后第一下不该立刻落子，实际落了 " + n2);
+  if (!Game.pendingTap) throw new Error("放大后第一下应当被扣住");
+  // 手动"等过窗口"：把定时器那一支走一遍（flush 就是定时器到点干的事）
+  Game.flushPendingTap();
+  if (n2 !== 1) throw new Error("窗口过后那一子要补上，实际落子 " + n2);
+
+  // 双击：第二下不落子、走复位
+  const distZoomed = Game.camera.distance;
+  let n3 = 0;
+  Game.handleTap("gl", 200, 200, () => n3++);
+  Game.handleTap("gl", 201, 201, () => n3++);
+  if (n3 !== 0) throw new Error("双击不该落子，实际落了 " + n3);
+  if (Game.pendingTap) throw new Error("双击之后不该还扣着落子");
+  if (Math.abs(Game.camera.distance - Game.camera.homeDistance) > 1e-9)
+    throw new Error("双击应复位到 homeDistance，实际 " + Game.camera.distance + "（放大态是 " + distZoomed + "）");
+
+  // 落在【不同的格子】上快速连点两下：不算双击，两子都要落
+  Game.camera.distance = Game.camera.homeDistance * 0.5;
+  let n4 = 0;
+  Game.handleTap("gl", 300, 300, () => n4++);
+  Game.handleTap("gl", 500, 300, () => n4++);   // 隔了 200px
+  Game.flushPendingTap();
+  if (n4 !== 2) throw new Error("不同格子上的两次点击不该被当成双击（那是连下两手），实际落了 " + n4);
+
+  // 刚捏完那一拍：不吃成点击
+  Game.camera.distance = Game.camera.homeDistance;
+  Game.pinchEndedAt = Game.nowMs();
+  let n5 = 0;
+  Game.handleTap("gl", 400, 400, () => n5++);
+  if (n5 !== 0) throw new Error("两指捏完那一拍不该落子，实际落了 " + n5);
+  Game.pinchEndedAt = keepPinch;
+  Game.cancelPendingTap();
+  Game.lastTap = keepTap;
+});
+
+step("起始界面上两指手势不生效，关掉之后恢复生效", () => {
+  const snap = () => JSON.stringify([Game.camera.distance, Game.pan3d, Game.zoom2d, Game.pan2d]);
+  Game.resetView("gl"); Game.resetView("layer");
+  Game.openSetup();
+  const before = snap();
+  Game.pinchApply("gl", 1.5, 30, 20);
+  Game.pinchApply("layer", 1.5, 30, 20);
+  if (snap() !== before)
+    throw new Error("起始界面上两指不该改动任何视图状态，实际 " + snap() + " vs " + before);
+  Game.closeSetup();
+  // 关掉之后必须恢复生效 —— 只验"被拦住"的话，"拦一次就永久失效"和"没写"看起来一样
+  const d0 = Game.camera.distance;
+  Game.pinchApply("gl", 1.5, 0, 0);
+  if (!(Game.camera.distance < d0))
+    throw new Error("对局中两指应当生效，实际 distance " + d0 + " → " + Game.camera.distance);
+  Game.resetView("gl"); Game.resetView("layer");
+});
+
+step("相机平移：targetFor 的标尺和方向（跟着相机走，不是跟着世界轴走）", () => {
+  const cam = new OrbitCameraNS();
+  cam.yaw = 0; cam.pitch = 0; cam.distance = 20; cam.fov = 42 * Math.PI / 180;
+  if (cam.targetFor([0, 0], 800)[0] !== 0) throw new Error("没有平移时注视点应是原点");
+  const t = cam.targetFor([100, 0], 800);
+  // 标尺：一个像素 = 2*d*tan(fov/2)/视口高 个世界单位，往右拖 100px 就是这个数的 100 倍
+  const k = 2 * 20 * Math.tan(cam.fov / 2) / 800;
+  // 【符号为什么是"往右拖 → 注视点往 +x 挪"】这个相机的约定是【世界 +x 在屏幕左边】——
+  // yaw=0 时实测（browser-check 与 _verify 的一次探查）：屏幕中心那格 x=7、
+  // 往右 60px 那格 x=4。所以"手指往右拖、画面内容跟着往右走"= 相机往左移
+  // = 注视点往 +x 挪。这里钉的是"内容和手指同向"，而那件事的另一端在
+  // browser-check 里用合成触摸量（把棋盘中心投影到屏幕上看它往哪边跑）。
+  if (Math.abs(t[0] - 100 * k) > 1e-9)
+    throw new Error("往右拖 100px 应当把注视点往 +x 挪 100k，实际 " + t[0] + "，期望 " + (100 * k));
+  if (Math.abs(t[2]) > 1e-9) throw new Error("yaw=0 时水平拖拽不该产生 z 方向位移，实际 " + t[2]);
+  // 往下拖（屏幕 y 向下）→ 注视点往上（世界 +y）
+  const d = cam.targetFor([0, 100], 800);
+  if (Math.abs(d[1] - 100 * k) > 1e-9)
+    throw new Error("往下拖 100px 应当把注视点往 +y 挪 100k，实际 " + d[1]);
+  // 转 90° 之后，同样的水平拖拽应该变成 z 方向的位移（跟着相机走，不是跟着世界轴走）
+  cam.yaw = 90;
+  const r90 = cam.targetFor([100, 0], 800);
+  if (Math.abs(r90[2] - 100 * k) > 1e-9)
+    throw new Error("yaw=90 时往右拖应挪 +z（相机转了 90°，方向得跟着转），实际 " + JSON.stringify(r90));
+  // 【东/西都对，只有这两个轴对调】yaw=0 时应当是 +x，yaw=90 时应当是 +z，
+  // 而不是"两种 yaw 下都挪 x"—— 那说明右向量的算法把 yaw 丢了。
+  if (Math.abs(r90[0]) > 1e-9) throw new Error("yaw=90 时不该还有 x 方向的位移");
+  // view() 必须是"注视点跟着走"：同样的入参给同样的矩阵，且平移量与视口高成反比
+  const v0 = cam.view([0, 0], 800), v1 = cam.view([0, 0], 800);
+  if (v0.join(",") !== v1.join(",")) throw new Error("同样的入参必须给同样的矩阵");
+  const half = cam.targetFor([0, 100], 400);
+  if (Math.abs(half[1] - 2 * 100 * k) > 1e-9)
+    throw new Error("视口高减半时同样拖 100px 的世界位移应加倍，实际 " + half[1]);
 });
 
 // ---------------------------------------------------------------------------

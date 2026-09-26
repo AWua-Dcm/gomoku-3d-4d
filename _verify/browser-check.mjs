@@ -571,10 +571,22 @@ try {
     const r = (el) => { const b = el.getBoundingClientRect();
       return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
     Game.closeRules();
+    // 【"英文排版那一段 CSS 真的生效了"的证据】原来查的是 .rowLabel 的计算宽度 == 138px
+    // （中文 96px）。行标改成【贴合自己的文字】之后那个数不再是常量，所以改成查字体：
+    // 字体栈正是 html.lang-en body 那一条设的，而且这里把中文那一侧也量一遍、
+    // 拿两者【必须不同】当判据 —— 只查类名的话，选择器写错成 html[lang="en"] 照样绿。
+    const fam = () => getComputedStyle(rowLabel).fontFamily.split(",")[0].trim();
+    const enFam = fam();
+    Game.setLang("zh"); const zhFam = fam();
+    Game.setLang("en");
+    // 行标宽度：不再写死，所以它必须随文字长短变 —— 中英都是"Mode 比 Rotation cooldown 短"，
+    // 两个都相等反而说明宽度还在被某个固定值支配。
+    const wOf = (id) => Math.round(document.getElementById(id).getBoundingClientRect().width);
     return {
       lang: root.lang,
       cls: root.className,
-      rowLabelW: Math.round(rowLabel.getBoundingClientRect().width),
+      fontEn: enFam, fontZh: zhFam,
+      labelWMode: wOf("rowLabelMode"), labelWCool: wOf("rowLabelCool"),
       // 每个行标占几个行盒。Range.getClientRects() 换行就多一个矩形，比拿高度除行高可靠
       // （line-height 可能是 normal，除出来是 NaN）。英文行标比中文长得多，
       // "Rotation cooldown" 就是会顶不住的典型。
@@ -599,10 +611,16 @@ try {
   check((" " + en.cls + " ").indexOf(" lang-en ") >= 0,
     "切到英文后 html 上有 .lang-en —— 英文排版那一段 CSS 靠它生效",
     "实际 class=" + JSON.stringify(en.cls));
-  // 这一条查的是"CSS 覆盖真的生效了"，不是"类名挂上了"：CSS 里 .rowLabel 中文 96px、
-  // 英文 138px。只查类名的话，选择器写错（比如还是 html[lang="en"]）照样绿。
-  check(en.rowLabelW === 138, "英文排版生效：.rowLabel 的计算宽度是 138px（中文是 96px）",
-    "实际 " + en.rowLabelW + "px —— 96 说明 html.lang-en 那段 CSS 没生效");
+  // 这一条查的是"CSS 覆盖真的生效了"，不是"类名挂上了"：html.lang-en body 那条把字体
+  // 从中文栈切成拉丁 UI 字体栈。只查类名的话，选择器写错（比如还是 html[lang="en"]）照样绿。
+  check(en.fontEn !== en.fontZh && en.fontEn === "system-ui",
+    "英文排版生效：行标的字体栈切到了拉丁 UI 字体（中文那一侧不是）",
+    "英文 " + JSON.stringify(en.fontEn) + " vs 中文 " + JSON.stringify(en.fontZh));
+  // 行标宽度不再写死（曾经英文 138 / 中文 96，对每一行都生效）—— "Mode" 白占 100px，
+  // 把英文的模式行撑到折行。现在它贴合自己的文字，所以同一个界面里两个行标就不该等宽。
+  check(en.labelWMode > 0 && en.labelWMode < en.labelWCool,
+    "行标宽度贴合自己的文字（不再是一个对所有行都生效的固定值）",
+    "Mode=" + en.labelWMode + "px, Rotation cooldown=" + en.labelWCool + "px");
   check(en.coolNoteW > 0, "冷却说明行在英文下量得到宽度", "实际 " + en.coolNoteW);
   // 行标必须都只占一行。折行的后果不是"难看"那么轻：行表把三条尺寸输入框对齐在一条竖线上，
   // 行标一折，"转动冷却"那一行就比别的行高一截，整块面板的节奏全乱。
@@ -1156,6 +1174,34 @@ try {
         panelEl.scrollTop = before;
         return ok;
       };
+      // 【起始界面那几条必须在这里量】上面那些都在对局状态下量的，而模式行/冷却行/
+      // 右上角两键都是起始界面里的东西：只有把 #setup 打开（#stage 带上 preview）
+      // 才有几何可量。英文单独验一遍 —— 按钮文字比中文宽，出问题的从来是英文那一侧。
+      const hits = (a, b) => !(a.right <= b.left || b.right <= a.left ||
+                               a.bottom <= b.top || b.bottom <= a.top);
+      const lineCount = (el) => { const rg = document.createRange(); rg.selectNodeContents(el);
+        return rg.getClientRects().length; };
+      const tops = (els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().top)))];
+      const cols = (els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().left)))];
+      Game.openSetup();
+      Game.setLang("en");
+      const modeBtns = [document.getElementById("mode3d"), document.getElementById("mode4d")];
+      const coolBtns = [...document.querySelectorAll(".coolBtn")];
+      const trEn = R("topRight"), title = document.querySelector("#setup .titleRow").getBoundingClientRect();
+      const coolCols = cols(coolBtns);
+      // "两列对齐"：每一列里那两个键的左边缘必须相同，而两列之间必须不同
+      const colOf = (i) => Math.round(coolBtns[i].getBoundingClientRect().left);
+      const setupUi = {
+        modeRowLines: tops(modeBtns).length,
+        coolRowLines: tops(coolBtns).length,
+        coolCols: coolCols.length,
+        coolColAligned: colOf(0) === colOf(2) && colOf(1) === colOf(3) && colOf(0) !== colOf(1),
+        labelLines: [...document.querySelectorAll(".rowLabel")].map(lineCount),
+        trTop: Math.round(trEn.top), trRight: Math.round(trEn.right),
+        trHitsTitle: hits(trEn, title),
+      };
+      Game.setLang("zh");
+      Game.closeSetup();
       return {
         isPortrait: matchMedia("(orientation: portrait)").matches,
         viewBottom: Math.round(v.bottom), panelTop: Math.round(p.top),
@@ -1169,6 +1215,7 @@ try {
         camDist: Game.camera.distance,
         mb: { r: Math.round(mb.right), b: Math.round(mb.bottom) },
         tr: { l: Math.round(tr.left), t: Math.round(tr.top) },
+        setupUi: setupUi,
       };
     })()`);
     if (vp.tag === "390×844") portCamDist = port.camDist;
@@ -1181,6 +1228,25 @@ try {
     check(port.modebarClear,
       vp.tag + " 下左上角的模式条不压住右上角的 EN / 具体规则（横屏时两者分处两侧，不会碰）",
       "模式条右下角 " + JSON.stringify(port.mb) + " vs 右上角按钮左上角 " + JSON.stringify(port.tr));
+
+    // ---- 起始界面（英文）在三处手机宽度下的几条硬要求。
+    // 这几条都是"改了才知道会坏"的那种：模式行折行是 2026-09 报上来的手机版错位，
+    // 冷却行折行时四个键落在两个互不对齐的列上，右上角两键原本压着标题。
+    check(port.setupUi.modeRowLines === 1,
+      vp.tag + " 英文下 3D / 4D 两个模式键在同一行",
+      "实测分成 " + port.setupUi.modeRowLines + " 行 —— 行标曾经是写死的 138px，"
+      + "把 \"Mode\" 也撑到 138，这一行就超了 32.7px");
+    check(port.setupUi.coolRowLines === 2 && port.setupUi.coolCols === 2 && port.setupUi.coolColAligned,
+      vp.tag + " 英文下转动冷却四键排成 2×2 且两列各自对齐",
+      JSON.stringify({ 行数: port.setupUi.coolRowLines, 列数: port.setupUi.coolCols,
+                       两列对齐: port.setupUi.coolColAligned }));
+    check(port.setupUi.labelLines.every((x) => x <= 1),
+      vp.tag + " 英文的每个行标都只占一行（宽度贴合文字，不折行）",
+      JSON.stringify(port.setupUi.labelLines));
+    check(port.setupUi.trTop <= 40 && !port.setupUi.trHitsTitle,
+      vp.tag + " 起始界面下右上角两键钉在视口顶部、且不压标题",
+      "top=" + port.setupUi.trTop + " 压标题=" + port.setupUi.trHitsTitle
+      + "（改之前它俩在 42dvh+14 那一行，实测正好落在 y=371.8~399.8，压着 y=383.8 起的标题块）");
   }
   await send("Emulation.setDeviceMetricsOverride",
     { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
@@ -1343,6 +1409,217 @@ try {
   const consoleAfter7 = drainConsole();
   check(consoleAfter7.length === 0,
     "第 7 节交互过程中控制台没有报错", consoleAfter7.join("\n      "));
+
+  // ---- 8. 触屏手势：两指缩放 / 平移 / 双击复位
+  //
+  // 【为什么必须用真的合成触摸事件】这一整块的全部风险都在"浏览器到底把什么
+  // 交给了我们"：CSS 的 touch-action 会把双指手势从我们手里抢走（页面跟着放大）、
+  // 两指松开后浏览器可能补一个 click（捏一下就在棋盘上落了一子）、
+  // 而 pointerdown 是一个指针一个事件（"现在有几根手指"没有现成 API）。
+  // 桩里一条都验不到，DOM 桩连 getBoundingClientRect 都是常量。
+  //
+  // 【方向那两条是重点】符号推错的表现是"往左拖、棋子往右跑"，而推符号的人
+  // （我）在纸上推两遍很可能两遍推反。所以方向不查 pan3d 的符号，
+  // 而是把【棋盘中心投影到屏幕上】看它往哪边跑 —— 用页面自己的 view 矩阵，
+  // 加一段独立的矩阵乘法，和游戏里的绘制路径只共享 lookAt 那一处。
+  await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 393, height: 852, deviceScaleFactor: 2, mobile: true });
+  await send("Page.navigate", { url: PAGE });
+  await sleep(2000);
+
+  const touch = (type, pts) => send("Input.dispatchTouchEvent",
+    { type, touchPoints: pts.map((p) => ({ x: p[0], y: p[1], id: p[2] })) });
+  // 两指手势：从间距 fromD 走到 toD，中点停在 (cx, cy)
+  const pinchAt = async (fromD, toD, cx, cy, steps) => {
+    const p = (d) => [[cx - d / 2, cy, 1], [cx + d / 2, cy, 2]];
+    await touch("touchStart", [p(fromD)[0]]);
+    await touch("touchStart", p(fromD));
+    for (let i = 1; i <= steps; i++) {
+      await touch("touchMove", p(fromD + (toD - fromD) * (i / steps)));
+      await sleep(16);
+    }
+    await touch("touchEnd", []);
+    // 留出比 PINCH_TAIL_MS 更长的时间再让调用方点：捏完那一拍的点击是被
+    // 故意吃掉的（防误落子），所以"紧接着就点"量到的不是后面的逻辑
+    await sleep(320);
+  };
+  const drag2 = async (dx, dy, cx, cy, steps) => {
+    const a = [[cx - 40, cy, 1], [cx + 40, cy, 2]];
+    await touch("touchStart", [a[0]]);
+    await touch("touchStart", a);
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      await touch("touchMove", [[a[0][0] + dx * t, a[0][1] + dy * t, 1],
+                                [a[1][0] + dx * t, a[1][1] + dy * t, 2]]);
+      await sleep(16);
+    }
+    await touch("touchEnd", []);
+    await sleep(60);
+  };
+  const tapAt = async (x, y) => {
+    await touch("touchStart", [[x, y, 1]]);
+    await sleep(30);
+    await touch("touchEnd", []);
+  };
+  // 棋盘中心在屏幕上的位置：页面自己的 view 矩阵 × 本文件自算的透视矩阵
+  const CENTER_PROBE = `(() => {
+    function mul(a, b) { const o = new Array(16);
+      for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0;
+        for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; }
+    function persp(fovy, aspect, near, far) { const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+      return [f / aspect,0,0,0, 0,f,0,0, 0,0,(far + near) * nf,-1, 0,0,2 * far * near * nf,0]; }
+    const c = document.getElementById("gl"), r = c.getBoundingClientRect();
+    const cam = Game.camera;
+    const vp = mul(persp(cam.fov, r.width / r.height, 0.1, 800), cam.view(Game.pan3d, r.height));
+    const x = vp[0] * 0 + vp[8] * 0 + vp[12], y = vp[5] * 0 + vp[13], w = vp[15];
+    return JSON.stringify([(x / w * 0.5 + 0.5) * r.width, (0.5 - y / w * 0.5) * r.height]);
+  })()`;
+
+  await ev(`document.getElementById("startBtn").click()`);
+  await sleep(700);
+  const GY = 150;   // 竖屏下三维视图是上面 42%（y 0..357.8）
+
+  const dz0 = await ev(`Game.camera.distance`);
+  await pinchAt(80, 300, 196, GY, 10);
+  const dz1 = await ev(`Game.camera.distance`);
+  check(dz1 < dz0 * 0.75, "两指撑开 → 三维棋盘放大（相机拉近）",
+    "distance " + dz0.toFixed(2) + " → " + dz1.toFixed(2));
+  await pinchAt(300, 80, 196, GY, 10);
+  const dz2 = await ev(`Game.camera.distance`);
+  check(dz2 > dz1, "两指收拢 → 三维棋盘缩小（相机推远）",
+    "distance " + dz1.toFixed(2) + " → " + dz2.toFixed(2));
+
+  const c0 = JSON.parse(await ev(CENTER_PROBE));
+  await drag2(80, 0, 196, GY, 8);
+  const c1 = JSON.parse(await ev(CENTER_PROBE));
+  check(Math.abs((c1[0] - c0[0]) - 80) < 12,
+    "两指往右拖 80px → 屏幕上的棋盘中心也往右走约 80px（内容和手指同向）",
+    "棋盘中心 " + c0[0].toFixed(1) + " → " + c1[0].toFixed(1) + "（位移 " +
+    (c1[0] - c0[0]).toFixed(1) + "px）");
+
+  // 平移之后"看到的"必须还是"点到的"：把棋盘中心的屏幕坐标往回挪一个平移量，
+  // 拾取到的应当还是同一格 —— 这是 pick 和 draw3D 共用 camera.view() 的直接证据
+  const pickOk = await ev(`(() => {
+    const r = Game.el.gl.getBoundingClientRect();
+    const a = Game.pick(r.width / 2 + (Game.el.gl.getBoundingClientRect().left - r.left), r.height / 2);
+    const cx = r.width / 2, cy = r.height / 2;
+    const atCenter = Game.pick(cx, cy);
+    const back = Game.pick(cx - Game.pan3d[0], cy - Game.pan3d[1]);
+    return JSON.stringify({ atCenter: atCenter, back: back });
+  })()`);
+  const pk = JSON.parse(pickOk);
+  check(pk.atCenter !== null || pk.back !== null,
+    "平移之后拾取仍然可用（不是整块点不到）", pickOk);
+
+  await ev(`Game.resetView("gl")`);
+  const yaw0 = await ev(`Game.camera.yaw`);
+  await touch("touchStart", [[150, GY, 1]]);
+  for (let i = 1; i <= 6; i++) { await touch("touchMove", [[150 + i * 15, GY, 1]]); await sleep(16); }
+  await touch("touchEnd", []);
+  const yaw1 = await ev(`Game.camera.yaw`);
+  check(Math.abs(yaw1 - yaw0) > 5 && Math.abs(await ev(`Game.pan3d[0]`)) < 1,
+    "单指拖拽仍然只转视角、不会顺带平移",
+    "yaw " + yaw0.toFixed(1) + " → " + yaw1.toFixed(1) + "，pan3d=" + await ev(`JSON.stringify(Game.pan3d)`));
+
+  // 【1 倍下必须是零延迟】这条是这次改动最要紧的代价控制：双击复位只在
+  // "视图被放大或平移过"时才需要，1 倍下每一子都要晚 300ms 生效是不能接受的
+  await ev(`Game.resetView("gl"); Game.newGame(15, 1)`);
+  const mv0 = await ev(`Game.session.moveCount`);
+  await tapAt(196, GY);
+  await sleep(60);
+  const mv1 = await ev(`Game.session.moveCount`);
+  check(mv1 === mv0 + 1, "1 倍下点一下【立刻】落子（点击后 60ms 内就落上了，没有等双击窗口）",
+    "moveCount " + mv0 + " → " + mv1);
+
+  // 放大之后：第一下不落子，第二下（同一处）→ 复位
+  await ev(`Game.resetView("gl")`);
+  await pinchAt(80, 300, 196, GY, 10);
+  const home = await ev(`Game.camera.homeDistance`);
+  const zz = await ev(`Game.camera.distance`);
+  check(Math.abs(zz - home) > 1, "（前置）这时确实处于放大状态",
+    "distance " + zz.toFixed(2) + " vs 开局取景 " + home.toFixed(2));
+  const mm0 = await ev(`Game.session.moveCount`);
+  await tapAt(196, GY);
+  await sleep(60);
+  const mm1 = await ev(`Game.session.moveCount`);
+  check(mm1 === mm0, "放大后第一下点击不立刻落子（在等双击窗口）",
+    "moveCount " + mm0 + " → " + mm1);
+  await tapAt(198, GY + 2);
+  await sleep(80);
+  check(Math.abs((await ev(`Game.camera.distance`)) - home) < 0.01,
+    "第二下（同一处）→ 双击复位，相机回到开局取景距离",
+    "distance " + (await ev(`Game.camera.distance`)).toFixed(3) + " vs " + home.toFixed(3));
+  check((await ev(`Game.session.moveCount`)) === mm0 && Math.abs(await ev(`Game.pan3d[0]`)) < 0.01,
+    "双击复位不落子、并把平移一起清掉");
+
+  // 放大后只点一下（不是双击）：窗口过后那一子要补上 —— 扣住的落子绝不能丢
+  await ev(`Game.resetView("gl")`);
+  await pinchAt(80, 300, 196, GY, 10);
+  const k0 = await ev(`Game.session.moveCount`);
+  await tapAt(196, GY);
+  await sleep(450);
+  check((await ev(`Game.session.moveCount`)) === k0 + 1,
+    "放大后单击（不是双击）：窗口过后扣住的那一子补上了，没被吞",
+    "moveCount " + k0 + " → " + (await ev(`Game.session.moveCount`)));
+
+  // 捏完松手那一拍：不能落子
+  await ev(`Game.resetView("gl"); Game.newGame(15, 1)`);
+  const j0 = await ev(`Game.session.moveCount`);
+  await pinchAt(100, 200, 196, GY, 6);
+  await sleep(120);
+  check((await ev(`Game.session.moveCount`)) === j0,
+    "两指捏完松手那一拍没有落子（浏览器补的那一下 click 被吃掉了）",
+    "moveCount " + j0 + " → " + (await ev(`Game.session.moveCount`)));
+
+  // 单层棋盘：两指缩放 / 平移 / 双击复位 / 点到的格子仍然对
+  const lr = JSON.parse(await ev(`(() => { const r = Game.el.layerBase.getBoundingClientRect();
+    return JSON.stringify([r.left, r.top, r.width, r.height]); })()`));
+  const lcx = lr[0] + lr[2] / 2, lcy = lr[1] + lr[3] / 2;
+  const z0 = await ev(`Game.zoom2d`);
+  await pinchAt(40, 140, lcx, lcy, 10);
+  const z1 = await ev(`Game.zoom2d`);
+  check(z1 > z0 + 0.5, "单层棋盘两指撑开 → 放大", "zoom2d " + z0 + " → " + z1.toFixed(2));
+  const centerCell = await ev(`(() => {
+    const c = Game.el.layerBase, r = c.getBoundingClientRect();
+    const d = Game.session.board.dims;
+    const lay = Game.gridLayout(r.width, r.height, d[0], d[1]);
+    const mx = r.left + lay.ox + lay.cs * (d[0] - 1) / 2;
+    const my = r.top + (r.height - (lay.oy + lay.cs * (d[1] - 1) / 2));
+    return JSON.stringify(Game.cellFromEvent({ clientX: mx, clientY: my }, c));
+  })()`);
+  const ccell = JSON.parse(centerCell);
+  check(ccell && ccell.x === 7 && ccell.y === 7,
+    "单层棋盘放大之后，棋盘正中那一格仍然点得到（看到的 = 点到的）", centerCell);
+  const p0 = JSON.parse(await ev(`JSON.stringify(Game.pan2d)`));
+  await drag2(-60, 0, lcx, lcy, 8);
+  const p1 = JSON.parse(await ev(`JSON.stringify(Game.pan2d)`));
+  check(p1[0] < p0[0], "单层棋盘两指往左拖 → 平移跟着往负方向走",
+    JSON.stringify(p0) + " → " + JSON.stringify(p1));
+  // 单层棋盘走的是 click 那条路（浏览器在两指松开后可能补发一个 click），
+  // 所以"捏完不吃成落子"这件事【必须在这个棋盘上单独验一遍】——
+  // 三维那侧走的是 pointerup，天然不会补 click，验了也证明不了这里
+  const lj0 = await ev(`Game.session.moveCount`);
+  await pinchAt(60, 160, lcx, lcy, 8);
+  await sleep(120);
+  check((await ev(`Game.session.moveCount`)) === lj0,
+    "单层棋盘捏完那一拍也没有落子（浏览器补的 click 被吃掉了）",
+    "moveCount " + lj0 + " → " + (await ev(`Game.session.moveCount`)));
+  // 双击之间必须等过那个窗口（PINCH_TAIL_MS），否则第一下会被当成"捏完那一拍"吃掉
+  await sleep(320);
+  await tapAt(lcx, lcy);
+  await sleep(60);
+  await tapAt(lcx + 2, lcy + 2);
+  await sleep(80);
+  check(Math.abs((await ev(`Game.zoom2d`)) - 1) < 1e-6 &&
+        (await ev(`JSON.stringify(Game.pan2d)`)) === "[0,0]",
+    "单层棋盘双击 → 回到 1 倍、平移清零",
+    "zoom2d=" + await ev(`Game.zoom2d`) + " pan=" + await ev(`JSON.stringify(Game.pan2d)`));
+
+  const consoleAfterTouch = drainConsole();
+  check(consoleAfterTouch.length === 0,
+    "触屏手势过程中控制台没有报错", consoleAfterTouch.join("\n      "));
+  await ev(`Game.resetView("gl"); Game.resetView("layer");`);
 
   // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态
   await ev(`(() => {
