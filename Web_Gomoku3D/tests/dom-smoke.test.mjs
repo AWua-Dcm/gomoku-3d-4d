@@ -183,6 +183,21 @@ for (const id of dimInputIds) {
   elementsById.set(id, el);
 }
 
+// 【把 HTML 里的 data-* 灌进 dataset】浏览器里 el.dataset.foo 读的就是这个。
+// 不灌的话，凡是从 dataset 取值的代码在桩里都会静默拿到 undefined ——
+// 那不是"桩测不到"，是**桩在骗人**：同一个取值在浏览器里好好的、在桩里被悄悄跳过，
+// 于是测试全绿而功能是坏的。电脑对手那四个键（data-ai）就是这么读的。
+// 形状要求：data-* 得写在 id 之后（本文件里所有这类元素都是这个写法）。
+{
+  for (const m of html.matchAll(/<(\w+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
+    const el = elementsById.get(m[3]);
+    if (!el || !el.dataset) continue;
+    for (const a of m[2].matchAll(/\bdata-([a-z0-9-]+)="([^"]*)"/g)) {
+      el.dataset[a[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = a[2];
+    }
+  }
+}
+
 // 四维面板上那几组按钮。和尺寸按钮一样从 HTML 里解析出取值，不在这里另写一份 ——
 // 否则 HTML 改了取值而这里没跟着改，桩会静默地测一套跟真实页面不一样的东西。
 const rotAxisValues = [];
@@ -344,7 +359,8 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
       " GESTURE: { ZOOM2D_MAX: ZOOM2D_MAX, TAP_WINDOW_MS: TAP_WINDOW_MS," +
       "            TAP_NEAR_PX: TAP_NEAR_PX, PINCH_TAIL_MS: PINCH_TAIL_MS }," +
       " CoreNS: { GameSession: GameSession, FourDSession: FourDSession, RuleSet: RuleSet," +
-      "           RotateStatus: RotateStatus, MoveStatus: MoveStatus } };"
+      "           RotateStatus: RotateStatus, MoveStatus: MoveStatus, fingerprint: fingerprint }," +
+      " aiChooseMove: aiChooseMove, AI_PARAMS: AI_PARAMS };"
   );
   // requestAnimationFrame 故意做成空实现：render loop 不能无限递归
   const NS = runner(documentStub, windowStub, () => 0, console, Set, Map);
@@ -2928,6 +2944,163 @@ step("相机平移：targetFor 的标尺和方向（跟着相机走，不是跟�
   const half = cam.targetFor([0, 100], 400);
   if (Math.abs(half[1] - 2 * 100 * k) > 1e-9)
     throw new Error("视口高减半时同样拖 100px 的世界位移应加倍，实际 " + half[1]);
+});
+
+// ---------------------------------------------------------------------------
+// 电脑对手
+//
+// 【这一块必须放在最后】它会开人机局、会让电脑真的落子。放在中间的话，
+// 后面那些几何/手势断言测的就是一个"有人在自动走棋"的棋盘 —— 那种失败很难查。
+// 块里每一步都先 cancelAiTimer：桩里的 setTimeout 是 node 的真定时器，
+// 而这个脚本是同步跑完的，留着的定时器会在打印完汇总之后才烧到 ——
+// 那时候再抛异常就没人接得住了。最后一步专门负责收尾。
+// ---------------------------------------------------------------------------
+
+/** 开一局人机局。**必须手动 cancelAiTimer** —— 桩里不让真定时器跑，下面靠 runAi 手动驱动。 */
+function startAiGame(ai, order, first) {
+  Game.closeSetup();
+  Game.setSetupAi(ai);
+  Game.setSetupOrder(order);
+  Game.newGame([15, 15, 15], first || 1);   // 1 = BLACK
+  Game.cancelAiTimer();
+}
+
+step("电脑对手：起始界面的六个新键都在，四个对手键恰好一个亮着", () => {
+  for (const id of ["aiHuman", "aiEasy", "aiMed", "aiHard", "orderMe", "orderCpu"]) {
+    if (!Game.el[id]) throw new Error("缺少元素 " + id);
+  }
+  Game.openSetup();
+  Game.setSetupAi("human");
+  const on = ["aiHuman", "aiEasy", "aiMed", "aiHard"].filter(id => Game.el[id].classList.contains("sel"));
+  if (on.length !== 1 || on[0] !== "aiHuman")
+    throw new Error("四个对手键应当恰好一个亮着，实际 " + JSON.stringify(on));
+  for (const v of ["weak", "medium", "strong"]) {
+    Game.setSetupAi(v);
+    const lit = ["aiHuman", "aiEasy", "aiMed", "aiHard"].filter(id => Game.el[id].classList.contains("sel"));
+    if (lit.length !== 1 || Game.el[lit[0]].dataset.ai !== v)
+      throw new Error(v + " 档下选中的是 " + JSON.stringify(lit));
+  }
+  Game.setSetupAi("human");
+  Game.closeSetup();
+});
+
+step("电脑对手：人人对局时「谁先下」是禁用而不是隐藏", () => {
+  Game.setSetupAi("human");
+  if (!Game.el.orderMe.disabled || !Game.el.orderCpu.disabled)
+    throw new Error("人人对局时「谁先下」应当禁用");
+  Game.setSetupAi("strong");
+  if (Game.el.orderMe.disabled || Game.el.orderCpu.disabled)
+    throw new Error("人机对战时应当时可用的");
+  Game.setSetupAi("human");
+});
+
+step("电脑对手：人机开局，双方各执一色，先手方由「谁先下」定", () => {
+  startAiGame("medium", "me", 1);            // 我执黑、我先下
+  if (!Game.aiMode) throw new Error("应当进入人机模式");
+  if (Game.aiLevel !== "medium") throw new Error("难度没传对：" + Game.aiLevel);
+  if (Game.aiColor !== 2) throw new Error("玩家执黑时电脑应执白，实际 " + Game.aiColor);
+  if (Game.isAiTurn()) throw new Error("玩家先手，开局不该轮到电脑");
+  if (Game.aiPending) throw new Error("玩家先手，开局不该排上电脑的定时器");
+
+  startAiGame("weak", "cpu", 1);             // 电脑执黑、电脑先下
+  if (Game.aiColor !== 1) throw new Error("「谁先下=电脑」时电脑应执先手那一色，实际 " + Game.aiColor);
+  if (!Game.isAiTurn()) throw new Error("电脑执先手，开局就该轮到它");
+  Game.cancelAiTimer();
+});
+
+step("电脑对手：轮到电脑时玩家点棋盘落不下子，而且给出提示", () => {
+  startAiGame("weak", "cpu", 1);
+  const before = CoreNS.fingerprint(Game.session);
+  Game.tryPlace(0, 0);
+  if (CoreNS.fingerprint(Game.session) !== before) throw new Error("玩家的点击不该改动棋盘");
+  if (!Game.el.toast.textContent) throw new Error("应当给出提示，而不是静默 return");
+  if (!Game.el.toast.classList.contains("on")) throw new Error("提示应当真的显示出来");
+  Game.el.toast.classList.remove("on");
+});
+
+step("电脑对手：runAi 真的落了一子，而且回合交了出去", () => {
+  startAiGame("strong", "cpu", 1);
+  Game.setAiSeed(20260927);
+  Game.runAi();
+  if (Game.session.moveCount !== 1) throw new Error("应当恰好落了一子，实际 " + Game.session.moveCount);
+  if (Game.isAiTurn()) throw new Error("电脑走完之后不该还轮到它");
+  if (Game.el.info.textContent.indexOf("电脑") < 0)
+    throw new Error("#info 里应当报出对手执什么色：" + Game.el.info.textContent);
+});
+
+step("电脑对手：悔棋一次把电脑那一手一并撤掉，退回玩家回合", () => {
+  startAiGame("medium", "me", 1);            // 我执黑先下
+  Game.tryPlace(7, 7);
+  if (!Game.isAiTurn()) throw new Error("我落一手之后该轮到电脑");
+  Game.cancelAiTimer();
+  Game.runAi();
+  if (Game.session.moveCount !== 2) throw new Error("应当有两手，实际 " + Game.session.moveCount);
+  Game.undo();
+  if (Game.session.moveCount !== 0)
+    throw new Error("悔棋应当把我的一手和电脑的一手一起撤掉，实际剩 " + Game.session.moveCount);
+  if (Game.isAiTurn()) throw new Error("悔棋之后应当轮到我");
+  if (Game.aiPending) throw new Error("悔棋之后不该还留着电脑的定时器");
+});
+
+step("电脑对手：悔棋只撤一手 —— 玩家刚下完、电脑还没走的时候", () => {
+  startAiGame("medium", "me", 1);
+  Game.tryPlace(7, 7);
+  Game.cancelAiTimer();                      // 电脑"还在想"
+  Game.undo();
+  if (Game.session.moveCount !== 0) throw new Error("应当撤掉我刚下的那一手");
+  if (Game.isAiTurn()) throw new Error("撤掉我那一手之后仍然该轮到我");
+});
+
+step("电脑对手：换先手之后我仍执原来的色，电脑接过先手", () => {
+  startAiGame("medium", "me", 1);            // 我执黑
+  if (Game.aiColor !== 2) throw new Error("电脑应执白");
+  Game.swapFirst();                          // 改为白先手 —— 电脑执白，于是电脑先走
+  if (Game.aiColor !== 2) throw new Error("换先手不该把我换到另一边");
+  if (!Game.isAiTurn()) throw new Error("换先手之后应当轮到电脑");
+  Game.cancelAiTimer();
+});
+
+step("电脑对手：人机模式下「恢复本次转动」不对玩家开放", () => {
+  Game.setSetupMode(true);                   // 四维，转动面板才会亮
+  startAiGame("strong", "me", 1);
+  Game.refreshRotPanel();
+  if (!Game.el.rotRestore.disabled) throw new Error("人机模式下应当禁用");
+  Game.restoreRotation();                    // 键盘 Y 也走这条路
+  if (Game.el.toast.textContent.indexOf("悔棋") < 0)
+    throw new Error("应当提示改用「悔棋」，实际：" + Game.el.toast.textContent);
+  Game.el.toast.classList.remove("on");
+
+  // 人人对局时它照旧是可用的（别把禁用做成"永远禁用"）
+  Game.closeSetup();
+  Game.setSetupAi("human");
+  Game.newGame([15, 15, 15], 1);
+  Game.refreshRotPanel();
+  if (Game.el.rotRestore.disabled && Game.session.canUndoLastRotation)
+    throw new Error("人人对局时不该被人机那条规则禁用");
+  Game.setSetupMode(false);
+});
+
+step("电脑对手：人人对局时任何一条路径都不会排上电脑的定时器", () => {
+  // 这一条护着前面那九十多步：只要哪次改动让"人人对局"也自动走棋了，它会当场红。
+  Game.closeSetup();
+  Game.setSetupAi("human");
+  Game.newGame([15, 15, 15], 1);
+  Game.tryPlace(7, 7);
+  Game.undo();
+  Game.restart();
+  Game.swapFirst();
+  Game.doRotate();
+  Game.openSetup();
+  Game.closeSetup();
+  if (Game.aiMode) throw new Error("人人对局时 aiMode 应当是 false");
+  if (Game.aiPending) throw new Error("人人对局时不该有待走的电脑着");
+  if (Game.aiThinking) throw new Error("人人对局时不该是思考中");
+});
+
+step("电脑对手：收尾 —— 不留任何待走的定时器", () => {
+  Game.cancelAiTimer();
+  Game.setSetupAi("human");
+  if (Game.aiPending) throw new Error("还有待走的电脑着，它会在汇总打印之后才烧到");
 });
 
 // ---------------------------------------------------------------------------

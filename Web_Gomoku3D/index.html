@@ -321,7 +321,11 @@
   #setup {
     position: fixed; left: 42%; right: 0; top: 0; bottom: 0; z-index: 50;
     display: flex; flex-direction: column; align-items: center;
-    gap: 18px; padding: 26px 30px; overflow-y: auto;
+    /* 【18 → 14】加「对手」和「谁先下」两行时，这一屏在 1280×800 的英文下把
+       「开始游戏」挤出了可视区（改动前按钮下面还有 40 多像素余量，截图对拍过）。
+       行距收 4px × 9 个间隔 ≈ 36px，正好把两行的高度还回来，而且不动行高本身 ——
+       按钮尺寸、每行 40px 的槽位、模式切换时"一个像素都不动"那条不变量全都不受影响。 */
+    gap: 14px; padding: 26px 30px; overflow-y: auto;
     /* 居中，但溢出时改为从顶部开始 —— 这是 safe 关键字的全部作用。
        没有它的话（也就是今天的行为），内容一旦高过视口，flex 的居中溢出会朝两头走，
        而滚动区只从内容起点算 → **顶部那段永远滚不到**，表现为"最上面几行看不见了"。
@@ -474,6 +478,10 @@
      会加到 4 行，15³ 再加"一层里常常只有一两颗子"那条能到 5~6 行。
      不钉住它，下面的规则摘要和「开始游戏」按钮照样跟着上下跳。
      写不下时在这块内部滚动，不影响外部布局。 */
+  /* 【高度写死，而且没跟着人机那一行一起加】加了两行之后英文版把「开始游戏」挤出
+     了 800px 高的窗口，所以改的是行距（见 #setup 的 gap），不是这里。
+     人机那一句在三维下只多占一行，92px 本来装得下；只有"四维 15³"那种
+     本来就要滚的情形才会被多推一行 —— 那一条是既有行为，不值得为它再抬高度。 */
   #sizeSummary { color: var(--dim); font-size: 13.5px; text-align: center; max-width: 640px;
                  line-height: 1.7; white-space: pre-line;
                  height: 92px; overflow-y: auto; }
@@ -2352,6 +2360,34 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
     <div class="rowLabel" id="rowLabelFirst" data-i18n="rowLabelFirst">谁先手</div>
     <button id="firstBlack" class="sel" data-first="1" data-i18n="firstBlack">黑棋先手</button>
     <button id="firstWhite" data-first="2" data-i18n="firstWhite">白棋先手</button>
+  </div>
+
+  <!-- 对手：人类 / 电脑（弱 / 中 / 强）。
+       【四个键排一行，而不是"对手"+"难度"两行】拆成两行就必须回答"人类 + 电脑·强"
+       是什么意思 —— 一个无意义的状态，得单独定义、单独禁用、单独测。
+       一行四个键是**一组单选**，和上面的三维/四维、黑先/白先、下面的 3/5/8/10 手
+       是同一套写法：一个状态变量、零个非法组合，而且比两行少占一行高度 ——
+       起始界面是定高的纵向 flex 列，每一行都要还。
+       四个键加 .mini：不加的话 393px 竖屏上"电脑·弱"会把这行折成三行。 -->
+  <div class="row" id="aiRow">
+    <div class="rowLabel" id="rowLabelAi" data-i18n="rowLabelAi">对手</div>
+    <button class="mini sel" id="aiHuman" data-ai="human" data-i18n="aiHuman">人类</button>
+    <button class="mini" id="aiEasy" data-ai="weak" data-i18n="aiEasy">电脑·弱</button>
+    <button class="mini" id="aiMed" data-ai="medium" data-i18n="aiMed">电脑·中</button>
+    <button class="mini" id="aiHard" data-ai="strong" data-i18n="aiHard">电脑·强</button>
+  </div>
+
+  <!-- 谁先下：谁去执那个"先手"。
+       和上面「谁先手」是**两件事**，别合并：谁先手选的是【哪个颜色】先走
+       （也就顺带定了受限的是谁 —— 长连判负跟着先手这个身份走），
+       谁先下选的是【哪个人】执那个颜色。
+       所以"黑棋先手 + 电脑"= 电脑执黑走第一手、我执白；"黑棋先手 + 我"= 我执黑先走。
+       人人对局时这一行没有意义 → **禁用而不是隐藏**，和 #coolRow 在三维下禁用同一条理由：
+       藏起来会让两边的行数不等，而 #setup 是居中的，一行之差就整列重排、按钮一起跳。 -->
+  <div class="row" id="orderRow">
+    <div class="rowLabel" id="rowLabelOrder" data-i18n="rowLabelOrder">谁先下</div>
+    <button id="orderMe" class="sel" data-order="me" data-i18n="orderMe">我</button>
+    <button id="orderCpu" data-order="cpu" data-i18n="orderCpu">电脑</button>
   </div>
 
   <!-- 三维和四维的尺寸行**共用同一个槽位**（网格叠放，见 CSS 里的 #dimsSlot）。
@@ -4412,6 +4448,14 @@ const STATIC_TEXT = { en: {
   "setupSub": "Thirteen directions — on a 3D board, blocking the front is not enough",
   "rowLabelMode": "Mode",
   "rowLabelFirst": "First player",
+  "rowLabelAi": "Opponent",
+  "aiHuman": "Human",
+  "aiEasy": "CPU·easy",
+  "aiMed": "CPU·mid",
+  "aiHard": "CPU·hard",
+  "rowLabelOrder": "Who starts",
+  "orderMe": "Me",
+  "orderCpu": "Computer",
   "rowLabelSize3d": "Board size",
   "rowLabelSize4d": "Board size",
   "rowLabelCool": "Rotation cooldown",
@@ -4451,6 +4495,13 @@ const TEXT = { en: {
   "info.rotations.one": " · {n} rotation",
   "info.rotations.many": " · {n} rotations",
   "info.board": " · board {x}×{y}×{z} · layer {layer}/{n} (z={z0})",
+  // ---- 电脑对手。中文在各自的调用点，这里只放另外五种语言。
+  "info.aiOpp": " · computer plays {who}",
+  "info.aiThink": " · the computer is thinking…",
+  "toast.aiTurn": "It is the computer's turn",
+  "toast.aiPlace": "The computer played ({x},{y},{z})",
+  "toast.aiRotUndo": "Against the computer, use Undo to step back",
+  "setup.aiSummary": "\nHuman vs computer: you play {mine}, the computer plays {theirs}.",
   "layer.label": "Layer {i} / {n}",
   "slice.label": "Drawing up to z ≤ {i}/{n}",
   "coords.hover": "Will place at ({x},{y},{z})",
@@ -4570,6 +4621,14 @@ STATIC_TEXT.ja = {
   "setupSub": "13方向。3Dの盤では、正面を塞ぐだけでは足りません",
   "rowLabelMode": "モード",
   "rowLabelFirst": "先手",
+  "rowLabelAi": "対戦相手",
+  "aiHuman": "人間",
+  "aiEasy": "CPU·弱",
+  "aiMed": "CPU·中",
+  "aiHard": "CPU·強",
+  "rowLabelOrder": "先に打つ人",
+  "orderMe": "自分",
+  "orderCpu": "コンピュータ",
   "rowLabelSize3d": "盤のサイズ",
   "rowLabelSize4d": "盤のサイズ",
   "rowLabelCool": "回転のクールダウン",
@@ -4589,6 +4648,12 @@ TEXT.ja = {
   "info.moves.many": "{n}手経過",
   "info.rotations.many": " · {n}回転",
   "info.board": " · 盤 {x}×{y}×{z} · レイヤー {layer}/{n} (z={z0})",
+  "info.aiOpp": " · コンピュータは{who}番",
+  "info.aiThink": " · コンピュータが考えています…",
+  "toast.aiTurn": "今はコンピュータの番です",
+  "toast.aiPlace": "コンピュータは ({x},{y},{z}) に打ちました",
+  "toast.aiRotUndo": "コンピュータ対戦では「取り消し」で戻してください",
+  "setup.aiSummary": "\nコンピュータ対戦：あなたは{mine}、コンピュータは{theirs}。",
   "layer.label": "レイヤー {i} / {n}",
   "slice.label": "z ≤ {i}/{n} まで描画",
   "coords.hover": "({x},{y},{z}) に着手します",
@@ -4666,6 +4731,14 @@ STATIC_TEXT.ko = {
   "setupSub": "13개 방향 — 3D 판에서는 앞만 막아서는 부족합니다",
   "rowLabelMode": "모드",
   "rowLabelFirst": "선수",
+  "rowLabelAi": "상대",
+  "aiHuman": "사람",
+  "aiEasy": "컴퓨터·하",
+  "aiMed": "컴퓨터·중",
+  "aiHard": "컴퓨터·상",
+  "rowLabelOrder": "먼저 두는 쪽",
+  "orderMe": "나",
+  "orderCpu": "컴퓨터",
   "rowLabelSize3d": "판 크기",
   "rowLabelSize4d": "판 크기",
   "rowLabelCool": "회전 쿨다운",
@@ -4685,6 +4758,12 @@ TEXT.ko = {
   "info.moves.many": "{n}수 착수",
   "info.rotations.many": " · {n}회 회전",
   "info.board": " · 판 {x}×{y}×{z} · 레이어 {layer}/{n} (z={z0})",
+  "info.aiOpp": " · 컴퓨터는 {who}",
+  "info.aiThink": " · 컴퓨터가 생각 중…",
+  "toast.aiTurn": "지금은 컴퓨터 차례입니다",
+  "toast.aiPlace": "컴퓨터가 ({x},{y},{z})에 두었습니다",
+  "toast.aiRotUndo": "컴퓨터 대국에서는 「되돌리기」로 돌아가세요",
+  "setup.aiSummary": "\n컴퓨터 대국: 당신은 {mine}, 컴퓨터는 {theirs}.",
   "layer.label": "레이어 {i} / {n}",
   "slice.label": "z ≤ {i}/{n}까지 표시",
   "coords.hover": "({x},{y},{z})에 착수합니다",
@@ -4762,6 +4841,14 @@ STATIC_TEXT.ru = {
   "setupSub": "Тринадцать направлений — на 3D-доске защиты спереди недостаточно",
   "rowLabelMode": "Режим",
   "rowLabelFirst": "Первый игрок",
+  "rowLabelAi": "Соперник",
+  "aiHuman": "Человек",
+  "aiEasy": "ПК·слабый",
+  "aiMed": "ПК·средний",
+  "aiHard": "ПК·сильный",
+  "rowLabelOrder": "Кто ходит",
+  "orderMe": "Я",
+  "orderCpu": "Компьютер",
   "rowLabelSize3d": "Размер доски",
   "rowLabelSize4d": "Размер доски",
   "rowLabelCool": "Перезарядка поворота",
@@ -4785,6 +4872,12 @@ TEXT.ru = {
   "info.rotations.few": " · {n} поворота",
   "info.rotations.many": " · {n} поворотов",
   "info.board": " · доска {x}×{y}×{z} · слой {layer}/{n} (z={z0})",
+  "info.aiOpp": " · компьютер: {who}",
+  "info.aiThink": " · компьютер думает…",
+  "toast.aiTurn": "Сейчас ход компьютера",
+  "toast.aiPlace": "Компьютер сыграл ({x},{y},{z})",
+  "toast.aiRotUndo": "В игре с компьютером отступайте кнопкой «Отменить»",
+  "setup.aiSummary": "\nИгра с компьютером: вы играете {mine}, компьютер — {theirs}.",
   "layer.label": "Слой {i} / {n}",
   "slice.label": "Рисуем до z ≤ {i}/{n}",
   "coords.hover": "Ход в ({x},{y},{z})",
@@ -4870,6 +4963,14 @@ STATIC_TEXT.fr = {
   "setupSub": "Treize directions — sur un plateau 3D, bloquer l'avant ne suffit pas",
   "rowLabelMode": "Mode",
   "rowLabelFirst": "Premier joueur",
+  "rowLabelAi": "Adversaire",
+  "aiHuman": "Humain",
+  "aiEasy": "ordi·facile",
+  "aiMed": "ordi·moyen",
+  "aiHard": "ordi·difficile",
+  "rowLabelOrder": "Qui commence",
+  "orderMe": "Moi",
+  "orderCpu": "Ordinateur",
   "rowLabelSize3d": "Taille du plateau",
   "rowLabelSize4d": "Taille du plateau",
   "rowLabelCool": "Recharge de rotation",
@@ -4891,6 +4992,12 @@ TEXT.fr = {
   "info.rotations.one": " · {n} rotation",
   "info.rotations.many": " · {n} rotations",
   "info.board": " · plateau {x}×{y}×{z} · couche {layer}/{n} (z={z0})",
+  "info.aiOpp": " · ordinateur : {who}",
+  "info.aiThink": " · l'ordinateur réfléchit…",
+  "toast.aiTurn": "C'est au tour de l'ordinateur",
+  "toast.aiPlace": "L'ordinateur a joué ({x},{y},{z})",
+  "toast.aiRotUndo": "Contre l'ordinateur, utilisez « Annuler » pour revenir en arrière",
+  "setup.aiSummary": "\nContre l'ordinateur : vous jouez {mine}, l'ordinateur joue {theirs}.",
   "layer.label": "Couche {i} / {n}",
   "slice.label": "Affichage jusqu'à z ≤ {i}/{n}",
   "coords.hover": "Sera posé en ({x},{y},{z})",
@@ -5763,6 +5870,28 @@ const Game = {
   setupDims: [15, 15, 15],
   setupCube: true,       // 三维模式下三轴是否联动
   setupFirst: BLACK,
+  // ---- 电脑对手（起始界面的选择）。
+  // setupAi 直接就是难度值，不另设一个"是不是人机"的布尔量和一个难度两个字段 ——
+  // 那样就会出现"人类 + 强"这个无意义组合需要单独定义。见 #aiRow 的 HTML 注释。
+  setupAi: "human",      // "human" | "weak" | "medium" | "strong"
+  setupOrder: "me",      // 「谁先下」："me" | "cpu"。人人对局时无意义（按钮禁用）
+  // ---- 电脑对手（本局的运行状态）。
+  // **aiMode 默认 false**：桩测试和 browser-check 里有一长串手动 newGame，
+  // 它们都依赖"没有人会来自动走棋"。只有「开始游戏」那条路会打开它。
+  aiMode: false,
+  aiLevel: "medium",
+  /** 人机模式下"我执哪个色"。**开局时定死，换先手不改变它** ——
+   *  换先手是"改为另一方先走"，不是"两个人换座位"：我仍然执原来的颜色，
+   *  于是电脑变成先手那一方（也就接过长连判负的责任）。 */
+  aiMyColor: BLACK,
+  /** 待走的电脑着（setTimeout 句柄），0 = 没有。任何会改变"轮到谁"的路径都要先清它。 */
+  aiPending: 0,
+  aiThinking: false,
+  /** 本局的随机种子。**不读 Math.random** —— 电脑的随机源是内核里那个种子 PRNG。 */
+  aiSeed: 0,
+  /** 一共开过几局。**种子由它推出来**，所以"同一局永远是同一手"这件事是可复现的；
+   *  用时间或随机数当种子的话，同一个 bug 再也复现不出来。 */
+  startCount: 0,
   // ---- 四维模式。fourD 为 false 时这一堆全都不参与，三维模式的行为一字不变。
   fourD: false,
   setupCool: 5,          // 设置页选的冷却（落子数）
@@ -5835,6 +5964,7 @@ const Game = {
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
+      "aiHuman","aiEasy","aiMed","aiHard","orderMe","orderCpu",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
@@ -6058,7 +6188,16 @@ const Game = {
     this.rotClockwise = true;
     this.rotTurns = 1;
     this.rotLayer = Math.max(0, Math.min(d[2] - 1, this.rotLayer));
+    // 人机对战的配置在开局这一刻从起始界面拍下来。放在 newGame 里而不是「开始游戏」
+    // 那个 handler 里：任何调用 newGame 的路径（脚本、测试、控制台）拿到的行为都一样。
+    // aiMyColor 一旦定下就不再变 —— 换先手是"改为另一方先走"，不是两个人换座位。
+    this.aiMode = this.setupAi !== "human";
+    this.aiLevel = this.aiMode ? this.setupAi : "medium";
+    this.aiMyColor = this.setupMyColor;
     this.onBoardChanged(true);
+    // 【这一条不能省】第一次 newGame 是新建会话，不会触发 onReset，
+    // 所以"电脑执先手"的开局只能靠这里排上第一手。
+    this.maybeScheduleAi();
   },
 
   onMoveApplied(rec, outcome) {
@@ -6068,10 +6207,14 @@ const Game = {
     } else {
       this.hideBanner();
     }
+    // 轮到电脑就安排下一手。放在最后：先让棋局本身结算清楚（终局就不该再排了，
+    // maybeScheduleAi 里的 isAiTurn 会看 status）。
+    this.maybeScheduleAi();
   },
   onMoveUndone(rec) {
     this.hideBanner(); this.onBoardChanged(false);
     this.toast(say(() => "已悔棋：" + rec.toString(), "toast.undone", { move: rec.toString("en") }), true);
+    this.maybeScheduleAi();
   },
   onReset() {
     this.hideBanner();
@@ -6081,6 +6224,7 @@ const Game = {
     this.applyBannerOffset();
     this.activeLayer = 0;
     this.onBoardChanged(true);
+    this.maybeScheduleAi();
   },
 
   // 转动成功时才走这里（三种"没转成"由 doRotate 自己提示，因为它们不留痕迹）
@@ -6092,11 +6236,13 @@ const Game = {
     this.toast(say(() => cnOf(rec.player) + "棋转动 " + axisName(rec.move.axis) + " = " + rec.move.layer +
                          " · " + describeRotationMove(rec.move) + " · 本层原有 " + rec.layerStones + " 颗子",
                    "toast.rotated", { move: rec.toString(LANG) }), true);
+    this.maybeScheduleAi();
   },
   onRotationUndone(rec) {
     this.onBoardChanged(false);
     this.toast(say(() => "已恢复转动前的样子（" + describeRotationMove(rec.move) + " 已撤销）",
                    "toast.rotUndone", { move: describeRotationMove(rec.move, "en") }), true);
+    this.maybeScheduleAi();
   },
 
   onBoardChanged(full) {
@@ -6527,11 +6673,16 @@ const Game = {
   },
 
   openSetup() {
+    // 【先清掉待走的电脑着】设置界面是盖在棋盘上的，而定时器不管这些 ——
+    // 不清的话会有一颗子在浮层底下悄悄落下来，收起来的时候看着像闹鬼。
+    // 出去的唯一一条路是「开始游戏」，它开新局并重新排，所以这里清掉是安全的。
+    this.cancelAiTimer();
     this.el.setup.classList.remove("off");
     this.el.stage.classList.add("preview");
     this.setHover(null);
     this.syncSetupInputs();
     this.syncCoolRow();
+    this.syncOrderRow();
     this.refreshSetupSummary();
     this.ensurePreview();
     this.uploadPreviewInstances();
@@ -7044,6 +7195,16 @@ const Game = {
     info += say(() => " · 棋盘 " + d[0] + "×" + d[1] + "×" + d[2] +
                       " · 当前层 " + (this.activeLayer + 1) + "/" + nz + " (z=" + this.activeLayer + ")",
                 "info.board", { x: d[0], y: d[1], z: d[2], layer: this.activeLayer + 1, n: nz, z0: this.activeLayer });
+    // 人机对战：报一句"电脑执哪一方"，轮到时再说一句"它在想"。
+    // 【为什么不写进 #status】那一条在内核里（describeStatus）、被 dom-smoke 和
+    // online.test.mjs 断言着；而且它是 22px 塞在 34px 高的行里，中文基线已经是两行、
+    // browser-check 钉着"不超过两行"，一点余量都没有。它也已经把该说的说了
+    // （"某某棋落子（第 n 手）"）。#info 是 12.5px、本来就按 ` · ` 拼，追加最省事。
+    if (this.aiMode) {
+      info += say(() => " · 电脑执" + cnOf(this.aiColor), "info.aiOpp",
+                  { who: sideName(this.aiColor, LANG) });
+      if (this.aiThinking) info += say(() => " · 电脑思考中…", "info.aiThink");
+    }
     this.el.info.textContent = info;
     this.el.layerLabel.textContent = say(() => "第 " + (this.activeLayer + 1) + " / " + nz + " 层",
                                          "layer.label", { i: this.activeLayer + 1, n: nz });
@@ -7155,6 +7316,15 @@ const Game = {
     on("firstBlack", () => this.setSetupFirst(BLACK));
     on("firstWhite", () => this.setSetupFirst(WHITE));
 
+    // ---- 电脑对手。四个键是一组单选，data-ai 的取值就是 setupAi 本身。
+    // 【只能走 this.el[id] + addEventListener，不能 querySelectorAll(".aiBtn")】——
+    // DOM 桩只认五个选择器，写成类选择器会在桩里静默返回空数组（见 syncOrderRow 的注释）。
+    for (const id of ["aiHuman", "aiEasy", "aiMed", "aiHard"]) {
+      on(id, () => this.setSetupAi(this.el[id].dataset.ai));
+    }
+    on("orderMe", () => this.setSetupOrder("me"));
+    on("orderCpu", () => this.setSetupOrder("cpu"));
+
     // ---- 四维模式
     on("mode3d", () => this.setSetupMode(false));
     on("mode4d", () => this.setSetupMode(true));
@@ -7189,6 +7359,11 @@ const Game = {
     on("startBtn", () => {
       this.closeSetup();
       const d = this.fourD ? [this.setupSize, this.setupSize, this.setupSize] : this.setupDims;
+      // 种子在这一刻定下来。**不读随机数** —— 电脑的所有随机性都来自内核那个种子 PRNG，
+      // 而种子本身按累计对局数取一个确定值，于是"同一局永远是同一手"。
+      // 开局数存在 startCount 里而不是 time/random：测试要能复现。
+      this.setAiSeed(0x5eed + this.startCount * 2654435761);
+      this.startCount++;
       this.newGame(d, this.setupFirst);
       this.toast(say(() => cnOf(this.setupFirst) + "先手，" + d[0] + "×" + d[1] + "×" + d[2] + " 开局",
                      "toast.start", { who: sideName(this.setupFirst, LANG), x: d[0], y: d[1], z: d[2] }), true);
@@ -7735,6 +7910,12 @@ const Game = {
   tryPlace(x, y) {
     if (this.setupOpen) return;
     if (!this.session) return;
+    // 电脑的回合里玩家点棋盘。**不能静默 return** —— "点了没反应"和"页面卡了"
+    // 在玩家眼里是同一件事，这条和下面那条"终局之后"是同一类，所以走同一套说法。
+    if (this.isAiTurn()) {
+      this.toast(say(() => "现在是电脑的回合", "toast.aiTurn"), false);
+      return;
+    }
     // 终局之后点棋盘：原来是**静默 return**。落子确实没落下（内核也会拒），
     // 但"点了完全没反应"和"页面卡了"在玩家眼里是同一件事 —— 而"关掉结果弹窗之后
     // 不能下棋"这个要求，只有可读才成立。所以这里说清楚，并指出唯一的出路。
@@ -7804,6 +7985,10 @@ const Game = {
   /** 面板上的选择 → 一次转动。非四维模式直接返回（按钮本来就不可见）。 */
   doRotate() {
     if (!this.session || !this.session.rotationEnabled) return;
+    if (this.isAiTurn()) {
+      this.toast(say(() => "现在是电脑的回合", "toast.aiTurn"), false);
+      return;
+    }
     const o = this.session.rotateBy(
       this.rotAxis,
       this.rotLayer,
@@ -7817,6 +8002,13 @@ const Game = {
 
   restoreRotation() {
     if (!this.session) return;
+    // 键盘的 Y 也要挡住，和 refreshRotPanel 里那个禁用按钮是同一件事：
+    // 人机模式下它能撤掉【电脑刚做的那次转动】，撤完回合又回到电脑，电脑立刻再转一次 ——
+    // 看起来就像按钮坏了。玩家要退回上一步有「悔棋」，那条路已经处理了转动的撤销。
+    if (this.aiMode) {
+      this.toast(say(() => "人机对战里请用「悔棋」退回去", "toast.aiRotUndo"), false);
+      return;
+    }
     // 成功时的提示走 onRotationUndone 回调
     if (!this.session.undoLastRotation()) {
       this.toast(say(() => "最后一步不是转动，没法恢复", "toast.noRotUndo"), false);
@@ -7869,8 +8061,12 @@ const Game = {
       "rot.layerLabel", layerStones,
       { axis: axisName(this.rotAxis), layer: this.rotLayer });
     this.el.rotStatus.textContent = this.session.describeRotationStatus(this.lang);
-    this.el.rotGo.disabled = !this.session.canRotate;
-    this.el.rotRestore.disabled = !this.session.canUndoLastRotation;
+    // 电脑的回合里玩家不能转（doRotate 里还有一道提示，键盘的 T 也走那里）
+    this.el.rotGo.disabled = !this.session.canRotate || this.isAiTurn();
+    // 【人机模式下对玩家禁用「恢复本次转动」】它能撤掉【电脑刚做的那次转动】，
+    // 撤完 passTurnForRotation 会把回合还回电脑，电脑立刻再转一次 —— 看起来像按钮坏了。
+    // 玩家要退回上一步有「悔棋」，那条路已经处理了转动的撤销。
+    this.el.rotRestore.disabled = !this.session.canUndoLastRotation || this.aiMode;
 
     // 提示语按"最可能挡住你的那件事"排序，一次只说一条
     let hint;
@@ -7896,6 +8092,21 @@ const Game = {
   },
 
   undo() {
+    // 先把待走的电脑着撤掉：不清的话它会在悔棋之后才落下来，看起来像闹鬼
+    this.cancelAiTimer();
+    if (this.aiMode) {
+      // 【必须连撤到"又轮到我"为止】只撤一手的话，撤掉的正是电脑刚下的那手，
+      // 出子权当场回到电脑，它会立刻重下一手 —— 玩家看到的就是"悔棋没反应"。
+      // 电脑执先手时撤到开局（那时又轮到电脑）也一样，末尾的 maybeScheduleAi 会把开局补上。
+      let n = 0;
+      while (this.session.undo()) {
+        n++;
+        if (!this.isAiTurn()) break;
+      }
+      if (n === 0) this.toast(say(() => "没有可悔的棋了", "toast.noUndo"), true);
+      else this.maybeScheduleAi();
+      return;
+    }
     if (!this.session.undo()) this.toast(say(() => "没有可悔的棋了", "toast.noUndo"), true);
   },
   restart() {
@@ -8065,6 +8276,138 @@ const Game = {
     this.refreshSetupSummary();
   },
 
+  // ------------------------------------------------------------------ 电脑对手
+
+  /** 起始界面上"我执哪个色"。**谁先手定颜色、谁先下定人**，两者合起来才定得下来。 */
+  get setupMyColor() {
+    return this.setupOrder === "cpu" ? opponentOf(this.setupFirst) : this.setupFirst;
+  },
+
+  /** 本局电脑执的颜色。aiMyColor 在开局时定死，所以换先手之后它自动还是对的。 */
+  get aiColor() { return opponentOf(this.aiMyColor); },
+
+  isAiTurn() {
+    const s = this.session;
+    if (!this.aiMode || !s || s.status !== "Playing") return false;
+    return s.currentPlayer === this.aiColor;
+  },
+
+  setSetupAi(v) {
+    this.setupAi = (v === "weak" || v === "medium" || v === "strong") ? v : "human";
+    for (const id of ["aiHuman", "aiEasy", "aiMed", "aiHard"]) {
+      const el = this.el[id];
+      // dataset.ai 就是 setupAi 的取值本身（human/weak/medium/strong），所以这里不用另建一张表
+      if (el) el.classList.toggle("sel", el.dataset.ai === this.setupAi);
+    }
+    this.syncOrderRow();
+    this.refreshSetupSummary();
+  },
+
+  setSetupOrder(order) {
+    this.setupOrder = (order === "cpu") ? "cpu" : "me";
+    if (this.el.orderMe) this.el.orderMe.classList.toggle("sel", this.setupOrder === "me");
+    if (this.el.orderCpu) this.el.orderCpu.classList.toggle("sel", this.setupOrder === "cpu");
+    this.refreshSetupSummary();
+  },
+
+  /**
+   * 人人对局时「谁先下」没有意义 → 禁用。和 #coolRow 在三维下禁用同一条理由：
+   * 隐藏会让两种对局的行数不等，而 #setup 是居中的，一行之差就整列重排、按钮一起跳。
+   *
+   * 【只能走 this.el[id]，不能用类选择器】DOM 桩只认五个选择器
+   * （.rotAxis / .rotTurns / .coolBtn / [data-i18n] / [data-i18n-html]），
+   * 写成 document.querySelectorAll(".aiBtn") 在桩里会返回空数组 ——
+   * 于是桩里全绿、只有浏览器里才生效的那部分成了一条永远绿的假测试。
+   */
+  syncOrderRow() {
+    const on = this.setupAi !== "human";
+    if (this.el.orderMe) this.el.orderMe.disabled = !on;
+    if (this.el.orderCpu) this.el.orderCpu.disabled = !on;
+  },
+
+  /** 测试钩子：把本局的种子钉死，让"电脑走了哪一手"可复现。 */
+  setAiSeed(n) { this.aiSeed = n >>> 0; },
+
+  /** 清掉待走的电脑着。**任何会改变"轮到谁"的路径都要先调它**，否则会有棋子在
+   *  悔棋/重开/打开设置之后才落下来，看起来像闹鬼。 */
+  cancelAiTimer() {
+    if (this.aiPending) { clearTimeout(this.aiPending); this.aiPending = 0; }
+    this.aiThinking = false;
+  },
+
+  /**
+   * 该电脑走就安排一次。**所有会改变"轮到谁"的路径都收口到这一个方法** ——
+   * 挂在六个既有事件上，加上 newGame 末尾。别在别处再加：漏掉任何一处，
+   * 症状都是"电脑在那种情况下永远不动"，而那种现象很难联想到"某个入口忘了调"。
+   *
+   * 【为什么要有延时】计算本身只要几毫秒。一落下就立刻弹回来，玩家会以为自己点错了 ——
+   * 那几百毫秒是**界面层的表演，不是计算时间**。所以它不读随机数（要可复现），
+   * 而是按累计手数取一个 260~460ms 的确定值。
+   */
+  maybeScheduleAi() {
+    this.cancelAiTimer();
+    if (!this.isAiTurn()) return;
+    this.aiThinking = true;
+    this.refreshTexts();
+    const delay = 260 + (this.session.actionCount % 6) * 40;
+    this.aiPending = setTimeout(() => { this.aiPending = 0; this.runAi(); }, delay);
+  },
+
+  /**
+   * 真的走一步。**返回前一定要把回合交出去**，否则棋局就卡住了。
+   *
+   * 三道防线，一道比一道兜底：
+   *   1. 再问一次 isAiTurn —— 定时器可能在棋局结束、悔棋、重开之后才烧到
+   *   2. 转动没转成（被拒 / 没变化 / 会造线）→ 禁掉转动重问一次，改落子
+   *   3. 还不行 → 线性扫第一个合法空点
+   * 第 2、3 条是"永远不会卡住"的保证：电脑的合法性判据万一和引擎有任何出入，
+   * 代价最多是"这一手改成落子"，而不是"电脑再也不动了"。
+   */
+  runAi() {
+    if (!this.isAiTurn()) { this.aiThinking = false; this.refreshTexts(); return; }
+    const s = this.session;
+    // 种子每手都不同，但完全由 aiSeed 和累计手数决定 —— 同一局同一步永远是同一手
+    const seed = (this.aiSeed + s.actionCount * 2654435761) >>> 0;
+    let done = false;
+
+    const act = aiChooseMove(s, { level: this.aiLevel, seed });
+    if (act.kind === "rotate") {
+      done = s.rotate(RotationMove.fromClockwiseTurns(act.axis, act.layer, act.turns), this.lang).accepted;
+    } else if (act.kind === "place") {
+      done = s.place(act.x, act.y, act.z, this.lang).status !== MoveStatus.Rejected;
+      if (done) this.toastAiPlace(act);
+    }
+
+    // 第二道防线：转动没成 → 禁掉转动重选一手落子
+    if (!done && act.kind === "rotate") {
+      const a2 = aiChooseMove(s, { level: this.aiLevel, seed: seed, noRotation: true });
+      if (a2.kind === "place") {
+        done = s.place(a2.x, a2.y, a2.z, this.lang).status !== MoveStatus.Rejected;
+        if (done) this.toastAiPlace(a2);
+      }
+    }
+
+    // 第三道防线：还不行就线性找一个合法空点。走不到这里，但走到也绝不能卡住。
+    if (!done) {
+      const b = s.board, d = b.dims;
+      for (let z = 0; z < d[2] && !done; z++) {
+        for (let y = 0; y < d[1] && !done; y++) {
+          for (let x = 0; x < d[0] && !done; x++) {
+            if (b.isEmpty(x, y, z)) done = s.place(x, y, z, this.lang).status !== MoveStatus.Rejected;
+          }
+        }
+      }
+    }
+
+    this.aiThinking = false;
+    this.refreshTexts();
+  },
+
+  toastAiPlace(act) {
+    this.toast(say(() => "电脑下在 (" + act.x + "," + act.y + "," + act.z + ")",
+                   "toast.aiPlace", { x: act.x, y: act.y, z: act.z }), true);
+  },
+
   /** 实测量（贪心模拟）：[中位手数, 一局结束时一层里的平均子数]。
    *  **只列真跑过的尺寸，其余不编** —— 见 Web_Gomoku3D/README.md。
    *  5 和 6 是下限还在 5 的那一轮测的，现在 UI 下限是 8、这两档已经选不到；
@@ -8140,6 +8483,15 @@ const Game = {
       // 这个工程里【没有任何胜率实测数据】—— 没有 AI 可自对弈，贪心模拟量的是
       // 中位手数和每层子数。别再把它当胜率写回来。
       warn = say(() => "\n注意：棋盘越小，5 连越容易连成，先手优势也越大。", "setup.small");
+    }
+
+    // 人机对战那一句。**必须有**：「谁先手」选的是颜色、「谁先下」选的是人，
+    // 合起来才知道"我执哪个色"—— 光看按钮的选中态推不出来，而这件事决定了谁背长连判负。
+    // 上面那句"某某先手"已经在说哪个颜色先走了，所以这一句只要把两个人各执什么色说清。
+    if (this.setupAi !== "human") {
+      const mine = this.setupMyColor, theirs = opponentOf(mine);
+      warn += say(() => "\n人机对战：你执" + cnOf(mine) + "，电脑执" + cnOf(theirs) + "。",
+                  "setup.aiSummary", { mine: sideName(mine, LANG), theirs: sideName(theirs, LANG) });
     }
 
     this.el.sizeSummary.textContent = say(

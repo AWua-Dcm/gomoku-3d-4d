@@ -1862,6 +1862,15 @@ try {
       ["起始界面", `1`],
       ["起始界面·四维", `Game.setSetupMode(true); 1`],
       ["对局界面", `Game.closeSetup(); Game.newGame([15,15,15], 1); 1`],
+      // 人机那两屏。【顺序要紧】它们必须排在上面的"对局界面"之后：起始界面·人机
+      // 会把 setupAi 设成 strong，而 newGame 是照 setupAi 开局的 —— 排在前面的话，
+      // 上面那条"对局界面"就变成人机局了，后面所有几何断言都会在一个会自动走棋的
+      // 棋盘上做。所以下面那条最后会把 setupAi 复位成 human。
+      ["起始界面·人机", `Game.openSetup(); Game.setSetupMode(false);
+                         Game.setSetupAi("strong"); Game.setSetupOrder("cpu"); 1`],
+      ["对局界面·人机", `Game.closeSetup(); Game.newGame([15,15,15], 1);
+                         Game.cancelAiTimer(); Game.runAi();
+                         Game.setSetupAi("human"); Game.cancelAiTimer(); 1`],
     ];
     for (const [name, prep] of screens) {
       await ev(`(() => { ${prep}; return 1; })()`);
@@ -1969,6 +1978,131 @@ try {
   check(consoleAfterTouch.length === 0,
     "触屏手势过程中控制台没有报错", consoleAfterTouch.join("\n      "));
   await ev(`Game.resetView("gl"); Game.resetView("layer");`);
+
+  // -------------------------------------------------------------------------
+  // 电脑对手
+  //
+  // 【为什么放在最后】它会开人机局、会让电脑真的落子。放在中间的话，后面那些几何
+  // 断言测的就是一个"有人在自动走棋"的棋盘 —— 那种失败极难查到 AI 头上。
+  //
+  // 【为什么这一节真的等定时器】"电脑会不会自己动"只有让真定时器烧到才算验过：
+  // dom-smoke 那边走的是手动驱动 runAi，验的是决策和落子，验不到"定时器这一环接上没接上"。
+  // -------------------------------------------------------------------------
+
+  await ev(`(() => {
+    Game.setLang("zh"); Game.openSetup(); Game.setSetupMode(false);
+    Game.setSetupAi("strong"); Game.setSetupOrder("cpu");
+    return 1;
+  })()`);
+  await sleep(150);
+  const aiSetupRaw = await ev(`(() => {
+    const aiIds = ["aiHuman","aiEasy","aiMed","aiHard"];
+    const sel = aiIds.filter((id) => document.getElementById(id).classList.contains("sel"));
+    const labelLines = (el) => { const rg = document.createRange(); rg.selectNodeContents(el); return rg.getClientRects().length; };
+    const sum = document.getElementById("sizeSummary");
+    return JSON.stringify({
+      vis: ["aiHuman","aiEasy","aiMed","aiHard","orderMe","orderCpu"]
+             .map((id) => document.getElementById(id).getClientRects().length > 0),
+      selCount: sel.length, selIs: sel[0],
+      aiRowLines: [...new Set(["aiHuman","aiEasy","aiMed","aiHard"]
+                     .map((id) => Math.round(document.getElementById(id).getBoundingClientRect().top)))].length,
+      orderDisabled: [document.getElementById("orderMe").disabled, document.getElementById("orderCpu").disabled],
+      labelWrapped: ["rowLabelAi","rowLabelOrder"].map((id) => labelLines(document.getElementById(id))),
+      summary: sum.textContent, summaryScrolls: sum.scrollHeight > sum.clientHeight + 1,
+      docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      setupOver: document.getElementById("setup").scrollWidth - document.getElementById("setup").clientWidth,
+    });
+  })()`);
+  const AS = JSON.parse(aiSetupRaw);
+  check(AS.vis.every(Boolean), "人机那两行的六个键都看得见", JSON.stringify(AS.vis));
+  check(AS.selCount === 1 && AS.selIs === "aiHard",
+    "四个对手键恰好一个亮着（选的是「电脑·强」）", JSON.stringify([AS.selCount, AS.selIs]));
+  check(AS.aiRowLines === 1, "四个对手键在同一行（1280 宽的窗口下）", AS.aiRowLines + " 行");
+  check(AS.orderDisabled[0] === false && AS.orderDisabled[1] === false,
+    "选了电脑时「谁先下」是可用的", JSON.stringify(AS.orderDisabled));
+  check(AS.labelWrapped.every((n) => n <= 1), "人机那两行的行标没有折行", JSON.stringify(AS.labelWrapped));
+  check(AS.summary.indexOf("你执") >= 0 && AS.summary.indexOf("电脑执") >= 0,
+    "起始界面把「我执哪个色」说清楚了（光看按钮的选中态推不出来）", AS.summary.slice(-70));
+  check(!AS.summaryScrolls, "#sizeSummary 里多出来的那一行没有把它挤到要滚动才看得见");
+  check(AS.docOver <= 1 && AS.setupOver <= 1,
+    "起始界面加了人机两行之后没有横向溢出", "doc " + AS.docOver + " / setup " + AS.setupOver);
+
+  // 真定时器：电脑执先手，等它自己落子
+  const ai0 = JSON.parse(await ev(`(() => {
+    Game.closeSetup(); Game.setAiSeed(20260927); Game.newGame([15,15,15], 1);
+    return JSON.stringify({ aiMode: Game.aiMode, aiColor: Game.aiColor,
+                            pending: !!Game.aiPending, turn: Game.session.currentPlayer });
+  })()`));
+  check(ai0.aiMode && ai0.aiColor === 1 && ai0.pending,
+    "电脑执先手：开局当场就排上了它的一手", JSON.stringify(ai0));
+  await sleep(900);
+  const ai1 = JSON.parse(await ev(`JSON.stringify({
+    stones: Game.session.board.stoneCount, moves: Game.session.moveCount,
+    status: Game.session.status, thinking: Game.aiThinking, pending: !!Game.aiPending,
+    info: document.getElementById("info").textContent,
+    statusLines: (() => { const rg = document.createRange();
+                          rg.selectNodeContents(document.getElementById("status"));
+                          return rg.getClientRects().length; })(),
+  })`));
+  check(ai1.stones === 1 && ai1.moves === 1, "真定时器烧到之后电脑自己落了一子", JSON.stringify(ai1));
+  check(!ai1.thinking && !ai1.pending, "落完子之后不再是「思考中」", JSON.stringify(ai1));
+  check(ai1.info.indexOf("电脑执") >= 0, "#info 报出了电脑执哪一方", ai1.info.slice(0, 90));
+  check(ai1.statusLines <= 2, "人机模式下状态行仍然不超过两行", ai1.statusLines + " 行");
+
+  // 交替走十几手：**一次都不许卡住**（卡住的表现是回合没交出去，下一手落不下）
+  const aiLoop = JSON.parse(await ev(`(() => {
+    let stuck = 0, guard = 0;
+    const d = Game.session.board.dims;
+    while (guard < 8 && Game.session.status === "Playing") {
+      const before = Game.session.actionCount;
+      // 我挑【离中心最近的空格】下。两件事一次办妥：
+      //   · 不能写死坐标 —— 电脑可能正好占了那一格，那样"落不下"是正常的，
+      //     会被误判成卡住（第一版就是这么红的）
+      //   · 从中心往外找，棋才会聚在中间，这张截图才像一盘真棋而不是棋盘角落里的一堆
+      Game.cancelAiTimer();
+      const cz = Game.activeLayer;
+      const cx = (d[0] - 1) >> 1, cy = (d[1] - 1) >> 1;
+      const far = Math.max(d[0], d[1]);
+      let found = false;
+      for (let r = 0; r <= far && !found; r++) {
+        for (let y = cy - r; y <= cy + r && !found; y++) {
+          for (let x = cx - r; x <= cx + r && !found; x++) {
+            if (y < 0 || y >= d[1] || x < 0 || x >= d[0]) continue;
+            if (Game.session.board.isEmpty(x, y, cz)) { Game.tryPlace(x, y); found = true; }
+          }
+        }
+      }
+      const mid = Game.session.actionCount;
+      Game.cancelAiTimer(); Game.runAi(); Game.cancelAiTimer();
+      const after = Game.session.actionCount;
+      if (Game.session.status === "Playing" && !(found && mid === before + 1 && after === mid + 1)) stuck++;
+      guard++;
+    }
+    return JSON.stringify({ stuck: stuck, guard: guard, moves: Game.session.moveCount,
+                            status: Game.session.status,
+                            turn: Game.session.currentPlayer, aiColor: Game.aiColor });
+  })()`));
+  check(aiLoop.stuck === 0, "人机交替走 " + aiLoop.guard + " 轮，一次都没有卡住", JSON.stringify(aiLoop));
+  check(aiLoop.moves >= 5, "人机对局真的走起来了", JSON.stringify(aiLoop));
+  // 棋局可能在中途就分出胜负（强档对着随手下的对手，通常十几手就赢了）——
+  // 那种情况下"轮到谁"已经不再按手数奇偶走了，所以只在还在下的时候查这一条。
+  check(aiLoop.status !== "Playing" || (aiLoop.moves % 2 === 1) === (aiLoop.turn !== aiLoop.aiColor),
+    "还在下的时候，轮到谁和手数对得上", JSON.stringify(aiLoop));
+
+  // 留一张人机对局的截图。**"电脑下得像不像话"只有眼睛能判**，
+  // 上面那些断言只能证明它合法、不卡死、算得快。
+  await sleep(200);
+  await shot("7-人机对战");
+
+  const consoleAi = drainConsole();
+  check(consoleAi.length === 0, "人机对战（含真定时器那一段）控制台没有输出", consoleAi.join("\n      "));
+
+  // 收尾：把电脑关掉，别让它影响后面任何东西
+  await ev(`(() => {
+    Game.cancelAiTimer(); Game.setSetupAi("human"); Game.setSetupMode(false);
+    Game.openSetup();
+    return 1;
+  })()`);
 
   // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态
   await ev(`(() => {
