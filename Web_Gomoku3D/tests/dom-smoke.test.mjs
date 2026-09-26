@@ -2511,17 +2511,38 @@ step("相机拖拽：顶视和底视真的够得到（原来是 ±85 夹在偏�
   const DEG = camConst("CAM_DEG_PER_PX");
   const pole = camConst("CAM_POLE");
   cam.yaw = 0; cam.pitch = 0;
-  Game.applyDrag(0, -100000);            // 一直往上拖
+  Game.applyDrag(0, 100000);             // 一直往下拖 → 相机升高 → 正俯视
   if (Math.abs(cam.pitch - pole) > 1e-9)
-    throw new Error("往上拖到底应停在 +CAM_POLE=" + pole + "，实际 " + cam.pitch);
+    throw new Error("往下拖到底应停在 +CAM_POLE=" + pole + "，实际 " + cam.pitch);
   // 真正要钉的是"离极轴有多远"：85° 时 cos=0.087（偏轴 5°），仍然明显是个斜视；
   // 89.5° 时 cos=0.0087（偏轴 0.5°），才是真的正对顶面。
   if (Math.cos(cam.pitch * Math.PI / 180) > 0.02)
     throw new Error("顶视不够正：离极轴 " + (Math.acos(Math.cos(cam.pitch * Math.PI / 180)) * 180 / Math.PI).toFixed(2) + "°");
   cam.pitch = 0;
-  Game.applyDrag(0, 100000);             // 一直往下拖
+  Game.applyDrag(0, -100000);            // 一直往上拖 → 相机降低 → 正仰视
   if (Math.abs(cam.pitch + pole) > 1e-9)
-    throw new Error("往下拖到底应停在 -CAM_POLE=" + (-pole) + "，实际 " + cam.pitch);
+    throw new Error("往上拖到底应停在 -CAM_POLE=" + (-pole) + "，实际 " + cam.pitch);
+});
+
+step("相机拖拽：两个轴同一个隐喻 —— 内容跟着手指走", () => {
+  // 【这条是 2026-09-26 补的】原来 dy 的符号是反的（`pitch - dy`），
+  // 表现是"手指往上拖、棋盘却往下转"，而上面那些断言（够不够得到顶视、
+  // 会不会震荡、会不会越界）**一条都不会红** —— 它们查的是范围，不是方向。
+  // 方向上出错的代价是"手感不对"，而手感没有别的办法钉住，只能在这里量。
+  const cam = Game.camera;
+  const DEG = camConst("CAM_DEG_PER_PX");
+  cam.yaw = 0; cam.pitch = 0;
+  Game.applyDrag(0, 100);                // 往下拖 100px
+  if (cam.pitch <= 0)
+    throw new Error("往下拖应当抬高相机（pitch 增加），实际 pitch=" + cam.pitch
+      + " —— 取反了的话手指和棋盘会对着走");
+  if (Math.abs(cam.pitch - 100 * DEG) > 1e-9)
+    throw new Error("垂直灵敏度应等于 CAM_DEG_PER_PX，实际 " + (cam.pitch / 100));
+  cam.pitch = 0;
+  Game.applyDrag(100, 0);                // 往右拖 100px
+  if (cam.yaw <= 0)
+    throw new Error("往右拖应当让 yaw 增加（和垂直同号），实际 yaw=" + cam.yaw);
+  cam.yaw = -32; cam.pitch = 24;
 });
 
 step("相机拖拽：垂直方向不会在极点附近震荡（这是被砍掉的'翻越极点'版本的病）", () => {
@@ -2530,11 +2551,12 @@ step("相机拖拽：垂直方向不会在极点附近震荡（这是被砍掉�
   const oneDeg = 1 / DEG;
   // 被砍掉的那版实现，越过极点会把状态折回极点之内，于是每一拍都再跨一次，
   // 实测序列是 89 89.95 89.05 89.95 89.05 … —— 棋盘在极点边上永远抖。
-  // 这一条就是钉住它不再发生：一直往上拖，pitch 单调不减、yaw 一次都不翻。
+  // 这一条就是钉住它不再发生：一直往下拖，pitch 单调不减、yaw 一次都不翻。
+  // （往下拖对应 pitch 增加，见上面"两个轴同一个隐喻"那条。）
   cam.yaw = 0; cam.pitch = 85;
   let prev = cam.pitch, flips = 0, prevYaw = cam.yaw;
   for (let i = 0; i < 30; i++) {
-    Game.applyDrag(0, -oneDeg);
+    Game.applyDrag(0, oneDeg);
     if (cam.pitch < prev - 1e-9)
       throw new Error("第 " + i + " 拍 pitch 倒退了：" + prev + " → " + cam.pitch + "（震荡）");
     prev = cam.pitch;

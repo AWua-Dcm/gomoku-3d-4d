@@ -1059,21 +1059,30 @@ try {
     "悔棋之后回到进行中 —— 这是终局后继续本局的唯一出路", JSON.stringify(afterClose));
 
   // ---- 7d. 相机：垂直能拖到接近正俯视，且不会震荡/越界
+  //   【2026-09-26 这一段的两个循环换了方向】相机的 dy 符号原来是反的
+  //   （`pitch - dy`）：手指往上拖，棋盘却往下转，和水平方向"内容跟着手指走"
+  //   互相矛盾。改成两轴同号之后，"往下拖"这一侧才对应正俯视。
+  //   断言查的东西一个没变（两端都停在 ±89.5、不越界、不震荡、极点附近 cos < 0.02），
+  //   变的是"哪一侧是对着手指的"—— 而且下面单独加了一条把方向约定钉住，
+  //   免得哪天再翻回去时只有手感能发现。
   const cam = await ev(`(() => {
     const c = Game.camera;
     c.yaw = 0; c.pitch = 0;
-    const seq = []; let prev = c.pitch, backwards = 0, over = 0;
-    const pole = (window.__camPole = 89.5);
+    let prev = c.pitch, backwards = 0, over = 0;
+    const pole = 89.5;
     for (let i = 0; i < 400; i++) {
-      Game.applyDrag(0, -1 / 0.32);           // 每拍往上拖 1 度
+      Game.applyDrag(0, 1 / 0.32);            // 每拍往下拖 1 度 → 应升到正俯视
       if (c.pitch < prev - 1e-9) backwards++;
       if (Math.abs(c.pitch) > pole + 1e-9) over++;
       prev = c.pitch;
     }
-    seq.push(c.pitch);
     const top = c.pitch;
-    c.pitch = 0;
-    for (let i = 0; i < 400; i++) Game.applyDrag(0, 1 / 0.32);
+    c.pitch = 0; prev = c.pitch;
+    for (let i = 0; i < 400; i++) {
+      Game.applyDrag(0, -1 / 0.32);           // 每拍往上拖 1 度 → 应降到正仰视
+      if (c.pitch > prev + 1e-9) backwards++;
+      prev = c.pitch;
+    }
     const bot = c.pitch;
     c.yaw = -32; c.pitch = 24;
     return { top: top, bot: bot, backwards: backwards, over: over,
@@ -1084,11 +1093,30 @@ try {
     JSON.stringify(cam));
   // 这条钉的是"顶面真的正对了"：85° 时 cos=0.087（还偏轴 5°），89.5° 时 cos=0.0087（偏 0.5°）。
   check(cam.cosTop < 0.02,
-    "往上拖能到接近正俯视（cos < 0.02，即离极轴不到 1.2°）",
+    "往下拖能到接近正俯视（cos < 0.02，即离极轴不到 1.2°）",
     "cos=" + cam.cosTop.toFixed(5));
   check(cam.backwards === 0,
     "垂直拖拽单调，不在极点附近来回震荡（被砍掉的'翻越极点'版本每拍倒退一次）",
     "倒退 " + cam.backwards + " 次");
+
+  // 方向约定：**内容跟着手指走**，两个轴同一个隐喻。
+  // 这条盯的是一个只在手感上才暴露的错法 —— 原来 dy 就是反的
+  // （"上拉棋盘、棋盘却往下转"），而当时所有断言都能过。
+  const dragDir = await ev(`(() => {
+    const c = Game.camera; const keepY = c.yaw, keepP = c.pitch;
+    c.yaw = 0; c.pitch = 0;
+    Game.applyDrag(0, 40);            // 往下拖 40px
+    const downPitch = c.pitch;
+    c.pitch = 0;
+    Game.applyDrag(40, 0);            // 往右拖 40px
+    const rightYaw = c.yaw;
+    c.yaw = keepY; c.pitch = keepP;
+    return JSON.stringify({ downPitch: +downPitch.toFixed(3), rightYaw: +rightYaw.toFixed(3) });
+  })()`);
+  const dd = JSON.parse(dragDir);
+  check(dd.downPitch > 0 && dd.rightYaw > 0,
+    "往下拖 → 相机抬高（pitch 增加）、往右拖 → yaw 增加：两轴都是「内容跟着手指走」",
+    dragDir + "（dy 取反的话 downPitch 会是负的，表现就是「上拉棋盘、棋盘却往下转」）");
 
   // ---- 7e. 触屏加固：拖动面必须禁掉浏览器手势
   const ta = await ev(`(() => {

@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40539_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40541_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -46,7 +46,7 @@
 
 | 操作 | 说明 |
 |---|---|
-| 左侧按住左键拖拽 | 旋转棋盘。左右能一直转；上下**拖到底就是正俯视 / 正仰视**（89.5°），不会再像以前那样停在偏轴 5° 处 |
+| 左侧按住左键拖拽 | 旋转棋盘。左右能一直转；上下**拖到底是正俯视 / 正仰视**（89.5°）。**棋盘跟着手指走**：往下拖看到顶面，往上拖看到底面 |
 | 滚轮 | 缩放 |
 | 单击 | 在当前层落子 |
 | 鼠标悬停 | 红线标出落点的 x / y / z 三条贯穿线 |
@@ -79,7 +79,7 @@ bash _verify/run-all.sh
 八步，期望结果：
 
 ```
-11733 + 19408 + 98 + 93 + 8845 + 115 + 247 = 40539 项断言全绿
+11733 + 19408 + 98 + 94 + 8845 + 115 + 248 = 40541 项断言全绿
 ```
 
 第 8 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -92,10 +92,10 @@ bash _verify/run-all.sh
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 三维规则基线（回放冻结向量） |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 四维转动一致性 |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 93 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值） |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 94 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值、拖拽方向约定） |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | 联机内核：和网页版逐格对拍 1156 组 |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | 联机 HTTP 层（本机 loopback） |
-| `node _verify/browser-check.mjs` | 247 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸） |
+| `node _verify/browser-check.mjs` | 248 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸） |
 
 后两项联机测试在第 7 步里跑，**不可跳过**（端口是随机挑的空闲端口）。
 另有三个注入验证脚本，专门证明上面那些检查**真的会红**：
@@ -219,6 +219,7 @@ bash _verify/run-all.sh
 
 ### 2026.09.26
 
+- 🐛 **v2.8.1** 手机版修复四处：① 法/俄起始界面按钮互相压住、"三轴联动"被推出屏幕右边（行被压扁 + 隐藏的四维行撑宽了格子）；② 对局界面「只看白」整颗跑出屏幕外、点不到（模式条装不下就整颗换行，六种语言都不再溢出）；③ **上下拖拽方向反了** —— 现在两个轴都是"棋盘跟着手指走"（往下拖看到顶面），和双指平移同一个隐喻；④ 语言键由「中」改成「中文」
 - 🌐 **v2.8.0** 新增日韩俄法语言：界面六种语言可切（右上角点开列表，写的是各语言的本族名），规则全文也翻了四份；单复数按语言选形（俄语三形）
 - 🐛 **v2.7.4** 修改移动端无法有效放大棋盘的问题：支持两指放大平移，双击恢复
 - 🎨 **v2.7.3** 初始界面中英文切换键与规则键移至上方

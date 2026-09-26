@@ -132,9 +132,31 @@
   #modebar {
     position: absolute; left: 14px; top: 14px;
     display: flex; align-items: center; gap: 8px;
+    /* 【装不下就整颗换行，按键永远不许被压窄 —— 手机版"只看白不见了"的根因】
+       原来既没有 flex-wrap 也没有右边约束，而按键是可压缩的（flex-shrink 默认 1），
+       于是 393px 竖屏下发生两件事，一件比一件糟：
+         · 英文/法语/俄语的按键【文字自己折成两行】（"Couches / fantômes"），
+           条子被撑到 56~71px 高，看着像没对齐；
+         · 按键压到自己的 min-content（= 最长的那个词）之后就压不动了，而这时
+           条子的总宽**已经超过视口**：实测法语 476.6px / 俄语 460.1px，
+           可用只有 379px。最后那颗「只看白」被推出屏幕右侧 87px（俄语 70px），
+           而 #view 是 overflow:hidden —— 它不是"挤扁了"，是**整颗看不见、也点不到**。
+       现在：`flex-wrap: wrap` 让装不下的按键整颗落到下一行（文字不再自己折），
+       `max-width: calc(100% - 20px)` 给右边留出 20px（左边是 14px 的 left，
+       右边留 20 是为了让"顺带换行"这件事不要卡在整数像素上：中文竖屏实测自然宽
+       367px，留 14px 时只剩 365px 可用，会为了 2px 白折一行）。
+       代价是条子变高：中文竖屏仍是一行 42px 不变，英/法/俄竖屏 74px（占三维视图 21%）。
+       小屏那一档另外把按键字号收了一档（见 --compact 段），能少折一行是一行。 */
+    flex-wrap: wrap;
+    max-width: calc(100% - 20px);
     background: var(--overlay); border: 1px solid var(--border);
     border-radius: 6px; padding: 7px 10px;
   }
+  /* 【按键不许被压窄，一行放不下就整颗换行】这条和上面那条是一件事的两半：
+     少了它，flex 会先按默认的 flex-shrink 把每颗键压到 min-content
+     （文字在按键【内部】折行，正是改之前那副样子），换行反而永远轮不到。
+     .modeSep 那根竖线本来就是这个值，这里只是让它对整条模式条都成立。 */
+  #modebar > * { flex: 0 0 auto; }
   /* 模式条里「看谁」那组和「怎么看」那组之间的竖线。高度写死一个 18px 而不是 100%：
      条子里有 27px 高的按钮和十几个字的标签，拉满会随内容高度变，看起来像没对齐。
 
@@ -305,6 +327,22 @@
     justify-content: safe center;
   }
   #setup.off { display: none; }
+  /* 【每一行都不许被压扁 —— 手机版"按钮叠在一起"的根因就是这条缺失】
+     #setup 是定高的纵向 flex 容器，子项默认 `flex-shrink: 1`。内容一旦高过视口
+     （手机上必然如此：实测 393×852，中文内容 716px / 法语 866 / 俄语 959，
+     而 #setup 只有 494px），每一行都会被压回自己的 `min-height: 40px`，
+     **但行里面的内容压不动**：折成两行的"谁先手"要 70px、2×2 的冷却格要 70px，
+     它们不会跟着变矮，于是从行盒里**溢出来盖住下一行** —— 表现就是
+     "白棋先手"那颗键压在下一条尺寸行的输入框上（法语、俄语截图里那一幕）。
+
+     改之前 `overflow-y: auto` 那条规则一直在，只是从来没生效过：flex 先把内容
+     压到容器高度以内，滚动条就没有出现的理由了。`flex: 0 0 auto` 之后行高一律取
+     内容的自然高度，装不下的部分真正交给滚动 —— 这才是这块布局本来的设计意图
+     （`justify-content: safe center` 那段注释写的就是"溢出时从顶部开始"）。
+
+     代价是**手机上起始界面要滚动才能看到「开始游戏」**（这是诚实的：那块内容
+     本来就比屏幕高）。小屏那一档另外把行距和标题收了一档，见下面 --compact 那段。 */
+  #setup > * { flex: 0 0 auto; }
   /* 演示棋盘角落的铭牌。少了它，从对局里点「设置」进来的人会以为自己的棋局还在 ——
      左边明明还摆着一盘棋。 */
   #previewTag {
@@ -346,7 +384,16 @@
      两种模式下都是零空白 —— 留空槽位的话两种模式各会多出一条 58px 的空当。
      副作用是好的：单元格宽度取两条里较宽的那条（三维行），所以两种模式下
      "棋盘尺寸"这个标签的横坐标**也**是同一个；不叠的话它会随各自行的宽度左右挪。 */
-  #dimsSlot { display: grid; }
+  /* 【轨道宽度必须显式夹住】`grid-template-columns` 不写时那一条隐式轨道是 auto
+     （= minmax(auto, max-content)），它的 **min 是内容的最小尺寸**，而"最小尺寸"
+     这一层【算上了藏着的那条四维行】：`visibility: hidden` 的盒子照样参与布局，
+     这正是上面"保留槽位"那套做法的前提。于是 #dimRange4d 那条 nowrap 的长提示
+     （法语 572px）把格子顶到 572px 宽，三维那条可见的行也跟着铺到 572px ——
+     实测法语三维下"三轴联动"和第三个输入框被推出屏幕右边 120px（英文 46 / 俄语 68），
+     而 #setup 被撑出横向滚动条，整页可以左右拖。
+     `minmax(0, 1fr)` 把轨道的下界钉成 0：容器有确定宽度（= #setup 的内容盒）时，
+     轨道就被夹在容器宽度内，行内自己按 flex-wrap 折行。 */
+  #dimsSlot { display: grid; grid-template-columns: minmax(0, 1fr); }
   #dimsSlot > .row { grid-area: 1 / 1; }
   /* 起始界面里每一行的按钮**始终**是粗体，选中态只改底色和字色。
      起因是一个只有真实排版引擎才能发现的 3px 位移：button.sel 带 font-weight:600，
@@ -387,6 +434,18 @@
      写死的话它会和内核的实际约束各自漂移，而"范围"这种东西漂移了没人会发现，
      只会表现为"填进去了但开不了局"。 */
   .hint { color: var(--dim); font-size: 12.5px; white-space: nowrap; flex: 0 0 auto; }
+  /* 【四维那条范围提示是唯一的例外：它必须能折行】
+     它是这一整块里最长的一句（法语 "8 – 50 · doit être cubique（转层要求另两轴等长）"
+     实测 572px），而 .hint 的 nowrap + flex: 0 0 auto 让它连一个字都不肯让 —— 后果见
+     上面 #dimsSlot 那条：把整个格子顶宽，三维模式下也跟着溢出。
+     `flex-shrink: 1` 是这里的关键：`flex: 0 0 auto` 下基准尺寸就是 max-content，
+     光把 white-space 改成 normal 是没用的（不换行的 max-content 仍然是整句）；
+     允许收缩 + 允许折行，它才会在格子宽度里排成两三行。
+     【折行不会破坏"切模式按钮不动"】两条尺寸行叠在同一个格子里、格子高度取两者的
+     max，而这两条**永远都在**（隐藏的那条只是 visibility: hidden，照样参与布局）——
+     所以"这条提示占几行"和"当前是三维还是四维"无关，格子高度在两种模式下恒等。
+     三维那条（#dimRange，最长是俄语 "Допустимо: 8 – 50"）短得多，保持 nowrap 不动。 */
+  #dimRange4d { white-space: normal; flex-shrink: 1; min-width: 0; }
   /* 转动冷却行的说明。**宽度写死**：它的文字在两种模式下不一样长（三维 6 字、
      四维 9 字），不写死的话这一行的总宽会变，而 .row 是居中的 ——
      "转动冷却"四个字会跟着左右挪。写死了，两种模式下它一个像素都不动。 */
@@ -448,13 +507,21 @@
   /* 按钮宽度【写死成一个值】：它上面写的是当前语言，切换时不能自己变宽把右边的
      「具体规则」挤走（这是这个工程反复在消的那类跳动）。
 
-     【为什么标签是 中 / EN / 日 / 한 / RU / FR 这种短写法】按钮和状态行抢同一行的宽度：
+     【为什么标签是 中文 / EN / 日 / 한 / RU / FR 这种短写法】按钮和状态行抢同一行的宽度：
      #statusRow 早先用 layoutTopRight() 实测出的留白给这两个按钮让位，按钮宽一寸、
      状态行就窄一寸。实测（393×852）：按钮写完整语言名（日本語 / 한국어 / Русский）
      时它要 64px，中文状态行"黑棋落子（第 1 手）"当场折成两行、行高 34 → 58px，
      棋盘被往下推；法语更是排到三行 84px。短标签之后按钮回到 52px，
      中文和英文都恢复到改动前的一行。
-     完整的语言名写在下拉列表里 —— 需要看清的地方是列表，不是这个按钮。 */
+     完整的语言名写在下拉列表里 —— 需要看清的地方是列表，不是这个按钮。
+
+     【中文那一格由「中」改成「中文」是 2026-09-26 的事】单一个"中"字读者得先猜
+     它是"中文"还是"中间"；改成两个字之后，它和 EN / 日 / 한 / RU / FR 一样是
+     "两个字以内的本族短名"。宽度不受影响 —— 按钮是写死宽的，
+     而两字的实测宽度（13px 字 26px、12.5px 字 25px）仍在内容盒内
+     （桌面 28px / 紧凑 26px），改前改后按钮一个像素都不动。
+     剩下三个单字/双字的（日 / 한 / РУ）等哪天一起改 —— 一次只动一处，
+     不然"状态行被挤成两行"到底是谁干的就说不清了。 */
   #langBtn { font-size: 13px; padding: 7px 11px; width: 52px; }
 
   /* 语言列表。锚在 #langBtn 上（#topRight 是 fixed，所以绝对定位以它为参照），
@@ -668,8 +735,32 @@
   @media (pointer: coarse), (max-width: 700px) {
     :root { --compact: 1; }
 
+    /* ---------- 起始界面：行距和标题各收一档 ----------
+       `#setup > * { flex: 0 0 auto }` 那条把"压扁"换成了"滚动"，代价是手机上
+       一屏看不全（实测 393×852：中文内容 716px，法语 866，俄语 959，而可见区只有 494px）。
+       这里把不承载信息的那些高度收一收 —— 省下来的全是"白"，不是内容：
+         · 行距 18 → 12px（7 个间隙，省 42px）
+         · 外框内边距 26/30 → 16/22px（省 20px，左右各多让出 8px 给正文）
+         · 标题 38 → 30px、印章 46 → 38px、副标题 14.5 → 13.5px（省约 20px）
+       合计约 80px。**这不是"想办法塞进一屏"** —— 俄语那样的一屏本来就不可能，
+       滚动是设计的一部分（见上面 #setup 那段）。收这一档只是少滚一点。
+
+       320px 那一档在后面还会把左右内边距再放到 20px，那条在源码里更靠后，照样赢。 */
+    #setup { gap: 12px; padding: 16px 22px; }
+    #setup h1 { font-size: 30px; }
+    #setup .sub { font-size: 13.5px; }
+    .seal { width: 38px; height: 38px; font-size: 22px; }
+
     button { padding: 6px 10px; font-size: 12.5px; }
     button.mini { padding: 4px 8px; font-size: 12px; }
+    /* 模式条的按键再收一档（在 button.mini 之后，才盖得住它）。
+       【上下内边距刻意不动，还是 4px】：11px 字 + 8px 内边距 + 2px 边框 = 25px 高，
+       正好压在上面那条"25px 是还能稳稳点中的下限"上。想再窄只能动左右内边距 ——
+       12→11px 的字加 8→7px 的左右内边距，整个条子实测窄 27px（中文 367→340）。
+       这一档换来的是【少折一行】：法语横屏手机上从 4 行降到 3 行（107→72px）。
+       竖屏的法/俄仍然是两行 —— 那是一行真放不下（要 477px，可用 373px），
+       不是这一档没使劲。 */
+    #modebar button.mini { font-size: 11px; padding: 4px 7px; }
     .rotRow button { padding: 4px 7px; font-size: 12px; }
     .rotRow button.mini { padding: 4px 9px; }
     /* 主按钮和输入框是【按 id 写字号的】，元素选择器盖不住，得单独点名。
@@ -3704,7 +3795,7 @@ let LANG = "zh";
  *            按钮宽度写死成一个值（见 #langBtn 的 CSS），短标签换语言时不撑破它。
  */
 const LANG_INFO = {
-  zh: { tag: "zh-CN", cls: "lang-zh", locale: "zh-CN", name: "中文", short: "中", rulesId: "rulesSrc" },
+  zh: { tag: "zh-CN", cls: "lang-zh", locale: "zh-CN", name: "中文", short: "中文", rulesId: "rulesSrc" },
   en: { tag: "en", cls: "lang-en", locale: "en-US", name: "English", short: "EN", rulesId: "rulesSrcEn" },
   ja: { tag: "ja", cls: "lang-ja", locale: "ja-JP", name: "日本語", short: "日", rulesId: "rulesSrcJa" },
   ko: { tag: "ko", cls: "lang-ko", locale: "ko-KR", name: "한국어", short: "한", rulesId: "rulesSrcKo" },
@@ -6650,11 +6741,26 @@ const Game = {
    *
    * yaw 无界（水平方向能一直转，这是转盘相机的本意），pitch 夹在 ±CAM_POLE。
    * 为什么不做"越过极点翻到另一面"，见 CAM_POLE 那段 —— 那是几何奇点，不是没写好。
+   *
+   * 【dy 的符号 2026-09-26 改过一次：原来是 `pitch - dy`，现在两轴同号】
+   * 水平和垂直必须是同一套隐喻，而这个隐喻在水平那边早就定死了：**内容跟着手指走**
+   * （双指平移那条方向断言用的就是这个，缩略条、二维棋盘也都一致）。
+   * `pitch - dy` 破坏的正是这一点：手指往上拖（dy<0）反而让相机升高，
+   * 于是棋盘**朝着手指的反方向转**——"上拉棋盘、棋盘往下转，下拉往上转"。
+   *
+   * 换算一下就很清楚：pitch 是相机的高度角，升高它 = 更接近正俯视。
+   * 屏幕 y 向下、世界 y 向上，所以往下拖（dy>0）要**抬高**相机（`+dy`），
+   * 棋盘正面才会跟着手指往下走。
+   *
+   * 这条也是三家主流的取值：three.js 的 OrbitControls 在 `rotateUp()` 里
+   * 让 `sphericalDelta.phi -= angle`（phi 是从天顶量起的极角，往下拖 phi 变小 =
+   * 相机升高 = 内容往下走），Babylon 的 ArcRotateCamera 同向。
+   * 换句话说【两轴同号不是顺手改的，是回到了"直接操纵"这个共同约定】。
    */
   applyDrag(dx, dy) {
     const cam = this.camera;
     cam.yaw += dx * CAM_DEG_PER_PX;
-    cam.pitch = Math.max(-CAM_POLE, Math.min(CAM_POLE, cam.pitch - dy * CAM_DEG_PER_PX));
+    cam.pitch = Math.max(-CAM_POLE, Math.min(CAM_POLE, cam.pitch + dy * CAM_DEG_PER_PX));
   },
 
   /**
