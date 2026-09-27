@@ -141,10 +141,10 @@ Un tour en sens antihoraire équivaut à trois tours en sens horaire. Quatre tou
 
 **Une rotation se fait en deux temps : « Tourner » montre le résultat, « Confirmer » le valide.**
 Après « Tourner », le plateau **pivote aussitôt pour que vous le voyiez**, mais le coup n'est pas joué :
-il ne consomme pas votre tour, ne compte pas comme un coup et n'entre pas dans l'historique. Pendant
-cet aperçu, les boutons « Tourner » et « Restaurer la rotation » cèdent la place à **« Confirmer »** et
-**« Annuler »**, cerclés tous les deux pour signaler la décision en attente : « Confirmer » tourne pour
-de bon, « Annuler » remet le plateau exactement comme avant. On ne peut pas poser de pierre pendant
+il ne consomme pas votre tour, ne compte pas comme un coup et n'entre pas dans l'historique.
+**« Confirmer »** et **« Annuler »** sont **toujours sur le panneau**, grisés et inertes ; à ce
+moment-là ils s'allument et s'entourent d'un cerne, pour signaler la décision en attente :
+« Confirmer » tourne pour de bon, « Annuler » remet le plateau exactement comme avant. On ne peut pas poser de pierre pendant
 l'aperçu : le plateau est déjà montré tourné, et la pierre tomberait ailleurs qu'où vous visiez.
 
 ### 10.2 L'effet d'une rotation
@@ -193,13 +193,14 @@ Une rotation ne compte pas comme « le N-ième coup » ; le N-ième coup désign
 | Action | Effet |
 |---|---|
 | Annuler `Z` | Si le dernier coup est une rotation, la rotation est retirée, si c'est une pose, la pose est retirée ; on peut annuler jusqu'avant le début de la partie |
-| Rétablir la rotation `Y` | Disponible seulement quand « le dernier coup est exactement une rotation » |
+| Rétablir la rotation `Y` | Disponible seulement quand « le dernier coup est exactement une rotation ». **Clavier uniquement — ce bouton n'est plus sur le panneau** (cette place revient à Confirmer / Annuler) ; à la souris ou au doigt, utilisez « Annuler », qui retire cette rotation quand c'est le dernier coup |
 
 Dès que quelqu'un pose un pion, cette rotation est acquise et ne peut plus être retirée à part — sinon elle deviendrait une machine à remonter le temps qui traverse plusieurs coups.
 
-> **Elle revient sur le panneau dès que vous appuyez sur « Confirmer ».** Les deux boutons de
-> l'aperçu **prennent sa place** le temps de l'aperçu, ils ne la suppriment pas. Une fois la rotation
-> acquise, c'est ce bouton qui l'annule.
+> **Pour retirer une rotation déjà acquise, utilisez « Annuler »** (`Z`, ou le bouton). Le panneau
+> avait un bouton dédié « Rétablir la rotation » ; cette place revient maintenant à Confirmer et
+> Annuler, mais la possibilité n'a pas disparu — quand le dernier coup est exactement une rotation,
+> c'est « Annuler » qui la retire.
 
 Après une annulation, la recharge revient elle aussi à son état d'avant la rotation.
 

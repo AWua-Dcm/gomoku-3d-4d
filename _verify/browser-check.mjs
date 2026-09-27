@@ -2474,8 +2474,8 @@ try {
     turn: Game.session.currentPlayer, moves: Game.session.moveCount,
     goDisabled: document.getElementById("rotGo").disabled,
     goOff: document.getElementById("rotGo").classList.contains("off"),
-    reOff: document.getElementById("rotRestore").classList.contains("off"),
-    reDisabled: document.getElementById("rotRestore").disabled,
+    cfDisabled: document.getElementById("rotConfirm").disabled,
+    caDisabled: document.getElementById("rotCancel").disabled,
     cfOff: document.getElementById("rotConfirm").classList.contains("off"),
     caOff: document.getElementById("rotCancel").classList.contains("off"),
     attn: document.getElementById("rotConfirm").classList.contains("attn"),
@@ -2503,10 +2503,74 @@ try {
   })()`));
   // 前置：四个键都量得到（面板没被挤出屏幕/被别的元素压住），且「执行转动」真的可点。
   // 少了 disabled 这一条，一个"按钮是灰的"会让下面所有点击断言全红，而看不出为什么。
-  check(setup4d.vis.length === 2 && setup4d.vis[0][2] > 20 && setup4d.vis[0][3] > 10 &&
-        !setup4d.goOff && setup4d.cfOff && !setup4d.goDisabled,
-    "前置：四维面板上的「执行转动」真的在屏幕上、且确定/取消此刻是收起的",
-    JSON.stringify(setup4d));
+  check(setup4d.vis.length === 3 && setup4d.vis[0][2] > 20 && setup4d.vis[0][3] > 10 &&
+        !setup4d.goOff && !setup4d.goDisabled,
+    "前置：四维面板上那三个键（执行转动 / 确定操作 / 取消操作）都真的在屏幕上",
+    JSON.stringify(setup4d.vis));
+  // 留一张"平时"的图：确定/取消是什么样子只有眼睛能判（灰到什么程度、会不会看着像坏的）
+  await shot("10-四维转动面板");
+  check(setup4d.cfDisabled && setup4d.caDisabled && !setup4d.attn,
+    "平时「确定操作」「取消操作」是灰的、点不动的（不用先点一下什么才生效）",
+    JSON.stringify({ cf: setup4d.cfDisabled, ca: setup4d.caDisabled, attn: setup4d.attn }));
+
+  // 【三个键挤不挤得下】「执行转动 / 确定操作 / 取消操作」都是四个汉字，
+  // 而面板在竖屏手机上只有一百多像素宽。窄一档就得当场量：横向不许溢出、
+  // 每个键不许被压成两行（压成两行整块面板会变高，把棋盘挤扁）。
+  //
+  // 【六种语言都要过，取最差的那一种】这是这个工程里反复踩过的一条：只测中文的话，
+  // 俄语的「Подтвердить」比「确定操作」长一倍，中文过了一切正常、俄语被切掉半截。
+  // 判据用 scrollWidth > clientWidth —— 按钮上写了 overflow:hidden，
+  // 放不下的字会被**切掉而不是换行**，那种坏法眼睛很难发现（切在字中间）。
+  for (const vw of [393, 320]) {
+    await send("Emulation.setDeviceMetricsOverride",
+      { width: vw, height: 780, deviceScaleFactor: 2, mobile: true });
+    await ev(`(() => { Game.resize(); Game.refreshRotPanel(); return 1; })()`);
+    await sleep(200);
+    const keep = await ev(`Game.lang`);
+    let worst = null, clipped = null, worstH = 0;
+    for (const lang of ["zh", "en", "ja", "ko", "ru", "fr"]) {
+      await ev(`(() => { Game.setLang("${lang}"); Game.refreshRotPanel(); return 1; })()`);
+      const m = JSON.parse(await ev(`(() => {
+        const ids = ["rotGo", "rotConfirm", "rotCancel"];
+        const panel = document.getElementById("rotPanel").getBoundingClientRect();
+        const boxes = ids.map((id) => { const e = document.getElementById(id);
+          const q = e.getBoundingClientRect();
+          return { id: id, l: Math.round(q.left), r: Math.round(q.right), h: Math.round(q.height),
+                   over: e.scrollWidth - e.clientWidth }; });
+        return JSON.stringify({ vw: window.innerWidth, panelR: Math.round(panel.right),
+          boxes: boxes, txt: ids.map((id) => document.getElementById(id).textContent).join("·"),
+          docOver: document.documentElement.scrollWidth - window.innerWidth });
+      })()`));
+      const mostOver = Math.max.apply(null, m.boxes.map((b) => b.over));
+      if (!worst || mostOver > worst.over) worst = { lang: lang, over: mostOver, txt: m.txt,
+        w: m.boxes.map((b) => b.r - b.l), right: Math.max.apply(null, m.boxes.map((b) => b.r)),
+        panelR: m.panelR, docOver: m.docOver };
+      if (mostOver > 0 && !clipped) clipped = lang + " 的「" + m.txt + "」";
+      worstH = Math.max(worstH, Math.max.apply(null, m.boxes.map((b) => b.h)));
+    }
+    await ev(`(() => { Game.setLang("${keep}"); Game.refreshRotPanel(); return 1; })()`);
+    // 【先证明这次测量不是空转】量到 0 宽 0 高的话，下面几条会因为"0 ≤ 阈值"永远绿。
+    check(worst.w.every((w) => w > 20) && worstH > 10,
+      "前置：窄屏 " + vw + "px 下那三个键真的量得到（不是 0 宽 0 高的空壳）",
+      JSON.stringify(worst));
+    // 【别在这里写"还空多少 px"】scrollWidth 在 overflow:hidden 上会被夹到 clientWidth，
+    // 所以 over 恒 ≥ 0，量不出"还剩多少余量"。0 只说明"没被切" —— 而这正是要的判据。
+    console.log("  " + vw + "px 宽（六语最差 " + worst.lang + "）：三个键宽 " +
+      worst.w.join("/") + "，高 " + worstH + "，最长的一个超出 " + worst.over + "px");
+    check(!clipped && worst.over <= 0,
+      "四维面板三个键在 " + vw + "px 宽的屏上、六种语言里都不被切字",
+      clipped ? clipped + " 被切掉了 " + worst.over + "px" : "");
+    check(worst.docOver <= 0 && worst.right <= worst.panelR + 1,
+      "四维面板在 " + vw + "px 宽的屏上不横向溢出（六语最差是 " + worst.lang + "）",
+      "最右 " + worst.right + " / 面板右沿 " + worst.panelR + "，整页溢出 " + worst.docOver + "px");
+    check(worstH <= 40,
+      "四维面板在 " + vw + "px 宽上三个键都没有被压成两行（六种语言）",
+      "最高的一个 " + worstH + "px");
+  }
+  await send("Emulation.clearDeviceMetricsOverride");
+  await send("Emulation.setTouchEmulationEnabled", { enabled: true });
+  await ev(`(() => { Game.resize(); Game.refreshRotPanel(); return 1; })()`);
+  await sleep(250);
 
   await clickEl("rotGo");
   const preview = JSON.parse(await ev(rotSnap));
@@ -2516,16 +2580,16 @@ try {
     JSON.stringify({ preview: preview.preview, rots: preview.rots, turn: preview.turn }));
   check(preview.board !== setup4d.board,
     "预览期间盘面是真的变了（看得见效果，不是只翻了个状态位）");
-  check(preview.goOff && preview.reOff && !preview.cfOff && !preview.caOff && preview.attn,
-    "预览中两个键换位：执行/恢复退场，确定/取消上场且带亮圈",
-    JSON.stringify({ goOff: preview.goOff, cfOff: preview.cfOff, attn: preview.attn }));
+  check(preview.goDisabled && !preview.cfDisabled && !preview.caDisabled && preview.attn,
+    "预览中：执行转动变灰（不许再开一个预览），确定/取消亮起来并戴上亮圈",
+    JSON.stringify({ go: preview.goDisabled, cf: preview.cfDisabled, attn: preview.attn }));
   // 【这一行不许动】换上去的是同样数目的 flex:1 格子，所以位置尺寸必须逐像素相同 ——
   // 一旦有人给新键加了 padding 或者忘了 flex，手机板上这一行就会跳，这条会当场红。
   check(JSON.stringify(preview.row) === JSON.stringify(setup4d.row) &&
         JSON.stringify(preview.vis) === JSON.stringify(setup4d.vis),
-    "换键时那一行的位置和尺寸一个像素都不动（手机端按钮错位的老毛病）",
+    "点亮前后那一行的位置和尺寸一个像素都不动（手机端按钮错位的老毛病）",
     "行 " + JSON.stringify(setup4d.row) + " → " + JSON.stringify(preview.row) +
-    "；可见格子 " + JSON.stringify(setup4d.vis) + " → " + JSON.stringify(preview.vis));
+    "；三个格子 " + JSON.stringify(setup4d.vis) + " → " + JSON.stringify(preview.vis));
   await shot("9-四维转动预览");
 
   // 预览期间点棋盘：不许落子（棋盘是转过的样子，照它点会落错地方）
@@ -2544,10 +2608,10 @@ try {
   check(!cancelled.preview && cancelled.board === setup4d.board && cancelled.rots === 0,
     "点「取消操作」：盘面逐格还原，等于什么都没发生过",
     JSON.stringify({ preview: cancelled.preview, rots: cancelled.rots }));
-  check(JSON.stringify(cancelled.row) === JSON.stringify(setup4d.row) && !cancelled.goOff &&
-        cancelled.cfOff && JSON.stringify(cancelled.vis) === JSON.stringify(setup4d.vis),
-    "取消之后那一行换回原样、几何仍然没动",
-    JSON.stringify(cancelled.row) + " / " + JSON.stringify(cancelled.vis));
+  check(cancelled.cfDisabled && cancelled.caDisabled && !cancelled.goDisabled &&
+        JSON.stringify(cancelled.vis) === JSON.stringify(setup4d.vis),
+    "取消之后确定/取消退回灰显、执行转动重新可点，几何仍然没动",
+    JSON.stringify(cancelled.vis));
 
   await clickEl("rotGo");
   await clickEl("rotConfirm");
@@ -2558,26 +2622,18 @@ try {
     JSON.stringify({ preview: committed.preview, rots: committed.rots, turn: committed.turn }));
   check(committed.board === preview.board,
     "确定之后盘面和预览时看到的一模一样（先还原再落地，两步不能互相吃掉）");
-  check(committed.goOff === false && committed.cfOff === true && committed.attn === false,
-    "落地之后两个键换回去、亮圈收掉",
-    JSON.stringify({goOff: committed.goOff, cfOff: committed.cfOff, attn: committed.attn}));
+  check(committed.attn === false && committed.cfDisabled && committed.caDisabled,
+    "落地之后亮圈收掉、两个键退回灰显不可点",
+    JSON.stringify({ attn: committed.attn, cf: committed.cfDisabled }));
 
-  // 【「恢复本次转动」不能因为加了这两步就再也点不到】它是确定之后的后悔药：
-  // 确定完那一行会换回去，这时候它必须**看得见、而且点得动**。
-  // 只有人和人下的时候有这条路 —— 人机模式下它一直是禁用的，那是另一条早就定下的规矩
-  // （撤销电脑刚做的那次转动，撤完回合又回到电脑，电脑立刻再转一次，看起来像按钮坏了）。
-  check(!committed.reOff && !committed.reDisabled,
-    "确定之后「恢复本次转动」回到那一行，而且是可以点的（预览这两步没把它顶掉）",
-    JSON.stringify({ reOff: committed.reOff, reDisabled: committed.reDisabled }));
-  await clickEl("rotRestore");
+  // 【确定之后还能不能撤回来】面板上那个「恢复本次转动」已经让位给了这两个键，
+  // 但**能力不能跟着按钮一起消失**：最后一步恰好是转动时「悔棋 Z」撤的就是它。
+  // 这一条真点「悔棋」那个按钮，证明那条路是通的。
+  await clickEl("undoBtn");
   const restored = JSON.parse(await ev(rotSnap));
   check(restored.rots === 0 && restored.board === setup4d.board && !restored.preview,
-    "点「恢复本次转动」真的把刚才那一次撤掉了（盘面逐格还原）",
+    "确定之后仍然撤得回来：点「悔棋」就把刚才那次转动撤掉了（盘面逐格还原）",
     JSON.stringify({ rots: restored.rots, preview: restored.preview }));
-  check(JSON.stringify(restored.row) === JSON.stringify(setup4d.row) && !restored.goOff &&
-        !restored.reOff && restored.cfOff,
-    "撤完之后那一行仍然停在平时那两个键上（没有卡在确定/取消）",
-    JSON.stringify(restored.row));
 
   const consoleRot = drainConsole();
   check(consoleRot.length === 0, "四维转动那一节控制台没有输出", consoleRot.join("\n      "));

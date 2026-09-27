@@ -303,12 +303,27 @@
   /* 【gap 从 6 加到 12】为了让预览中那两个键各戴各的亮圈。亮圈是"往外扩 4px"画的
      （2px 线宽 + 2px 空隙），相邻两个键各扩 4px 就是 8px —— 6px 的间距兜不住，
      两个圈会连成一个框，看起来像"整行被选中"而不是"这两个键在等你决定"。
-     12px 留下 4px 的空档，两个圈才是分开的（实测扫过像素：10px 时只隔 1px，糊在一起）。 */
+     12px 留下 4px 的空档，两个圈才是分开的（实测扫过像素：10px 时只隔 1px，糊在一起）。
+     【这一行是三个键】执行转动 + 确定操作 + 取消操作。窄屏（393px 的手机）下每个
+     只剩五十几像素，"确定操作"四个字放不下 —— 所以下面有一档 --compact 收字号。 */
   .rotRow { display: flex; align-items: center; gap: 12px; }
-  .rotRow button { flex: 1 1 0; padding: 6px 8px; font-size: 13px; }
-  /* 预览中顶替上来的那两个键（见 #rotPanel 里那段 HTML 注释）：平时不显示，
-     显示时正好顶掉同样数目的格子，所以整行几何不变。 */
-  .rotRow button.off { display: none; }
+  .rotRow button { flex: 1 1 0; padding: 6px 8px; font-size: 13px; min-width: 0; }
+  /* 【min-width: 0 和 flex: 1 1 0 一起用】默认的 min-width:auto 会让 flex 子项
+     撑到内容宽度，"确定操作"四个字就是 52px，三个键加起来比面板还宽 →
+     整行横向溢出（手机端的经典故障）。设成 0 之后按钮可以被压窄，
+     再用 white-space: nowrap 把文字挡在按钮里面（见下面 .rotRow button 的文字处理）。 */
+  #rotPanel .rotRow button { white-space: nowrap; overflow: hidden; }
+  /* 窄屏收一档字号，让四个字放得下。和 #setup 的 --compact 是两套，互不影响。 */
+  @media (max-width: 460px) {
+    .rotRow { gap: 8px; }
+    .rotRow button { font-size: 11.5px; padding: 6px 4px; }
+  }
+  /* 320px 那一档再收一点：三个键这时候各只有 89px，而六种语言里最长的一个
+     实测要 76px（俄语的「Оставить」）。留 13px 余量，字体的细微差别吃不掉它。 */
+  @media (max-width: 360px) {
+    .rotRow { gap: 6px; }
+    .rotRow button { font-size: 11px; padding: 6px 2px; }
+  }
   /* 亮圈：转动已经转上去了、还没落地，这时候最要紧的就是"你还有个待决定的操作"。
      用 outline + outline-offset 而不是 box-shadow。box-shadow 是紧贴着边框画的，
      而这两个键里有一个本来就填着强调色（.sel）—— 强调色的圈套在强调色的块上等于看不见。
@@ -1046,8 +1061,8 @@
 
 **转动是两步：先「执行转动」看效果，再「确定操作」才算数。**
 点「执行转动」之后，棋盘会**当场转给你看**，但这一手还没落地 —— 不消耗回合、
-不算一步、也没记进棋谱。这时候原来那两个键（执行转动 / 恢复本次转动）会换成
-「确定操作」和「取消操作」，并带上亮圈提醒你还有个没做完的决定：
+不算一步、也没记进棋谱。「确定操作」和「取消操作」两个键**一直在面板上**，平时是灰的、点不动；
+这时候它们亮起来，周围多一圈亮圈，提醒你还有个没做完的决定：
 「确定操作」才真的转过去，「取消操作」把棋盘原样转回来，等于什么都没发生。
 预览期间不能落子 —— 那时候棋盘是转过的样子，照着它点会落错地方。
 
@@ -1098,12 +1113,13 @@
 | 操作 | 效果 |
 |---|---|
 | 悔棋 `Z` | 最后一步是转动就撤转动，是落子就撤落子，可以一直悔到开局前 |
-| 恢复本次转动 `Y` | 只在"最后一步恰好是转动"时可用 |
+| 恢复本次转动 `Y` | 只在"最后一步恰好是转动"时可用。**只有键盘，面板上没有这个按钮** —— 那个位置让给了「确定操作」「取消操作」；鼠标和触屏请用「悔棋」，最后一步是转动时它撤的就是那次转动 |
 
 一旦有人落了子，那次转动就算落地了，不能再单独撤回 —— 否则它会变成一台横跨很多手的时光机。
 
-> **「确定操作」之后它就回到面板上了。** 预览中那两个键是**顶替**它的位置，不是把它取消掉 ——
-> 确定完这一手落地了，它就是这一手的后悔药。
+> **转动落地之后想反悔，用「悔棋」**（`Z` 或那个按钮）。面板上原来有个专键「恢复本次转动」，
+> 现在那个位置让给了「确定操作」「取消操作」，能力本身没丢 —— 最后一步恰好是转动时，
+> 悔棋撤的就是它。
 
 撤销之后，冷却也一起回到转动之前。
 
@@ -1308,10 +1324,10 @@ One counterclockwise turn equals three clockwise turns. Four turns equal no turn
 
 **Rotating takes two steps: "Rotate" shows you the result, "Confirm" makes it count.**
 After you press Rotate the board **turns immediately so you can see it**, but the move has not landed:
-it does not use up your turn, does not count as a move, and is not written into the record. While that
-preview is up, the Rotate and Restore buttons are replaced by **Confirm** and **Cancel**, both ringed to
-flag the decision you still owe: Confirm turns it for real, Cancel turns the board straight back, as if
-nothing had happened. You cannot place a stone during the preview — the board is showing the rotated
+it does not use up your turn, does not count as a move, and is not written into the record. **Confirm**
+and **Cancel** are always on the panel, greyed out and inert; at that moment they light up and gain a
+ring, flagging the decision you still owe: Confirm turns it for real, Cancel turns the board straight
+back, as if nothing had happened. You cannot place a stone during the preview — the board is showing the rotated
 position, so clicking it would put your stone somewhere other than where you aimed.
 
 ### 10.2 What a rotation does
@@ -1361,13 +1377,14 @@ A rotation does not count as move number N; the Nth move always means the Nth pl
 | Action | Effect |
 |---|---|
 | Undo `Z` | Takes back the last step — a rotation or a placement — and can go back to before the game started |
-| Restore rotation `Y` | Available only when the last move was exactly a rotation |
+| Restore rotation `Y` | Available only when the last move was exactly a rotation. **Keyboard only — there is no such button on the panel** (that slot belongs to Confirm / Cancel); with a mouse or on a touch screen use Undo, which takes back that rotation when it is the last move |
 
 Once someone places a stone, that rotation has landed and can no longer be taken back on its own — otherwise it would become a
 time machine spanning many moves.
 
-> **It is back on the panel once you press Confirm.** The preview pair **takes its place** while the
-> preview is up; it does not remove it. Once the rotation has landed, that button is its undo.
+> **To take back a landed rotation, use Undo** (`Z`, or the button). The panel used to have a
+> dedicated "Restore rotation" key; that slot now belongs to Confirm and Cancel, and the capability
+> itself is not gone — when the last move was exactly a rotation, Undo takes back that rotation.
 
 Undoing also returns the cooldown to what it was before the rotation.
 
@@ -1579,9 +1596,9 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 
 **回転は二段階です：「回転」で結果を見て、「確定」で初めて成立します。**
 「回転」を押すと盤面は**その場で回って見えます**が、この手はまだ成立していません ——
-手番を消費せず、一手とも数えず、記録にも残りません。その間、パネルの「回転」と
-「回転を戻す」は「確定」と「キャンセル」に入れ替わり、決めていないことがあると分かるように
-光る輪が付きます。「確定」で本当に回り、「キャンセル」で盤面をそのまま元に戻します。
+手番を消費せず、一手とも数えず、記録にも残りません。「確定」と「キャンセル」は
+**常にパネルにあり**、普段は灰色で押せません。その瞬間にこの 2 つが光り、周りに
+光る輪が付いて、決めていないことがあると分かります。「確定」で本当に回り、「キャンセル」で盤面をそのまま元に戻します。
 プレビュー中は着手できません —— 盤面は回した後の見た目なので、そこを押すと狙った場所と
 違うところに石が置かれてしまいます。
 
@@ -1631,13 +1648,13 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 | 操作 | 効果 |
 |---|---|
 | 待った `Z` | 最後の 1 手が回転なら回転を、着手なら着手を取り消す。対局開始前まで何手でも戻せる |
-| 回転を復元 `Y` | 「最後の 1 手がちょうど回転」のときだけ使える |
+| 回転を復元 `Y` | 「最後の 1 手がちょうど回転」のときだけ使える。**キーボードのみ —— パネルにこのボタンはありません**（その場所は「確定」「キャンセル」）；マウスやタッチでは「取り消し」を使ってください。最後の 1 手が回転なら、それがその回転を取り消します |
 
 いったん誰かが石を着手すると、その回転は確定してしまい、単独ではもう取り消せない —— さもないと多くの手にまたがるタイムマシンになってしまう。
 
-> **「確定」を押せばパネルに戻ってきます。** プレビュー中の 2 つはその場所を**一時的に
-> 譲ってもらっている**だけで、無くなったわけではありません。回転が確定した後は、
-> このボタンがその一手の取り消しになります。
+> **確定した回転を戻すには「取り消し」を使います**（`Z` か、そのボタン）。パネルには
+> 「回転を戻す」専用のボタンがありましたが、その場所は「確定」「キャンセル」に譲りました。
+> 機能自体は無くなっていません —— 最後の 1 手がちょうど回転なら、取り消しがそれを戻します。
 
 取り消したあとは、クールダウンも回転の前に戻る。
 
@@ -1841,9 +1858,9 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 **회전은 두 단계입니다: 「회전」으로 결과를 보고, 「확인」을 눌러야 성립합니다.**
 「회전」을 누르면 판이 **그 자리에서 돌아 보입니다**, 하지만 이 수는 아직 성립하지 않았습니다 ——
-차례를 쓰지 않고, 한 수로 세지도 않고, 기록에도 남지 않습니다. 그동안 패널의
-「회전」과 「회전 복원」은 「확인」과 「취소」로 바뀌고, 아직 결정하지 않은 것이 있다는 것을
-알리기 위해 빛나는 테두리가 붙습니다. 「확인」을 눌러야 실제로 돌아가고,
+차례를 쓰지 않고, 한 수로 세지도 않고, 기록에도 남지 않습니다. 「확인」과 「취소」는
+**항상 패널에 있고**, 평소에는 회색이라 눌리지 않습니다. 그 순간 이 둘이 밝아지고
+주위에 빛나는 테두리가 붙어, 아직 결정하지 않은 것이 있다는 것을 알립니다. 「확인」을 눌러야 실제로 돌아가고,
 「취소」는 판을 그대로 되돌립니다. 미리보기 중에는 착수할 수 없습니다 ——
 판이 돌아간 모습이므로 그걸 보고 누르면 노린 자리와 다른 곳에 돌이 놓입니다.
 
@@ -1893,13 +1910,13 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 | 조작 | 효과 |
 |---|---|
 | 무르기 `Z` | 마지막 단계가 회전이면 회전을, 착수면 착수를 취소하며, 대국 시작 전까지 계속 무를 수 있습니다 |
-| 이번 회전 복구 `Y` | “마지막 단계가 정확히 회전일 때”만 쓸 수 있습니다 |
+| 이번 회전 복구 `Y` | “마지막 단계가 정확히 회전일 때”만 쓸 수 있습니다. **키보드 전용 — 패널에 이 버튼이 없습니다** (그 자리는 「확인」「취소」); 마우스나 터치에서는 「되돌리기」를 쓰세요. 마지막 수가 회전이면 그것이 그 회전을 되돌립니다 |
 
 누군가 착수를 해 버리면 그 회전은 이미 자리를 잡은 것이 되어 따로 취소할 수 없습니다 — 그러지 않으면 여러 수에 걸친 타임머신이 되어 버립니다.
 
-> **「확인」을 누르면 패널로 돌아옵니다.** 미리보기 중의 두 버튼은 그 자리를 **잠시
-> 대신하고 있을 뿐이고, 없어진 것이 아닙니다. 회전이 확정된 뒤에는 이 버튼이
-> 그 수의 되돌리기가 됩니다.
+> **확정된 회전을 되돌리려면 「되돌리기」를 쓰세요** (`Z` 또는 그 버튼). 패널에 있던
+> 「회전 복원」 전용 버튼은 그 자리를 「확인」「취소」에 내주었습니다. 기능 자체는
+> 사라지지 않았습니다 —— 마지막 수가 정확히 회전이면 되돌리기가 그 회전을 되돌립니다.
 
 취소한 뒤에는 쿨다운도 회전 전으로 함께 돌아갑니다.
 
@@ -2103,10 +2120,10 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 **Поворот делается в два шага: «Повернуть» показывает результат, «Подтвердить» — засчитывает.**
 После нажатия «Повернуть» доска **тут же поворачивается, чтобы вы увидели результат**, но ход ещё
-не сделан: он не расходует ваш ход, не считается ходом и не записывается в летопись. Пока идёт
-предпросмотр, кнопки «Повернуть» и «Вернуть поворот» заменяются на **«Подтвердить»** и
-**«Отмена»** — обе с подсветкой, чтобы решение не потерялось: «Подтвердить» поворачивает
-по-настоящему, «Отмена» возвращает доску как было. Во время предпросмотра ставить камень нельзя —
+не сделан: он не расходует ваш ход, не считается ходом и не записывается в летопись.
+**«Оставить»** и **«Отмена»** — кнопки, которые **всегда есть на панели** и обычно серые
+и неактивные; в этот момент они загораются и получают подсветку, чтобы решение не потерялось:
+«Оставить» поворачивает по-настоящему, «Отмена» возвращает доску как было. Во время предпросмотра ставить камень нельзя —
 доска показывается уже повёрнутой, и камень лёг бы не туда, куда вы целились.
 
 ### 10.2 Что делает поворот
@@ -2155,13 +2172,14 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 | Действие | Эффект |
 |---|---|
 | Отмена хода `Z` | если последним был поворот — отменяется поворот, если камень — отменяется камень; можно отменять вплоть до начала партии |
-| Вернуть этот поворот `Y` | доступно только когда «последний ход — ровно поворот» |
+| Вернуть этот поворот `Y` | доступно только когда «последний ход — ровно поворот». **Только с клавиатуры — на панели такой кнопки нет** (это место занимают «Оставить» и «Отмена»); мышью или на сенсорном экране пользуйтесь «Отменой» — когда последний ход был поворотом, она возвращает именно его |
 
 Как только кто-то поставил камень, тот поворот считается закреплённым и больше не отменяется отдельно — иначе он превратился бы в машину времени, растянутую на много ходов.
 
-> **После нажатия «Подтвердить» она возвращается на панель.** Две кнопки предпросмотра
-> **занимают её место** на время, а не отменяют её. Когда поворот совершён, именно эта кнопка
-> служит его отменой.
+> **Чтобы вернуть уже состоявшийся поворот, пользуйтесь «Отменой»** (`Z` или кнопкой).
+> На панели была отдельная кнопка «Вернуть этот поворот»; теперь это место занимают
+> «Оставить» и «Отмена», но сама возможность никуда не делась — если последний ход был
+> ровно поворотом, «Отмена» возвращает именно его.
 
 После отмены перезарядка тоже возвращается к состоянию до поворота.
 
@@ -2370,10 +2388,10 @@ Un tour en sens antihoraire équivaut à trois tours en sens horaire. Quatre tou
 
 **Une rotation se fait en deux temps : « Tourner » montre le résultat, « Confirmer » le valide.**
 Après « Tourner », le plateau **pivote aussitôt pour que vous le voyiez**, mais le coup n'est pas joué :
-il ne consomme pas votre tour, ne compte pas comme un coup et n'entre pas dans l'historique. Pendant
-cet aperçu, les boutons « Tourner » et « Restaurer la rotation » cèdent la place à **« Confirmer »** et
-**« Annuler »**, cerclés tous les deux pour signaler la décision en attente : « Confirmer » tourne pour
-de bon, « Annuler » remet le plateau exactement comme avant. On ne peut pas poser de pierre pendant
+il ne consomme pas votre tour, ne compte pas comme un coup et n'entre pas dans l'historique.
+**« Confirmer »** et **« Annuler »** sont **toujours sur le panneau**, grisés et inertes ; à ce
+moment-là ils s'allument et s'entourent d'un cerne, pour signaler la décision en attente :
+« Confirmer » tourne pour de bon, « Annuler » remet le plateau exactement comme avant. On ne peut pas poser de pierre pendant
 l'aperçu : le plateau est déjà montré tourné, et la pierre tomberait ailleurs qu'où vous visiez.
 
 ### 10.2 L'effet d'une rotation
@@ -2422,13 +2440,14 @@ Une rotation ne compte pas comme « le N-ième coup » ; le N-ième coup désign
 | Action | Effet |
 |---|---|
 | Annuler `Z` | Si le dernier coup est une rotation, la rotation est retirée, si c'est une pose, la pose est retirée ; on peut annuler jusqu'avant le début de la partie |
-| Rétablir la rotation `Y` | Disponible seulement quand « le dernier coup est exactement une rotation » |
+| Rétablir la rotation `Y` | Disponible seulement quand « le dernier coup est exactement une rotation ». **Clavier uniquement — ce bouton n'est plus sur le panneau** (cette place revient à Confirmer / Annuler) ; à la souris ou au doigt, utilisez « Annuler », qui retire cette rotation quand c'est le dernier coup |
 
 Dès que quelqu'un pose un pion, cette rotation est acquise et ne peut plus être retirée à part — sinon elle deviendrait une machine à remonter le temps qui traverse plusieurs coups.
 
-> **Elle revient sur le panneau dès que vous appuyez sur « Confirmer ».** Les deux boutons de
-> l'aperçu **prennent sa place** le temps de l'aperçu, ils ne la suppriment pas. Une fois la rotation
-> acquise, c'est ce bouton qui l'annule.
+> **Pour retirer une rotation déjà acquise, utilisez « Annuler »** (`Z`, ou le bouton). Le panneau
+> avait un bouton dédié « Rétablir la rotation » ; cette place revient maintenant à Confirmer et
+> Annuler, mais la possibilité n'a pas disparu — quand le dernier coup est exactement une rotation,
+> c'est « Annuler » qui la retire.
 
 Après une annulation, la recharge revient elle aussi à son état d'avant la rotation.
 
@@ -2688,15 +2707,16 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
       </div>
       <div class="rotRow">
         <button id="rotGo" data-i18n="rotGo">执行转动</button>
-        <button id="rotRestore" disabled data-i18n="rotRestore">恢复本次转动</button>
-        <!-- 【预览中顶替上面那两个的两个键】有预览时 rotConfirm / rotCancel 上，
-             rotGo / rotRestore 下。**只换不增**：四个按钮都是 flex: 1 1 0，
-             永远恰好两个可见，所以这一行的宽度分配、换行、整块高度全都不动 ——
-             这也是这里敢用 display:none 的原因。平时那条"禁用而不是隐藏"的规矩
-             （见 #coolRow、#aiLevel 的注释）防的是布局跳，而这里换上去的是
-             和原来一模一样的两格，跳不起来。 -->
-        <button id="rotConfirm" class="off" data-i18n="rotConfirm">确定操作</button>
-        <button id="rotCancel" class="off" data-i18n="rotCancel">取消操作</button>
+        <!-- 【确定 / 取消常驻，平时灰显不可点】它们是"执行转动"之后那一步，
+             不点「执行转动」的时候就是两个死键 —— 用 :disabled 淡显而不是藏起来，
+             理由和 #coolRow / #aiLevel 同：藏起来会让这一行的宽度重新分配、按钮跳一下。
+             点亮时周围加一圈呼吸的亮圈（.attn），见 CSS。
+             【「恢复本次转动」原来在这个位置，现在没有按钮了】它做的事「悔棋 Z」已经覆盖
+             （最后一步是转动时悔棋撤的就是那次转动），键盘的 Y 也一直留着。
+             留着那个键反而更糟：它和「取消操作」看着是同一件事，实际一个管"还没落地的预览"、
+             一个管"已经落地的那一手"，并排放只会让人分不清自己在撤哪一个。 -->
+        <button id="rotConfirm" disabled data-i18n="rotConfirm">确定操作</button>
+        <button id="rotCancel" disabled data-i18n="rotCancel">取消操作</button>
       </div>
       <div id="rotHint"></div>
     </div>
@@ -5262,7 +5282,6 @@ const STATIC_TEXT = { en: {
   "rotCW": "Clockwise",
   "rotCCW": "Counterclockwise",
   "rotGo": "Rotate",
-  "rotRestore": "Restore rotation",
   "rotConfirm": "Confirm",
   "rotCancel": "Cancel",
   "undoBtn": "Undo Z",
@@ -5446,7 +5465,6 @@ STATIC_TEXT.ja = {
   "rotCW": "時計回り",
   "rotCCW": "反時計回り",
   "rotGo": "回転",
-  "rotRestore": "回転を戻す",
   "rotConfirm": "確定",
   "rotCancel": "キャンセル",
   "undoBtn": "元に戻す Z",
@@ -5565,7 +5583,6 @@ STATIC_TEXT.ko = {
   "rotCW": "시계 방향",
   "rotCCW": "반시계 방향",
   "rotGo": "회전",
-  "rotRestore": "회전 복원",
   "rotConfirm": "확인",
   "rotCancel": "취소",
   "undoBtn": "되돌리기 Z",
@@ -5684,8 +5701,10 @@ STATIC_TEXT.ru = {
   "rotCW": "По часовой",
   "rotCCW": "Против часовой",
   "rotGo": "Повернуть",
-  "rotRestore": "Вернуть поворот",
-  "rotConfirm": "Подтвердить",
+  // 【不是"Подтвердить"——实测它放不下】那是 11 个西里尔字母，320px 宽的屏上
+  // 三个键各只有 89px，它会被 overflow:hidden 切掉 5px（browser-check 量出来的）。
+  // "Оставить"（保留这次转动）和旁边的「Отмена」正好是一对，而且短得下。
+  "rotConfirm": "Оставить",
   "rotCancel": "Отмена",
   "undoBtn": "Отменить (Z)",
   "restartBtn": "Заново (R)",
@@ -5815,7 +5834,6 @@ STATIC_TEXT.fr = {
   "rotCW": "Sens horaire",
   "rotCCW": "Sens antihoraire",
   "rotGo": "Tourner",
-  "rotRestore": "Restaurer la rotation",
   "rotConfirm": "Confirmer",
   "rotCancel": "Annuler",
   "undoBtn": "Annuler Z",
@@ -6844,7 +6862,7 @@ const Game = {
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
       "dimRange","dimRange4d","coolNote",
       "rotPanel","rotStatus","rotLayerDown","rotLayerUp","rotLayerLabel",
-      "rotCW","rotCCW","rotGo","rotRestore","rotConfirm","rotCancel","rotHint",
+      "rotCW","rotCCW","rotGo","rotConfirm","rotCancel","rotHint",
       "topRight","langBtn","langList","langZh","langEn","langJa","langKo","langRu","langFr",
       "statusRow"];
     for (const id of ids) this.el[id] = document.getElementById(id);
@@ -8263,7 +8281,6 @@ const Game = {
     on("rotLayerDown", () => this.nudgeRotLayer(-1));
     on("rotLayerUp", () => this.nudgeRotLayer(1));
     on("rotGo", () => this.doRotate());
-    on("rotRestore", () => this.restoreRotation());
     on("rotConfirm", () => this.confirmRotation());
     on("rotCancel", () => this.cancelRotation());
     // 尺寸输入框。input 事件只刷新那行说明（不提交），change（失焦/回车）才提交夹取后的值 ——
@@ -8996,6 +9013,12 @@ const Game = {
     this.onBoardChanged(false);      // 盘面转回去了，画的那一份也得跟回去
   },
 
+  /**
+   * 撤销"最后一步恰好是转动"的那一手。
+   * **面板上已经没有这个按钮了**（那个位置让给了「确定操作」「取消操作」），
+   * 现在只有键盘的 `Y` 走这里 —— 鼠标/触屏那条路是「悔棋 `Z`」，
+   * 它在最后一步是转动时撤的就是那次转动，效果和这里一模一样。
+   */
   restoreRotation() {
     if (!this.session) return;
     // 预览期间「恢复本次转动」和「取消操作」是同一件事（都在把这次转动退回去），
@@ -9062,19 +9085,14 @@ const Game = {
     this.el.rotStatus.textContent = this.session.describeRotationStatus(this.lang);
     // 电脑的回合里玩家不能转（doRotate 里还有一道提示，键盘的 T 也走那里）
     this.el.rotGo.disabled = !this.session.canRotate || this.isAiTurn();
-    // 【人机模式下对玩家禁用「恢复本次转动」】它能撤掉【电脑刚做的那次转动】，
-    // 撤完 passTurnForRotation 会把回合还回电脑，电脑立刻再转一次 —— 看起来像按钮坏了。
-    // 玩家要退回上一步有「悔棋」，那条路已经处理了转动的撤销。
-    this.el.rotRestore.disabled = !this.session.canUndoLastRotation || this.aiMode;
 
-    // 【一行两态：平时是"执行/恢复"，有预览时换成"确定/取消"】
-    // 四个键都是 flex:1 1 0，永远恰好两个可见 → 这一行的几何一个像素都不动（见 HTML 那段注释）。
-    // 确定旁边那个亮圈只是为了让人注意到"还有个没做完的决定"。
+    // 【三个键：执行转动 / 确定操作 / 取消操作】
+    // 后两个**常驻但平时是灰的**（:disabled），点了「执行转动」才亮起来并戴上亮圈。
+    // 用禁用而不是隐藏：藏起来这一行的宽度要重新分配，三个键会跳一下。
     const pv = !!this.rotPreview;
-    this.el.rotGo.classList.toggle("off", pv);
-    this.el.rotRestore.classList.toggle("off", pv);
-    this.el.rotConfirm.classList.toggle("off", !pv);
-    this.el.rotCancel.classList.toggle("off", !pv);
+    this.el.rotGo.disabled = this.el.rotGo.disabled || pv;   // 预览中不许再开一个预览
+    this.el.rotConfirm.disabled = !pv;
+    this.el.rotCancel.disabled = !pv;
     this.el.rotConfirm.classList.toggle("attn", pv);
     this.el.rotCancel.classList.toggle("attn", pv);
     this.el.rotConfirm.classList.toggle("sel", pv);   // 两个里它是"主选"，填色区分

@@ -142,10 +142,10 @@ One counterclockwise turn equals three clockwise turns. Four turns equal no turn
 
 **Rotating takes two steps: "Rotate" shows you the result, "Confirm" makes it count.**
 After you press Rotate the board **turns immediately so you can see it**, but the move has not landed:
-it does not use up your turn, does not count as a move, and is not written into the record. While that
-preview is up, the Rotate and Restore buttons are replaced by **Confirm** and **Cancel**, both ringed to
-flag the decision you still owe: Confirm turns it for real, Cancel turns the board straight back, as if
-nothing had happened. You cannot place a stone during the preview — the board is showing the rotated
+it does not use up your turn, does not count as a move, and is not written into the record. **Confirm**
+and **Cancel** are always on the panel, greyed out and inert; at that moment they light up and gain a
+ring, flagging the decision you still owe: Confirm turns it for real, Cancel turns the board straight
+back, as if nothing had happened. You cannot place a stone during the preview — the board is showing the rotated
 position, so clicking it would put your stone somewhere other than where you aimed.
 
 ### 10.2 What a rotation does
@@ -195,13 +195,14 @@ A rotation does not count as move number N; the Nth move always means the Nth pl
 | Action | Effect |
 |---|---|
 | Undo `Z` | Takes back the last step — a rotation or a placement — and can go back to before the game started |
-| Restore rotation `Y` | Available only when the last move was exactly a rotation |
+| Restore rotation `Y` | Available only when the last move was exactly a rotation. **Keyboard only — there is no such button on the panel** (that slot belongs to Confirm / Cancel); with a mouse or on a touch screen use Undo, which takes back that rotation when it is the last move |
 
 Once someone places a stone, that rotation has landed and can no longer be taken back on its own — otherwise it would become a
 time machine spanning many moves.
 
-> **It is back on the panel once you press Confirm.** The preview pair **takes its place** while the
-> preview is up; it does not remove it. Once the rotation has landed, that button is its undo.
+> **To take back a landed rotation, use Undo** (`Z`, or the button). The panel used to have a
+> dedicated "Restore rotation" key; that slot now belongs to Confirm and Cancel, and the capability
+> itself is not gone — when the last move was exactly a rotation, Undo takes back that rotation.
 
 Undoing also returns the cooldown to what it was before the rotation.
 

@@ -774,11 +774,10 @@ step("冷却门槛：落满 5 手前转不动，之后才可转", () => {
   if (Game.session.moveCount !== before) throw new Error("转动不该改变落子数");
   if (Game.session.currentPlayer !== turnBefore)
     throw new Error("预览期间回合不该翻转 —— 这一手还没落地");
-  // 两个键换了位置：执行/恢复退场，确定/取消上场，而且确定那个带亮圈
-  if (!Game.el.rotGo.classList.contains("off") || !Game.el.rotRestore.classList.contains("off"))
-    throw new Error("预览中「执行转动」「恢复本次转动」应该让位");
-  if (Game.el.rotConfirm.classList.contains("off") || Game.el.rotCancel.classList.contains("off"))
-    throw new Error("预览中「确定操作」「取消操作」应该上场");
+  // 那一行是三个键常驻：确定/取消**平时灰着不可点**，预览中才亮起来并戴上亮圈
+  if (!Game.el.rotGo.disabled) throw new Error("预览中不该还能再开一个预览");
+  if (Game.el.rotConfirm.disabled || Game.el.rotCancel.disabled)
+    throw new Error("预览中「确定操作」「取消操作」应该可点");
   if (!Game.el.rotConfirm.classList.contains("attn") || !Game.el.rotCancel.classList.contains("attn"))
     throw new Error("预览中两个键都要有亮圈");
   if (Game.el.rotHint.textContent.indexOf("预览") < 0)
@@ -794,6 +793,11 @@ step("冷却门槛：落满 5 手前转不动，之后才可转", () => {
   if (!Game.el.rotGo.disabled) throw new Error("刚转完应重新进入冷却");
   if (Game.el.rotConfirm.classList.contains("attn"))
     throw new Error("落地之后亮圈要收掉");
+  // 收掉之后它们退回"灰着不可点"的那个常态 —— 不是消失
+  if (!Game.el.rotConfirm.disabled || !Game.el.rotCancel.disabled)
+    throw new Error("落地之后确定/取消应该退回灰显不可点");
+  if (Game.el.rotConfirm.classList.contains("off"))
+    throw new Error("确定/取消是常驻的，任何时候都不该被藏起来（藏起来这一行会跳）");
 });
 
 step("预览：不落地、可取消、取消后盘面逐格还原", () => {
@@ -855,7 +859,7 @@ step("预览期间不能落子：棋盘是「转过的样子」，照着它点�
   if (Game.session.moveCount !== moves) throw new Error("悔棋不该顺手撤掉落子");
 });
 
-step("恢复本次转动：只在最后一步是转动时可用，且完整还原盘面", () => {
+step("恢复本次转动（现在只有键盘 Y 走这条路）：只在最后一步是转动时可用，且完整还原盘面", () => {
   Game.setSetupMode(true);
   Game.setupCool = 0;
   Game.newGame(8, 1);
@@ -870,25 +874,25 @@ step("恢复本次转动：只在最后一步是转动时可用，且完整还�
     return s;
   };
 
-  if (!Game.el.rotRestore.disabled) throw new Error("还没转过的时候不该能恢复");
+  if (Game.session.canUndoLastRotation) throw new Error("还没转过的时候不该能恢复");
   const before = snapshot();
   Game.doRotate();
   if (Game.session.rotationCount !== 0) throw new Error("预览期间不该有记录");
   Game.confirmRotation();
   if (Game.session.rotationCount !== 1) throw new Error("转动应成功");
   if (snapshot() === before) throw new Error("转动应该改变了盘面（否则这条测试没意义）");
-  if (Game.el.rotRestore.disabled) throw new Error("刚转完应能恢复");
+  if (!Game.session.canUndoLastRotation) throw new Error("刚转完应能恢复");
 
   Game.restoreRotation();
   if (Game.session.rotationCount !== 0) throw new Error("恢复后转动记录应被撤掉");
   if (snapshot() !== before) throw new Error("恢复后盘面必须逐格还原");
-  if (Game.el.rotRestore.disabled === false) throw new Error("恢复之后不该还能再恢复");
+  if (Game.session.canUndoLastRotation) throw new Error("恢复之后不该还能再恢复");
 
   // 转完再落一手，就不能再单独恢复那次转动了
   Game.doRotate();
   Game.confirmRotation();
   Game.tryPlace(7, 7);
-  if (!Game.el.rotRestore.disabled)
+  if (Game.session.canUndoLastRotation)
     throw new Error("已经有人落子了，不该还能单独撤销那次转动");
 });
 
@@ -1806,7 +1810,7 @@ step("键盘与面板事件回调都能挂上", () => {
                     "topLayer", "modeGhost", "modeSlice", "sliceUp", "sliceDown",
                     "bannerUndo", "bannerRestart", "startBtn", "firstBlack", "firstWhite",
                     "mode3d", "mode4d", "rotLayerDown", "rotLayerUp", "rotCW", "rotCCW",
-                    "rotGo", "rotRestore"]) {
+                    "rotGo", "rotConfirm", "rotCancel"]) {
     const el = Game.el[id];
     if (!el || !el._listeners || !el._listeners.click)
       throw new Error("'" + id + "' 没有挂上 click 回调");
@@ -3190,23 +3194,32 @@ step("电脑对手：换先手之后我仍执原来的色，电脑接过先手",
   Game.cancelAiTimer();
 });
 
-step("电脑对手：人机模式下「恢复本次转动」不对玩家开放", () => {
+step("电脑对手：人机模式下不许玩家单独撤掉电脑刚做的那次转动", () => {
+  // 【面板上已经没有「恢复本次转动」这个按钮了】它让位给了「确定操作」「取消操作」，
+  // 现在只剩键盘的 Y 走 restoreRotation()。这条规矩本身没变，改的是它的入口。
   Game.setSetupMode(true);                   // 四维，转动面板才会亮
   startAiGame("ultra", "me", 1);
   Game.refreshRotPanel();
-  if (!Game.el.rotRestore.disabled) throw new Error("人机模式下应当禁用");
-  Game.restoreRotation();                    // 键盘 Y 也走这条路
+  Game.restoreRotation();                    // 键盘 Y 走的就是这条路
   if (Game.el.toast.textContent.indexOf("悔棋") < 0)
     throw new Error("应当提示改用「悔棋」，实际：" + Game.el.toast.textContent);
   Game.el.toast.classList.remove("on");
 
-  // 人人对局时它照旧是可用的（别把禁用做成"永远禁用"）
+  // 人人对局时它照旧是通的（别把那条规矩做成"永远禁用"）
   Game.closeSetup();
   Game.setSetupAi("human");
-  Game.newGame([15, 15, 15], 1);
+  Game.setupCool = 0;
+  Game.newGame([8, 8, 8], 1);
+  if (Game.aiMode) throw new Error("这一局应该是人人对局");
+  Game.session.board.set(0, 0, 0, 1);
+  Game.rotAxis = 0; Game.rotLayer = 0; Game.rotClockwise = true; Game.rotTurns = 1;
   Game.refreshRotPanel();
-  if (Game.el.rotRestore.disabled && Game.session.canUndoLastRotation)
-    throw new Error("人人对局时不该被人机那条规则禁用");
+  Game.doRotate(); Game.confirmRotation();
+  if (Game.session.rotationCount !== 1) throw new Error("人人对局里转动应当成功");
+  Game.el.toast.classList.remove("on");
+  Game.restoreRotation();
+  if (Game.session.rotationCount !== 0)
+    throw new Error("人人对局里「恢复本次转动」必须真的能撤（键盘 Y 走的就是这里）");
   Game.setSetupMode(false);
 });
 

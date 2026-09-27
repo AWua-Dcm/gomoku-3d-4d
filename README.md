@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40751_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40758_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -80,7 +80,7 @@ bash _verify/run-all.sh
 九步，期望结果：
 
 ```
-11733 + 19408 + 98 + 123 + 109 + 8845 + 115 + 320 = 40751 项断言全绿
+11733 + 19408 + 98 + 123 + 109 + 8845 + 115 + 327 = 40758 项断言全绿
 ```
 
 第 9 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -97,7 +97,7 @@ bash _verify/run-all.sh
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 109 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值、拖拽方向约定） |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | 联机内核：和网页版逐格对拍 1156 组 |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | 联机 HTTP 层（本机 loopback） |
-| `node _verify/browser-check.mjs` | 320 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局） |
+| `node _verify/browser-check.mjs` | 327 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局） |
 
 后两项联机测试在第 8 步里跑，**不可跳过**（端口是随机挑的空闲端口）。
 另有三个注入验证脚本，专门证明上面那些检查**真的会红**：
@@ -223,6 +223,7 @@ bash _verify/run-all.sh
 
 ### 2026.09.27
 
+- 🎨 **v2.10.11** 调整四维转动面板：「确定操作」「取消操作」改成常驻，平时灰显不可点、点「执行转动」后才亮起并带亮圈；「恢复本次转动」的按钮撤掉（那个位置让给这两个键），功能改用「悔棋」和 `Y` 键
 - ✨ **v2.10.10** 四维转动改成两步：点「执行转动」先**把棋盘转给你看**（不消耗回合、不算一步），这时原来的两个键换成「确定操作」「取消操作」并带亮圈，「确定操作」才真的落地；预览期间落不了子
 - 🎨 **v2.10.9** 调整配色：幽灵层的棋子加深一档，三维静态格线改成更灰、更浅的颜色（原来是暖褐色，铺开一大片偏跳）；四维下电脑对手不再一直转动层，改成只在能真的拆掉对方活三以上的阵型时才转，四维的搜索深度也一并加深
 - 🐛 **v2.10.8** 修复若干问题
