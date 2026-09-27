@@ -78,6 +78,13 @@ function makeElement(tag, id) {
     classList: makeClassList(),
     style: {},
     dataset: {},
+    // style 要带 setProperty / getPropertyValue：真实浏览器里 CSS 自定义属性（--x）
+    // 只能从这两个口进出，直接 style["--x"] = v 在浏览器里是不生效的。
+    // 桩里给成空对象的话，凡是用自定义属性传值的代码都会静默变成空操作 ——
+    // 那不是桩测不到，是桩在骗人（同 dataset 那一段的理由）。
+    style: { _vars: {},
+             setProperty(k, v) { this._vars[k] = String(v); },
+             getPropertyValue(k) { return Object.prototype.hasOwnProperty.call(this._vars, k) ? this._vars[k] : ""; } },
     textContent: "",
     innerHTML: "",
     // 真属性的影子本。collectStatic 现在读的是 data-i18n 的【属性值】（不是 id），
@@ -2956,33 +2963,57 @@ step("相机平移：targetFor 的标尺和方向（跟着相机走，不是跟�
 // 那时候再抛异常就没人接得住了。最后一步专门负责收尾。
 // ---------------------------------------------------------------------------
 
-const AI_SEGS = ["aiHuman", "aiLow", "aiMed", "aiHigh", "aiXHigh", "aiUltra"];
+// 「对手」是开关（人类 / 人机），「强度」才是拉条 —— 两者分开之后
+// 玩家看得出我现在到底选了什么，加一档也不用往枚举里塞值。
+const AI_SEGS = ["aiHuman", "aiCpu"];
 const AI_TIERS = ["low", "medium", "high", "xhigh", "ultra"];
 
 /** 开一局人机局。**必须手动 cancelAiTimer** —— 桩里不让真定时器跑，下面靠 runAi 手动驱动。 */
-function startAiGame(ai, order, first) {
+function startAiGame(tier, order, first) {
   Game.closeSetup();
-  Game.setSetupAi(ai);
+  Game.setSetupAi("cpu");
+  Game.setSetupLevel(AI_TIERS.indexOf(tier));
   Game.setSetupOrder(order);
   Game.newGame([15, 15, 15], first || 1);   // 1 = BLACK
   Game.cancelAiTimer();
 }
 
-step("电脑对手：对手行六个键 + 强度拉条五格都在，且恰好一个亮着", () => {
-  for (const id of ["aiHuman", "aiLow", "aiMed", "aiHigh", "aiXHigh", "aiUltra", "orderMe", "orderCpu"]) {
+step("电脑对手：人类/人机是开关，选了人机才看得见拉条；五档名字与颜色各不相同", () => {
+  for (const id of ["aiHuman", "aiCpu", "aiLevel", "aiRange", "aiLevelName", "orderMe", "orderCpu"]) {
     if (!Game.el[id]) throw new Error("缺少元素 " + id);
   }
   Game.openSetup();
   Game.setSetupAi("human");
-  const on = AI_SEGS.filter(id => Game.el[id].classList.contains("sel"));
+  let on = AI_SEGS.filter(id => Game.el[id].classList.contains("sel"));
   if (on.length !== 1 || on[0] !== "aiHuman")
-    throw new Error("四个对手键应当恰好一个亮着，实际 " + JSON.stringify(on));
-  for (const v of AI_TIERS) {
-    Game.setSetupAi(v);
-    const lit = AI_SEGS.filter(id => Game.el[id].classList.contains("sel"));
-    if (lit.length !== 1 || Game.el[lit[0]].dataset.ai !== v)
-      throw new Error(v + " 档下选中的是 " + JSON.stringify(lit));
+    throw new Error("应恰好选中「人类」，实际 " + JSON.stringify(on));
+  if (!Game.el.aiLevel.classList.contains("hide")) throw new Error("选了人类时拉条应当看不见");
+
+  Game.setSetupAi("cpu");
+  on = AI_SEGS.filter(id => Game.el[id].classList.contains("sel"));
+  if (on.length !== 1 || on[0] !== "aiCpu")
+    throw new Error("应恰好选中「人机」，实际 " + JSON.stringify(on));
+  if (Game.el.aiLevel.classList.contains("hide")) throw new Error("选了人机时拉条应当看得见");
+
+  // 五档都能选到：滑块的 value、右边的名字、颜色标记都要跟着走
+  const names = new Set(), lvs = new Set();
+  for (let i = 0; i < AI_TIERS.length; i++) {
+    Game.setSetupLevel(i);
+    if (Game.setupLevel !== i) throw new Error("第 " + i + " 档没选上");
+    if (Game.el.aiRange.value !== String(i)) throw new Error("滑块的 value 没跟着走：" + Game.el.aiRange.value);
+    if (Game.el.aiLevel.dataset.lv !== String(i)) throw new Error("data-lv 没跟着走：" + Game.el.aiLevel.dataset.lv);
+    if (!Game.el.aiLevel.style.getPropertyValue("--pct")) throw new Error("填充比例没写进 --pct");
+    names.add(Game.el.aiLevelName.textContent);
+    lvs.add(Game.el.aiLevel.dataset.lv);
   }
+  if (names.size !== AI_TIERS.length) throw new Error("五档的名字应当互不相同，实际 " + names.size + " 种");
+  if (lvs.size !== AI_TIERS.length) throw new Error("五档的颜色档位应当互不相同，实际 " + lvs.size + " 种");
+  // 越界要夹住，不能把滑块留在没有那一档的位置上
+  Game.setSetupLevel(99);
+  if (Game.setupLevel !== AI_TIERS.length - 1) throw new Error("越界应当夹到最高档");
+  Game.setSetupLevel(-5);
+  if (Game.setupLevel !== 0) throw new Error("负数应当夹到最低档");
+  Game.setSetupLevel(1);
   Game.setSetupAi("human");
   Game.closeSetup();
 });
@@ -2991,7 +3022,7 @@ step("电脑对手：人人对局时「谁先下」是禁用而不是隐藏", ()
   Game.setSetupAi("human");
   if (!Game.el.orderMe.disabled || !Game.el.orderCpu.disabled)
     throw new Error("人人对局时「谁先下」应当禁用");
-  Game.setSetupAi("xhigh");
+  Game.setSetupAi("cpu");
   if (Game.el.orderMe.disabled || Game.el.orderCpu.disabled)
     throw new Error("人机对战时应当时可用的");
   Game.setSetupAi("human");

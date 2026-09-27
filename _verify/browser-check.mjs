@@ -1358,6 +1358,30 @@ try {
     check(port.setupUi.labelLines.every((x) => x <= 1),
       vp.tag + " 英文的每个行标都只占一行（宽度贴合文字，不折行）",
       JSON.stringify(port.setupUi.labelLines));
+    // ---- 竖屏 + 选了「人机」：拉条那一行会不会压到下一行、会不会探出屏幕 ----
+    // 【为什么单测这一档】拉条是这一行里唯一宽度随语言变的控件，而竖屏可用宽度只有
+    // 三百多像素 —— 俄语/法语下它最可能把这一行挤折，而挤折本身不报错，
+    // 只表现为两行贴在一起（那正是 v2.8.1 修过的按钮互相压住）。
+    const portAi = JSON.parse(await ev(`(() => {
+      Game.openSetup(); Game.setSetupMode(false); Game.setSetupAi("cpu"); Game.setSetupLevel(4);
+      const R = (id) => document.getElementById(id).getBoundingClientRect();
+      const row = R("aiRow"), rng = R("aiRange"), nxt = R("orderRow");
+      return JSON.stringify({
+        rowBottom: row.bottom, nextTop: nxt.top,
+        rangeLeft: rng.left, rangeRight: rng.right, vw: window.innerWidth,
+        rowH: Math.round(row.height),
+        docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      });
+    })()`));
+    check(portAi.rowBottom <= portAi.nextTop + 0.5,
+      vp.tag + " 选人机后：拉条那一行没有压在「谁先下」上",
+      JSON.stringify(portAi));
+    check(portAi.rangeLeft >= -0.5 && portAi.rangeRight <= portAi.vw + 0.5,
+      vp.tag + " 选人机后：拉条完整落在屏幕里",
+      "left=" + portAi.rangeLeft + " right=" + portAi.rangeRight + " 视口=" + portAi.vw);
+    check(portAi.docOver <= 1, vp.tag + " 选人机后：整页没有横向滚动", "溢出 " + portAi.docOver + "px");
+    await ev(`Game.setSetupAi("human"); 1`);
+
     check(port.setupUi.trTop <= 40 && !port.setupUi.trHitsTitle,
       vp.tag + " 起始界面下右上角两键钉在视口顶部、且不压标题",
       "top=" + port.setupUi.trTop + " 压标题=" + port.setupUi.trHitsTitle
@@ -1867,7 +1891,7 @@ try {
       // 上面那条"对局界面"就变成人机局了，后面所有几何断言都会在一个会自动走棋的
       // 棋盘上做。所以下面那条最后会把 setupAi 复位成 human。
       ["起始界面·人机", `Game.openSetup(); Game.setSetupMode(false);
-                         Game.setSetupAi("ultra"); Game.setSetupOrder("cpu"); 1`],
+                         Game.setSetupAi("cpu"); Game.setSetupLevel(4); Game.setSetupOrder("cpu"); 1`],
       ["对局界面·人机", `Game.closeSetup(); Game.newGame([15,15,15], 1);
                          Game.cancelAiTimer(); Game.runAi();
                          Game.setSetupAi("human"); Game.cancelAiTimer(); 1`],
@@ -1991,20 +2015,24 @@ try {
 
   await ev(`(() => {
     Game.setLang("zh"); Game.openSetup(); Game.setSetupMode(false);
-    Game.setSetupAi("ultra"); Game.setSetupOrder("cpu");
+    Game.setSetupAi("cpu"); Game.setSetupLevel(4); Game.setSetupOrder("cpu");
     return 1;
   })()`);
   await sleep(150);
   const aiSetupRaw = await ev(`(() => {
-    const aiIds = ["aiHuman","aiLow","aiMed","aiHigh","aiXHigh","aiUltra"];
+    const aiIds = ["aiHuman","aiCpu"];
     const sel = aiIds.filter((id) => document.getElementById(id).classList.contains("sel"));
     const labelLines = (el) => { const rg = document.createRange(); rg.selectNodeContents(el); return rg.getClientRects().length; };
     const sum = document.getElementById("sizeSummary");
     return JSON.stringify({
-      vis: ["aiHuman","aiLow","aiMed","aiHigh","aiXHigh","aiUltra","orderMe","orderCpu"]
+      vis: ["aiHuman","aiCpu","aiRange","aiLevelName","orderMe","orderCpu"]
              .map((id) => document.getElementById(id).getClientRects().length > 0),
       selCount: sel.length, selIs: sel[0],
-      off: document.getElementById("aiLevel").classList.contains("off"),
+      hidden: document.getElementById("aiLevel").classList.contains("hide"),
+      lv: document.getElementById("aiLevel").dataset.lv,
+      lvName: document.getElementById("aiLevelName").textContent,
+      rangeVal: document.getElementById("aiRange").value,
+      pct: document.getElementById("aiLevel").style.getPropertyValue("--pct"),
       // 【不能拿 top 去数行数】拉条比按钮高一两像素，而 .row 是 align-items:center ——
       // 居中对齐让它们 top 不同，于是同一行被数成两行。量整行高度才是对的：
       // 单行时约 40px（#setup .row 的 min-height），折行必定 >= 80px。
@@ -2018,10 +2046,40 @@ try {
   })()`);
   const AS = JSON.parse(aiSetupRaw);
   check(AS.vis.every(Boolean), "人机那两行的六个键都看得见", JSON.stringify(AS.vis));
-  check(AS.selCount === 1 && AS.selIs === "aiUltra",
-    "拉条六格里恰好一格亮着（选的是「极限」）", JSON.stringify([AS.selCount, AS.selIs]));
-  check(AS.off === false, "选了电脑时拉条不置灰", String(AS.off));
-  check(AS.aiRowH <= 48, "人类键 + 五格拉条在同一行（1280 宽的窗口下）", AS.aiRowH + "px 高");
+  check(AS.selCount === 1 && AS.selIs === "aiCpu",
+    "人类/人机里恰好选中「人机」", JSON.stringify([AS.selCount, AS.selIs]));
+  check(AS.hidden === false, "选了人机时拉条看得见");
+  check(AS.lv === "4" && AS.rangeVal === "4" && AS.lvName.length > 0,
+    "拉条停在最高档，右边写着档位名", JSON.stringify([AS.lv, AS.rangeVal, AS.lvName]));
+  check(AS.pct === "100.0%", "填充比例跟着档位走", AS.pct);
+  check(AS.aiRowH <= 48, "人类/人机 + 拉条在同一行（1280 宽的窗口下）", AS.aiRowH + "px 高");
+
+  // ---- 真的能拖吗 ----
+  // 【这一条是冲着用户反馈"实测没法拉动"去的】上一版是五个按钮拼的假拉条，只能点。
+  // 这里按的是真鼠标：按住滑块、往右拖、松开，看 value 有没有跟着走。
+  const rbox = JSON.parse(await ev(`(() => {
+    Game.setSetupLevel(0);
+    const r = document.getElementById("aiRange").getBoundingClientRect();
+    return JSON.stringify({ l: r.left, t: r.top, w: r.width, h: r.height });
+  })()`));
+  const ry = rbox.t + rbox.h / 2;
+  await mouseAt("mousePressed", rbox.l + 8, ry, { button: "left", buttons: 1, clickCount: 1 });
+  for (let i = 1; i <= 8; i++) {
+    await mouseAt("mouseMoved", rbox.l + 8 + (rbox.w - 16) * i / 8, ry, { button: "left", buttons: 1 });
+    await sleep(16);
+  }
+  await mouseAt("mouseReleased", rbox.l + rbox.w - 8, ry, { button: "left", buttons: 0, clickCount: 1 });
+  await sleep(150);
+  const dragged = JSON.parse(await ev(`JSON.stringify({
+    v: document.getElementById("aiRange").value,
+    lv: document.getElementById("aiLevel").dataset.lv,
+    pct: document.getElementById("aiLevel").style.getPropertyValue("--pct"),
+    name: document.getElementById("aiLevelName").textContent,
+  })`));
+  check(dragged.v === "4" && dragged.lv === "4",
+    "拉条拖得动：按住滑块拖到最右，档位跟着到最高档", JSON.stringify(dragged));
+  check(dragged.pct === "100.0%", "拖完之后填充比例也跟到了底", dragged.pct);
+  await ev("Game.setSetupLevel(4); 1");
   check(AS.orderDisabled[0] === false && AS.orderDisabled[1] === false,
     "选了电脑时「谁先下」是可用的", JSON.stringify(AS.orderDisabled));
   check(AS.labelWrapped.every((n) => n <= 1), "人机那两行的行标没有折行", JSON.stringify(AS.labelWrapped));

@@ -473,39 +473,51 @@
      gap 和 .row 的 gap 一样是 10px，所以它嵌在行里看不出接缝。 */
   #coolGrid { display: grid; grid-template-columns: repeat(2, auto); gap: 10px; }
 
-  /* 电脑强度拉条：一条**圆头**的轨道 + 一个会滑过去的圆头滑块。
-     【为什么是"滑块"而不是"五格各自高亮"】后者是五个方块拼起来的样子，
-     一眼看去像一组按钮；而这里要表达的是"一条刻度上选了某一档"，
-     所以选中态必须是**同一个东西在移动**（就像那些 AI 应用里的思考强度选择器）。
+  /* 电脑强度拉条。**真的能拖**：原生 input[type=range]，系统外观整个去掉、自己画。
+     方角 + 描边，和这一页其他按钮是同一套语言（不做圆头胶囊 —— 那是另一种控件的样子）。
 
-     【滑块怎么动】#aiThumb 绝对定位在轨道里，setSetupAi 把它挪到选中那一格的
-     位置和宽度上，left/width 各有 .18s 过渡 —— 换档时是滑过去而不是跳过去。
-     每格仍然是独立的 button，所以键盘能走、点击语义和页面别处一致、测试也照旧。
-
-     【为什么不用 input[type=range]】它是系统原生外观，和这一页的宣纸风格不是一回事；
-     而且手机竖屏上纵向滚动时，横向拖动条很容易误触。 */
+     【滑块往右拖，颜色一档一档变重】--lv 由 data-lv 决定，轨道和档位名共用它。
+     色阶是"灰 → 蓝 → 深蓝 → 金 → 朱砂"，用的是这一页本来就有的那几档颜色，
+     所以它读起来是"强度在升"，而不是"换了个不相干的颜色"。
+     --pct 是已填充的比例，由 JS 写；轨道的背景是一条硬停止的渐变，
+     所以左边是填充色、右边是空轨 —— 就是常见的那种滑条长相。 */
   #aiLevel {
-    position: relative; display: flex; align-items: stretch; flex: 0 0 auto;
-    padding: 3px; border: 1px solid var(--border); border-radius: 999px;
-    background: var(--well); overflow: hidden;
+    display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
+    --lv: #4f7fa0; --pct: 25%;
   }
-  #aiThumb {
-    position: absolute; top: 3px; bottom: 3px; left: 3px; width: 0;
-    border-radius: 999px; background: var(--accent); z-index: 0;
-    transition: left .18s ease, width .18s ease;
+  /* 没选「人机」时整条看不见，但**槽位留着** —— 见 HTML 里那段注释。 */
+  #aiLevel.hide { visibility: hidden; }
+  #aiLevel[data-lv="0"] { --lv: #8a7f6b; }
+  #aiLevel[data-lv="1"] { --lv: #4f7fa0; }
+  #aiLevel[data-lv="2"] { --lv: #2f5d7c; }
+  #aiLevel[data-lv="3"] { --lv: #9c6b1f; }
+  #aiLevel[data-lv="4"] { --lv: #9c3428; }
+  #aiRange {
+    -webkit-appearance: none; appearance: none;
+    width: 104px; height: 26px; margin: 0; padding: 0;
+    border: 1px solid var(--border); border-radius: 3px;
+    background: linear-gradient(to right,
+                var(--lv) 0, var(--lv) var(--pct), var(--well) var(--pct), var(--well) 100%);
+    cursor: pointer;
   }
-  #aiLevel .seg {
-    position: relative; z-index: 1;
-    border: 0; border-radius: 999px; padding: 6px 12px;
-    font-size: 13px; font-weight: 600; white-space: nowrap;
-    background: transparent; color: var(--dim); transition: color .18s ease;
+  /* 轨和槽都清空，让上面那条渐变透出来（滑块本身还是自己画的） */
+  #aiRange::-webkit-slider-runnable-track { height: 100%; background: transparent; border: 0; }
+  #aiRange::-moz-range-track { height: 100%; background: transparent; border: 0; }
+  #aiRange::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 12px; height: 24px; margin-top: 0;
+    border: 1px solid var(--stone-edge); border-radius: 2px;
+    background: #f7f2e8;
   }
-  #aiLevel .seg.sel { color: #f7f2e8; }
-  /* 选了「人类」时这条整体置灰 —— 和 #coolRow 在三维下禁用同一条理由：
-     保留位置而不是藏起来，免得整列重排、按钮一起跳。 */
-  #aiLevel.off { opacity: .45; }
-  #aiLevel.off #aiThumb { background: var(--dim); }
-  #aiLevel.off .seg { cursor: default; }
+  #aiRange::-moz-range-thumb {
+    width: 12px; height: 24px;
+    border: 1px solid var(--stone-edge); border-radius: 2px;
+    background: #f7f2e8;
+  }
+  #aiLevelName {
+    font-size: 13.5px; font-weight: 600; color: var(--lv);
+    white-space: nowrap; min-width: 3.2em;
+  }
 
   /* 固定高度。【这是按钮跳动的第二个根因，比行数变化更隐蔽】：
      这段文案的长度在两种模式下差一倍以上 —— 三维 15³ 是 2 行，四维 8³ 因为有实测数据
@@ -1060,7 +1072,7 @@
 - **极限档会下出"你还没看出危险就已经输了"的棋** —— 那是算杀算出来的，不是走运。
   它也可能在开局就布下十几手之后才兑现的陷阱。
 - **两个选择各管一件事**：「谁先手」选的是**哪个颜色**先走（顺带也就定了谁背长连判负），
-  「谁先下」选的是**哪个人**执那个颜色。所以「黑棋先手 + 电脑」= 电脑执黑走第一手、你执白。
+  「谁先下」选的是**哪个人**执那个颜色。所以「黑棋先手 + 人机」= 电脑执黑走第一手、你执白。
   起始界面底下那句总结会把「你执哪个色」写出来。
 - **电脑一样受长连判负约束**，它也会躲开让自己连成 6 个的点。但它照样会漏堵活三、
   看不见双威胁 —— 这是刻意的，不是 bug。
@@ -2542,24 +2554,28 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
     <button id="firstWhite" data-first="2" data-i18n="firstWhite">白棋先手</button>
   </div>
 
-  <!-- 对手：人类 / 电脑（五档强度拉条）。
-       【为什么人类是按钮、强度是拉条】"就是人类"和"电脑有多强"是两种不同的东西：
-       前者是一个开关，后者是一条有顺序的刻度。做成拉条之后，
-       "低 → 极限"的递进关系一眼看得出来，而四个并列的按钮看不出来。
-       这也正是当下那些 AI 产品里"思考强度"选择器的样子。
-       【一行装得下吗】行标 + 人类 + 五格 ≈ 320px，393px 竖屏可用约 349px —— 刚好。
-       语言切到俄语/法语时会变长，那时这一行会折成两行；宁可折行也不能让文字互相压。
-       【每一格仍然是 button】所以键盘能走、点击语义和别处一致，测试也照旧。 -->
+  <!-- 对手：人类 / 人机。选了「人机」右边才出现强度拉条。
+       【为什么分成两步】原来"人类"和四档强度挤在一行里，两者是同一个单选组 ——
+       但"要不要跟电脑下"和"电脑有多强"本来是两件事，挤在一起时
+       玩家看不出"我现在到底选了什么"。现在人类/人机是个开关，拉条是开关打开之后才有的刻度。
+       【拉条是原生 input[type=range]】因为要真的**拖得动**：纯按钮做的"拉条"只能点，
+       拖不动。样式上把系统外观整个去掉（appearance:none）、自己画轨和滑块，
+       方角 + 描边，和这一页其他按钮是同一套语言。
+
+       【没选人机时拉条用 visibility:hidden 而不是 display:none】
+       后者会把这一格从布局里摘掉，行宽一变、居中一重排，整列按钮都会跳一下；
+       前者只让它看不见，槽位还在。手机端尤其不能让它跳。
+
+       【#aiLevelName 上没有 data-i18n】它的字是 JS 写进去的（随档位变），
+       而带 data-i18n 的元素会被 applyStatic 覆写 —— 两条通路抢同一个元素。
+       按本工程的惯例，JS 写的文案走 say() + TEXT 表。 -->
   <div class="row" id="aiRow">
     <div class="rowLabel" id="rowLabelAi" data-i18n="rowLabelAi">对手</div>
     <button class="mini sel" id="aiHuman" data-ai="human" data-i18n="aiHuman">人类</button>
-    <div id="aiLevel">
-      <span id="aiThumb"></span>
-      <button class="seg" id="aiLow"   data-ai="low"    data-i18n="aiLow">低</button>
-      <button class="seg" id="aiMed"   data-ai="medium" data-i18n="aiMed">中</button>
-      <button class="seg" id="aiHigh"  data-ai="high"   data-i18n="aiHigh">高</button>
-      <button class="seg" id="aiXHigh" data-ai="xhigh"  data-i18n="aiXHigh">极高</button>
-      <button class="seg" id="aiUltra" data-ai="ultra"  data-i18n="aiUltra">极限</button>
+    <button class="mini" id="aiCpu" data-ai="cpu" data-i18n="aiCpu">人机</button>
+    <div id="aiLevel" class="hide">
+      <input type="range" id="aiRange" min="0" max="4" step="1" value="1">
+      <span id="aiLevelName"></span>
     </div>
   </div>
 
@@ -2573,7 +2589,7 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
   <div class="row" id="orderRow">
     <div class="rowLabel" id="rowLabelOrder" data-i18n="rowLabelOrder">谁先下</div>
     <button id="orderMe" class="sel" data-order="me" data-i18n="orderMe">我</button>
-    <button id="orderCpu" data-order="cpu" data-i18n="orderCpu">电脑</button>
+    <button id="orderCpu" data-order="cpu" data-i18n="orderCpu">人机</button>
   </div>
 
   <!-- 三维和四维的尺寸行**共用同一个槽位**（网格叠放，见 CSS 里的 #dimsSlot）。
@@ -4975,11 +4991,7 @@ const STATIC_TEXT = { en: {
   "rowLabelFirst": "First player",
   "rowLabelAi": "Opponent",
   "aiHuman": "Human",
-  "aiLow": "Low",
-  "aiMed": "Mid",
-  "aiHigh": "High",
-  "aiXHigh": "Very high",
-  "aiUltra": "Ultra",
+  "aiCpu": "Computer",
   "rowLabelOrder": "Who starts",
   "orderMe": "Me",
   "orderCpu": "Computer",
@@ -5029,6 +5041,12 @@ const TEXT = { en: {
   "toast.aiPlace": "The computer played ({x},{y},{z})",
   "toast.aiRotUndo": "Against the computer, use Undo to step back",
   "setup.aiSummary": "\nHuman vs computer: you play {mine}, the computer plays {theirs}.",
+  "aiLv.low": "Low",
+  "aiLv.medium": "Mid",
+  "aiLv.high": "High",
+  "aiLv.xhigh": "Very high",
+  "aiLv.ultra": "Ultra",
+  "aiLevel.aria": "Computer strength",
   "layer.label": "Layer {i} / {n}",
   "slice.label": "Drawing up to z ≤ {i}/{n}",
   "coords.hover": "Will place at ({x},{y},{z})",
@@ -5150,11 +5168,7 @@ STATIC_TEXT.ja = {
   "rowLabelFirst": "先手",
   "rowLabelAi": "対戦相手",
   "aiHuman": "人間",
-  "aiLow": "弱",
-  "aiMed": "中",
-  "aiHigh": "強",
-  "aiXHigh": "最強",
-  "aiUltra": "極",
+  "aiCpu": "コンピュータ",
   "rowLabelOrder": "先に打つ人",
   "orderMe": "自分",
   "orderCpu": "コンピュータ",
@@ -5183,6 +5197,12 @@ TEXT.ja = {
   "toast.aiPlace": "コンピュータは ({x},{y},{z}) に打ちました",
   "toast.aiRotUndo": "コンピュータ対戦では「取り消し」で戻してください",
   "setup.aiSummary": "\nコンピュータ対戦：あなたは{mine}、コンピュータは{theirs}。",
+  "aiLv.low": "弱",
+  "aiLv.medium": "中",
+  "aiLv.high": "強",
+  "aiLv.xhigh": "最強",
+  "aiLv.ultra": "極",
+  "aiLevel.aria": "コンピュータの強さ",
   "layer.label": "レイヤー {i} / {n}",
   "slice.label": "z ≤ {i}/{n} まで描画",
   "coords.hover": "({x},{y},{z}) に着手します",
@@ -5262,11 +5282,7 @@ STATIC_TEXT.ko = {
   "rowLabelFirst": "선수",
   "rowLabelAi": "상대",
   "aiHuman": "사람",
-  "aiLow": "하",
-  "aiMed": "중",
-  "aiHigh": "상",
-  "aiXHigh": "최상",
-  "aiUltra": "극",
+  "aiCpu": "컴퓨터",
   "rowLabelOrder": "먼저 두는 쪽",
   "orderMe": "나",
   "orderCpu": "컴퓨터",
@@ -5295,6 +5311,12 @@ TEXT.ko = {
   "toast.aiPlace": "컴퓨터가 ({x},{y},{z})에 두었습니다",
   "toast.aiRotUndo": "컴퓨터 대국에서는 「되돌리기」로 돌아가세요",
   "setup.aiSummary": "\n컴퓨터 대국: 당신은 {mine}, 컴퓨터는 {theirs}.",
+  "aiLv.low": "하",
+  "aiLv.medium": "중",
+  "aiLv.high": "상",
+  "aiLv.xhigh": "최상",
+  "aiLv.ultra": "극",
+  "aiLevel.aria": "컴퓨터 강도",
   "layer.label": "레이어 {i} / {n}",
   "slice.label": "z ≤ {i}/{n}까지 표시",
   "coords.hover": "({x},{y},{z})에 착수합니다",
@@ -5374,11 +5396,7 @@ STATIC_TEXT.ru = {
   "rowLabelFirst": "Первый игрок",
   "rowLabelAi": "Соперник",
   "aiHuman": "Человек",
-  "aiLow": "Слаб",
-  "aiMed": "Сред",
-  "aiHigh": "Сильн",
-  "aiXHigh": "Оч. сильн",
-  "aiUltra": "Ультра",
+  "aiCpu": "Компьютер",
   "rowLabelOrder": "Кто ходит",
   "orderMe": "Я",
   "orderCpu": "Компьютер",
@@ -5411,6 +5429,12 @@ TEXT.ru = {
   "toast.aiPlace": "Компьютер сыграл ({x},{y},{z})",
   "toast.aiRotUndo": "В игре с компьютером отступайте кнопкой «Отменить»",
   "setup.aiSummary": "\nИгра с компьютером: вы играете {mine}, компьютер — {theirs}.",
+  "aiLv.low": "Слаб",
+  "aiLv.medium": "Сред",
+  "aiLv.high": "Сильн",
+  "aiLv.xhigh": "Оч. сильн",
+  "aiLv.ultra": "Ультра",
+  "aiLevel.aria": "Сила компьютера",
   "layer.label": "Слой {i} / {n}",
   "slice.label": "Рисуем до z ≤ {i}/{n}",
   "coords.hover": "Ход в ({x},{y},{z})",
@@ -5498,11 +5522,7 @@ STATIC_TEXT.fr = {
   "rowLabelFirst": "Premier joueur",
   "rowLabelAi": "Adversaire",
   "aiHuman": "Humain",
-  "aiLow": "Bas",
-  "aiMed": "Moyen",
-  "aiHigh": "Haut",
-  "aiXHigh": "Très haut",
-  "aiUltra": "Ultra",
+  "aiCpu": "Ordinateur",
   "rowLabelOrder": "Qui commence",
   "orderMe": "Moi",
   "orderCpu": "Ordinateur",
@@ -5533,6 +5553,12 @@ TEXT.fr = {
   "toast.aiPlace": "L'ordinateur a joué ({x},{y},{z})",
   "toast.aiRotUndo": "Contre l'ordinateur, utilisez « Annuler » pour revenir en arrière",
   "setup.aiSummary": "\nContre l'ordinateur : vous jouez {mine}, l'ordinateur joue {theirs}.",
+  "aiLv.low": "Bas",
+  "aiLv.medium": "Moyen",
+  "aiLv.high": "Haut",
+  "aiLv.xhigh": "Très haut",
+  "aiLv.ultra": "Ultra",
+  "aiLevel.aria": "Force de l'ordinateur",
   "layer.label": "Couche {i} / {n}",
   "slice.label": "Affichage jusqu'à z ≤ {i}/{n}",
   "coords.hover": "Sera posé en ({x},{y},{z})",
@@ -6405,10 +6431,12 @@ const Game = {
   setupDims: [15, 15, 15],
   setupCube: true,       // 三维模式下三轴是否联动
   setupFirst: BLACK,
-  // ---- 电脑对手（起始界面的选择）。
-  // setupAi 直接就是难度值，不另设一个"是不是人机"的布尔量和一个难度两个字段 ——
-  // 那样就会出现"人类 + 强"这个无意义组合需要单独定义。见 #aiRow 的 HTML 注释。
-  setupAi: "human",      // "human" | "weak" | "medium" | "strong"
+  // ---- 电脑对手（起始界面的选择）。**两个字段，因为界面上是两个控件**：
+  // setupAi 是"跟谁下"的开关（人类 / 人机），setupLevel 是"电脑有多强"的刻度（0..4）。
+  // 上一版把它们塞成一个字段（human/low/…/ultra），于是"人类"和"难度"共用一个单选组，
+  // 玩家看不出自己到底选了什么 —— 而且想加一档就得往那个枚举里再塞一个值。
+  setupAi: "human",      // "human" | "cpu"
+  setupLevel: 1,         // 0..4，下标进内核的 AI_LEVELS
   setupOrder: "me",      // 「谁先下」："me" | "cpu"。人人对局时无意义（按钮禁用）
   // ---- 电脑对手（本局的运行状态）。
   // **aiMode 默认 false**：桩测试和 browser-check 里有一长串手动 newGame，
@@ -6499,7 +6527,7 @@ const Game = {
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
-      "aiHuman","aiLow","aiMed","aiHigh","aiXHigh","aiUltra","aiLevel","aiThumb","orderMe","orderCpu",
+      "aiHuman","aiCpu","aiLevel","aiRange","aiLevelName","orderMe","orderCpu",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
@@ -6614,9 +6642,8 @@ const Game = {
     if (this.session) this.refreshTexts();
     this.syncSetupInputs();
     this.syncCoolRow();
-    // 拉条上的字换了语言，每一格的宽度就变了 —— 滑块得重新量一次位置，
-    // 否则它会停在上一种语言算出来的宽度上（俄语比中文宽得多）。
-    this.syncAiThumb();
+    // 档位名换了语言就要重刷（它是 say() 写的，applyStatic 管不到）
+    this.syncAiLevel();
     this.refreshSetupSummary();
     // 这两个是 JS 写的、不挂 data-i18n 的元素，applyStatic 管不到它们。
     // refreshHint 只在 WebGL2 失败时动手，正常情况下它直接返回。
@@ -6730,7 +6757,7 @@ const Game = {
     // 那个 handler 里：任何调用 newGame 的路径（脚本、测试、控制台）拿到的行为都一样。
     // aiMyColor 一旦定下就不再变 —— 换先手是"改为另一方先走"，不是两个人换座位。
     this.aiMode = this.setupAi !== "human";
-    this.aiLevel = this.aiMode ? this.setupAi : "medium";
+    this.aiLevel = AI_LEVELS[this.setupLevel] || "medium";
     this.aiMyColor = this.setupMyColor;
     this.onBoardChanged(true);
     // 【这一条不能省】第一次 newGame 是新建会话，不会触发 onReset，
@@ -7221,7 +7248,7 @@ const Game = {
     this.syncSetupInputs();
     this.syncCoolRow();
     this.syncOrderRow();
-    this.syncAiThumb();
+    this.syncAiLevel();
     this.refreshSetupSummary();
     this.ensurePreview();
     this.uploadPreviewInstances();
@@ -7858,8 +7885,12 @@ const Game = {
     // ---- 电脑对手：「人类」一个键 + 强度拉条五格，data-ai 的取值就是 setupAi 本身。
     // 【只能走 this.el[id] + addEventListener，不能 querySelectorAll(".seg")】——
     // DOM 桩只认五个选择器，写成类选择器会在桩里静默返回空数组（见 syncOrderRow 的注释）。
-    for (const id of ["aiHuman", "aiLow", "aiMed", "aiHigh", "aiXHigh", "aiUltra"]) {
+    for (const id of ["aiHuman", "aiCpu"]) {
       on(id, () => this.setSetupAi(this.el[id].dataset.ai));
+    }
+    // 拉条：input 事件拖动和键盘都会触发
+    if (this.el.aiRange && this.el.aiRange.addEventListener) {
+      this.el.aiRange.addEventListener("input", () => this.setSetupLevel(parseInt(this.el.aiRange.value, 10)));
     }
     on("orderMe", () => this.setSetupOrder("me"));
     on("orderCpu", () => this.setSetupOrder("cpu"));
@@ -8832,19 +8863,62 @@ const Game = {
   },
 
   setSetupAi(v) {
-    this.setupAi = (v === "low" || v === "medium" || v === "high" ||
-                    v === "xhigh" || v === "ultra") ? v : "human";
-    for (const id of ["aiHuman", "aiLow", "aiMed", "aiHigh", "aiXHigh", "aiUltra"]) {
+    this.setupAi = (v === "cpu") ? "cpu" : "human";
+    for (const id of ["aiHuman", "aiCpu"]) {
       const el = this.el[id];
-      // dataset.ai 就是 setupAi 的取值本身（human/low/medium/high/xhigh/ultra），
-      // 所以这里不用另建一张表 —— 少一张表就少一处会和 HTML 漂移的地方
+      // dataset.ai 就是 setupAi 的取值本身（human/cpu），少一张表就少一处会漂移的地方
       if (el) el.classList.toggle("sel", el.dataset.ai === this.setupAi);
     }
-    // 选了「人类」时整条拉条置灰（保留位置，见 #aiLevel.off 的 CSS 注释）
-    if (this.el.aiLevel) this.el.aiLevel.classList.toggle("off", this.setupAi === "human");
-    this.syncAiThumb();
+    // 没选人机时拉条看不见，但槽位留着（见 #aiRow 的 HTML 注释：不能让整列跳）
+    if (this.el.aiLevel) this.el.aiLevel.classList.toggle("hide", this.setupAi !== "cpu");
+    this.syncAiLevel();
     this.syncOrderRow();
     this.refreshSetupSummary();
+  },
+
+  /** 拖动拉条 / 键盘左右键都会走这里。i 是 0..4 的下标。 */
+  setSetupLevel(i) {
+    const n = AI_LEVELS.length;
+    this.setupLevel = Math.max(0, Math.min(n - 1, Math.round(i) || 0));
+    if (this.el.aiRange) this.el.aiRange.value = String(this.setupLevel);
+    this.syncAiLevel();
+    this.refreshSetupSummary();
+  },
+
+  /**
+   * 把拉条的外观刷成当前档位：填充比例、颜色、右边的档位名。
+   * **两件事都只写在父元素上**（--pct / data-lv），轨道的渐变和滑块的颜色都由 CSS 读它们 ——
+   * 原生滑块的轨道和滑块是伪元素，写不进内联样式；写在父元素的自定义属性上才能被它们继承到。
+   */
+  syncAiLevel() {
+    const lv = this.el.aiLevel;
+    if (lv && lv.style) {
+      const n = AI_LEVELS.length - 1;
+      lv.dataset.lv = String(this.setupLevel);
+      // 填充到滑块中心：留半格的余量，不然最后一档看着像没填满
+      const pct = n > 0 ? (this.setupLevel / n) * 100 : 100;
+      lv.style.setProperty("--pct", pct.toFixed(1) + "%");
+    }
+    const name = this.aiLevelNameText();
+    if (this.el.aiLevelName) this.el.aiLevelName.textContent = name;
+    // 无障碍：滑块本身报出当前档位。它是 attribute 不是文本，不进 data-i18n 表。
+    if (this.el.aiRange) {
+      this.el.aiRange.setAttribute("aria-valuetext", name);
+      this.el.aiRange.setAttribute("aria-label", say(() => "电脑强度", "aiLevel.aria"));
+    }
+  },
+
+  /**
+   * 当前档位的名字。**五个 say 各写各的字面量键** ——
+   * 源码扫描要求键是字面量（拼出来的键它认不出，会当成漏翻），所以不能写成下标查表。
+   */
+  aiLevelNameText() {
+    const i = this.setupLevel;
+    if (i === 0) return say(() => "低", "aiLv.low");
+    if (i === 1) return say(() => "中", "aiLv.medium");
+    if (i === 2) return say(() => "高", "aiLv.high");
+    if (i === 3) return say(() => "极高", "aiLv.xhigh");
+    return say(() => "极限", "aiLv.ultra");
   },
 
   setSetupOrder(order) {
@@ -8852,28 +8926,6 @@ const Game = {
     if (this.el.orderMe) this.el.orderMe.classList.toggle("sel", this.setupOrder === "me");
     if (this.el.orderCpu) this.el.orderCpu.classList.toggle("sel", this.setupOrder === "cpu");
     this.refreshSetupSummary();
-  },
-
-  /**
-   * 把圆头滑块挪到当前那一档上。**只有真实浏览器里做** —— 桩里没有 offsetLeft/offsetWidth，
-   * 量出来是 undefined，写进去会变成一个 NaN 宽度。
-   */
-  syncAiThumb() {
-    const thumb = this.el.aiThumb;
-    if (!thumb || !thumb.style) return;
-    let target = null;
-    for (const id of ["aiLow", "aiMed", "aiHigh", "aiXHigh", "aiUltra"]) {
-      const el = this.el[id];
-      if (el && el.classList.contains("sel")) { target = el; break; }
-    }
-    // 没选中任何一档（= 人类）时把滑块缩到最左边，别让它停在上一次的档位上误导人
-    if (!target || !target.offsetWidth) {
-      thumb.style.width = "0px";
-      thumb.style.left = "3px";
-      return;
-    }
-    thumb.style.left = target.offsetLeft + "px";
-    thumb.style.width = target.offsetWidth + "px";
   },
 
   /**

@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40699_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40709_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -80,7 +80,7 @@ bash _verify/run-all.sh
 九步，期望结果：
 
 ```
-11733 + 19408 + 98 + 114 + 107 + 8845 + 115 + 279 = 40699 项断言全绿
+11733 + 19408 + 98 + 114 + 107 + 8845 + 115 + 289 = 40709 项断言全绿
 ```
 
 第 9 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -97,7 +97,7 @@ bash _verify/run-all.sh
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 107 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值、拖拽方向约定） |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | 联机内核：和网页版逐格对拍 1156 组 |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | 联机 HTTP 层（本机 loopback） |
-| `node _verify/browser-check.mjs` | 279 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局） |
+| `node _verify/browser-check.mjs` | 289 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局） |
 
 后两项联机测试在第 8 步里跑，**不可跳过**（端口是随机挑的空闲端口）。
 另有三个注入验证脚本，专门证明上面那些检查**真的会红**：
@@ -223,6 +223,7 @@ bash _verify/run-all.sh
 
 ### 2026.09.27
 
+- 🐛 **v2.10.3** 强度拉条改成真的能拖（原生滑块、方角、和别的按钮同一套），拖动时颜色一档档变重；「对手」拆成 人类/人机 两步，选了人机才出现拉条；「谁先下」的「电脑」改为「人机」
 - ✨ **v2.10.2** 电脑对手改成五档（低/中/高/极高/极限）拉条；换掉评估函数（按方向数威胁、认得跳形与双威胁）；最高档新增算杀（连续冲四的强制取胜搜索）
 
 - ✨ **v2.10.1** 电脑对手中/强两档改为会搜索：中档算一层、强档算四层；修复强档之外的着法其实没排序（三档大量回合在乱下）
