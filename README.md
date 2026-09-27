@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40650_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40666_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -80,7 +80,7 @@ bash _verify/run-all.sh
 九步，期望结果：
 
 ```
-11733 + 19408 + 98 + 66 + 107 + 8845 + 115 + 278 = 40650 项断言全绿
+11733 + 19408 + 98 + 82 + 107 + 8845 + 115 + 278 = 40666 项断言全绿
 ```
 
 第 9 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -93,7 +93,7 @@ bash _verify/run-all.sh
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 三维规则基线（回放冻结向量） |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 四维转动一致性 |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
-| `node Web_Gomoku3D/tests/ai.test.mjs` | 66 | 电脑对手（两条硬规则、三档强弱关系、自对局逐手喂给引擎、计算量上界） |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 82 | 电脑对手（两条硬规则、三档强弱关系、自对局逐手喂给引擎、计算量上界） |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 107 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值、拖拽方向约定） |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | 联机内核：和网页版逐格对拍 1156 组 |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | 联机 HTTP 层（本机 loopback） |
@@ -200,9 +200,9 @@ bash _verify/run-all.sh
 
 ## ⚠️ 已知限制
 
-- **电脑对手只会看眼前一步。** 有弱 / 中 / 强三档，但三档都只算一手：认不出跳子形状、
-  看不见双威胁，最高档也不做多步搜索。这是刻意的（"简单档把新手打没脾气"是这类功能的通病），
-  不是没做完 —— 想要真正的棋力得换成会搜索的实现。
+- **电脑对手不是棋力引擎。** 三档的差别在算多远：弱档只看眼前一步，中档会算一层，
+  强档往下算四层。就算强档也认不出跳子形状、看不见双威胁，没有开局库也没有定式 ——
+  当陪练够用，想认真下棋请找专门的引擎。
   （跨机联机的**服务器与协议已经实现并有测试覆盖**（`Web_Gomoku3D/server.js`，第 8 步 8960 项断言），
   但页面还没接上它 —— 所以现在还不能真的跨机对局。方案与取舍见 [ONLINE.md](Web_Gomoku3D/ONLINE.md)）
 - **没有存档。**
@@ -223,6 +223,7 @@ bash _verify/run-all.sh
 
 ### 2026.09.27
 
+- ✨ **v2.11.0** 电脑对手中/强两档改为会搜索：中档算一层、强档算四层；修复强档之外的着法其实没排序（三档大量回合在乱下）
 - ✨ **v2.10.0** 新增人机对战：起始界面可选弱/中/强三档电脑对手，四维模式下它也会转动层
 - 🐛 **v2.9.1** 电脑版新增右键拖动（与 Shift + 左键）平移立体棋盘；修复触控板双指放大实际缩小（鼠标滚轮方向一并改正）
 

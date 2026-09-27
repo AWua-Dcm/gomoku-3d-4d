@@ -68,7 +68,7 @@ try {
     return { Board3D, RuleSet, RuleEngine, GameSession, FourDSession, DIRS13, MoveStatus,
              EMPTY, BLACK, WHITE, opponentOf, fingerprint,
              RotationMove, RotateStatus, AXIS_X, AXIS_Y, AXIS_Z,
-             aiChooseMove, aiCandidates, aiRng, AI_LEVELS, AI_PARAMS };`)();
+             aiChooseMove, aiCandidates, aiShapeAt, aiRng, AI_LEVELS, AI_PARAMS };`)();
   passed++;
 } catch (e) {
   console.error("内核求值失败：" + e.message + "\n" + (e.stack || ""));
@@ -76,7 +76,7 @@ try {
 }
 const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK, WHITE,
         opponentOf, fingerprint, RotationMove, RotateStatus, AXIS_X, AXIS_Y, AXIS_Z,
-        aiChooseMove, aiCandidates, aiRng, AI_LEVELS, AI_PARAMS } = Core;
+        aiChooseMove, aiCandidates, aiShapeAt, aiRng, AI_LEVELS, AI_PARAMS } = Core;
 
 console.log("三档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
@@ -481,10 +481,138 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   }
   console.log("对方活三时去堵的比例（各 60 局）：弱 " + counts.weak +
               " / 中 " + counts.medium + " / 强 " + counts.strong);
-  check(counts.weak < counts.medium && counts.medium < counts.strong,
-        "对方活三时去堵的比例：弱 < 中 < 强",
-        "弱 " + counts.weak + " / 中 " + counts.medium + " / 强 " + counts.strong + "（各 60 局）");
+  // 【注意这个指标在搜索档上饱和了】中/强 都是 100%，所以它只能证明"弱档不总堵、
+  // 搜索档每次都堵"，证不了"中 < 强"。后者由下面第 8.5 组的真对局来证。
+  check(counts.weak < counts.medium,
+        "弱档不是每个活三都去堵（这是它「弱」的主要来源）",
+        "弱 " + counts.weak + " / 中 " + counts.medium + "（各 60 局）");
+  eq(counts.medium, 60, "中档每个活三都去堵（它已经会搜索了）");
   eq(counts.strong, 60, "强档每个活三都去堵");
+}
+
+// ---------------------------------------------------------------------------
+// 8.5 「你选的这一手像不像话」—— 名次不变量
+//
+// 【这一组是冲着 v2.10.0 的一个真 bug 去的】那一版里 `scored.sort()` 被写在
+// `if (blockAt)` 分支**里面**，于是没有活三威胁的时候那个数组从来没排过序，
+// `scored[0]` 拿的是"扫描到的第一个候选"（基本就是 z/y/x 最小的那一带，棋盘角落）。
+// 三档在大多数回合里都在乱下 —— 而当时的 66 项断言全绿，因为它们只测了硬规则
+// （能赢必赢、必堵必堵、不自尽）和堵活三的比例，**没有一条问过"你选的这一手像不像话"**。
+// 硬规则是判断链兜住的，判断链之外的着法当时完全没人管。
+//
+// 这里钉的是结构性的那一条：无论走打分还是走搜索，选中的那一手必须在引擎自己的
+// 排序键里排前 4 名（打分档从前 topK 名里挑，搜索档只看前 branch 名，都是 4）。
+// 那个 bug 下选中的角落格子名次在两百名开外，这一条会当场红。
+// ---------------------------------------------------------------------------
+
+{
+  const wl = 5;
+  const keyOf = (s, x, y, z, mover) => {
+    const foe = opponentOf(mover);
+    return aiShapeAt(s.board, x, y, z, mover, wl).total +
+           aiShapeAt(s.board, x, y, z, foe, wl).total;
+  };
+  const rankOf = (s, a, mover) => {
+    const mine = keyOf(s, a.x, a.y, a.z, mover);
+    const cand = aiCandidates(s.board, 20000);
+    let better = 0;
+    for (let i = 0; i < cand.length; i += 3) {
+      if (keyOf(s, cand[i], cand[i + 1], cand[i + 2], mover) > mine) better++;
+    }
+    return better + 1;
+  };
+
+  // 三个局面：都没有"立刻分出胜负"的点，所以判断链一步都不会提前返回，
+  // 走的一定是打分/搜索那条路 —— 正好是 bug 藏身的地方。
+  const cases = [
+    ["自己两连", (s) => { put(s, BLACK, [[5, 5, 5], [6, 5, 5]]);
+                          put(s, WHITE, [[8, 9, 9], [9, 9, 9]]); }],
+    ["对方两连", (s) => { put(s, WHITE, [[5, 5, 5], [6, 5, 5]]);
+                          put(s, BLACK, [[8, 9, 9]]); }],
+    ["对方活三", (s) => { put(s, WHITE, [[5, 5, 5], [6, 5, 5], [7, 5, 5]]);
+                          put(s, BLACK, [[5, 9, 9], [6, 9, 9]]); }],
+    ["开局散子", (s) => { put(s, BLACK, [[7, 7, 7], [9, 9, 9]]);
+                          put(s, WHITE, [[6, 6, 6], [8, 8, 8]]); }],
+  ];
+
+  // 名次上界按档位分开：
+  //   · 中/强 走搜索，而搜索**只看排序后的前 branch(=4) 个**，所以 4 是结构性保证
+  //   · 弱档有噪声（乘性抖动会把低分格抬进前几名），还有一条按 defBest 走的堵活三分支
+  //     （它挑的是"对方在那里最能做出东西"的点，未必是全键的前几名），所以放宽到 40。
+  //     实测最差 19 名。**那个 bug 下这个数是两百名开外**，所以 40 一样抓得住。
+  const RANK_MAX = { weak: 40, medium: 4, strong: 4 };
+
+  for (const [name, setup] of cases) {
+    for (const level of AI_LEVELS) {
+      const seeds = level === "weak" ? [0, 1, 2, 3, 4, 5, 6, 7] : [0, 1, 2];
+      let worst = 0;
+      for (const seed of seeds) {
+        const s = mkSession(15, BLACK, false);
+        setup(s);
+        s.inner.currentPlayer = BLACK;
+        const a = aiChooseMove(s, { level, seed });
+        if (a.kind !== "place") { worst = 999; break; }
+        const r = rankOf(s, a, BLACK);
+        if (r > worst) worst = r;
+      }
+      check(worst <= RANK_MAX[level],
+            "选的那一手排在引擎自己排序键的前 " + RANK_MAX[level] + " 名 [" + level + " · " + name + "]",
+            "最差名次 " + worst + "（超了就说明着法不是按分数挑的）");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8.6 三档的强弱关系，用**真对局**量
+//
+// 上面那条"堵活三比例"在搜索档上饱和了（都是 100%），所以强弱只能靠对局。
+// 方法论上有两处必须做对，否则量出来的是假数据（这两条我都踩过）：
+//   1. **随机开局**。搜索是确定性的、不消耗随机数，固定开局下"40 局"其实是同一盘棋重复 40 次。
+//   2. **两色各半**。这个棋里先手优势很大，同色自比几乎恒为"黑胜"，所以必须两边都下一遍。
+// 断言不看单局、只看胜分率，而且留了余量。
+// ---------------------------------------------------------------------------
+
+{
+  function duel(levelA, levelB, games, seedBase) {
+    let score = 0, wins = 0, losses = 0, draws = 0, plies = 0;
+    for (let i = 0; i < games; i++) {
+      const aIsBlack = i % 2 === 0;
+      const s = mkSession(15, BLACK, false);
+      const rng = rngOf(seedBase + i * 7);
+      const open = (i % 4) * 2;                    // 0 / 2 / 4 / 6 手随机开局
+      for (let j = 0; j < open && s.status === "Playing"; j++) {
+        const em = [];
+        for (let z = 4; z < 9; z++) for (let y = 4; y < 9; y++) for (let x = 4; x < 9; x++) {
+          if (s.board.isEmpty(x, y, z)) em.push([x, y, z]);
+        }
+        const m = em[(rng() * em.length) | 0];
+        s.place(m[0], m[1], m[2]);
+      }
+      let n = open;
+      while (s.status === "Playing" && n < 240) {
+        const lv = ((s.currentPlayer === BLACK) === aIsBlack) ? levelA : levelB;
+        const a = aiChooseMove(s, { level: lv, seed: (rng() * 4294967296) >>> 0 });
+        if (a.kind !== "place") break;
+        if (s.place(a.x, a.y, a.z).status === MoveStatus.Rejected) break;
+        n++;
+      }
+      plies += n;
+      const aWon = (s.winner === BLACK && aIsBlack) || (s.winner === WHITE && !aIsBlack);
+      if (s.winner === EMPTY) { score += 0.5; draws++; }
+      else if (aWon) { score += 1; wins++; }
+      else losses++;
+    }
+    return { score: score, wins: wins, losses: losses, draws: draws, games: games,
+             avg: Math.round(plies / games) };
+  }
+
+  for (const [strong, weak] of [["medium", "weak"], ["strong", "medium"], ["strong", "weak"]]) {
+    const r = duel(strong, weak, 12, 4000);
+    console.log(`${strong} vs ${weak}：${r.score}/${r.games}（胜 ${r.wins} / 负 ${r.losses} / 和 ${r.draws}）平均 ${r.avg} 手`);
+    check(r.score >= r.games * 0.7,
+          strong + " 档明显强于 " + weak + " 档（真对局，随机开局 + 两色各半）",
+          `得分 ${r.score}/${r.games}`);
+  }
 }
 
 // ---------------------------------------------------------------------------

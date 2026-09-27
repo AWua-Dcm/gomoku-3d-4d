@@ -7,7 +7,7 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-40650_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-40666_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
@@ -81,7 +81,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
 
 ```
-11733 + 19408 + 98 + 66 + 107 + 8845 + 115 + 278 = 40650 assertions, all green
+11733 + 19408 + 98 + 82 + 107 + 8845 + 115 + 278 = 40666 assertions, all green
 ```
 
 Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -94,7 +94,7 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
-| `node Web_Gomoku3D/tests/ai.test.mjs` | 66 | The computer opponent (both hard rules, the three tiers' relative strength, self-play fed to the engine move by move, compute ceiling) |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 82 | The computer opponent (both hard rules, the three tiers' relative strength, self-play fed to the engine move by move, compute ceiling) |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 107 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
@@ -227,11 +227,10 @@ and it is stated here rather than papered over.
 
 ## ⚠️ Known limitations
 
-- **The computer opponent only looks one move ahead.** Three tiers (easy / medium / hard), and all
-  three count a single move: they do not recognise gapped shapes, they do not see double threats, and
-  even the hardest tier does no multi-move search. That is deliberate — an "easy" opponent that beats
-  beginners every time is the usual failure of this feature — not unfinished work. Real strength
-  would need a searching implementation.
+- **The computer opponent is not an engine.** The tiers differ in how far they look: easy sees one
+  move ahead, medium one reply ahead, hard searches four plies. Even hard does not recognise gapped
+  shapes, does not see double threats, and has no opening book or joseki — good enough as a sparring
+  partner; for a serious game, use a dedicated engine.
   (Cross-machine networking: the **server and protocol are implemented and tested**
   — `Web_Gomoku3D/server.js`, 8960 assertions in step 8 — but the page is not wired to it,
   so you cannot actually play across machines yet. Design and trade-offs:
@@ -257,6 +256,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.27
 
+- ✨ **v2.11.0** The medium and hard tiers now search: medium looks one reply ahead, hard four plies; fixed moves outside the hard tier's win/block path never being sorted (all three tiers played near-randomly on most turns)
 - ✨ **v2.10.0** Added a computer opponent: easy / medium / hard on the start screen; in 4D it rotates layers too
 - 🐛 **v2.9.1** Desktop: right-drag (or Shift + left-drag) now pans the 3D board; fixed the trackpad pinch zooming the wrong way (the mouse wheel direction was wrong too)
 

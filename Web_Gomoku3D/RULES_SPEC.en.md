@@ -210,9 +210,12 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 ## 11. Playing the computer
 
 - **The start screen has an "Opponent" row**: Human (two players, one device) / CPU · easy /
-  CPU · medium / CPU · hard. All three tiers are **deliberately weak**: they look one move ahead, and
-  even the hardest tier does not search any deeper. An "easy" opponent that beats beginners every time
-  is the usual failure of this feature, so the whole thing errs on the weak side.
+  CPU · medium / CPU · hard. **The tiers differ in how far they look ahead**: the easy tier sees one
+  move ahead; the medium tier looks one reply ahead (what the board looks like after you answer);
+  the hard tier searches four plies. That is why the hard tier walks away from positions where your
+  next move would make an open four, while the easy tier happily walks into them. All three stay
+  deliberately on the weak side — an "easy" opponent that beats beginners every time is the usual
+  failure of this feature.
 - **Two choices, two different jobs.** "First player" picks the **colour** that goes first (which is
   also the colour that carries the overline loss); "Who starts" picks **which of the two** plays that
   colour. So "Black first + Computer" means the computer plays Black and opens, and you play White.
@@ -230,8 +233,8 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 - **No double-three or double-four restrictions.** In traditional Renju (Gomoku's competitive form) the first player is also
   barred from "one move making two open threes / two fours" and the like; this game implements the overline loss only. The
   penalty falls after the move — there is no cell you are forbidden to play.
-- **No computer opponent that searches.** All three tiers look one move ahead: they do not recognise
-  gapped shapes, they do not see double threats, and even the hardest tier does no multi-move search.
-  Real strength would need a searching implementation.
+- **The computer opponent is not an engine.** Even the hardest tier only searches four plies: it does
+  not recognise gapped shapes, it does not see double threats, and it has no opening book or joseki.
+  Good enough as a sparring partner; for a serious game, use a dedicated engine.
 - **Rotations are not animated**; they land instantly, with only a brief highlight on the rotated layer.
 - **Rotations can only be made with the panel buttons**, not by dragging in the 3D view.

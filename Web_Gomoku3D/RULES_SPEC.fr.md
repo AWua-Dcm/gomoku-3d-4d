@@ -207,10 +207,12 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 ## 11. Jouer contre l'ordinateur
 
 - **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil) /
-  ordinateur · facile / moyen / difficile. Les trois niveaux sont **volontairement faibles** : ils ne
-  regardent qu'un coup d'avance, et même le plus difficile ne calcule pas plus loin. Un adversaire
-  « facile » qui bat les débutants à tous les coups est le défaut habituel de cette fonction, donc
-  tout est tiré vers le bas.
+  ordinateur · facile / moyen / difficile. **Les niveaux diffèrent par la profondeur de calcul** :
+  le facile ne voit qu'un coup d'avance ; le moyen voit la réponse d'après (ce que donne le plateau
+  quand vous répondez) ; le difficile calcule quatre demi-coups. C'est pourquoi le difficile évite
+  les positions où votre coup suivant ferait un quatre ouvert, alors que le facile y entre sans
+  broncher. Les trois restent volontairement faibles : un adversaire « facile » qui bat les débutants
+  à tous les coups est le défaut habituel de cette fonction.
 - **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
   aussi la défaite pour alignement trop long) ; « Qui commence » choisit **lequel des deux** joue cette
   couleur. Ainsi « Noirs en premier + Ordinateur » : l'ordinateur joue Noirs et ouvre, vous jouez
@@ -227,8 +229,8 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 
 - **Pas de double-trois ni de double-quatre.** Dans le renju traditionnel, le premier joueur a aussi des interdits comme
   « un coup qui forme à la fois deux trois ouverts / deux quatre » ; ce jeu n'implémente que la défaite pour alignement trop long. La sanction tombe après la pose du pion : il n'existe pas de « cette case est interdite ».
-- **Pas d'ordinateur qui calcule.** Les trois niveaux ne regardent qu'un coup d'avance : ils ne
-  reconnaissent pas les figures à trou, ne voient pas les menaces doubles, et même le plus difficile ne
-  fait aucune recherche sur plusieurs coups. Une vraie force demanderait une implémentation avec recherche.
+- **L'ordinateur n'est pas un moteur d'échecs.** Même le niveau difficile ne calcule que quatre
+  demi-coups : il ne reconnaît pas les figures à trou, ne voit pas les menaces doubles, et n'a ni
+  ouvertures ni théorie. Bon partenaire d'entraînement ; pour jouer sérieusement, prenez un moteur dédié.
 - **Les rotations n'ont pas d'animation** : elles se font instantanément, seule la couche tournée est brièvement mise en évidence.
 - **Les rotations ne se font qu'avec les boutons du panneau**, pas en glissant directement dans la vue 3D.

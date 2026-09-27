@@ -1018,8 +1018,9 @@
 ## 11. 人机对战
 
 - **起始界面可以选「对手」**：人类（同机轮流）/ 电脑 · 弱 / 电脑 · 中 / 电脑 · 强。
-  三档都是**刻意做弱**的：只算眼前一步，最高档也不会再多算。低级难度把玩家打得没脾气
-  是这类功能最常见的毛病，所以宁可做弱。
+  **三档的差别在"算多远"**：弱档只看眼前一步；中档会算一层（我下完他会怎么应）；
+  强档往下算四层。所以强档会主动躲开"我下这里、他下一手就成四"这类局面，弱档看不出来。
+  三档都刻意不去做得太强 —— 低级难度把玩家打得没脾气是这类功能最常见的毛病。
 - **两个选择各管一件事**：「谁先手」选的是**哪个颜色**先走（顺带也就定了谁背长连判负），
   「谁先下」选的是**哪个人**执那个颜色。所以「黑棋先手 + 电脑」= 电脑执黑走第一手、你执白。
   起始界面底下那句总结会把「你执哪个色」写出来。
@@ -1033,8 +1034,8 @@
 
 - **没有双三、双四禁手。** 传统连珠（Renju）里，先手还有"一手同时形成两个活三 / 两个四"
   这类禁手，本作只实现了长连判负这一条。判罚发生在落子之后，不存在"这个点不能落"。
-- **没有会搜索的电脑对手。** 三档都只看眼前一步，认不出跳子形状、看不见双威胁，
-  最高档也不做多步搜索。想要真正的棋力得换成会搜索的实现。
+- **电脑对手不是棋力引擎。** 最强的一档也只往下算四层，认不出跳子形状、看不见双威胁，
+  没有开局库也没有定式。当陪练够用，想认真下棋请找专门的引擎。
 - **转动没有动画**，是瞬间到位，只会高亮一下被转的那一层。
 - **转动只能用面板上的按钮完成**，不能在立体视图里直接拖动。
 </script>
@@ -1260,9 +1261,12 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 ## 11. Playing the computer
 
 - **The start screen has an "Opponent" row**: Human (two players, one device) / CPU · easy /
-  CPU · medium / CPU · hard. All three tiers are **deliberately weak**: they look one move ahead, and
-  even the hardest tier does not search any deeper. An "easy" opponent that beats beginners every time
-  is the usual failure of this feature, so the whole thing errs on the weak side.
+  CPU · medium / CPU · hard. **The tiers differ in how far they look ahead**: the easy tier sees one
+  move ahead; the medium tier looks one reply ahead (what the board looks like after you answer);
+  the hard tier searches four plies. That is why the hard tier walks away from positions where your
+  next move would make an open four, while the easy tier happily walks into them. All three stay
+  deliberately on the weak side — an "easy" opponent that beats beginners every time is the usual
+  failure of this feature.
 - **Two choices, two different jobs.** "First player" picks the **colour** that goes first (which is
   also the colour that carries the overline loss); "Who starts" picks **which of the two** plays that
   colour. So "Black first + Computer" means the computer plays Black and opens, and you play White.
@@ -1280,9 +1284,9 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 - **No double-three or double-four restrictions.** In traditional Renju (Gomoku's competitive form) the first player is also
   barred from "one move making two open threes / two fours" and the like; this game implements the overline loss only. The
   penalty falls after the move — there is no cell you are forbidden to play.
-- **No computer opponent that searches.** All three tiers look one move ahead: they do not recognise
-  gapped shapes, they do not see double threats, and even the hardest tier does no multi-move search.
-  Real strength would need a searching implementation.
+- **The computer opponent is not an engine.** Even the hardest tier only searches four plies: it does
+  not recognise gapped shapes, it does not see double threats, and it has no opening book or joseki.
+  Good enough as a sparring partner; for a serious game, use a dedicated engine.
 - **Rotations are not animated**; they land instantly, with only a brief highlight on the rotated layer.
 - **Rotations can only be made with the panel buttons**, not by dragging in the 3D view.
 </script>
@@ -1505,9 +1509,11 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 ## 11. コンピュータとの対戦
 
 - **開始画面に「対戦相手」の行がある**：人間（同じ端末で交互に）/ コンピュータ · 弱 / 中 / 強。
-  3 段階とも**わざと弱く**作ってあり、読むのは常に一手先まで —— 最上位でもそれ以上は読みません。
-  「簡単」な相手が初心者を毎回負かしてしまうのはこの手の機能でありがちな失敗なので、
-  弱い側に振ってあります。
+  **3 段階の違いは「どこまで読むか」**です：弱は一手先だけ、中は一手先の応手まで
+  （自分が打ったあと相手がどう受けるか）、強は四手先まで読みます。だから強は
+  「ここに打つと次の相手の一手で活四になる」という局面を避け、弱は平気で踏み込みます。
+  3 段階とも**わざと弱め**に振ってあります —— 「簡単」な相手が初心者を毎回負かしてしまうのは
+  この手の機能でありがちな失敗なので。
 - **2 つの選択は役割が違う**：「誰が先手」は**どの色**が先に打つか（＝長連による負けを負う側）を選び、
   「誰が先に打つか」は**2 人のどちら**がその色を持つかを選びます。つまり
   「黒が先手 + コンピュータ」ならコンピュータが黒で初手を打ち、あなたは白です。
@@ -1523,8 +1529,9 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 
 - **三三禁・四四禁はない。** 伝統的な連珠（Renju）では、先手に「1 手で同時に 2 つの活三 / 2 つの四を作る」
   といった禁手もあるが、本作が実装しているのは長連による負けの 1 つだけ。反則の判定は着手の後に行われ、「この点には打てない」ということはない。
-- **読むコンピュータはいない。** 3 段階とも一手先しか見ません：跳びの形は認めず、
-  二重の脅威も見えず、最上位でも複数手の探索はしません。本当の棋力には探索する実装が要ります。
+- **コンピュータは棋力エンジンではありません。** 最上位でも四手先までしか読みません：
+  跳びの形は認めず、二重の脅威も見えず、定石も定跡もありません。
+  練習相手には十分ですが、本気で打つなら専用のエンジンを使ってください。
 - **回転にアニメーションはない**。瞬時に移動し、回したレイヤーが一瞬ハイライトされるだけ。
 - **回転はパネルのボタンでしか行えない**。立体ビューの中で直接ドラッグすることはできない。
 </script>
@@ -1743,8 +1750,11 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 ## 11. 컴퓨터와의 대국
 
 - **시작 화면에 「상대」 줄이 있습니다**: 사람(같은 기기에서 번갈아) / 컴퓨터 · 하 / 중 / 상.
-  세 단계 모두 **일부러 약하게** 만들어졌고, 한 수 앞만 봅니다 — 가장 높은 단계도 더 읽지 않습니다.
-  "쉬움" 상대가 초보자를 매번 이기는 것은 이런 기능에서 흔한 실패라서, 약한 쪽으로 맞췄습니다.
+  **세 단계의 차이는 "얼마나 멀리 읽는가"** 입니다: 하 단계는 한 수 앞만, 중 단계는
+  한 수 앞의 응수까지(내가 둔 뒤 상대가 어떻게 받는지), 상 단계는 네 수 앞까지 읽습니다.
+  그래서 상 단계는 "여기에 두면 다음 상대 수에 활사가 된다" 같은 국면을 피하고,
+  하 단계는 그냥 밟고 들어갑니다. 세 단계 모두 **일부러 약한 쪽**으로 맞췄습니다 —
+  "쉬움" 상대가 초보자를 매번 이기는 것은 이런 기능에서 흔한 실패라서요.
 - **두 선택은 역할이 다릅니다**: 「누가 선수인가」는 **어느 색**이 먼저 두는지(곧 장련 패배를 지는 쪽)를,
   「누가 먼저 두는가」는 **두 사람 중 누가** 그 색을 잡는지를 고릅니다. 즉
   「흑 선수 + 컴퓨터」면 컴퓨터가 흑으로 첫 수를 두고 당신은 백입니다.
@@ -1760,8 +1770,9 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 - **쌍삼, 쌍사 금지가 없습니다.** 전통 렌주(Renju)에서는 선수에게 “한 수로 활삼 둘 / 사 둘을 만드는”
   같은 금지가 더 있지만, 이 게임은 장련 패배 하나만 구현했습니다. 판정은 착수 뒤에 이루어지고, “이 점에는 둘 수 없다”는 것은 없습니다.
-- **탐색하는 컴퓨터는 없습니다.** 세 단계 모두 한 수 앞만 봅니다: 띈 모양을 알아보지 못하고,
-  두 겹 위협도 보지 못하며, 가장 높은 단계도 여러 수를 탐색하지 않습니다. 진짜 기력에는 탐색 구현이 필요합니다.
+- **컴퓨터는 기력 엔진이 아닙니다.** 가장 높은 단계도 네 수 앞까지만 읽습니다:
+  띈 모양을 알아보지 못하고, 두 겹 위협도 보지 못하며, 정석도 없습니다.
+  연습 상대로는 충분하지만, 진지하게 두려면 전용 엔진을 쓰세요.
 - **회전에는 애니메이션이 없습니다**, 순간적으로 자리를 잡고, 회전한 레이어만 잠깐 강조 표시됩니다.
 - **회전은 패널의 버튼으로만 할 수 있습니다**, 입체 뷰에서 직접 끌어서 돌릴 수는 없습니다.
 </script>
@@ -1980,9 +1991,11 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 ## 11. Игра с компьютером
 
 - **На стартовом экране есть строка «Соперник»**: человек (двое по очереди на одном устройстве) /
-  компьютер · слабый / средний / сильный. Все три уровня **намеренно слабые**: они смотрят на один ход
-  вперёд, и даже сильнейший не считает дальше. «Лёгкий» соперник, обыгрывающий новичка каждый раз, —
-  обычная беда таких функций, поэтому всё смещено в слабую сторону.
+  компьютер · слабый / средний / сильный. **Уровни различаются тем, как далеко они считают**:
+  слабый смотрит на один ход вперёд; средний — на один ответный ход (что будет, когда вы ответите);
+  сильный считает на четыре полухода. Поэтому сильный уходит из позиций, где ваш следующий ход
+  сделал бы открытую четвёрку, а слабый спокойно туда входит. Все три уровня намеренно смещены
+  в слабую сторону — «лёгкий» соперник, обыгрывающий новичка каждый раз, это обычная беда таких функций.
 - **Два выбора делают разное.** «Первый игрок» выбирает **цвет**, который ходит первым (он же несёт
   поражение за перебор); «Кто ходит» выбирает, **кто из двоих** играет этим цветом. То есть
   «Первыми ходят чёрные + Компьютер» — компьютер играет чёрными и начинает, а вы белыми.
@@ -1999,9 +2012,9 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 - **Нет запретов на двойную тройку и двойную четвёрку.** В традиционном рэндзю (Renju) у первого игрока есть ещё такие запреты, как «один ход образует две открытые тройки / две четвёрки»;
   в этой игре реализовано только поражение за перебор. Наказание наступает после хода — запретных точек, куда нельзя ставить камень, не существует.
-- **Нет компьютера, который считает.** Все три уровня смотрят на один ход вперёд: они не узнают
-  разорванные фигуры, не видят двойных угроз, и даже сильнейший не перебирает несколько ходов.
-  Для настоящей силы нужна реализация с поиском.
+- **Компьютер — не шахматный движок.** Даже сильнейший уровень считает только на четыре полухода:
+  он не узнаёт разорванные фигуры, не видит двойных угроз, у него нет ни дебютов, ни теории.
+  Как спарринг-партнёр он хорош; для серьёзной игры берите специальный движок.
 - **У поворота нет анимации** — он происходит мгновенно, лишь на миг подсвечивается повёрнутый слой.
 - **Поворот выполняется только кнопками на панели**, его нельзя сделать перетаскиванием прямо в объёмном виде.
 </script>
@@ -2220,10 +2233,12 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 ## 11. Jouer contre l'ordinateur
 
 - **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil) /
-  ordinateur · facile / moyen / difficile. Les trois niveaux sont **volontairement faibles** : ils ne
-  regardent qu'un coup d'avance, et même le plus difficile ne calcule pas plus loin. Un adversaire
-  « facile » qui bat les débutants à tous les coups est le défaut habituel de cette fonction, donc
-  tout est tiré vers le bas.
+  ordinateur · facile / moyen / difficile. **Les niveaux diffèrent par la profondeur de calcul** :
+  le facile ne voit qu'un coup d'avance ; le moyen voit la réponse d'après (ce que donne le plateau
+  quand vous répondez) ; le difficile calcule quatre demi-coups. C'est pourquoi le difficile évite
+  les positions où votre coup suivant ferait un quatre ouvert, alors que le facile y entre sans
+  broncher. Les trois restent volontairement faibles : un adversaire « facile » qui bat les débutants
+  à tous les coups est le défaut habituel de cette fonction.
 - **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
   aussi la défaite pour alignement trop long) ; « Qui commence » choisit **lequel des deux** joue cette
   couleur. Ainsi « Noirs en premier + Ordinateur » : l'ordinateur joue Noirs et ouvre, vous jouez
@@ -2240,9 +2255,9 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 
 - **Pas de double-trois ni de double-quatre.** Dans le renju traditionnel, le premier joueur a aussi des interdits comme
   « un coup qui forme à la fois deux trois ouverts / deux quatre » ; ce jeu n'implémente que la défaite pour alignement trop long. La sanction tombe après la pose du pion : il n'existe pas de « cette case est interdite ».
-- **Pas d'ordinateur qui calcule.** Les trois niveaux ne regardent qu'un coup d'avance : ils ne
-  reconnaissent pas les figures à trou, ne voient pas les menaces doubles, et même le plus difficile ne
-  fait aucune recherche sur plusieurs coups. Une vraie force demanderait une implémentation avec recherche.
+- **L'ordinateur n'est pas un moteur d'échecs.** Même le niveau difficile ne calcule que quatre
+  demi-coups : il ne reconnaît pas les figures à trou, ne voit pas les menaces doubles, et n'a ni
+  ouvertures ni théorie. Bon partenaire d'entraînement ; pour jouer sérieusement, prenez un moteur dédié.
 - **Les rotations n'ont pas d'animation** : elles se font instantanément, seule la couche tournée est brièvement mise en évidence.
 - **Les rotations ne se font qu'avec les boutons du panneau**, pas en glissant directement dans la vue 3D.
 </script>
@@ -3848,12 +3863,26 @@ const AI_LEVELS = ["weak", "medium", "strong"];
 /**
  * 三档的参数。**调强弱只调这一张表。**
  *
- * 【"弱"是怎么来的】不是"偶尔改走一个随机点" —— 那样会做出明显像 bug 的棋，
- * 玩家的观感是"这程序坏了"而不是"这电脑很菜"。真正的三个旋钮是：
- *   · defWeight  防守权重。小于 1 就是"偏进攻、防守不足"，这是弱档的第一来源
- *   · pOpenThree 对方做出活三时真的去堵的概率。弱档只有三成会堵 —— 这是最有效的那个旋钮
+ * 【三档的强弱是靠什么拉开的 —— 实测，不是想当然】
+ * 弱档不搜索，中/强两档各带一层 α-β。这个分法来自一组随机开局的对局测量
+ * （每对 40 局、两色各半，脚本是一次性的，数在 commit message 里）：
+ *   · 深度 0 的三个配置**互相之间打平**（44% / 42.5%）—— 光调 noise / 防守权重拉不开差距
+ *   · 但**任何**带搜索的配置打深度 0 都是 **40:0**
+ *   · 深度 1 → 2 是 70%，2 → 3 是 82.5%，3 → 4 是 60%
+ * 所以梯度只能这么给：弱 = 不搜索，中 = 浅搜索，强 = 深搜索。
+ * 深度 0 那几档之间没有可靠的强弱关系，这跟直觉相反，但量出来就是这样。
+ *
+ * 【深度 0 才用的旋钮】weak 用，中/强 用不到（它们走搜索）：
+ *   · defWeight  防守权重，小于 1 就是"偏进攻、防守不足"
+ *   · pOpenThree 对方做出活三时真的去堵的概率
  *   · topK/topProb  从前几名里随机挑，错得像新手而不是像坏掉
- * noise 是打分的乘性抖动，让它偶尔算错同一批候选的先后。
+ *   · noise      打分的乘性抖动
+ *
+ * 【搜索档才用的旋钮】
+ *   · searchDepth  往下算几层。0 = 不搜索
+ *   · branch       每个节点最多展开几个候选。**实测是越小越强**（支 4 打支 8 是 22.5%），
+ *                  原因是叶子评估本身很粗，展开得越宽越容易被这个粗评估带偏。
+ *                  要变强请加深度，别加宽度。
  *
  * 【两条硬规则任何一档都不许破，所以它们不在这张表里，而是判断链的第 1、3 步】
  *   · 能立刻赢就必须赢
@@ -3861,12 +3890,26 @@ const AI_LEVELS = ["weak", "medium", "strong"];
  */
 const AI_PARAMS = {
   weak: { topK: 4, topProb: 0.40, noise: 0.55, defWeight: 0.50,
-          pOpenThree: 0.30, wantGapped: false, rotChance: 0.15, rotProbe: 6 },
+          pOpenThree: 0.30, wantGapped: false, rotChance: 0.15, rotProbe: 6,
+          searchDepth: 0, branch: 4 },
   medium: { topK: 2, topProb: 0.72, noise: 0.28, defWeight: 0.80,
-            pOpenThree: 0.70, wantGapped: false, rotChance: 0.50, rotProbe: 10 },
+            pOpenThree: 0.70, wantGapped: false, rotChance: 0.50, rotProbe: 10,
+            searchDepth: 1, branch: 4 },
   strong: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 1.05,
-            pOpenThree: 1.00, wantGapped: true, rotChance: 1.00, rotProbe: 14 },
+            pOpenThree: 1.00, wantGapped: true, rotChance: 1.00, rotProbe: 14,
+            searchDepth: 4, branch: 4 },
 };
+
+/**
+ * 搜索的降档阈值（按候选点个数）。深度是耗时的指数项、候选数是线性项，
+ * 所以棋盘一大就先砍深度。50³ 塞 300 颗子时深度 4 约 160ms，已经接近"装思考"延时，
+ * 再密下去必须降档，否则手机上一手要等一秒以上。
+ */
+const AI_SEARCH_DROP = [        // [候选数下限, 允许的最大深度]
+  [2000, 3],
+  [5000, 2],
+  [10000, 1],
+];
 
 /**
  * 棋型分的档位。**量级差才是全部意义**，绝对值随便。
@@ -3919,6 +3962,17 @@ function aiRng(seed) {
  * 【绝不走扁平下标加减】`index(x,y,z) = x + nx*(y + ny*z)`，x=0 时减 1 会绕到上一行的末尾。
  * 一律 x/y/z 逐个夹取，代价是几次比较，换来的是不会在棋盘左右两端之间下出一手莫名其妙的棋。
  */
+/**
+ * 去重用的位图。**跨调用复用**：带搜索的档位一次出招会调 aiCandidates 几百遍，
+ * 每遍新分配一个 Uint8Array(cellCount) 在 50³ 上是 125KB × 几百次 —— 那是纯 GC 垃圾。
+ * 用"代数戳"代替清零：每次调用把戳 +1，比对 seen[i] === stamp，就不需要 fill(0)。
+ *
+ * 这是这一段里唯一一处模块级可变状态。它是纯粹的加速结构，不参与任何决策，
+ * 所以不影响"同局面同结果"那条确定性契约。
+ */
+let aiSeenBits = new Int32Array(0);
+let aiSeenStamp = 0;
+
 function aiCandidates(board, cap) {
   const out = [];
   if (board.stoneCount === 0) {
@@ -3926,7 +3980,9 @@ function aiCandidates(board, cap) {
     out.push((board.nx - 1) >> 1, (board.ny - 1) >> 1, (board.nz - 1) >> 1);
     return out;
   }
-  const seen = new Uint8Array(board.cellCount);
+  if (aiSeenBits.length < board.cellCount) aiSeenBits = new Int32Array(board.cellCount);
+  aiSeenStamp++;
+  const seen = aiSeenBits, stamp = aiSeenStamp;
   board.forEachStone((x, y, z) => {
     for (let dz = -1; dz <= 1; dz++) {
       const nz = z + dz;
@@ -3939,8 +3995,8 @@ function aiCandidates(board, cap) {
           const nx = x + dx;
           if (nx < 0 || nx >= board.nx) continue;
           const i = nx + board.nx * (ny + board.ny * nz);
-          if (seen[i] || board.cells[i] !== EMPTY) continue;
-          seen[i] = 1;
+          if (seen[i] === stamp || board.cells[i] !== EMPTY) continue;
+          seen[i] = stamp;
           out.push(nx, ny, nz);
         }
       }
@@ -4152,6 +4208,214 @@ function aiCompare(a, b) {
   return a.z - b.z;
 }
 
+/* --------------------------------------------------------------------------
+   搜索：给打分器加一层"模拟对方应手"。
+
+   【为什么加这一层 —— 实测量出来的，不是猜的】不带搜索的三个配置（只调噪声、防守权重、
+   堵活三概率）**互相之间打平**（44% / 42.5%），而任何带搜索的配置打它们都是 **40:0**。
+   也就是说棋力差在这一层上，不在参数上 —— 光调参数调不出"更难"的对手。
+
+   【为什么深度 1 就有这么大用】原来根节点只算"我这一手能做出什么"，
+   从来不算"我下完之后对方能做出什么"。加上这一层，它才第一次会躲开
+   "我下这里他就成四"这类局面。再往下的边际收益是：深 1→2 七成、2→3 八成、3→4 六成。
+
+   【分支宽度为什么取小】实测支 4 打支 8 只得 22.5% —— **展开得越宽越弱**。
+   原因是叶子评估很粗（只看"双方各自最强的一手威胁"），展开越宽越容易被它带偏。
+   所以要变强请加深度，别加宽度。
+   -------------------------------------------------------------------------- */
+
+/** 终局分。必须远大于最高的棋型分（1e7），否则"赢"会被"很好的形状"盖过去。 */
+const AI_SEARCH_WIN = 1e9;
+/** 排序里防守项的权重。**必须和进攻项相加而不是相减**，理由见 aiOrderKey。 */
+const AI_ORDER_W = 1;
+/**
+ * 叶子评估里对方威胁的权重（折扣）。**0.2~0.8 实测都一样好，1.0 会坏掉**：
+ * 取 1.0 时中档一个活三都不堵（0/40），0.2~0.8 时 40/40。取中间值。
+ * 这个数不需要精确 —— 它是"隔一手"这个定性事实的数值化，不是拟合出来的参数。
+ */
+const AI_EVAL_W = 0.5;
+
+/** 某一方"最强的一手威胁"能到哪一档。用 .best（单方向最高档）而不是 .total。 */
+function aiThreatBest(board, cands, player, winLength) {
+  let best = 0;
+  for (let i = 0; i < cands.length; i += 3) {
+    const v = aiShapeAt(board, cands[i], cands[i + 1], cands[i + 2], player, winLength).best;
+    if (v > best) best = v;
+  }
+  return best;
+}
+
+/**
+ * 叶子评估：**我最强的威胁 − 对方最强的威胁**，对方那一项要打折。
+ *
+ * 【为什么要打折 —— 这一项是整段搜索里最难调的一个数，两个错法我都实测过】
+ *   · 打折太少（尤其 =1）：等于假设两边各走一步。于是"我不堵、他也堵不上"会被算成
+ *     和"我堵住"一样好 —— 中档堵活三 0/60，白棋连成三个它都不管。
+ *   · 干脆不打折、改成"我最好的那一手值多少（含废掉对方多少）"：堵活三是会了（60/60），
+ *     但**整体棋力垮掉** —— 中档 2/12 输给弱档。因为那个式子里"对方能在哪做好棋"
+ *     也变成了我的分数，等于替对手高兴。
+ * 折扣的物理含义是"下一步是我走，不是他走"：我的威胁是即时的，他的隔一手。
+ */
+function aiEvalLeaf(board, cands, mover, foe, winLength) {
+  return aiThreatBest(board, cands, mover, winLength) -
+         AI_EVAL_W * aiThreatBest(board, cands, foe, winLength);
+}
+
+/**
+ * 候选排序的键。**用加号**：攻和守都要排在前面。
+ *
+ * 【减号是错的，而且错得很隐蔽】用 `我攻 − 对方守` 时，"必须去堵的那个点"
+ * （对方在那里能做成活四）会算出一个很大的负分、排到队尾 —— 于是它压根进不了前 branch 个，
+ * 搜索永远看不到它。第一版就是这么输的：白棋眼看着黑棋连成三个不去堵，平均 9 手就完蛋。
+ * 现有那套深度 0 的打分用的是加号，所以它反而会堵。
+ */
+function aiOrderKey(board, x, y, z, mover, foe, winLength) {
+  return aiShapeAt(board, x, y, z, mover, winLength).total +
+         AI_ORDER_W * aiShapeAt(board, x, y, z, foe, winLength).total;
+}
+
+/** 搜索内的排序：分值降序，然后按坐标升序 —— 全序，同分也确定。 */
+function aiSearchCompare(a, b) {
+  if (b.v !== a.v) return b.v - a.v;
+  if (a.x !== b.x) return a.x - b.x;
+  if (a.y !== b.y) return a.y - b.y;
+  return a.z - b.z;
+}
+
+/**
+ * 负极大值。返回「轮到 mover 时这个局面的值」。
+ * 上一手 last 已经落在盘上，由调用方负责摆上和撤销 —— judge 需要子真的在盘上。
+ */
+function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
+  if (stats) stats.searchNodes++;
+  const board = session.board, rules = session.rules, fp = session.firstPlayer;
+  const foe = opponentOf(mover);
+  // 上一手分出了胜负就到此为止。**这是唯一可靠的终局判据**：恰好 5 连赢、长连判负，
+  // 全在 judge 里；自己数连子的写法在这里必然数错。
+  if (last) {
+    const o = RuleEngine.judge(board, last, last.p, fp, rules);
+    if (o.status === MoveStatus.Win) return -(AI_SEARCH_WIN - depth);
+    if (o.status === MoveStatus.LoseByOverline) return AI_SEARCH_WIN - depth;
+  }
+  const cands = aiCandidates(board, AI_CANDIDATE_CAP);
+  if (depth <= 0 || cands.length === 0) {
+    return aiEvalLeaf(board, cands, mover, foe, tune.winLength);
+  }
+  const sc = [];
+  for (let i = 0; i < cands.length; i += 3) {
+    const x = cands[i], y = cands[i + 1], z = cands[i + 2];
+    sc.push({ x: x, y: y, z: z, v: aiOrderKey(board, x, y, z, mover, foe, tune.winLength) });
+  }
+  sc.sort(aiSearchCompare);
+
+  let best = -Infinity;
+  const k = tune.branch < sc.length ? tune.branch : sc.length;
+  for (let i = 0; i < k; i++) {
+    const m = sc[i];
+    board.set(m.x, m.y, m.z, mover);
+    const v = -aiNegamax(session, depth - 1, -beta, -alpha, foe,
+                         { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats);
+    board.set(m.x, m.y, m.z, EMPTY);
+    if (v > best) best = v;
+    if (best > alpha) alpha = best;
+    if (alpha >= beta) break;                    // 剪枝
+  }
+  return best === -Infinity ? 0 : best;
+}
+
+/**
+ * 搜索出招。返回 {x,y,z,v}，或 null（没搜出东西，调用方退到打分路径）。
+ * 调用方**已经走过硬规则链**：能赢的直接赢了、必堵的直接堵了、自尽点已经剔掉，
+ * 所以这里只管"剩下的候选里哪个最好"。
+ */
+function aiSearchMove(session, safe, params, stats) {
+  const board = session.board, rules = session.rules, winLength = rules.winLength;
+  const mover = session.currentPlayer, foe = opponentOf(mover);
+
+  // 降档：深度是耗时的指数项，候选数是线性项，棋盘一大就先砍深度
+  let depth = params.searchDepth;
+  const count = safe.length / 3;
+  for (let i = 0; i < AI_SEARCH_DROP.length; i++) {
+    if (count >= AI_SEARCH_DROP[i][0] && depth > AI_SEARCH_DROP[i][1]) depth = AI_SEARCH_DROP[i][1];
+  }
+  if (depth <= 0) return null;
+
+  const sc = [];
+  for (let i = 0; i < safe.length; i += 3) {
+    const x = safe[i], y = safe[i + 1], z = safe[i + 2];
+    sc.push({ x: x, y: y, z: z, v: aiOrderKey(board, x, y, z, mover, foe, winLength) });
+  }
+  sc.sort(aiSearchCompare);
+
+  const tune = { winLength: winLength, branch: params.branch };
+  let best = null, alpha = -Infinity;
+  const k = params.branch < sc.length ? params.branch : sc.length;
+  for (let i = 0; i < k; i++) {
+    const m = sc[i];
+    board.set(m.x, m.y, m.z, mover);
+    const v = -aiNegamax(session, depth - 1, -Infinity, -alpha, foe,
+                         { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats);
+    board.set(m.x, m.y, m.z, EMPTY);
+    if (!best || v > best.v) best = { x: m.x, y: m.y, z: m.z, v: v };
+    if (v > alpha) alpha = v;
+  }
+  return best;
+}
+
+/**
+ * 深度 0 的打分路径：给每个候选打分、按概率处理"偶尔不堵活三"、在前几名里随机。
+ * **弱档走的就是这条路**；中/强 走搜索，搜索降档降到 0 时也会落到这里。
+ */
+function aiGreedyMove(session, safe, params, rng, winLength, mover) {
+  const board = session.board;
+  const foe = opponentOf(mover);
+  const scored = [];
+  for (let i = 0; i < safe.length; i += 3) {
+    const x = safe[i], y = safe[i + 1], z = safe[i + 2];
+    const mine = aiShapeAt(board, x, y, z, mover, winLength);
+    const theirs = aiShapeAt(board, x, y, z, foe, winLength);
+    if (params.wantGapped) theirs.total += aiGappedBonus(board, x, y, z, foe, winLength);
+    // 每个候选恰好消耗一次随机数 —— 消耗顺序是"同种子必然同结果"那条契约的一部分
+    const jitter = 1 + params.noise * (rng() * 2 - 1);
+    scored.push({ x: x, y: y, z: z, atk: mine.total, def: theirs.total, defBest: theirs.best,
+                  jitter: jitter, score: (mine.total + params.defWeight * theirs.total) * jitter,
+                  d: aiCenterDist(board, x, y, z) });
+  }
+
+  // 对方有活三：按 pOpenThree 决定堵还是不堵。
+  //
+  // 【档位别认错】"对方有活三"在形状分里的长相是 **defBest >= FOUR_OPEN** ——
+  // 因为那里量的是"对方在那个点落一子会做出什么"，活三的堵点正是对方做**活四**的点。
+  // 第一版按 `defBest === THREE_OPEN` 判，结果一个活三都认不出来，三档全都百分百去堵。
+  // 同理，"对方已经有四连"的堵点量出来是 WIN，那一类在第 3 步就已经返回了，走不到这里。
+  //
+  // 【为什么这里是一个显式分支，而不是给防守项乘一个系数】系数是调不出来的 ——
+  // 压小了等于根本不堵，压大了等于必堵，中间没有能用的档位。这不是推理，是实测：
+  // 第一版用"以 1-p 的概率把 def 项乘 0.15"，弱档照样七成都在堵。
+  let blockAt = null;
+  for (let i = 0; i < scored.length; i++) {
+    const c = scored[i];
+    if (c.defBest < AI_W.FOUR_OPEN) continue;
+    if (!blockAt || c.defBest > blockAt.defBest ||
+        (c.defBest === blockAt.defBest && c.def > blockAt.def)) blockAt = c;
+  }
+  if (blockAt) {
+    if (rng() < params.pOpenThree) return blockAt;
+    // 决定不堵：那就得把这一手的吸引力**真的**拿掉。
+    // 只把防守项压小是不够的 —— 压完它还是比棋盘上其他点高，结果还是堵。
+    for (let i = 0; i < scored.length; i++) {
+      if (scored[i].defBest >= AI_W.FOUR_OPEN) scored[i].score = scored[i].atk * scored[i].jitter;
+    }
+  }
+  scored.sort(aiCompare);
+
+  // 在最优和"前几名"之间随机 —— 让它错得像个新手，而不是像个 bug
+  const k = params.topK < scored.length ? params.topK : scored.length;
+  let pick = scored[0];
+  if (k > 1 && rng() > params.topProb) pick = scored[(rng() * k) | 0];
+  return { x: pick.x, y: pick.y, z: pick.z };
+}
+
 /**
  * 电脑走一步。**唯一的对外入口**，界面只调这一个。
  *
@@ -4187,7 +4451,7 @@ function aiChooseMove(session, opts) {
 
   // stats 只给测试量计算量用：它是"耗时上界"这类断言的抓手，用计数器而不是墙钟，
   // 免得测试在慢机器上随机变红。
-  if (stats) { stats.candidates = 0; stats.judgeCalls = 0; stats.rotProbes = 0; }
+  if (stats) { stats.candidates = 0; stats.judgeCalls = 0; stats.rotProbes = 0; stats.searchNodes = 0; }
 
   const cand = aiCandidates(board, AI_CANDIDATE_CAP);
   if (stats) stats.candidates = cand.length / 3;
@@ -4232,56 +4496,13 @@ function aiChooseMove(session, opts) {
   // 填满，而那种局面早就终局了），但真为空时也只能认输 —— 返回 none 会变成"电脑不动了"。
   if (safe.length === 0) return { kind: "place", x: cand[0], y: cand[1], z: cand[2] };
 
-  // ---- 4. 打分排序。
-  // 候选顺序固定 → 每个候选恰好消耗两次随机数 → 同一种子必然给出同一结果。
-  const scored = [];
-  for (let i = 0; i < safe.length; i += 3) {
-    const x = safe[i], y = safe[i + 1], z = safe[i + 2];
-    const mine = aiShapeAt(board, x, y, z, mover, winLength);
-    const theirs = aiShapeAt(board, x, y, z, foe, winLength);
-    if (params.wantGapped) theirs.total += aiGappedBonus(board, x, y, z, foe, winLength);
-    // 每个候选恰好消耗一次随机数 —— 消耗顺序是"同种子必然同结果"那条契约的一部分
-    const jitter = 1 + params.noise * (rng() * 2 - 1);
-    scored.push({ x: x, y: y, z: z, atk: mine.total, def: theirs.total, defBest: theirs.best,
-                  jitter: jitter, score: (mine.total + params.defWeight * theirs.total) * jitter,
-                  d: aiCenterDist(board, x, y, z) });
-  }
+  // ---- 4. 出招：搜索档走 α-β，其余走深度 0 的打分。
+  // 【硬规则已经走完了】上面能赢的直接赢了、必堵的直接堵了、自尽点已经剔掉，
+  // 所以这里两条路都只管"剩下的候选里哪个最好"。
+  let move = params.searchDepth > 0 ? aiSearchMove(session, safe, params, stats) : null;
+  if (!move) move = aiGreedyMove(session, safe, params, rng, winLength, mover);
 
-  // ---- 5. 对方有活三：按 pOpenThree 决定堵还是不堵。
-  //
-  // 【档位别认错】"对方有活三"在形状分里的长相是 **defBest >= FOUR_OPEN** ——
-  // 因为那里量的是"对方在那个点落一子会做出什么"，活三的堵点正是对方做**活四**的点。
-  // 第一版按 `defBest === THREE_OPEN` 判，结果一个活三都认不出来，三档全都百分百去堵。
-  // 同理，"对方已经有四连"的堵点量出来是 WIN，那一类在第 3 步就已经返回了，走不到这里。
-  //
-  // 【为什么这里是一个显式分支，而不是给防守项乘一个系数】系数是调不出来的 ——
-  // 压小了等于根本不堵，压大了等于必堵，中间没有能用的档位。这不是推理，是实测：
-  // 第一版用"以 1-p 的概率把 def 项乘 0.15"，弱档照样七成都在堵
-  // （0.15 × 活三分 × 防守权重 仍然高于棋盘上其他所有点）。显式分支的比例才是精确可控的。
-  //
-  // 【堵活三排在转动前面】有活三必须先处理，先转一手把回合让掉是不合理的。
-  // 代价是强档在四维下遇到活三时不会去考虑"转一手把它拆掉"—— 这条取舍是刻意的：
-  // 对刻意做弱的对手来说，"该堵就堵"比"偶尔想出妙手"重要得多。
-  let blockAt = null;
-  for (let i = 0; i < scored.length; i++) {
-    const c = scored[i];
-    if (c.defBest < AI_W.FOUR_OPEN) continue;
-    if (!blockAt || c.defBest > blockAt.defBest ||
-        (c.defBest === blockAt.defBest && c.def > blockAt.def)) blockAt = c;
-  }
-  if (blockAt) {
-    if (rng() < params.pOpenThree) {
-      return { kind: "place", x: blockAt.x, y: blockAt.y, z: blockAt.z };
-    }
-    // 决定不堵：那就得把这一手的吸引力**真的**拿掉。
-    // 只把防守项压小是不够的 —— 压完它还是比棋盘上其他点高，结果还是堵。
-    for (let i = 0; i < scored.length; i++) {
-      if (scored[i].defBest >= AI_W.FOUR_OPEN) scored[i].score = scored[i].atk * scored[i].jitter;
-    }
-    scored.sort(aiCompare);
-  }
-
-  // ---- 6. 四维：把转动当成另一个候选动作，只有它确实更能改善局面时才占掉这一手
+  // ---- 5. 四维：把转动当成另一个候选动作，只有它确实更能改善局面时才占掉这一手
   if (!o.noRotation && params.rotChance > 0 &&
       typeof session.probeRotate === "function" &&
       session.rotationEnabled && session.canRotate && rng() < params.rotChance) {
@@ -4289,11 +4510,8 @@ function aiChooseMove(session, opts) {
     if (rot) return rot;
   }
 
-  // ---- 7. 在最优和"前几名"之间随机 —— 让它错得像个新手，而不是像个 bug
-  const k = params.topK < scored.length ? params.topK : scored.length;
-  let pick = scored[0];
-  if (k > 1 && rng() > params.topProb) pick = scored[(rng() * k) | 0];
-  return { kind: "place", x: pick.x, y: pick.y, z: pick.z };
+  if (!move) return { kind: "none" };
+  return { kind: "place", x: move.x, y: move.y, z: move.z };
 }
 
 /**
