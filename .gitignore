@@ -10,6 +10,11 @@ npm-debug.log*
 # 编辑器 / 系统
 .vscode/
 .idea/
+# Visual Studio 直接打开这个文件夹就会生成（本工程里没有任何 .sln/.csproj，
+# 纯属残留）：里面是 Copilot 索引、窗口布局、slnx 缓存一类的东西，和源码无关。
+# 前后两个位置都写一遍 —— 用 VS 打开根目录和打开 Web_Gomoku3D/ 各生成一份。
+.vs/
+Web_Gomoku3D/.vs/
 .DS_Store
 Thumbs.db
 desktop.ini
