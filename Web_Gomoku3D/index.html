@@ -31,12 +31,19 @@
     --cell:      #e9e1d1;   /* 二维板面 */
     --cell-hint: #cec0a4;
     --border:    #b7a98f;
-    /* 三维静态格线（那层灰网）的颜色。**为什么不复用 --border**：--border 是暖褐色，
+    /* 三维静态格线（那层网）的颜色。**为什么不复用 --border**：--border 是暖褐色，
        画在同样暖的纸底上那层网是「有颜色的」，一大片铺开之后偏亮、偏跳；
        而它同时又是所有按钮和边框的颜色，改它等于把整套界面都改了。
-       这里单独取一个更灰、更浅的色：R−B 从 40 收到 17（去色），亮度从 64% 提到 74%（变浅），
-       叠上 0.55 的透明度之后落在纸上比原来浅 9 个色阶，色相从暖褐变成中性灰。 */
-    --grid:      #c5beb4;
+       这里单独取一个更浅、偏黄的色：色相 48°（上一版是 35° 的灰、更早是 --border 那支暖褐），
+       亮度 82% —— 比 --border(#b7a98f) 亮 18 个色阶、比上一版 --grid(#c5beb4) 亮 8 个。
+       **这个值是所见即所得的**（alpha 那一趟修好之后，见 draw3D 第 2 步那段），
+       所以它同时也是棋盘内部那片密网的颜色：内部叠到饱和时收敛到的就是它本身。
+       【白棋那一头是硬约束】：格线不写深度，近处的线会直接压在棋子上，
+       压上去之后那个像素就是"0.40·本色 + 0.60·棋子色"。
+       本版压在白子(#fdfaf2)上是 rgb(245,239,218)，白子只被压掉 8/11/24 个色阶；
+       上一版（#c5beb4 @ 0.55）是 rgb(222,217,208)，压掉 31/33/34 —— 白子会明显发闷。
+       压纸上同理：本版只掉 2/4/14 个色阶，上一版掉 23/23/21，这就是"浅"的落点。 */
+    --grid:      #e9dfb7;
     --text:      #2f2a23;   /* 墨 */
     --dim:       #6d6353;
     --black:     #1c1a16;
@@ -2539,7 +2546,7 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
       <!-- 隐藏三维静态格线。`sel` 表示"格线可见"（默认），和 modeGhost 的 sel=幽灵层生效
            是同一套语义：亮着 = 这个东西有作用。
            存在的理由见 uploadGrid / gridSegments 那段注释：格线是 alpha 混合画的，
-           n 层屏幕位置重合的线累积透过率是 0.45^n，15³ 时已经是 6.3e-6 ——
+           n 层屏幕位置重合的线累积透过率是 0.60^n，15³ 时已经是 4.7e-4 ——
            立方体内部会读成一片灰网，盘里的子被糊得看不见。这是"从 15³ 起就必然发生"的，
            不是大棋盘才有的问题，所以需要一个一键关掉它的开关。 -->
       <button id="modeGrid" class="mini sel" data-i18n="modeGrid">格线</button>
@@ -5091,7 +5098,7 @@ function fingerprint(s) {
    -------------------------------------------------------------------------- */
 const FALLBACK_COLORS = {
   "--bg": "#efe8db", "--panel": "#f7f2e8", "--panel-hi": "#e6dcc8",
-  "--cell": "#e9e1d1", "--cell-hint": "#cec0a4", "--border": "#b7a98f", "--grid": "#c5beb4",
+  "--cell": "#e9e1d1", "--cell-hint": "#cec0a4", "--border": "#b7a98f", "--grid": "#e9dfb7",
   "--text": "#2f2a23", "--dim": "#6d6353", "--black": "#1c1a16", "--white": "#fdfaf2",
   "--accent": "#2f5d7c", "--gold": "#9c6b1f", "--danger": "#9c3428", "--ok": "#4a6b45",
   "--hover-line": "#c8452e", "--line2d": "#3a332a", "--well": "#ddd3bd",
@@ -7347,8 +7354,8 @@ const Game = {
     // 框满，所以 n 变大只是"同样的密度里塞进更多条"，要到 n≈300 才会碰到像素间距。
     //
     // 真正的代价是【深度感】：视线穿过立方体时会依次叠上 n 层屏幕位置完全重合的
-    // 平行格线，而格线是 alpha 混合画的，累积剩余透过率是 0.45^n：
-    // n=10 是 3.4e-4、n=15 是 6.3e-6 —— 【从 15³ 起内部就已经叠到饱和了】，
+    // 平行格线，而格线是 alpha 混合画的，累积剩余透过率是 0.60^n：
+    // n=10 是 6.0e-3、n=15 是 4.7e-4 —— 【从 15³ 起内部就已经叠到饱和了】，
     // 不是"大棋盘才有"的问题。所以立方体内部会读成一片灰网，而不是"近处清楚、远处淡"；
     // n 变大只是让这张网更密。这是 alpha 混合叠同位置图元的固有问题，
     // 调 alpha 只能整体变淡、消不掉。想要深度感就把 draw3D 里的 depthMask(false)
@@ -7736,6 +7743,23 @@ const Game = {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
+    // 【这一趟不许写 alpha，否则浅色格线会被合成器冲成纯白】—— 下面是实测记录。
+    //
+    // 画布是 premultipliedAlpha，而 alpha 混合把 alpha 通道也一起写小了
+    // （dstA = a·a + dstA·(1−a)：一层就掉到 0.75，叠几层掉到 0.48）。
+    // 合成器按"帧缓冲里的颜色已经乘过 alpha"去合成，于是又叠了一遍纸底色：
+    // 【帧缓冲里 rgb(234,225,191) 的淡黄线（alpha 134），到屏幕上成了 rgb(255,255,255) 的纯白】，
+    // 棋盘内部叠得越多越白 —— 白棋和那片白网糊在一起，正是"看不清白棋"的根源。
+    // 对照实验：把格线设成纯黑，屏幕上也只是 rgb(164,160,153) 的灰。
+    // 也就是说修这一行之前，--grid 填什么颜色【根本不影响观感】。
+    // 关掉 alpha 写入之后帧缓冲的 alpha 始终是清屏时的 255，
+    // 合成结果 = 帧缓冲（同一点：rgb(234,225,191) 进、rgb(235,225,194) 出），所见即所得。
+    //
+    // **只有对局态能这么干**：起始界面的演示盘是故意要透出纸纹的（那边清屏就是 (0,0,0,0)），
+    // 那里 alpha 必须可写，否则整块演示盘会直接消失。所以这里按 setupOpen 分开。
+    //
+    // 幽灵子、光标、获胜连线都在这一趟里，一起受益：它们原来也被同一个机制冲淡了。
+    if (!this.setupOpen) gl.colorMask(true, true, true, false);
     // 静态格线可以整体关掉。**只跳过这一次 drawLines，不动 staticGridCount、
     // 也不重传缓冲** —— 见 Game.gridVisible 的注释。
     //
@@ -7747,7 +7771,7 @@ const Game = {
     // 这正是"只隐藏静态灰网"这个产品选择在代码里的落点，dom-smoke 有一条测试
     // 盯着关闭时 active 仍然被画。
     if (this.gridVisible) {
-      Renderer.drawLines("static", this.staticGridCount, vp, Palette.rgba("--grid", 0.55), 1.0);
+      Renderer.drawLines("static", this.staticGridCount, vp, Palette.rgba("--grid", 0.40), 1.0);
     }
     Renderer.drawLines("active", this.activeGridCount, vp, Palette.rgba("--accent", 0.80), 1.0);
     // 待转的那一层（绿）：四维模式下才画。和蓝色的"当前层"是两个独立的东西 ——
@@ -7779,6 +7803,9 @@ const Game = {
       this.drawInstances(Renderer.cursorBuf, Renderer.cursorCol, 1, vp, 0.8, 0.6, 0.0, 0.6, 0.0);
     }
 
+    // 恢复 alpha 写入。**必须在 draw3D 退出前恢复**：gl.clear 同样受 colorMask 管，
+    // 漏了这一步，下一帧的清屏就清不动 alpha（起始界面和对局态来回切时最先现形）。
+    gl.colorMask(true, true, true, true);
     gl.depthMask(true);
     gl.disable(gl.BLEND);
   },
