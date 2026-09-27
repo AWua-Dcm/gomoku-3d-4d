@@ -3171,7 +3171,6 @@ function sideName(s, lang = "zh") {
   if (s === WHITE) return ct("side.white", lang);
   return ct("side.empty", lang);
 }
-function enOf(s) { return sideName(s, "en"); }
 
 /** 走子记录 */
 function MoveRecord(x, y, z, player, moveNumber) {
@@ -3419,8 +3418,6 @@ class RuleSet {
   }
   /** 四维模式的棋盘尺寸下限。棋盘至少要装得下一条 winLength 连，否则永远分不出胜负。 */
   get minSizeFourD() { return this.winLength < 2 ? 2 : this.winLength; }
-  /** 维度名，UI 里区分"三维 / 四维"。 */
-  get modeName() { return this.allowRotation ? "四维" : "三维"; }
   isRestricted(player, firstPlayer) {
     if (!this.overlineLoses) return false;
     if (this.restricted === RestrictionTarget.None) return false;
@@ -6318,8 +6315,6 @@ function renderRulesMarkdown(src) {
    矩阵与相机。只需要足够用的几个函数 —— 不引入任何第三方库。
    -------------------------------------------------------------------------- */
 const M4 = {
-  identity() { return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); },
-
   perspective(fovy, aspect, near, far) {
     const f = 1 / Math.tan(fovy / 2);
     const nf = 1 / (near - far);
@@ -7196,9 +7191,17 @@ const Game = {
       win = this.session.lastOutcome.line;
       foul = this.session.lastOutcome.isOverlineFoul;
     }
+    // 【键用扁平下标，不用 "x,y,z" 字符串】这是每颗子都要过一遍的循环，拼字符串
+    // 等于每颗子分配一个临时字符串再去哈希。board.index() 就是内核里那份
+    // x + nx*(y + ny*z)，一格一个号，判别结果和字符串键完全一样。
     const winSet = new Set();
-    if (win) for (const p of win) winSet.add(p[0] + "," + p[1] + "," + p[2]);
+    if (win) for (const p of win) winSet.add(board.index(p[0], p[1], p[2]));
 
+    // 【五种颜色在进循环之前解析好】Palette.rgb 每次都要走一遍正则 + parseInt + 新建数组，
+    // 而下面那段是**逐颗子**跑的（40³ 铺满时几千颗）。颜色在整趟循环里是常量，
+    // 写在里面等于把同一个解析重复几千遍 —— 输出一个像素都不差，纯粹是白算。
+    const cBlack = Palette.rgb("--black"), cWhite = Palette.rgb("--white");
+    const cWin = Palette.rgb(foul ? "--danger" : "--gold");
     // 幽灵子的不透明度（非当前层的子）。原来 0.42，一屏淡子铺开之后整体发白、
     // 和"真正的子"分不太开；提到 0.52 让它沉下去一点，又还没到会被误看成实子的地步。
     // 【为什么改这里而不是改幽灵子的颜色】颜色走调色板（--black / --white），
@@ -7218,11 +7221,10 @@ const Game = {
       // 迟早有一个分支只判了其中一个条件。
       if (this.stoneFilter && s !== this.stoneFilter) return;
 
-      // 颜色全部走调色板。白子原来是纯白 [1,1,1]，和二维面板的 --white 其实不是同一个色 ——
-      // 那种"三维和面板差一点点"的偏差肉眼几乎发现不了，但换主题时就会放大成两个色调。
-      let rgb;
-      if (winSet.has(x + "," + y + "," + z)) rgb = Palette.rgb(foul ? "--danger" : "--gold");
-      else rgb = (s === BLACK) ? Palette.rgb("--black") : Palette.rgb("--white");
+      // 颜色全部走调色板（值在上面解析好了）。白子原来是纯白 [1,1,1]，
+      // 和二维面板的 --white 其实不是同一个色 —— 那种"三维和面板差一点点"的偏差
+      // 肉眼几乎发现不了，但换主题时就会放大成两个色调。
+      const rgb = winSet.has(board.index(x, y, z)) ? cWin : (s === BLACK ? cBlack : cWhite);
 
       const p = this.worldOf(x, y, z, dims, cs);
       const ghost = this.ghostMode && z !== this.activeLayer;
