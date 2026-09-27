@@ -6690,6 +6690,10 @@ const Game = {
     if (this.session) this.refreshTexts();
     this.syncSetupInputs();
     this.syncCoolRow();
+    // 【拉条的禁用状态也要在这里落一次】它原来只在 setSetupAi 里写，而那个函数只在
+    // **点击**时跑 —— 于是刚打开页面时（HTML 默认「人类」）拉条是满色、拖得动的，
+    // 「谁先下」两个键也点得动。applyLang 是**启动时**和切语言时都必经的唯一收口。
+    this.syncAiRow();
     // 档位名换了语言就要重刷（它是 say() 写的，applyStatic 管不到）
     this.syncAiLevel();
     // 行标换了语言、宽度就变了，同宽那条得重量一次
@@ -7297,7 +7301,8 @@ const Game = {
     this.setHover(null);
     this.syncSetupInputs();
     this.syncCoolRow();
-    this.syncOrderRow();
+    // 「对手」那一行的禁用/高亮（含「谁先下」）—— 见 syncAiRow 的注释
+    this.syncAiRow();
     this.syncAiLevel();
     this.syncLabelWidth();
     this.refreshSetupSummary();
@@ -7402,8 +7407,19 @@ const Game = {
     // 左边就只透出 70% 强度的纸纹（0.3 × 纯色 + 0.7 × 纸纹），而右边是满的 ——
     // 中间那条【缝】是没了，但两半的亮度差着一档，看着还是两块不同的纸。
     // 清成透明之后，纸纹原样透出来，两半逐像素同色。（画布因此必须开 alpha，见 Renderer.init）
-    const bgc = Palette.rgb("--bg");
-    gl.clearColor(bgc[0], bgc[1], bgc[2], this.setupOpen ? 0 : 1);
+    //
+    // 【透明必须是"透明的黑"，不能是"(--bg 的 RGB, alpha 0)"】——踩过一次，代价是整块变白：
+    // 画布是 premultipliedAlpha（WebGL 默认），缓冲区里存的是【预乘过】的颜色，
+    // alpha=0 就意味着 RGB 也必须是 0。而 clearColor 是把 RGB 原样写进去的、不做预乘，
+    // 于是 (239,232,219,0) 这组"RGB 比 alpha 还大"的非法预乘值交给合成器之后，
+    // 左边半屏被合成为**纯白 (255,255,255)**，比不透明清屏还糟。
+    // 读回像素只看 alpha 是看不出来的（alpha 确实是 0），必须看合成后的截图才现形 ——
+    // browser-check 里那条"藏起画布前后左半屏必须逐点相同"就是为它加的。
+    if (this.setupOpen) gl.clearColor(0, 0, 0, 0);
+    else {
+      const bgc = Palette.rgb("--bg");
+      gl.clearColor(bgc[0], bgc[1], bgc[2], 1);
+    }
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // 【注意这里传的是 CSS 像素高，不是设备像素高】：平移量是按 CSS 像素记的
@@ -8921,18 +8937,36 @@ const Game = {
 
   setSetupAi(v) {
     this.setupAi = (v === "cpu") ? "cpu" : "human";
+    this.syncAiRow();
+    this.syncAiLevel();
+    this.refreshSetupSummary();
+  },
+
+  /**
+   * 把「对手」那一行的**派生状态**全部刷成 this.setupAi 的样子：两个按钮的高亮、
+   * 强度拉条的淡显与禁用、以及「谁先下」那一行的禁用。
+   *
+   * 【为什么必须从 setSetupAi 里抽出来】这些原来只写在 setSetupAi 里，而它只在
+   * **点击**时跑 —— 于是**刚打开页面时**（HTML 里默认是「人类」）拉条是满色的、拖得动，
+   * 「谁先下」两个键也点得动：状态和「人类」这个选择对不上，看起来像没做这个功能。
+   * 启动路径和切语言路径都不经过 setSetupAi，所以那两处要各自刷一遍。
+   *
+   * 【收口到 openSetup / applyLang 两个地方】openSetup 是"从对局里点设置进来"，
+   * applyLang 是"启动 + 切语言"，两者合起来覆盖了起始界面出现的全部时机。
+   */
+  syncAiRow() {
     for (const id of ["aiHuman", "aiCpu"]) {
       const el = this.el[id];
       // dataset.ai 就是 setupAi 的取值本身（human/cpu），少一张表就少一处会漂移的地方
       if (el) el.classList.toggle("sel", el.dataset.ai === this.setupAi);
     }
-    // 没选人机时**淡显 + 不可点**，不是藏起来 —— 和 #coolRow 在三维下同一套，见 CSS 那段注释
+    // 没选人机时**淡显 + 不可点**，不是藏起来 —— 和 #coolRow 在三维下同一套，见 CSS 那段注释。
+    // disabled 才是真正"点不动"的那一半，opacity 只是让人看出来它现在是死的。
     const dim = this.setupAi !== "cpu";
     if (this.el.aiRange) this.el.aiRange.disabled = dim;
     if (this.el.aiLevel) this.el.aiLevel.classList.toggle("dim", dim);
-    this.syncAiLevel();
+    // 人人对战里「谁先下」没有意义（没有电脑可先下），一并跟着这个开关禁用
     this.syncOrderRow();
-    this.refreshSetupSummary();
   },
 
   /** 拖动拉条 / 键盘左右键都会走这里。i 是 0..4 的下标。 */

@@ -17,6 +17,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -89,6 +90,73 @@ async function ev(expr) {
 async function shot(name) {
   const r = await send("Page.captureScreenshot", { format: "png" });
   fs.writeFileSync(path.join(OUT_DIR, name + ".png"), Buffer.from(r.result.data, "base64"));
+}
+
+/** 派发一个真鼠标事件。原来定义在相机那一节里，挪到这里是因为"刚打开页面时拉条要拖不动"
+ *  那条断言在很前面 —— 而它必须用【真鼠标】去拖，不能靠 JS 调 setSetupLevel。 */
+const mouseAt = (type, x, y, extra) => send("Input.dispatchMouseEvent", Object.assign(
+  { type: type, x: x, y: y, button: "none", clickCount: 0, pointerType: "mouse" }, extra || {}));
+
+/**
+ * 把浏览器交回来的 PNG 解成像素。**只用 node 自带的 zlib，不引任何包。**
+ *
+ * 【为什么需要它】有些问题只在**合成之后**才存在：画布自己读回来一切正常
+ * （readPixels 说 alpha 是 0），可它贴到页面上之后整块是白的 —— 那一步发生在
+ * 合成器里，JS 完全看不见，只有截了图去数像素才现形。
+ * 见下面那条"藏起画布前后左半屏必须逐点相同"。
+ *
+ * 只认 Chrome 截图会产生的那些格式（8 位、非隔行、RGB 或 RGBA），
+ * 碰到别的直接抛 —— 解错了比解不了更坏，静默返回一堆 0 会让断言变成假绿。
+ */
+function decodePng(buf) {
+  let p = 8, w = 0, h = 0, bd = 0, ct = 0;
+  const idat = [];
+  while (p < buf.length) {
+    const len = buf.readUInt32BE(p);
+    const type = buf.toString("ascii", p + 4, p + 8);
+    const data = buf.subarray(p + 8, p + 8 + len);
+    if (type === "IHDR") { w = data.readUInt32BE(0); h = data.readUInt32BE(4); bd = data[8]; ct = data[9]; }
+    else if (type === "IDAT") idat.push(data);
+    else if (type === "IEND") break;
+    p += 12 + len;
+  }
+  const ch = ct === 6 ? 4 : ct === 2 ? 3 : 0;
+  if (bd !== 8 || !ch) throw new Error("截图格式不认识：bitDepth=" + bd + " colorType=" + ct);
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = w * ch;
+  const out = Buffer.alloc(stride * h);
+  let prev = Buffer.alloc(stride);            // 上一行解过滤之后的字节
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride);
+    const cur = out.subarray(y * stride, (y + 1) * stride);
+    for (let i = 0; i < stride; i++) {
+      const a = i >= ch ? cur[i - ch] : 0, b = prev[i], c = i >= ch ? prev[i - ch] : 0;
+      let v = line[i];
+      if (f === 1) v += a;
+      else if (f === 2) v += b;
+      else if (f === 3) v += (a + b) >> 1;
+      else if (f === 4) {
+        const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c);
+        v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+      }
+      cur[i] = v & 255;
+    }
+    prev = cur;
+  }
+  return { w: w, h: h,
+    /** fx/fy 是 0..1 的比例，返回 [r,g,b] */
+    at(fx, fy) {
+      const x = Math.round(w * fx), y = Math.round(h * fy);
+      const i = (y * w + x) * ch;
+      return [out[i], out[i + 1], out[i + 2]];
+    } };
+}
+
+/** 拍一张当前的屏幕，返回带 at(fx,fy) 的像素读取器（比例是 0..1）。 */
+async function shotPixels() {
+  const r = await send("Page.captureScreenshot", { format: "png" });
+  return decodePng(Buffer.from(r.result.data, "base64"));
 }
 
 /**
@@ -216,6 +284,55 @@ try {
   const consoleOnLoad = drainConsole();
   check(consoleOnLoad.length === 0, "页面加载期间控制台没有输出",
     consoleOnLoad.join("\n      "));
+
+  // ---- 0. 刚打开页面时，「对手」那一行就必须是自己该有的样子 ----
+  //
+  // 【这一条是冲着用户反馈"刚打开界面时拉条仍可以交互"去的】HTML 里默认选中的是「人类」，
+  // 而"选中谁"之外的派生状态（拉条禁用、淡显、「谁先下」禁用）原来只写在 setSetupAi 里 ——
+  // 那个函数**只在点击时跑**，启动和切语言都不经过它。于是刚打开时拉条是满色、拖得动的，
+  // 「谁先下」两个键也点得动，和「人类」这个选择对不上。
+  //
+  // 【为什么这条断言必须放在这里，不能放到后面拉条那一节】那一节在断言之前会先
+  // `Game.setSetupAi(...)` 把状态摆好再去查 —— 查的是**设过的状态**，正好绕过这个 bug。
+  // 这条是唯一一条"页面刚加载完、一个字都还没设过"的断言，也是唯一能抓住它的位置。
+  //
+  // 【为什么要真拖】`disabled` 是平台保证没错，但用户报的是"还能交互"这个现象本身。
+  // 按真鼠标拖一次、看档位动不动，才是照着现象验现象。
+  const fresh = JSON.parse(await ev(`(() => {
+    const r = document.getElementById("aiRange");
+    const b = r.getBoundingClientRect();
+    return JSON.stringify({
+      ai: Game.setupAi, lv: Game.setupLevel,
+      disabled: r.disabled, value: r.value,
+      dim: document.getElementById("aiLevel").classList.contains("dim"),
+      humanSel: document.getElementById("aiHuman").classList.contains("sel"),
+      orderDisabled: [document.getElementById("orderMe").disabled,
+                      document.getElementById("orderCpu").disabled],
+      box: { l: b.left, t: b.top, w: b.width, h: b.height },
+    });
+  })()`));
+  check(fresh.ai === "human" && fresh.humanSel,
+    "刚打开页面时「对手」默认选中「人类」", JSON.stringify(fresh));
+  check(fresh.disabled === true && fresh.dim === true,
+    "刚打开页面时拉条就是淡显且不可点的（不用先点一下「人类」才生效）",
+    "disabled=" + fresh.disabled + " dim=" + fresh.dim);
+  check(fresh.orderDisabled[0] === true && fresh.orderDisabled[1] === true,
+    "刚打开页面时「谁先下」也是禁用的（没有电脑可先下）", JSON.stringify(fresh.orderDisabled));
+  // 真拖一次：按住滑块一路拖到最右
+  const fr = fresh.box;
+  const fry = fr.t + fr.h / 2;
+  await mouseAt("mousePressed", fr.l + 8, fry, { button: "left", buttons: 1, clickCount: 1 });
+  for (let i = 1; i <= 8; i++) {
+    await mouseAt("mouseMoved", fr.l + 8 + (fr.w - 16) * i / 8, fry, { button: "left", buttons: 1 });
+    await sleep(16);
+  }
+  await mouseAt("mouseReleased", fr.l + fr.w - 8, fry, { button: "left", buttons: 0, clickCount: 1 });
+  await sleep(150);
+  const afterDrag = JSON.parse(await ev(`JSON.stringify({
+    lv: Game.setupLevel, v: document.getElementById("aiRange").value })`));
+  check(afterDrag.lv === fresh.lv && afterDrag.v === fresh.value,
+    "刚打开页面时用真鼠标拖拉条，档位纹丝不动（拉条确实是死的）",
+    fresh.lv + "/" + fresh.value + " → " + afterDrag.lv + "/" + afterDrag.v);
 
   // ---- 1. WebGL2 与两段着色器
   const gl = await ev(`(() => {
@@ -1131,8 +1248,6 @@ try {
     return JSON.stringify({ cx: Math.round(r.left + r.width / 2), cy: Math.round(r.top + r.height / 2),
       distance: c.distance, yaw: c.yaw, pitch: c.pitch, min: c.minDistance, max: c.maxDistance });
   })()`));
-  const mouseAt = (type, x, y, extra) => send("Input.dispatchMouseEvent", Object.assign(
-    { type: type, x: x, y: y, button: "none", clickCount: 0, pointerType: "mouse" }, extra || {}));
   const mouseDrag = async (button, dx, dy, steps) => {
     await mouseAt("mousePressed", cam0.cx, cam0.cy, { button: button, buttons: button === "right" ? 2 : 1, clickCount: 1 });
     for (let i = 1; i <= steps; i++) {
@@ -2179,15 +2294,75 @@ try {
   const clearAlpha = JSON.parse(await ev(`(() => {
     const keep = Game.setupOpen;
     Game.openSetup(); Game.draw3D();
-    const a = Renderer.gl.getParameter(Renderer.gl.COLOR_CLEAR_VALUE)[3];
+    const a = Renderer.gl.getParameter(Renderer.gl.COLOR_CLEAR_VALUE);
     Game.closeSetup(); Game.draw3D();
-    const b = Renderer.gl.getParameter(Renderer.gl.COLOR_CLEAR_VALUE)[3];
+    const b = Renderer.gl.getParameter(Renderer.gl.COLOR_CLEAR_VALUE);
     if (keep) Game.openSetup(); else Game.closeSetup();
     return JSON.stringify({ preview: a, inGame: b });
   })()`));
-  check(clearAlpha.preview === 0 && clearAlpha.inGame === 1,
+  check(clearAlpha.preview[3] === 0 && clearAlpha.inGame[3] === 1,
     "起始界面的画布清成全透明（纸纹才会原样透出来）、对局里仍然不透明",
     JSON.stringify(clearAlpha));
+  // 【透明必须是"透明的黑"，不能是"(--bg 的 RGB, alpha 0)"】
+  // 画布是 premultipliedAlpha，缓冲区里存的是预乘过的颜色 —— alpha=0 就意味着 RGB 也必须全是 0。
+  // 而 clearColor 是把 RGB 原样写进去、不做预乘的，于是 (239,232,219,0) 这组
+  // "RGB 比 alpha 还大"的非法值交给合成器之后，**左半屏被合成为纯白**，比不透明清屏还糟。
+  // 上面那条只看 alpha，这种错它一个字都看不出来（alpha 确实是 0），所以这里必须把 RGB 也钉住。
+  check(clearAlpha.preview[0] === 0 && clearAlpha.preview[1] === 0 && clearAlpha.preview[2] === 0,
+    "起始界面的透明是「透明的黑」(0,0,0,0)，不是把 --bg 的 RGB 配上 alpha 0（那会整块合成成白色）",
+    "实际 " + JSON.stringify(clearAlpha.preview) +
+    "；premultipliedAlpha 下 RGB 比 alpha 大是非法值，合成结果不可预期");
+
+  // ---- 合成之后，左边那半张纸必须和右边一模一样 ----
+  //
+  // 【为什么非要截图数像素】上面两条查的都是**画布自己**的状态，而这件事发生在
+  // **合成器**里：画布读回来 alpha 全是 0、清屏值也确实是透明的黑，可它贴到页面上之后
+  // 左边还是白的。JS 看不见那一步，只有截了图才现形。这个 bug 已经真的出过一次
+  // （v2.10.7），当时上面那两条断言全绿、页面却是纯白。
+  //
+  // 【判据为什么是"藏起画布前后逐点相同"】不拿左右两半直接比：纸纹本身是横跨整个视口的
+  // 渐变色（16%/18% 一处白晕、84%/82% 一处暗晕），左右两半本来就该有系统性的色差，
+  // 直接比会把正常现象判成错。改成比"同一个点、同一时刻，画布可见 vs 藏起"——
+  // 演示盘是透明的、压着 opacity .3，**它对底下的纸必须是零影响**。
+  // 这个判据与棋盘转到哪个角度、纸纹落在哪里都无关。
+  //
+  // 阈值是量出来的，不是拍的：修好之后 112 个采样点里 70 个（63%）逐字节相同、
+  // 差值中位数 0（不相同的那些是演示棋盘自己的格线和棋子），
+  // 而出错那一版是 **0 个相同、差值中位数 28**。取 40% 留足余量。
+  await freezePreview(-28);
+  const grid = [];
+  for (let gy = 0.04; gy <= 0.96; gy += 0.06)
+    for (let gx = 0.04; gx <= 0.40; gx += 0.06) grid.push([gx, gy]);
+  const withGl = await shotPixels();
+  const visPx = grid.map((g) => withGl.at(g[0], g[1]));
+  await ev(`document.getElementById("gl").style.visibility = "hidden"; 1`);
+  await sleep(200);
+  const noGl = await shotPixels();
+  const hidPx = grid.map((g) => noGl.at(g[0], g[1]));
+  await ev(`document.getElementById("gl").style.visibility = ""; 1`);
+  await sleep(120);
+
+  let sameN = 0;
+  const diffs = [];
+  for (let i = 0; i < visPx.length; i++) {
+    const d = Math.max(Math.abs(visPx[i][0] - hidPx[i][0]), Math.abs(visPx[i][1] - hidPx[i][1]),
+                       Math.abs(visPx[i][2] - hidPx[i][2]));
+    diffs.push(d);
+    if (d <= 3) sameN++;
+  }
+  const sorted = diffs.slice().sort((a, b) => a - b);
+  const median = sorted[sorted.length >> 1];
+  const pct = Math.round(100 * sameN / visPx.length);
+  // 前置：左边那张纸得是**暖色**（R 明显大于 B）。纯白 R−B = 0 —— 这正是出错时的样子。
+  // 没有这条的话，两边同时变白时"逐点相同"会假通过。
+  const warm = hidPx.map((c) => c[0] - c[2]).sort((a, b) => a - b)[hidPx.length >> 1];
+  check(warm >= 10,
+    "前置：藏起画布后左半屏是暖色纸（不是纯白）—— 纸质 #efe8db 的 R−B ≈ 20，纯白是 0",
+    "R−B 中位数 = " + warm + "，左上角像素 " + JSON.stringify(hidPx[0]));
+  check(pct >= 40 && median <= 2,
+    "起始界面：演示画布对底下的纸零影响（藏起画布前后左半屏逐点相同）",
+    "112 点里相同 " + pct + "%、差值中位数 " + median +
+    "（预期 ≥40% 且中位数 ≤2；出错那一版是 0% / 28）");
 
   // ---- 角落小字的方位要跟着屏幕方向走 ----
   // 横屏时设置区在右边（#stage 左右分栏），竖屏时在下面（翻成上下分栏）。
