@@ -360,6 +360,14 @@
     padding: 6px 11px; color: var(--dim); font-size: 12.5px; line-height: 1.6;
   }
   #stage.preview #previewTag { display: block; }
+  /* 角落小字有两个方向的说法，按屏幕方向露一个：
+     横屏时设置区在右边（#stage 是左右分栏），竖屏时在下面（翻成了上下分栏）。
+     盒子的位置不变 —— 它一直在视图的左上/左下角，变的是那句话指向哪边。 */
+  #previewTagBelow { display: none; }
+  @media (orientation: portrait) {
+    #previewTagRight { display: none; }
+    #previewTagBelow { display: inline; }
+  }
 
   .titleRow { display: flex; align-items: center; gap: 14px; }
   /* 印章：朱砂底 + 楷体字。用字体而不是画一个图形，是为了不引任何外部资源。 */
@@ -2363,7 +2371,15 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
     <!-- 起始界面打开时，左边这块画布就变成演示棋盘（自动缓慢旋转的 10×10×10）。
          铭牌是必须的：从对局里点「设置」进来时，左边仍然摆着一盘棋，
          不说明的话看起来像是自己的棋局还在。 -->
-    <div id="previewTag" data-i18n-html="previewTag">演示棋盘 · 10 × 10 × 10<br>与左侧设置无关，也不参与对局</div>
+    <!-- 角落那行小字：**方位随屏幕方向变** —— 横屏时设置区在右边，竖屏时在下面。
+         原来写死成"与左侧设置无关"，可设置区从来不在左边，两个方向下都指错了。
+         两个 span 各挂一个 data-i18n-html 键，由 CSS 按 orientation 决定露出哪一个。
+         【容器上不能带 data-i18n】applyStatic 是拿 innerHTML 覆写的，挂在容器上会把这两个
+         span 一起冲掉 —— 那一冲是静默的：切一次语言就变回中文原样。 -->
+    <div id="previewTag">
+      <span id="previewTagRight" data-i18n-html="previewTagRight">演示棋盘 · 10 × 10 × 10<br>与右侧设置无关，也不参与对局</span>
+      <span id="previewTagBelow" data-i18n-html="previewTagBelow">演示棋盘 · 10 × 10 × 10<br>与下方设置无关，也不参与对局</span>
+    </div>
 
     <div id="modebar">
       <button id="modeGhost" class="mini sel" data-i18n="modeGhost">幽灵层</button>
@@ -4973,7 +4989,8 @@ function storeSet(key, value) {
  */
 const STATIC_TEXT = { en: {
   // ---- 左侧舞台
-  "previewTag": "Demo board · 10 × 10 × 10<br>Independent of the settings on the left — not part of the game",
+  "previewTagRight": "Demo board · 10 × 10 × 10<br>Independent of the settings on the right — not part of the game",
+  "previewTagBelow": "Demo board · 10 × 10 × 10<br>Independent of the settings below — not part of the game",
   "hint": "Drag to rotate · Right-drag to pan · Scroll to zoom · Click to place on the current layer<br>" +
     "Touch: pinch to zoom / pan · double-tap a board to reset (works on both boards)<br>" +
     "Z undo · R restart · Q/E change layer · G view mode · H grid lines · B black/white only · T rotate · Y restore rotation<br>" +
@@ -5161,7 +5178,8 @@ const TEXT = { en: {
    靠不住眼睛，dom-smoke 里有一条逐语言、逐键的齐全性检查。
    -------------------------------------------------------------------------- */
 STATIC_TEXT.ja = {
-  "previewTag": "デモ盤 · 10 × 10 × 10<br>左の設定とは無関係、対局には含まれません",
+  "previewTagRight": "デモ盤 · 10 × 10 × 10<br>右の設定とは無関係、対局には含まれません",
+  "previewTagBelow": "デモ盤 · 10 × 10 × 10<br>下の設定とは無関係、対局には含まれません",
   "hint": "ドラッグで回転 · 右ドラッグで平行移動 · スクロールでズーム · クリックで現在のレイヤーに着手<br>タッチ：ピンチでズーム/パン · 盤をダブルタップでリセット（どちらの盤でも有効）<br>Z 元に戻す · R 最初から · Q/E レイヤー切替 · G 表示モード · H グリッド線 · B 黒/白のみ · T 回転 · Y 回転を戻す<br>緑の枠 = 回転するレイヤー · 青の枠 = 現在のレイヤー（緑は 4D のみ）",
   "modeGhost": "ゴースト表示",
   "modeSlice": "スライス",
@@ -5275,7 +5293,8 @@ TEXT.ja = {
   "hint.noWebgl2": "<b style='color:#c0392b'>このブラウザは WebGL2 に対応していないため、3Dの盤を表示できません。</b><br>右側のレイヤーパネルはそのまま使えます。",
 };
 STATIC_TEXT.ko = {
-  "previewTag": "데모 판 · 10 × 10 × 10<br>왼쪽 설정과 무관 — 게임에 포함되지 않습니다",
+  "previewTagRight": "데모 판 · 10 × 10 × 10<br>오른쪽 설정과 무관 — 게임에 포함되지 않습니다",
+  "previewTagBelow": "데모 판 · 10 × 10 × 10<br>아래쪽 설정과 무관 — 게임에 포함되지 않습니다",
   "hint": "드래그로 회전 · 오른쪽 드래그로 이동 · 스크롤로 확대/축소 · 클릭하면 현재 레이어에 착수<br>터치: 두 손가락으로 확대/이동 · 판을 더블탭하면 초기화 (두 판 모두 가능)<br>Z 되돌리기 · R 다시 시작 · Q/E 레이어 변경 · G 보기 모드 · H 격자선 · B 흑/백만 보기 · T 회전 · Y 회전 복원<br>초록 상자 = 곧 회전할 레이어 · 파란 상자 = 현재 레이어 (초록 상자는 4D 전용)",
   "modeGhost": "고스트 레이어",
   "modeSlice": "슬라이스",
@@ -5389,7 +5408,8 @@ TEXT.ko = {
   "hint.noWebgl2": "<b style='color:#c0392b'>이 브라우저는 WebGL2를 지원하지 않아 3D 판을 표시할 수 없습니다.</b><br>오른쪽 레이어 패널은 그대로 사용할 수 있습니다.",
 };
 STATIC_TEXT.ru = {
-  "previewTag": "Демо-доска · 10 × 10 × 10<br>Не зависит от настроек слева — не часть игры",
+  "previewTagRight": "Демо-доска · 10 × 10 × 10<br>Не зависит от настроек справа — не часть игры",
+  "previewTagBelow": "Демо-доска · 10 × 10 × 10<br>Не зависит от настроек снизу — не часть игры",
   "hint": "Перетаскивание — вращение вида · Правая кнопка — сдвиг · Прокрутка — масштаб · Клик — ход на текущем слое<br>Сенсор: двумя пальцами — масштаб и сдвиг · двойной тап по доске — сброс (работает на обеих досках)<br>Z — отменить · R — заново · Q/E — сменить слой · G — режим вида · H — линии сетки · B — только чёрные/белые · T — поворот слоя · Y — вернуть поворот<br>Зелёная рамка — слой, который повернётся · Синяя рамка — текущий слой (зелёная — только в 4D)",
   "modeGhost": "Призрачные слои",
   "modeSlice": "Срез",
@@ -5515,7 +5535,8 @@ TEXT.ru = {
   "hint.noWebgl2": "<b style='color:#c0392b'>Этот браузер не поддерживает WebGL2, поэтому 3D-доску показать нельзя.</b><br>Панель слоёв справа всё равно работает.",
 };
 STATIC_TEXT.fr = {
-  "previewTag": "Plateau de démo · 10 × 10 × 10<br>Indépendant des réglages à gauche — hors partie",
+  "previewTagRight": "Plateau de démo · 10 × 10 × 10<br>Indépendant des réglages à droite — hors partie",
+  "previewTagBelow": "Plateau de démo · 10 × 10 × 10<br>Indépendant des réglages en dessous — hors partie",
   "hint": "Glisser pour tourner · Clic droit pour déplacer · Molette pour zoomer · Clic pour poser sur la couche courante<br>Tactile : pincer pour zoomer / faire glisser · double appui sur un plateau pour réinitialiser (valable sur les deux plateaux)<br>Z annuler · R recommencer · Q/E changer de couche · G mode d'affichage · H lignes de grille · B noir/blanc seulement · T tourner · Y restaurer la rotation<br>Cadre vert = couche sur le point de tourner · Cadre bleu = couche courante (vert seulement en 4D)",
   "modeGhost": "Couches fantômes",
   "modeSlice": "Tranche",
@@ -6256,7 +6277,7 @@ const Renderer = {
 
   init(canvas) {
     this.canvas = canvas;
-    const gl = canvas.getContext("webgl2", { antialias: true, alpha: false, depth: true });
+    const gl = canvas.getContext("webgl2", { antialias: true, alpha: true, depth: true });
     if (!gl) {
       this.ok = false;
       return false;
@@ -7377,6 +7398,12 @@ const Game = {
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
 
     gl.viewport(0, 0, w, h);
+    // 【起始界面那张演示盘要【全透明】清屏】#gl 整体压着 opacity .3，清屏若是不透明的，
+    // 左边就只透出 70% 强度的纸纹（0.3 × 纯色 + 0.7 × 纸纹），而右边是满的 ——
+    // 中间那条【缝】是没了，但两半的亮度差着一档，看着还是两块不同的纸。
+    // 清成透明之后，纸纹原样透出来，两半逐像素同色。（画布因此必须开 alpha，见 Renderer.init）
+    const bgc = Palette.rgb("--bg");
+    gl.clearColor(bgc[0], bgc[1], bgc[2], this.setupOpen ? 0 : 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // 【注意这里传的是 CSS 像素高，不是设备像素高】：平移量是按 CSS 像素记的

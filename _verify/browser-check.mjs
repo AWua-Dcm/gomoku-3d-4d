@@ -1355,6 +1355,17 @@ try {
       vp.tag + " 英文下转动冷却四键排成 2×2 且两列各自对齐",
       JSON.stringify({ 行数: port.setupUi.coolRowLines, 列数: port.setupUi.coolCols,
                        两列对齐: port.setupUi.coolColAligned }));
+    // 竖屏下 #stage 翻成了上下分栏，设置区在【下面】—— 角落小字说的也得是"与下方设置无关"
+    const tagPort = JSON.parse(await ev(`(() => {
+      Game.openSetup();
+      const R = (id) => document.getElementById(id).getClientRects().length > 0;
+      return JSON.stringify({ right: R("previewTagRight"), below: R("previewTagBelow"),
+                              text: document.getElementById("previewTag").textContent });
+    })()`));
+    check(tagPort.below && !tagPort.right,
+      vp.tag + " 竖屏：角落小字说的是「与下方设置无关」",
+      JSON.stringify(tagPort));
+
     check(port.setupUi.labelLines.every((x) => x <= 1),
       vp.tag + " 英文的每个行标都只占一行（宽度贴合文字，不折行）",
       JSON.stringify(port.setupUi.labelLines));
@@ -2159,6 +2170,36 @@ try {
   await send("Emulation.setTouchEmulationEnabled", { enabled: true });
   await send("Emulation.clearDeviceMetricsOverride");
   await sleep(200);
+
+  // ---- 左右两半的纸纹必须一模一样 ----
+  // 【为什么要有这一条】缝（一条硬边）之前就修掉了，但两半的【亮度】还差着一档：
+  // 画布是 opacity .3 的，而它的清屏色原本不透明 —— 左边于是只剩 70% 强度的纸纹
+  // （0.3 × 纯色 + 0.7 × 纸纹），右边是满的。看上去不像两块拼接的纸了，但仍是两种底色。
+  // 修法是起始界面把画布清成【全透明】（画布因此必须开 alpha）。这里直接问 GL 要清屏色的 alpha。
+  const clearAlpha = JSON.parse(await ev(`(() => {
+    const keep = Game.setupOpen;
+    Game.openSetup(); Game.draw3D();
+    const a = Renderer.gl.getParameter(Renderer.gl.COLOR_CLEAR_VALUE)[3];
+    Game.closeSetup(); Game.draw3D();
+    const b = Renderer.gl.getParameter(Renderer.gl.COLOR_CLEAR_VALUE)[3];
+    if (keep) Game.openSetup(); else Game.closeSetup();
+    return JSON.stringify({ preview: a, inGame: b });
+  })()`));
+  check(clearAlpha.preview === 0 && clearAlpha.inGame === 1,
+    "起始界面的画布清成全透明（纸纹才会原样透出来）、对局里仍然不透明",
+    JSON.stringify(clearAlpha));
+
+  // ---- 角落小字的方位要跟着屏幕方向走 ----
+  // 横屏时设置区在右边（#stage 左右分栏），竖屏时在下面（翻成上下分栏）。
+  const tagLand = JSON.parse(await ev(`(() => {
+    Game.openSetup();
+    const R = (id) => document.getElementById(id).getClientRects().length > 0;
+    return JSON.stringify({ right: R("previewTagRight"), below: R("previewTagBelow"),
+                            text: document.getElementById("previewTag").textContent });
+  })()`));
+  check(tagLand.right && !tagLand.below,
+    "横屏：角落小字说的是「与右侧设置无关」",
+    JSON.stringify(tagLand));
 
   check(AS.docOver <= 1 && AS.setupOver <= 1,
     "起始界面加了人机两行之后没有横向溢出", "doc " + AS.docOver + " / setup " + AS.setupOver);
