@@ -762,14 +762,97 @@ step("冷却门槛：落满 5 手前转不动，之后才可转", () => {
   if (!Game.el.rotStatus.textContent.includes("可以转动"))
     throw new Error("状态文字应说可以转动，实际：" + Game.el.rotStatus.textContent);
 
-  // 转一次
+  // 转一次。**注意这是两步**：执行转动只把盘面转上去（预览），确定操作才落地。
   const before = Game.session.moveCount;
   const turnBefore = Game.session.currentPlayer;
   Game.doRotate();
+
+  // ① 预览期间：盘面转了，但**什么都没记账**
+  if (!Game.rotPreview) throw new Error("执行转动之后应该处于预览中");
+  if (Game.session.rotationCount !== 0)
+    throw new Error("预览期间不该有转动记录，实际 " + Game.session.rotationCount);
+  if (Game.session.moveCount !== before) throw new Error("转动不该改变落子数");
+  if (Game.session.currentPlayer !== turnBefore)
+    throw new Error("预览期间回合不该翻转 —— 这一手还没落地");
+  // 两个键换了位置：执行/恢复退场，确定/取消上场，而且确定那个带亮圈
+  if (!Game.el.rotGo.classList.contains("off") || !Game.el.rotRestore.classList.contains("off"))
+    throw new Error("预览中「执行转动」「恢复本次转动」应该让位");
+  if (Game.el.rotConfirm.classList.contains("off") || Game.el.rotCancel.classList.contains("off"))
+    throw new Error("预览中「确定操作」「取消操作」应该上场");
+  if (!Game.el.rotConfirm.classList.contains("attn") || !Game.el.rotCancel.classList.contains("attn"))
+    throw new Error("预览中两个键都要有亮圈");
+  if (Game.el.rotHint.textContent.indexOf("预览") < 0)
+    throw new Error("预览中要给出一句说明，实际：" + Game.el.rotHint.textContent);
+
+  Game.confirmRotation();
+
+  // ② 确定之后才真的落地
+  if (Game.rotPreview) throw new Error("确定之后不该还停在预览里");
   if (Game.session.rotationCount !== 1) throw new Error("转动应被记录，实际 " + Game.session.rotationCount);
   if (Game.session.moveCount !== before) throw new Error("转动不该改变落子数");
   if (Game.session.currentPlayer === turnBefore) throw new Error("转动必须占掉一整个回合");
   if (!Game.el.rotGo.disabled) throw new Error("刚转完应重新进入冷却");
+  if (Game.el.rotConfirm.classList.contains("attn"))
+    throw new Error("落地之后亮圈要收掉");
+});
+
+step("预览：不落地、可取消、取消后盘面逐格还原", () => {
+  Game.setSetupMode(true);
+  Game.setupCool = 0;
+  Game.newGame(8, 1);
+
+  const b = Game.session.board;
+  for (const c of [[0, 0, 0], [1, 0, 0], [2, 3, 0], [3, 3, 0], [4, 4, 0], [5, 1, 0]]) b.set(c[0], c[1], c[2], 1);
+  Game.rotAxis = 0; Game.rotLayer = 0; Game.rotClockwise = true; Game.rotTurns = 1;
+  Game.refreshRotPanel();
+
+  const snapshot = () => {
+    let s = "";
+    for (let z = 0; z < b.size; z++) for (let y = 0; y < b.size; y++) for (let x = 0; x < b.size; x++) s += b.get(x, y, z);
+    return s;
+  };
+  const before = snapshot();
+  const fpBefore = CoreNS.fingerprint(Game.session);
+
+  Game.doRotate();
+  if (snapshot() === before) throw new Error("预览就该看得见效果（盘面必须变了），否则这条测试没意义");
+  if (CoreNS.fingerprint(Game.session) === fpBefore)
+    throw new Error("预览期间盘面变了，指纹当然也该变 —— 这条要是相等，说明上面那句没生效");
+
+  Game.cancelRotation();
+  if (Game.rotPreview) throw new Error("取消之后不该还停在预览里");
+  if (snapshot() !== before) throw new Error("取消之后盘面必须逐格还原");
+  if (CoreNS.fingerprint(Game.session) !== fpBefore)
+    throw new Error("取消之后指纹必须逐位还原（预览等于没发生过）");
+
+  // 取消之后还能接着正常走：再预览一次、这次确定
+  Game.doRotate();
+  Game.confirmRotation();
+  if (Game.session.rotationCount !== 1) throw new Error("确定之后应有转动记录");
+  if (Game.session.canUndoLastRotation !== true)
+    throw new Error("落地之后「恢复本次转动」应该可用（它就是确定之后的后悔药）");
+});
+
+step("预览期间不能落子：棋盘是「转过的样子」，照着它点会落错地方", () => {
+  Game.setSetupMode(true);
+  Game.setupCool = 0;
+  Game.newGame(8, 1);
+  const b = Game.session.board;
+  for (const c of [[0, 0, 0], [1, 0, 0], [2, 3, 0], [3, 3, 0], [4, 4, 0], [5, 1, 0]]) b.set(c[0], c[1], c[2], 1);
+  Game.rotAxis = 0; Game.rotLayer = 0; Game.rotClockwise = true; Game.rotTurns = 1;
+  Game.refreshRotPanel();
+
+  Game.doRotate();
+  const moves = Game.session.moveCount;
+  Game.tryPlace(7, 7);
+  if (Game.session.moveCount !== moves)
+    throw new Error("预览期间不该落得下子（棋盘是转过的样子，落点会和看到的不符）");
+  if (Game.toastTimer <= 0) throw new Error("挡下来要给出提示，不能静默 return");
+
+  // 悔棋在预览期间 = 取消这次预览，而不是去撤更早的落子
+  Game.undo();
+  if (Game.rotPreview) throw new Error("预览期间按悔棋应该先把这次预览撤掉");
+  if (Game.session.moveCount !== moves) throw new Error("悔棋不该顺手撤掉落子");
 });
 
 step("恢复本次转动：只在最后一步是转动时可用，且完整还原盘面", () => {
@@ -790,6 +873,8 @@ step("恢复本次转动：只在最后一步是转动时可用，且完整还�
   if (!Game.el.rotRestore.disabled) throw new Error("还没转过的时候不该能恢复");
   const before = snapshot();
   Game.doRotate();
+  if (Game.session.rotationCount !== 0) throw new Error("预览期间不该有记录");
+  Game.confirmRotation();
   if (Game.session.rotationCount !== 1) throw new Error("转动应成功");
   if (snapshot() === before) throw new Error("转动应该改变了盘面（否则这条测试没意义）");
   if (Game.el.rotRestore.disabled) throw new Error("刚转完应能恢复");
@@ -801,6 +886,7 @@ step("恢复本次转动：只在最后一步是转动时可用，且完整还�
 
   // 转完再落一手，就不能再单独恢复那次转动了
   Game.doRotate();
+  Game.confirmRotation();
   Game.tryPlace(7, 7);
   if (!Game.el.rotRestore.disabled)
     throw new Error("已经有人落子了，不该还能单独撤销那次转动");
@@ -889,8 +975,16 @@ step("转动之后，最后一手标记不能挂在一颗无关的子（或空�
   // 绕 x 轴转第 0 层：(0,0,0) -> (0,0,7)，离开当前层，且原来的格子变空
   Game.rotAxis = 0; Game.rotLayer = 0; Game.rotClockwise = true; Game.rotTurns = 1;
   Game.doRotate();
-  if (Game.session.rotationCount !== 1) throw new Error("转动应成功");
+  if (Game.session.rotationCount !== 0) throw new Error("预览期间不该有记录");
   if (!Game.session.board.isEmpty(0, 0, 0)) throw new Error("(0,0,0) 应该已经被搬空了");
+  // 【画面必须当场跟上】预览不发任何事件，重画得自己来 —— 少了那一句，
+  // 棋盘转过去了、屏幕上却没动静，而且下面这两条断言会红在这里，很好查。
+  if (Game.opqCount !== 0)
+    throw new Error("预览期间画面就该是转过的样子：当前层不该还有不透明子，实际 opq=" + Game.opqCount);
+  if (Game.ghCount !== 1)
+    throw new Error("预览期间应只剩那颗被搬走的幽灵子，实际 gh=" + Game.ghCount);
+  Game.confirmRotation();
+  if (Game.session.rotationCount !== 1) throw new Error("转动应成功");
 
   if (Game.opqCount !== 0)
     throw new Error("被搬走之后当前层不该还有不透明子，实际 opq=" + Game.opqCount);

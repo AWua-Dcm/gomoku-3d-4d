@@ -139,6 +139,14 @@ les axes `x` et `y` s'observent respectivement depuis la gauche et depuis le bas
 
 Un tour en sens antihoraire équivaut à trois tours en sens horaire. Quatre tours équivalent à rien, donc **cette option n'est pas proposée**.
 
+**Une rotation se fait en deux temps : « Tourner » montre le résultat, « Confirmer » le valide.**
+Après « Tourner », le plateau **pivote aussitôt pour que vous le voyiez**, mais le coup n'est pas joué :
+il ne consomme pas votre tour, ne compte pas comme un coup et n'entre pas dans l'historique. Pendant
+cet aperçu, les boutons « Tourner » et « Restaurer la rotation » cèdent la place à **« Confirmer »** et
+**« Annuler »**, cerclés tous les deux pour signaler la décision en attente : « Confirmer » tourne pour
+de bon, « Annuler » remet le plateau exactement comme avant. On ne peut pas poser de pierre pendant
+l'aperçu : le plateau est déjà montré tourné, et la pierre tomberait ailleurs qu'où vous visiez.
+
 ### 10.2 L'effet d'une rotation
 
 Seules les cases de la couche tournée bougent ; tout ce qui est hors de la couche reste immobile.

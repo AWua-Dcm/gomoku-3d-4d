@@ -140,6 +140,14 @@ the `x` and `y` axes are viewed from the left of the board and from below it.
 
 One counterclockwise turn equals three clockwise turns. Four turns equal no turn, so **that option is not offered**.
 
+**Rotating takes two steps: "Rotate" shows you the result, "Confirm" makes it count.**
+After you press Rotate the board **turns immediately so you can see it**, but the move has not landed:
+it does not use up your turn, does not count as a move, and is not written into the record. While that
+preview is up, the Rotate and Restore buttons are replaced by **Confirm** and **Cancel**, both ringed to
+flag the decision you still owe: Confirm turns it for real, Cancel turns the board straight back, as if
+nothing had happened. You cannot place a stone during the preview — the board is showing the rotated
+position, so clicking it would put your stone somewhere other than where you aimed.
+
 ### 10.2 What a rotation does
 
 Only the cells of the rotated layer move; everything outside it stays put.

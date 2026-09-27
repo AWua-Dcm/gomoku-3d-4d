@@ -300,8 +300,22 @@
   #rotHead { display: flex; align-items: baseline; gap: 10px; }
   #rotTitle { font-size: 15px; font-weight: 600; }
   #rotStatus { color: var(--dim); font-size: 12.5px; flex: 1 1 auto; text-align: right; }
-  .rotRow { display: flex; align-items: center; gap: 6px; }
+  /* 【gap 从 6 加到 12】为了让预览中那两个键各戴各的亮圈。亮圈是"往外扩 4px"画的
+     （2px 线宽 + 2px 空隙），相邻两个键各扩 4px 就是 8px —— 6px 的间距兜不住，
+     两个圈会连成一个框，看起来像"整行被选中"而不是"这两个键在等你决定"。
+     12px 留下 4px 的空档，两个圈才是分开的（实测扫过像素：10px 时只隔 1px，糊在一起）。 */
+  .rotRow { display: flex; align-items: center; gap: 12px; }
   .rotRow button { flex: 1 1 0; padding: 6px 8px; font-size: 13px; }
+  /* 预览中顶替上来的那两个键（见 #rotPanel 里那段 HTML 注释）：平时不显示，
+     显示时正好顶掉同样数目的格子，所以整行几何不变。 */
+  .rotRow button.off { display: none; }
+  /* 亮圈：转动已经转上去了、还没落地，这时候最要紧的就是"你还有个待决定的操作"。
+     用 outline + outline-offset 而不是 box-shadow。box-shadow 是紧贴着边框画的，
+     而这两个键里有一个本来就填着强调色（.sel）—— 强调色的圈套在强调色的块上等于看不见。
+     offset 留出的那圈空隙自动露出底下的面板底色，于是同一份写法在填色键和素色键上一样清楚。
+     让 offset 呼吸而不是常亮：常亮会被当成"这个按钮就是这个颜色"，动起来才叫提醒。 */
+  @keyframes rotRing { 0%, 100% { outline-offset: 2px; } 50% { outline-offset: 5px; } }
+  .rotRow button.attn { outline: 2px solid var(--accent); animation: rotRing 1.6s ease-in-out infinite; }
   .rotRow button.mini { flex: 0 0 auto; padding: 6px 12px; }
   .rotLabel { color: var(--dim); font-size: 12.5px; width: 34px; flex: 0 0 auto; text-align: right; }
   #rotLayerLabel { flex: 1 1 auto; text-align: center; font-size: 13.5px; }
@@ -1030,6 +1044,13 @@
 
 逆时针转 1 圈等于顺时针转 3 圈。转 4 圈等于没转，所以**不提供**这个选项。
 
+**转动是两步：先「执行转动」看效果，再「确定操作」才算数。**
+点「执行转动」之后，棋盘会**当场转给你看**，但这一手还没落地 —— 不消耗回合、
+不算一步、也没记进棋谱。这时候原来那两个键（执行转动 / 恢复本次转动）会换成
+「确定操作」和「取消操作」，并带上亮圈提醒你还有个没做完的决定：
+「确定操作」才真的转过去，「取消操作」把棋盘原样转回来，等于什么都没发生。
+预览期间不能落子 —— 那时候棋盘是转过的样子，照着它点会落错地方。
+
 ### 10.2 转动的效果
 
 只有被转的那一层里，位置在变；层外的一切都不动。
@@ -1062,6 +1083,7 @@
 - **只有落子算数**，转动本身不算 —— 否则就变成"每 5 手里只准有一手是转动"，太难算了。
 - 可以调成 3 / 5 / 8 / 10，默认 5。
 - 第一次转动同样受这条约束：开局之后落满 5 个子才能转。
+- **只有「确定操作」之后才开始算冷却** —— 预览期间既没落地，也就不该消耗冷却。
 - 悔棋会把冷却一起退回去，不会出现"计数器和棋盘对不上"。
 
 ### 10.5 转动的代价
@@ -1280,6 +1302,14 @@ For the `z` axis that is the direction you see on screen, with no conversion nee
 the `x` and `y` axes are viewed from the left of the board and from below it.
 
 One counterclockwise turn equals three clockwise turns. Four turns equal no turn, so **that option is not offered**.
+
+**Rotating takes two steps: "Rotate" shows you the result, "Confirm" makes it count.**
+After you press Rotate the board **turns immediately so you can see it**, but the move has not landed:
+it does not use up your turn, does not count as a move, and is not written into the record. While that
+preview is up, the Rotate and Restore buttons are replaced by **Confirm** and **Cancel**, both ringed to
+flag the decision you still owe: Confirm turns it for real, Cancel turns the board straight back, as if
+nothing had happened. You cannot place a stone during the preview — the board is showing the rotated
+position, so clicking it would put your stone somewhere other than where you aimed.
 
 ### 10.2 What a rotation does
 
@@ -1541,6 +1571,14 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 
 反時計回り 1 回転は時計回り 3 回転と同じ。4 回転は回さないのと同じなので、この選択肢は**用意していない**。
 
+**回転は二段階です：「回転」で結果を見て、「確定」で初めて成立します。**
+「回転」を押すと盤面は**その場で回って見えます**が、この手はまだ成立していません ——
+手番を消費せず、一手とも数えず、記録にも残りません。その間、パネルの「回転」と
+「回転を戻す」は「確定」と「キャンセル」に入れ替わり、決めていないことがあると分かるように
+光る輪が付きます。「確定」で本当に回り、「キャンセル」で盤面をそのまま元に戻します。
+プレビュー中は着手できません —— 盤面は回した後の見た目なので、そこを押すと狙った場所と
+違うところに石が置かれてしまいます。
+
 ### 10.2 回転の効果
 
 変わるのは回したレイヤーの中の位置だけで、レイヤーの外は一切動かない。
@@ -1791,6 +1829,14 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 반시계 방향 1바퀴는 시계 방향 3바퀴와 같습니다. 4바퀴는 돌지 않은 것과 같으므로 **이 선택지는 제공하지 않습니다**.
 
+**회전은 두 단계입니다: 「회전」으로 결과를 보고, 「확인」을 눌러야 성립합니다.**
+「회전」을 누르면 판이 **그 자리에서 돌아 보입니다**, 하지만 이 수는 아직 성립하지 않았습니다 ——
+차례를 쓰지 않고, 한 수로 세지도 않고, 기록에도 남지 않습니다. 그동안 패널의
+「회전」과 「회전 복원」은 「확인」과 「취소」로 바뀌고, 아직 결정하지 않은 것이 있다는 것을
+알리기 위해 빛나는 테두리가 붙습니다. 「확인」을 눌러야 실제로 돌아가고,
+「취소」는 판을 그대로 되돌립니다. 미리보기 중에는 착수할 수 없습니다 ——
+판이 돌아간 모습이므로 그걸 보고 누르면 노린 자리와 다른 곳에 돌이 놓입니다.
+
 ### 10.2 회전의 효과
 
 회전한 그 레이어 안에서만 위치가 바뀌고, 레이어 밖의 모든 것은 움직이지 않습니다.
@@ -2040,6 +2086,14 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 для осей `x` и `y` точка обзора находится слева от доски и снизу от неё.
 
 Поворот на 1 оборот против часовой стрелки равен 3 оборотам по часовой. 4 оборота — это отсутствие поворота, поэтому такой вариант **не предлагается**.
+
+**Поворот делается в два шага: «Повернуть» показывает результат, «Подтвердить» — засчитывает.**
+После нажатия «Повернуть» доска **тут же поворачивается, чтобы вы увидели результат**, но ход ещё
+не сделан: он не расходует ваш ход, не считается ходом и не записывается в летопись. Пока идёт
+предпросмотр, кнопки «Повернуть» и «Вернуть поворот» заменяются на **«Подтвердить»** и
+**«Отмена»** — обе с подсветкой, чтобы решение не потерялось: «Подтвердить» поворачивает
+по-настоящему, «Отмена» возвращает доску как было. Во время предпросмотра ставить камень нельзя —
+доска показывается уже повёрнутой, и камень лёг бы не туда, куда вы целились.
 
 ### 10.2 Что делает поворот
 
@@ -2295,6 +2349,14 @@ Pour l'axe `z`, c'est le sens que vous voyez à l'écran, sans conversion à fai
 les axes `x` et `y` s'observent respectivement depuis la gauche et depuis le bas du plateau.
 
 Un tour en sens antihoraire équivaut à trois tours en sens horaire. Quatre tours équivalent à rien, donc **cette option n'est pas proposée**.
+
+**Une rotation se fait en deux temps : « Tourner » montre le résultat, « Confirmer » le valide.**
+Après « Tourner », le plateau **pivote aussitôt pour que vous le voyiez**, mais le coup n'est pas joué :
+il ne consomme pas votre tour, ne compte pas comme un coup et n'entre pas dans l'historique. Pendant
+cet aperçu, les boutons « Tourner » et « Restaurer la rotation » cèdent la place à **« Confirmer »** et
+**« Annuler »**, cerclés tous les deux pour signaler la décision en attente : « Confirmer » tourne pour
+de bon, « Annuler » remet le plateau exactement comme avant. On ne peut pas poser de pierre pendant
+l'aperçu : le plateau est déjà montré tourné, et la pierre tomberait ailleurs qu'où vous visiez.
 
 ### 10.2 L'effet d'une rotation
 
@@ -2605,6 +2667,14 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
       <div class="rotRow">
         <button id="rotGo" data-i18n="rotGo">执行转动</button>
         <button id="rotRestore" disabled data-i18n="rotRestore">恢复本次转动</button>
+        <!-- 【预览中顶替上面那两个的两个键】有预览时 rotConfirm / rotCancel 上，
+             rotGo / rotRestore 下。**只换不增**：四个按钮都是 flex: 1 1 0，
+             永远恰好两个可见，所以这一行的宽度分配、换行、整块高度全都不动 ——
+             这也是这里敢用 display:none 的原因。平时那条"禁用而不是隐藏"的规矩
+             （见 #coolRow、#aiLevel 的注释）防的是布局跳，而这里换上去的是
+             和原来一模一样的两格，跳不起来。 -->
+        <button id="rotConfirm" class="off" data-i18n="rotConfirm">确定操作</button>
+        <button id="rotCancel" class="off" data-i18n="rotCancel">取消操作</button>
       </div>
       <div id="rotHint"></div>
     </div>
@@ -3951,6 +4021,27 @@ class FourDSession {
   }
 
   /**
+   * 【给玩家的"预览"用】按方向 + 次数转一层，**转上去就留着，但仍然不记账**：
+   * 不消耗回合、不写 this.rotations、不发任何事件。判定和 rotate() 共用 _tryRotate。
+   *
+   * 留给调用方的只有两件事：`cancelPreviewRotate()` 转回去，或者还原之后走正常的
+   * `rotate()`。**别在这里加记账** —— 一行加进来，预览就不再是"没落地"了。
+   *
+   * 【为什么要放进内核而不是让 UI 自己调 _tryRotate】预览会把"棋盘已经变了、
+   * 但会话状态还是旧的"这个中间态摆到台面上，那是 FourDSession 的状态，
+   * 该由它自己守：下面 cancelPreviewRotate 的还原式子和 probeRotate / CreatesLine
+   * 用的是同一个逆置换，写在这里三处才能保证一起改。
+   */
+  previewRotate(axis, layer, direction, turns, lang = "zh") {
+    return this._tryRotate(RotationMove.create(axis, layer, direction, turns), lang);
+  }
+
+  /** 把预览中的转动转回去。传进来的必须和 previewRotate 那次是同一个 move。 */
+  cancelPreviewRotate(move) {
+    this.inner.board.rotateLayer(move.axis, move.layer, 4 - move.turns);
+  }
+
+  /**
    * 按用户输入的"方向 + 次数"转一层。
    *
    * 【lang 必须一路传下去】rotate() 会把"没转成"的原因（层是空的 / 冷却未到 / 不是立方盘…）
@@ -5150,6 +5241,8 @@ const STATIC_TEXT = { en: {
   "rotCCW": "Counterclockwise",
   "rotGo": "Rotate",
   "rotRestore": "Restore rotation",
+  "rotConfirm": "Confirm",
+  "rotCancel": "Cancel",
   "undoBtn": "Undo Z",
   "restartBtn": "Restart R",
   "swapBtn": "Swap first player",
@@ -5209,6 +5302,7 @@ const TEXT = { en: {
   "info.aiOpp": " · computer plays {who}",
   "info.aiThink": " · the computer is thinking…",
   "toast.aiTurn": "It is the computer's turn",
+  "toast.rotPreview": "Rotation not confirmed yet — press Confirm or Cancel first",
   "toast.aiPlace": "The computer played ({x},{y},{z})",
   "toast.aiRotUndo": "Against the computer, use Undo to step back",
   "setup.aiSummary": "\nHuman vs computer: you play {mine}, the computer plays {theirs}.",
@@ -5238,6 +5332,7 @@ const TEXT = { en: {
   "rot.layerLabel.one": "{axis} = {layer} (1 stone in this layer)",
   "rot.layerLabel.many": "{axis} = {layer} ({n} stones in this layer)",
   "rot.hint.over": "The game is over.",
+  "rot.hint.preview": "Preview: the board already looks rotated, but nothing is committed yet. Confirm makes it real; Cancel turns it back.",
   "rot.hint.empty": "This layer is empty — nothing to rotate. Pick another layer, or check the 3D view to see where the stones are.",
   // 冷却只剩 1 手时要说 "1 more move" —— 和 setup.fourD.every* 同一类单复数。
   // 这一处【界面上够得到】：冷却选 3 时落两手，placementsUntilRotation 就是 1。
@@ -5330,6 +5425,8 @@ STATIC_TEXT.ja = {
   "rotCCW": "反時計回り",
   "rotGo": "回転",
   "rotRestore": "回転を戻す",
+  "rotConfirm": "確定",
+  "rotCancel": "キャンセル",
   "undoBtn": "元に戻す Z",
   "restartBtn": "最初から R",
   "swapBtn": "先手を入れ替え",
@@ -5366,6 +5463,7 @@ TEXT.ja = {
   "info.aiOpp": " · コンピュータは{who}番",
   "info.aiThink": " · コンピュータが考えています…",
   "toast.aiTurn": "今はコンピュータの番です",
+  "toast.rotPreview": "回転がまだ確定していません — 先に「確定」か「キャンセル」を押してください",
   "toast.aiPlace": "コンピュータは ({x},{y},{z}) に打ちました",
   "toast.aiRotUndo": "コンピュータ対戦では「取り消し」で戻してください",
   "setup.aiSummary": "\nコンピュータ対戦：あなたは{mine}、コンピュータは{theirs}。",
@@ -5388,6 +5486,7 @@ TEXT.ja = {
   "banner.winSub": "{n}手目",
   "rot.layerLabel.many": "{axis} = {layer}（このレイヤーに石{n}個）",
   "rot.hint.over": "対局は終了しました。",
+  "rot.hint.preview": "プレビュー中：盤面は回した後の見た目ですが、まだ確定していません。「確定」で本当に回り、「キャンセル」で元に戻ります。",
   "rot.hint.empty": "このレイヤーは空です。回転するものがありません。別のレイヤーを選ぶか、3D表示で石の位置を確認してください。",
   "rot.hint.cool.many": "クールダウン中：あと{n}手。回転はその手番を丸ごと使うため、回転した直後には着手できません。",
   "rot.hint.undo": "直前の手は回転でした。「回転を戻す」で取り消せます。",
@@ -5445,6 +5544,8 @@ STATIC_TEXT.ko = {
   "rotCCW": "반시계 방향",
   "rotGo": "회전",
   "rotRestore": "회전 복원",
+  "rotConfirm": "확인",
+  "rotCancel": "취소",
   "undoBtn": "되돌리기 Z",
   "restartBtn": "다시 시작 R",
   "swapBtn": "선수 교체",
@@ -5481,6 +5582,7 @@ TEXT.ko = {
   "info.aiOpp": " · 컴퓨터는 {who}",
   "info.aiThink": " · 컴퓨터가 생각 중…",
   "toast.aiTurn": "지금은 컴퓨터 차례입니다",
+  "toast.rotPreview": "회전이 아직 확정되지 않았습니다 — 먼저 「확인」이나 「취소」를 누르세요",
   "toast.aiPlace": "컴퓨터가 ({x},{y},{z})에 두었습니다",
   "toast.aiRotUndo": "컴퓨터 대국에서는 「되돌리기」로 돌아가세요",
   "setup.aiSummary": "\n컴퓨터 대국: 당신은 {mine}, 컴퓨터는 {theirs}.",
@@ -5503,6 +5605,7 @@ TEXT.ko = {
   "banner.winSub": "{n}수",
   "rot.layerLabel.many": "{axis} = {layer} (이 레이어에 돌 {n}개)",
   "rot.hint.over": "게임이 끝났습니다.",
+  "rot.hint.preview": "미리보기 중: 판은 이미 돌아간 모습이지만 아직 확정되지 않았습니다. 「확인」을 누르면 실제로 돌아가고, 「취소」를 누르면 되돌아갑니다.",
   "rot.hint.empty": "이 레이어는 비어 있습니다 — 회전할 것이 없습니다. 다른 레이어를 고르거나 3D 보기에서 돌이 있는 곳을 확인하세요.",
   "rot.hint.cool.many": "쿨다운: {n}수 남음. 회전은 한 수를 전부 사용하므로 회전 직후에는 착수할 수 없습니다.",
   "rot.hint.undo": "마지막 수는 회전이었습니다 — \"복원\"으로 되돌릴 수 있습니다.",
@@ -5560,6 +5663,8 @@ STATIC_TEXT.ru = {
   "rotCCW": "Против часовой",
   "rotGo": "Повернуть",
   "rotRestore": "Вернуть поворот",
+  "rotConfirm": "Подтвердить",
+  "rotCancel": "Отмена",
   "undoBtn": "Отменить (Z)",
   "restartBtn": "Заново (R)",
   "swapBtn": "Сменить первого игрока",
@@ -5600,6 +5705,7 @@ TEXT.ru = {
   "info.aiOpp": " · компьютер: {who}",
   "info.aiThink": " · компьютер думает…",
   "toast.aiTurn": "Сейчас ход компьютера",
+  "toast.rotPreview": "Поворот не подтверждён — сначала «Подтвердить» или «Отмена»",
   "toast.aiPlace": "Компьютер сыграл ({x},{y},{z})",
   "toast.aiRotUndo": "В игре с компьютером отступайте кнопкой «Отменить»",
   "setup.aiSummary": "\nИгра с компьютером: вы играете {mine}, компьютер — {theirs}.",
@@ -5624,6 +5730,7 @@ TEXT.ru = {
   "rot.layerLabel.few": "{axis} = {layer} ({n} камня в этом слое)",
   "rot.layerLabel.many": "{axis} = {layer} ({n} камней в этом слое)",
   "rot.hint.over": "Игра окончена.",
+  "rot.hint.preview": "Предпросмотр: доска уже выглядит повёрнутой, но ход ещё не сделан. «Подтвердить» — повернуть по-настоящему, «Отмена» — вернуть как было.",
   "rot.hint.empty": "В этом слое пусто — поворачивать нечего. Выберите другой слой или посмотрите 3D-вид, чтобы увидеть, где стоят камни.",
   "rot.hint.cool.one": "Перезарядка: ещё 1 ход. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
   "rot.hint.cool.few": "Перезарядка: ещё {n} хода. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
@@ -5687,6 +5794,8 @@ STATIC_TEXT.fr = {
   "rotCCW": "Sens antihoraire",
   "rotGo": "Tourner",
   "rotRestore": "Restaurer la rotation",
+  "rotConfirm": "Confirmer",
+  "rotCancel": "Annuler",
   "undoBtn": "Annuler Z",
   "restartBtn": "Recommencer R",
   "swapBtn": "Échanger le premier joueur",
@@ -5725,6 +5834,7 @@ TEXT.fr = {
   "info.aiOpp": " · ordinateur : {who}",
   "info.aiThink": " · l'ordinateur réfléchit…",
   "toast.aiTurn": "C'est au tour de l'ordinateur",
+  "toast.rotPreview": "Rotation non confirmée — appuyez d'abord sur « Confirmer » ou « Annuler »",
   "toast.aiPlace": "L'ordinateur a joué ({x},{y},{z})",
   "toast.aiRotUndo": "Contre l'ordinateur, utilisez « Annuler » pour revenir en arrière",
   "setup.aiSummary": "\nContre l'ordinateur : vous jouez {mine}, l'ordinateur joue {theirs}.",
@@ -5748,6 +5858,7 @@ TEXT.fr = {
   "rot.layerLabel.one": "{axis} = {layer} (1 pion dans cette couche)",
   "rot.layerLabel.many": "{axis} = {layer} ({n} pions dans cette couche)",
   "rot.hint.over": "La partie est terminée.",
+  "rot.hint.preview": "Aperçu : le plateau est déjà tourné, mais le coup n'est pas encore validé. « Confirmer » le valide, « Annuler » remet tout en place.",
   "rot.hint.empty": "Cette couche est vide — rien à tourner. Choisissez une autre couche, ou regardez la vue 3D pour voir où sont les pions.",
   "rot.hint.cool.one": "Recharge : encore 1 coup. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
   "rot.hint.cool.many": "Recharge : encore {n} coups. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
@@ -6637,6 +6748,9 @@ const Game = {
   rotLayer: 0,
   rotClockwise: true,
   rotTurns: 1,
+  /* 正在预览、还没落地的那次转动（null = 没有）。
+     它不是"要转的东西"，而是"已经转上去、但还没记账的那一手" —— 见 doRotate 的注释。 */
+  rotPreview: null,
   rotOutlineCount: 0,
   colCounts: null,
   layerCounts: null,
@@ -6708,7 +6822,7 @@ const Game = {
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
       "dimRange","dimRange4d","coolNote",
       "rotPanel","rotStatus","rotLayerDown","rotLayerUp","rotLayerLabel",
-      "rotCW","rotCCW","rotGo","rotRestore","rotHint",
+      "rotCW","rotCCW","rotGo","rotRestore","rotConfirm","rotCancel","rotHint",
       "topRight","langBtn","langList","langZh","langEn","langJa","langKo","langRu","langFr",
       "statusRow"];
     for (const id of ids) this.el[id] = document.getElementById(id);
@@ -6934,6 +7048,10 @@ const Game = {
     this.rotClockwise = true;
     this.rotTurns = 1;
     this.rotLayer = Math.max(0, Math.min(d[2] - 1, this.rotLayer));
+    // 预览状态也一起清掉。这里【不调 dropRotPreview()】—— 那会把棋子转回去，
+    // 而此刻旧 session 马上就要被整个换掉，转回去纯属白算（而且下面换 session 的
+    // 分支里 this.session 可能还是 null）。直接置空就够，盘面是新的。
+    this.rotPreview = null;
     // 人机对战的配置在开局这一刻从起始界面拍下来。放在 newGame 里而不是「开始游戏」
     // 那个 handler 里：任何调用 newGame 的路径（脚本、测试、控制台）拿到的行为都一样。
     // aiMyColor 一旦定下就不再变 —— 换先手是"改为另一方先走"，不是两个人换座位。
@@ -7428,6 +7546,9 @@ const Game = {
     // 不清的话会有一颗子在浮层底下悄悄落下来，收起来的时候看着像闹鬼。
     // 出去的唯一一条路是「开始游戏」，它开新局并重新排，所以这里清掉是安全的。
     this.cancelAiTimer();
+    // 预览中的那一手没落地就得先撤掉：不然玩家在设置界面里改了尺寸再回来，
+    // 棋盘还是"转过的样子"，而记账里根本没有那一手 —— 这局棋就对不上了。
+    this.dropRotPreview();
     this.el.setup.classList.remove("off");
     this.el.stage.classList.add("preview");
     this.setHover(null);
@@ -8121,6 +8242,8 @@ const Game = {
     on("rotLayerUp", () => this.nudgeRotLayer(1));
     on("rotGo", () => this.doRotate());
     on("rotRestore", () => this.restoreRotation());
+    on("rotConfirm", () => this.confirmRotation());
+    on("rotCancel", () => this.cancelRotation());
     // 尺寸输入框。input 事件只刷新那行说明（不提交），change（失焦/回车）才提交夹取后的值 ——
     // 理由见 commitDimInput 的注释：删掉旧数字的中间态不能被当成"要下最小盘"。
     const dimInputs = [["dimX", 0], ["dimY", 1], ["dimZ", 2], ["dimN", 0]];
@@ -8185,8 +8308,11 @@ const Game = {
       else if (k === "b") this.cycleStoneFilter();
       else if (k === "q" || k === "[") this.setActiveLayer(this.activeLayer - 1);
       else if (k === "e" || k === "]") this.setActiveLayer(this.activeLayer + 1);
-      else if (k === "t") this.doRotate();                 // 四维：执行转动
-      else if (k === "y") this.restoreRotation();          // 四维：恢复本次转动
+      // 四维：执行转动 / 恢复本次转动。**这两个键在"预览中"不做确定，只做取消**：
+      // T 会提示你去按面板上那个键（连按两下 T 就落定的话，加这一步就白加了），
+      // Y 直接等于「取消操作」—— 它本来就是"把这次转动退回去"，两个状态里都是这个意思。
+      else if (k === "t") this.doRotate();                 // 四维：执行转动（预览）
+      else if (k === "y") this.restoreRotation();          // 四维：恢复本次转动 / 取消预览
     });
   },
 
@@ -8701,6 +8827,13 @@ const Game = {
       this.toast(say(() => "本局已结束 · 按 Z 或点「悔棋」可继续这一局", "toast.decided"), false);
       return;
     }
+    // 【预览中的那一手还没落地，这期间不许落子】不拦住的话会出一个很难看的局面：
+    // 棋盘此刻是"转过的样子"，玩家照着这个假盘面点一格，落下的位置和他看到的不符
+    // （那个位置马上就要被取消转动转回去）。所以这里必须挡住，而且要说出路。
+    if (this.rotPreview) {
+      this.toast(say(() => "转动还没确定 · 先按「确定操作」或「取消操作」", "toast.rotPreview"), false);
+      return;
+    }
     const o = this.session.place(x, y, this.activeLayer, this.lang);
     if (o.status === MoveStatus.Rejected) this.toast(o.reason, false);
   },
@@ -8757,26 +8890,95 @@ const Game = {
 
   // ------------------------------------------------------------------ 四维转动
 
-  /** 面板上的选择 → 一次转动。非四维模式直接返回（按钮本来就不可见）。 */
+  /**
+   * 「执行转动」：**先把这一手转上去给你看，但不落地**。
+   *
+   * 【为什么改成两步】转动是全局唯一一手"落了地就撤不回来"的操作 ——
+   * 落子有悔棋，转动只有「恢复本次转动」，而那只在它还是最后一步时可用。
+   * 误触一下就可能把整盘棋挪乱，手机上尤其容易（面板按键小、又不挨着棋盘）。
+   *
+   * 【"没落地"是精确的，不是感觉】走的是 `session.previewRotate()` →
+   * 内核里的 `_tryRotate()`：**只转棋盘，不记账、不占回合、不发事件**。
+   * 也就是说预览期间 moveCount、currentPlayer、rotationCount、冷却计数全都没动，
+   * 指纹（除去棋盘那一项）也没动 —— 取消之后 `fingerprint()` 逐位还原，有断言钉着。
+   *
+   * 【取消 = 转回去；确定 = 先转回去再走正常的 rotate()】
+   * 确定那条路刻意**不自己记账**，而是先把棋盘还原、再调原来的 `session.rotate()`。
+   * 这样"落地"永远只有一条代码路径，将来改转动的规则不会漏掉预览这条旁路。
+   */
   doRotate() {
     if (!this.session || !this.session.rotationEnabled) return;
     if (this.isAiTurn()) {
       this.toast(say(() => "现在是电脑的回合", "toast.aiTurn"), false);
       return;
     }
-    const o = this.session.rotateBy(
+    // 【已经在预览里了 —— 这里刻意不让 T 键变成"确定"】那样连按两下 T 就落定了，
+    // 而加这一步的全部意义就是不让它这么容易落定。确定只走面板上那个亮着圈的键。
+    if (this.rotPreview) {
+      this.toast(say(() => "转动还没确定 · 先按「确定操作」或「取消操作」", "toast.rotPreview"), false);
+      return;
+    }
+    const o = this.session.previewRotate(
       this.rotAxis,
       this.rotLayer,
       this.rotClockwise ? RotationDirection.Clockwise : RotationDirection.CounterClockwise,
       this.rotTurns, this.lang);
-    // 成功的提示走 onRotationApplied 回调；这里只管三种"没转成"。
-    // 它们都不消耗回合、不留下痕迹 —— 提示必须说清是哪种，否则看起来像按钮坏了。
-    if (!o.accepted) this.toast(o.describe(this.lang), false);
+    // 没转成的那几种（空层 / 冷却 / 非立方…）都不留痕迹，提示必须说清是哪种，
+    // 否则看起来像按钮坏了。**它们不会进预览** —— 转不上去就没有"待确定"可言。
+    if (!o.accepted) {
+      this.toast(o.describe(this.lang), false);
+      this.refreshRotPanel();
+      return;
+    }
+    // 存内核交回来的那个 move 对象本身 —— 取消时原样递给它，中间不做任何转换，
+    // 也就没有"轴/层/次数抄错一处"的机会（逆置换要的就是这一次的那个 move）。
+    this.rotPreview = o.move;
+    // 【必须自己重画】正常的转动是靠 onRotationApplied → onBoardChanged 刷新的，
+    // 而预览刻意不发任何事件（那正是"没落地"的定义）—— 少了这一句，
+    // 棋盘确实转过去了，屏幕上却一点动静都没有。
+    this.onBoardChanged(false);
     this.refreshRotPanel();
+  },
+
+  /** 「确定操作」：把预览中的那一手真正落地。 */
+  confirmRotation() {
+    if (!this.rotPreview) return;
+    const move = this.rotPreview;
+    this.rotPreview = null;
+    this.session.cancelPreviewRotate(move);         // 先还原，再走正常落地那条路
+    const o = this.session.rotate(move, this.lang);
+    if (!o.accepted) this.toast(o.describe(this.lang), false);   // 理论上到不了，兜底
+    this.refreshRotPanel();
+  },
+
+  /** 「取消操作」：把预览中的那一手转回去，等于什么都没发生。 */
+  cancelRotation() {
+    if (!this.rotPreview) return;
+    const move = this.rotPreview;
+    this.rotPreview = null;
+    this.session.cancelPreviewRotate(move);
+    this.onBoardChanged(false);      // 同上：预览没有事件，重画要自己来
+    this.refreshRotPanel();
+  },
+
+  /**
+   * 丢掉未落地的预览：把棋盘转回去、清状态。**任何"局面要变"的入口都该先调它**
+   * （开设置、悔棋、以后再加的别的）。和 cancelRotation 的区别只有一个：
+   * 它不刷面板 —— 调用方接下来要做的多半就是把整个面板重画一遍。
+   */
+  dropRotPreview() {
+    if (!this.rotPreview) return;
+    const move = this.rotPreview;
+    this.rotPreview = null;
+    this.session.cancelPreviewRotate(move);
+    this.onBoardChanged(false);      // 盘面转回去了，画的那一份也得跟回去
   },
 
   restoreRotation() {
     if (!this.session) return;
+    // 预览期间「恢复本次转动」和「取消操作」是同一件事（都在把这次转动退回去），
+    // 键盘的 Y 和按钮都走这里，转发一下就不用把那段判断写两遍。
+    if (this.rotPreview) { this.cancelRotation(); return; }
     // 键盘的 Y 也要挡住，和 refreshRotPanel 里那个禁用按钮是同一件事：
     // 人机模式下它能撤掉【电脑刚做的那次转动】，撤完回合又回到电脑，电脑立刻再转一次 ——
     // 看起来就像按钮坏了。玩家要退回上一步有「悔棋」，那条路已经处理了转动的撤销。
@@ -8843,9 +9045,26 @@ const Game = {
     // 玩家要退回上一步有「悔棋」，那条路已经处理了转动的撤销。
     this.el.rotRestore.disabled = !this.session.canUndoLastRotation || this.aiMode;
 
+    // 【一行两态：平时是"执行/恢复"，有预览时换成"确定/取消"】
+    // 四个键都是 flex:1 1 0，永远恰好两个可见 → 这一行的几何一个像素都不动（见 HTML 那段注释）。
+    // 确定旁边那个亮圈只是为了让人注意到"还有个没做完的决定"。
+    const pv = !!this.rotPreview;
+    this.el.rotGo.classList.toggle("off", pv);
+    this.el.rotRestore.classList.toggle("off", pv);
+    this.el.rotConfirm.classList.toggle("off", !pv);
+    this.el.rotCancel.classList.toggle("off", !pv);
+    this.el.rotConfirm.classList.toggle("attn", pv);
+    this.el.rotCancel.classList.toggle("attn", pv);
+    this.el.rotConfirm.classList.toggle("sel", pv);   // 两个里它是"主选"，填色区分
+
     // 提示语按"最可能挡住你的那件事"排序，一次只说一条
     let hint;
-    if (this.session.status !== "Playing") {
+    if (pv && this.session.status === "Playing") {
+      // 【排在最前】预览是唯一一种"棋盘上有个东西还没落地"的状态，
+      // 别的提示（空层 / 冷却 / 已经能赢）此刻都不如它要紧。
+      hint = say(() => "预览中：棋盘已经是转完的样子，但还没落地。按「确定操作」才算数，按「取消操作」转回去。",
+                 "rot.hint.preview");
+    } else if (this.session.status !== "Playing") {
       hint = say(() => "棋局已结束。", "rot.hint.over");
     } else if (layerStones === 0) {
       hint = say(() => "这一层是空的，转不动。换一层，或者先在三维视图里看看子都在哪。", "rot.hint.empty");
@@ -8867,6 +9086,9 @@ const Game = {
   },
 
   undo() {
+    // 【预览期间，悔棋就是取消这次预览】盘面上还没落地的东西只有这一手，
+    // 撤掉它才是"悔一步"的正解；继续往下走会去撤更早的落子，而棋盘此刻是转过的样子。
+    if (this.rotPreview) { this.cancelRotation(); return; }
     // 先把待走的电脑着撤掉：不清的话它会在悔棋之后才落下来，看起来像闹鬼
     this.cancelAiTimer();
     if (this.aiMode) {

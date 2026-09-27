@@ -2449,6 +2449,121 @@ try {
   const consoleAi = drainConsole();
   check(consoleAi.length === 0, "人机对战（含真定时器那一段）控制台没有输出", consoleAi.join("\n      "));
 
+  // ---- 7j. 四维转动：执行 → 预览 → 确定 / 取消（**真鼠标点那三个按钮**）
+  //
+  // 【这一节防的是"预览了但看不出来"】预览的全部价值就是"你看得见转完的样子，
+  // 而且知道它还没落地"。所以这里不调 Game.doRotate()，而是像玩家一样用真鼠标去点，逐条验：
+  //   · 点「执行转动」→ 盘面真的变了（不是只翻了个状态位）
+  //   · 两个键换了位置，但**这一行的几何一个像素都不动** —— 这是敢用 display:none 的前提，
+  //     也是"手机端不许出现按钮位置错乱"那条要求在四维面板上的落点
+  //   · 取消之后盘面逐格还原
+  //   · 确定之后才记账、才换回合
+  const clickEl = async (id) => {
+    const p = JSON.parse(await ev(`(() => { const q = document.getElementById("${id}").getBoundingClientRect();
+      return JSON.stringify({ x: Math.round(q.left + q.width / 2), y: Math.round(q.top + q.height / 2) }); })()`));
+    await mouseAt("mousePressed", p.x, p.y, { button: "left", buttons: 1, clickCount: 1 });
+    await mouseAt("mouseReleased", p.x, p.y, { button: "left", buttons: 0, clickCount: 1 });
+    await sleep(140);
+  };
+  // 一个能看见四个键和这一行几何的快照；盘面用逐格字符串（比指纹更直接，红了也看得懂）
+  const rotSnap = `JSON.stringify({
+    board: (() => { const b = Game.session.board, d = b.dims; let s = "";
+      for (let z = 0; z < d[2]; z++) for (let y = 0; y < d[1]; y++) for (let x = 0; x < d[0]; x++) s += b.get(x, y, z);
+      return s; })(),
+    preview: !!Game.rotPreview, rots: Game.session.rotationCount,
+    turn: Game.session.currentPlayer, moves: Game.session.moveCount,
+    goDisabled: document.getElementById("rotGo").disabled,
+    goOff: document.getElementById("rotGo").classList.contains("off"),
+    reOff: document.getElementById("rotRestore").classList.contains("off"),
+    cfOff: document.getElementById("rotConfirm").classList.contains("off"),
+    caOff: document.getElementById("rotCancel").classList.contains("off"),
+    attn: document.getElementById("rotConfirm").classList.contains("attn"),
+    row: (() => { const r = document.getElementById("rotGo").parentNode.getBoundingClientRect();
+      return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; })(),
+    /* 这一行里【看得见的那几个】各自的盒子。换键前后这两组必须逐像素相同 ——
+       藏起来的那个当然没有盒子（width 0），所以比"可见的盒子"而不是比某个具体按钮。 */
+    vis: Array.from(document.getElementById("rotGo").parentNode.children)
+      .filter((e) => e.getBoundingClientRect().width > 0)
+      .map((e) => { const q = e.getBoundingClientRect();
+        return [Math.round(q.left), Math.round(q.top), Math.round(q.width), Math.round(q.height)]; }),
+  })`;
+  const setup4d = JSON.parse(await ev(`(() => {
+    // 【必须先关掉电脑对手】上一节刚打完一盘人机，setupAi 还是 cpu ——
+    // 那样 newGame 会把这一局也设成人机，于是"轮到谁"根本不受我们控制：
+    // 电脑会自己走子、甚至自己转层，下面那些"点了没反应"全都不是按钮的错。
+    Game.cancelAiTimer(); Game.setSetupAi("human");
+    Game.closeSetup(); Game.setSetupMode(true); Game.setupCool = 0;
+    Game.newGame([8, 8, 8], 1);
+    const b = Game.session.board;
+    [[0,0,0],[1,0,0],[2,3,0],[3,3,0],[4,4,0],[5,1,0]].forEach((c) => b.set(c[0], c[1], c[2], 1));
+    Game.rotAxis = 0; Game.rotLayer = 0; Game.rotClockwise = true; Game.rotTurns = 1;
+    Game.onBoardChanged(false); Game.refreshRotPanel();
+    return ${rotSnap};
+  })()`));
+  // 前置：四个键都量得到（面板没被挤出屏幕/被别的元素压住），且「执行转动」真的可点。
+  // 少了 disabled 这一条，一个"按钮是灰的"会让下面所有点击断言全红，而看不出为什么。
+  check(setup4d.vis.length === 2 && setup4d.vis[0][2] > 20 && setup4d.vis[0][3] > 10 &&
+        !setup4d.goOff && setup4d.cfOff && !setup4d.goDisabled,
+    "前置：四维面板上的「执行转动」真的在屏幕上、且确定/取消此刻是收起的",
+    JSON.stringify(setup4d));
+
+  await clickEl("rotGo");
+  const preview = JSON.parse(await ev(rotSnap));
+  check(preview.preview && preview.rots === 0 && preview.moves === setup4d.moves &&
+        preview.turn === setup4d.turn,
+    "点「执行转动」进入预览：盘面转了，但没记账、没换回合（这一手还没落地）",
+    JSON.stringify({ preview: preview.preview, rots: preview.rots, turn: preview.turn }));
+  check(preview.board !== setup4d.board,
+    "预览期间盘面是真的变了（看得见效果，不是只翻了个状态位）");
+  check(preview.goOff && preview.reOff && !preview.cfOff && !preview.caOff && preview.attn,
+    "预览中两个键换位：执行/恢复退场，确定/取消上场且带亮圈",
+    JSON.stringify({ goOff: preview.goOff, cfOff: preview.cfOff, attn: preview.attn }));
+  // 【这一行不许动】换上去的是同样数目的 flex:1 格子，所以位置尺寸必须逐像素相同 ——
+  // 一旦有人给新键加了 padding 或者忘了 flex，手机板上这一行就会跳，这条会当场红。
+  check(JSON.stringify(preview.row) === JSON.stringify(setup4d.row) &&
+        JSON.stringify(preview.vis) === JSON.stringify(setup4d.vis),
+    "换键时那一行的位置和尺寸一个像素都不动（手机端按钮错位的老毛病）",
+    "行 " + JSON.stringify(setup4d.row) + " → " + JSON.stringify(preview.row) +
+    "；可见格子 " + JSON.stringify(setup4d.vis) + " → " + JSON.stringify(preview.vis));
+  await shot("9-四维转动预览");
+
+  // 预览期间点棋盘：不许落子（棋盘是转过的样子，照它点会落错地方）
+  const movesBefore = preview.moves;
+  await ev(`(() => { const cz = Game.activeLayer;
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++)
+      if (Game.session.board.isEmpty(x, y, cz)) { Game.tryPlace(x, y); return 1; }
+    return 0; })()`);
+  const afterPlace = JSON.parse(await ev(rotSnap));
+  check(afterPlace.moves === movesBefore,
+    "预览期间点棋盘落不下子（棋盘是转过的样子，照着它点会落错地方）",
+    movesBefore + " → " + afterPlace.moves);
+
+  await clickEl("rotCancel");
+  const cancelled = JSON.parse(await ev(rotSnap));
+  check(!cancelled.preview && cancelled.board === setup4d.board && cancelled.rots === 0,
+    "点「取消操作」：盘面逐格还原，等于什么都没发生过",
+    JSON.stringify({ preview: cancelled.preview, rots: cancelled.rots }));
+  check(JSON.stringify(cancelled.row) === JSON.stringify(setup4d.row) && !cancelled.goOff &&
+        cancelled.cfOff && JSON.stringify(cancelled.vis) === JSON.stringify(setup4d.vis),
+    "取消之后那一行换回原样、几何仍然没动",
+    JSON.stringify(cancelled.row) + " / " + JSON.stringify(cancelled.vis));
+
+  await clickEl("rotGo");
+  await clickEl("rotConfirm");
+  const committed = JSON.parse(await ev(rotSnap));
+  check(!committed.preview && committed.rots === 1 &&
+        committed.turn !== setup4d.turn && committed.moves === setup4d.moves,
+    "点「确定操作」才真的落地：记了这一次转动、换了回合、落子数不变",
+    JSON.stringify({ preview: committed.preview, rots: committed.rots, turn: committed.turn }));
+  check(committed.board === preview.board,
+    "确定之后盘面和预览时看到的一模一样（先还原再落地，两步不能互相吃掉）");
+  check(committed.goOff === false && committed.cfOff === true && committed.attn === false,
+    "落地之后两个键换回去、亮圈收掉",
+    JSON.stringify({goOff: committed.goOff, cfOff: committed.cfOff, attn: committed.attn}));
+
+  const consoleRot = drainConsole();
+  check(consoleRot.length === 0, "四维转动那一节控制台没有输出", consoleRot.join("\n      "));
+
   // 收尾：把电脑关掉，别让它影响后面任何东西
   await ev(`(() => {
     Game.cancelAiTimer(); Game.setSetupAi("human"); Game.setSetupMode(false);
