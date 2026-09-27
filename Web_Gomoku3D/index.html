@@ -485,8 +485,6 @@
     display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
     --lv: #4f7fa0; --pct: 25%;
   }
-  /* 没选「人机」时整条看不见，但**槽位留着** —— 见 HTML 里那段注释。 */
-  #aiLevel.hide { visibility: hidden; }
   #aiLevel[data-lv="0"] { --lv: #8a7f6b; }
   #aiLevel[data-lv="1"] { --lv: #4f7fa0; }
   #aiLevel[data-lv="2"] { --lv: #2f5d7c; }
@@ -2554,17 +2552,21 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
     <button id="firstWhite" data-first="2" data-i18n="firstWhite">白棋先手</button>
   </div>
 
-  <!-- 对手：人类 / 人机。选了「人机」右边才出现强度拉条。
+  <!-- 对手：人类 / 人机。**这一行只有两个键**，强度拉条在下面单独一行。
        【为什么分成两步】原来"人类"和四档强度挤在一行里，两者是同一个单选组 ——
        但"要不要跟电脑下"和"电脑有多强"本来是两件事，挤在一起时
        玩家看不出"我现在到底选了什么"。现在人类/人机是个开关，拉条是开关打开之后才有的刻度。
+       【为什么拉条另起一行】和开关并排时，这一行在俄语/法语下会折行，
+       而折行的那一行高度不一样、居中一重排 —— 整列按钮跟着跳。
+       另起一行之后，两个键那一行短而稳，拉条那一行宽度固定，两边都不会被语言挤变形。
+
        【拉条是原生 input[type=range]】因为要真的**拖得动**：纯按钮做的"拉条"只能点，
        拖不动。样式上把系统外观整个去掉（appearance:none）、自己画轨和滑块，
        方角 + 描边，和这一页其他按钮是同一套语言。
 
-       【没选人机时拉条用 visibility:hidden 而不是 display:none】
-       后者会把这一格从布局里摘掉，行宽一变、居中一重排，整列按钮都会跳一下；
-       前者只让它看不见，槽位还在。手机端尤其不能让它跳。
+       【没选人机时整行用 visibility:hidden 而不是 display:none】
+       后者会把这一行从布局里摘掉，下面所有行一起上移、而 #setup 是居中的 ——
+       等于整屏跳一下。前者只让它看不见，槽位还在。手机端尤其不能让它跳。
 
        【#aiLevelName 上没有 data-i18n】它的字是 JS 写进去的（随档位变），
        而带 data-i18n 的元素会被 applyStatic 覆写 —— 两条通路抢同一个元素。
@@ -2573,7 +2575,9 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
     <div class="rowLabel" id="rowLabelAi" data-i18n="rowLabelAi">对手</div>
     <button class="mini sel" id="aiHuman" data-ai="human" data-i18n="aiHuman">人类</button>
     <button class="mini" id="aiCpu" data-ai="cpu" data-i18n="aiCpu">人机</button>
-    <div id="aiLevel" class="hide">
+  </div>
+  <div class="row hide" id="aiLevelRow">
+    <div id="aiLevel">
       <input type="range" id="aiRange" min="0" max="4" step="1" value="1">
       <span id="aiLevelName"></span>
     </div>
@@ -6527,7 +6531,7 @@ const Game = {
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
-      "aiHuman","aiCpu","aiLevel","aiRange","aiLevelName","orderMe","orderCpu",
+      "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","orderMe","orderCpu",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
@@ -8870,7 +8874,7 @@ const Game = {
       if (el) el.classList.toggle("sel", el.dataset.ai === this.setupAi);
     }
     // 没选人机时拉条看不见，但槽位留着（见 #aiRow 的 HTML 注释：不能让整列跳）
-    if (this.el.aiLevel) this.el.aiLevel.classList.toggle("hide", this.setupAi !== "cpu");
+    if (this.el.aiLevelRow) this.el.aiLevelRow.classList.toggle("hide", this.setupAi !== "cpu");
     this.syncAiLevel();
     this.syncOrderRow();
     this.refreshSetupSummary();

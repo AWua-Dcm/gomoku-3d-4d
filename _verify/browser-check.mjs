@@ -1365,16 +1365,17 @@ try {
     const portAi = JSON.parse(await ev(`(() => {
       Game.openSetup(); Game.setSetupMode(false); Game.setSetupAi("cpu"); Game.setSetupLevel(4);
       const R = (id) => document.getElementById(id).getBoundingClientRect();
-      const row = R("aiRow"), rng = R("aiRange"), nxt = R("orderRow");
+      const row = R("aiRow"), lvl = R("aiLevelRow"), rng = R("aiRange"), nxt = R("orderRow");
       return JSON.stringify({
-        rowBottom: row.bottom, nextTop: nxt.top,
+        rowBottom: row.bottom, lvlTop: lvl.top, lvlBottom: lvl.bottom, nextTop: nxt.top,
         rangeLeft: rng.left, rangeRight: rng.right, vw: window.innerWidth,
-        rowH: Math.round(row.height),
+        rowH: Math.round(row.height), lvlH: Math.round(lvl.height),
         docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       });
     })()`));
-    check(portAi.rowBottom <= portAi.nextTop + 0.5,
-      vp.tag + " 选人机后：拉条那一行没有压在「谁先下」上",
+    // 三行依次是「对手」「强度」「谁先下」，两两之间都不许叠上
+    check(portAi.rowBottom <= portAi.lvlTop + 0.5 && portAi.lvlBottom <= portAi.nextTop + 0.5,
+      vp.tag + " 选人机后：对手 / 拉条 / 谁先下 三行没有互相压住",
       JSON.stringify(portAi));
     check(portAi.rangeLeft >= -0.5 && portAi.rangeRight <= portAi.vw + 0.5,
       vp.tag + " 选人机后：拉条完整落在屏幕里",
@@ -2028,7 +2029,7 @@ try {
       vis: ["aiHuman","aiCpu","aiRange","aiLevelName","orderMe","orderCpu"]
              .map((id) => document.getElementById(id).getClientRects().length > 0),
       selCount: sel.length, selIs: sel[0],
-      hidden: document.getElementById("aiLevel").classList.contains("hide"),
+      hidden: document.getElementById("aiLevelRow").classList.contains("hide"),
       lv: document.getElementById("aiLevel").dataset.lv,
       lvName: document.getElementById("aiLevelName").textContent,
       rangeVal: document.getElementById("aiRange").value,
@@ -2037,6 +2038,7 @@ try {
       // 居中对齐让它们 top 不同，于是同一行被数成两行。量整行高度才是对的：
       // 单行时约 40px（#setup .row 的 min-height），折行必定 >= 80px。
       aiRowH: Math.round(document.getElementById("aiRow").getBoundingClientRect().height),
+      aiLevelRowH: Math.round(document.getElementById("aiLevelRow").getBoundingClientRect().height),
       orderDisabled: [document.getElementById("orderMe").disabled, document.getElementById("orderCpu").disabled],
       labelWrapped: ["rowLabelAi","rowLabelOrder"].map((id) => labelLines(document.getElementById(id))),
       summary: sum.textContent, summaryScrolls: sum.scrollHeight > sum.clientHeight + 1,
@@ -2052,7 +2054,8 @@ try {
   check(AS.lv === "4" && AS.rangeVal === "4" && AS.lvName.length > 0,
     "拉条停在最高档，右边写着档位名", JSON.stringify([AS.lv, AS.rangeVal, AS.lvName]));
   check(AS.pct === "100.0%", "填充比例跟着档位走", AS.pct);
-  check(AS.aiRowH <= 48, "人类/人机 + 拉条在同一行（1280 宽的窗口下）", AS.aiRowH + "px 高");
+  check(AS.aiRowH <= 48, "人类/人机两个键在同一行（1280 宽的窗口下）", AS.aiRowH + "px 高");
+  check(AS.aiLevelRowH <= 48, "强度拉条自己占一行、没有折行", AS.aiLevelRowH + "px 高");
 
   // ---- 真的能拖吗 ----
   // 【这一条是冲着用户反馈"实测没法拉动"去的】上一版是五个按钮拼的假拉条，只能点。

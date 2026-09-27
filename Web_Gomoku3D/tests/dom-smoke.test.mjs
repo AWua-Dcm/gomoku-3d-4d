@@ -2979,7 +2979,7 @@ function startAiGame(tier, order, first) {
 }
 
 step("电脑对手：人类/人机是开关，选了人机才看得见拉条；五档名字与颜色各不相同", () => {
-  for (const id of ["aiHuman", "aiCpu", "aiLevel", "aiRange", "aiLevelName", "orderMe", "orderCpu"]) {
+  for (const id of ["aiHuman", "aiCpu", "aiLevelRow", "aiLevel", "aiRange", "aiLevelName", "orderMe", "orderCpu"]) {
     if (!Game.el[id]) throw new Error("缺少元素 " + id);
   }
   Game.openSetup();
@@ -2987,13 +2987,13 @@ step("电脑对手：人类/人机是开关，选了人机才看得见拉条；�
   let on = AI_SEGS.filter(id => Game.el[id].classList.contains("sel"));
   if (on.length !== 1 || on[0] !== "aiHuman")
     throw new Error("应恰好选中「人类」，实际 " + JSON.stringify(on));
-  if (!Game.el.aiLevel.classList.contains("hide")) throw new Error("选了人类时拉条应当看不见");
+  if (!Game.el.aiLevelRow.classList.contains("hide")) throw new Error("选了人类时拉条那一行应当看不见");
 
   Game.setSetupAi("cpu");
   on = AI_SEGS.filter(id => Game.el[id].classList.contains("sel"));
   if (on.length !== 1 || on[0] !== "aiCpu")
     throw new Error("应恰好选中「人机」，实际 " + JSON.stringify(on));
-  if (Game.el.aiLevel.classList.contains("hide")) throw new Error("选了人机时拉条应当看得见");
+  if (Game.el.aiLevelRow.classList.contains("hide")) throw new Error("选了人机时拉条应当看得见");
 
   // 五档都能选到：滑块的 value、右边的名字、颜色标记都要跟着走
   const names = new Set(), lvs = new Set();
