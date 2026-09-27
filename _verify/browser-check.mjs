@@ -2122,6 +2122,44 @@ try {
   await sleep(250);
   await shot("8-起始界面-电脑档");
 
+  // ---- 起始界面的总高：英文版比中文高一截（规则摘要固定高 + 说明多两行），
+  // 加了两行人机行之后「开始游戏」被挤出了视口 —— 这条把它钉住。
+  // 【为什么要六种语言全量一遍】高度差得很远：英文的规则摘要固定高 108px、
+  // 说明还要多折两行，俄语的按钮文案最长、行更容易折。只量中文会漏掉真正溢出的那一种
+  // （第一版就是这么漏的：量的是中文，过了，而英文截图里按钮是切掉的）。
+  //
+  // 【为什么要先关掉触屏模拟】前面测触屏时开着 touch 模拟，`pointer: coarse` 成立，
+  // 于是 CSS 的小屏那一档（--compact）一直是打开的 —— 按键、标题全都小一档，
+  // 量出来的"最差语言"比真实排版矮 41px，这条断言就成了空转。
+  await send("Emulation.setTouchEmulationEnabled", { enabled: false });
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+  await sleep(200);
+  const startWorst = JSON.parse(await ev(`(() => {
+    const keep = Game.lang;
+    let worst = null;
+    for (const l of ["zh","en","ja","ko","ru","fr"]) {
+      Game.setLang(l); Game.openSetup(); Game.setSetupMode(false);
+      const r = document.getElementById("startBtn").getBoundingClientRect();
+      const s = document.getElementById("setup");
+      const m = { lang: l, bottom: Math.round(r.bottom), vh: window.innerHeight,
+                  over: Math.round(r.bottom - window.innerHeight),
+                  contentH: s.scrollHeight, boxH: s.clientHeight };
+      if (!worst || m.over > worst.over) worst = m;
+    }
+    Game.setLang(keep); Game.openSetup();
+    return JSON.stringify(worst);
+  })()`));
+  check(startWorst.over <= 0,
+    "起始界面「开始游戏」六种语言都不用滚动就看得见",
+    "最差是 " + startWorst.lang + "：按钮下沿 " + startWorst.bottom + "，视口 " + startWorst.vh +
+    "，超出 " + startWorst.over + "px（内容 " + startWorst.contentH + " / 可视 " + startWorst.boxH + "）");
+  // 【量完要把视口和触屏还原】不还原的话，后面那几张截图会在这个 1280×800 的临时视口下拍 ——
+  // 实测过一次：7-人机对战.png 整张变成了 1280 宽，而它是 1568 宽那一版才有意义。
+  await send("Emulation.setTouchEmulationEnabled", { enabled: true });
+  await send("Emulation.clearDeviceMetricsOverride");
+  await sleep(200);
+
   check(AS.docOver <= 1 && AS.setupOver <= 1,
     "起始界面加了人机两行之后没有横向溢出", "doc " + AS.docOver + " / setup " + AS.setupOver);
 

@@ -321,11 +321,12 @@
   #setup {
     position: fixed; left: 42%; right: 0; top: 0; bottom: 0; z-index: 50;
     display: flex; flex-direction: column; align-items: center;
-    /* 【18 → 14】加「对手」和「谁先下」两行时，这一屏在 1280×800 的英文下把
-       「开始游戏」挤出了可视区（改动前按钮下面还有 40 多像素余量，截图对拍过）。
-       行距收 4px × 9 个间隔 ≈ 36px，正好把两行的高度还回来，而且不动行高本身 ——
-       按钮尺寸、每行 40px 的槽位、模式切换时"一个像素都不动"那条不变量全都不受影响。 */
-    gap: 14px; padding: 26px 30px; overflow-y: auto;
+    /* 【18 → 14 → 10】行距收过两次，两次都是为了「开始游戏」不能被挤出视口：
+       第一次（v2.10.0）是加人机那一行；第二次（v2.10.6）是行标同宽 + 拉条独立成行之后，
+       英文和法语的起始界面又超出了四十多像素（法语的规则摘要和按钮文案都最长）。
+       配合 .row 的槽位 40→38px、英文 #sizeSummary 108→96px，一共还回去约 70px。
+       行高本身没动，模式切换时整列不跳那条不变量不受影响。 */
+    gap: 10px; padding: 26px 30px; overflow-y: auto;
     /* 居中，但溢出时改为从顶部开始 —— 这是 safe 关键字的全部作用。
        没有它的话（也就是今天的行为），内容一旦高过视口，flex 的居中溢出会朝两头走，
        而滚动区只从内容起点算 → **顶部那段永远滚不到**，表现为"最上面几行看不见了"。
@@ -374,7 +375,7 @@
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
   /* 每一行占一个固定高度的槽位。三种模式相关的行（三维尺寸 / 四维尺寸 / 转动冷却）
      高度都一样，所以"显示哪几行"不影响总高。 */
-  #setup .row { min-height: 40px; }
+  #setup .row { min-height: 38px; }
   /* 模式相关的行：【保留槽位地藏起来】，不是 display:none。
      三维和四维显示的行数不一样（四维多一个"转动冷却"行），用 display:none 的话
      内容总高就变了，而父级是居中的 —— 于是整列重新居中，所有行一起上下跳。
@@ -410,7 +411,10 @@
      正是这一版要消掉的那类干扰。
      固定成粗体之后，按钮宽度只由文字内容决定，和选没选中无关。
      （#startBtn 不在任何 .row 里，所以它保留 .sel 的粗体，主按钮的分量不受影响。） */
-  #setup .row button { font-weight: 600; }
+  /* 【按钮等宽】键的宽度不再跟着文字走 —— 同一行里一宽一窄看着参差，行与行之间也对不上。
+     给一个下限之后，短文案的键就都一样宽了；真长的（「三轴联动」、俄语那几条）还会自己撑开，
+     那是应该的 —— 不能为了整齐把字挤到换行。 */
+  #setup .row button { font-weight: 600; min-width: 6em; }
   /* 行标宽度【贴着文字算】，不写死。
      【改之前是 width: 96px（英文 138px）】：那个数照最长的那一行（「转动冷却」/
      "Rotation cooldown"）量，然后对每一行都生效 —— 于是 "Mode" 白占 100px
@@ -425,7 +429,13 @@
      四个行标的右边缘实测是 143.3 / 162.5 / 127.4 / 128.8，本来就不在一条竖线上。
 
      nowrap 是必须的：不写的话行标自己会折行、把那一行撑高一截。 */
-  .rowLabel { color: var(--dim); text-align: right; flex: 0 0 auto; white-space: nowrap; }
+  /* 【行标同宽】宽度由 JS 按【当前语言里最长的那一条】实测后写进 --labelW（见 syncLabelWidth）。
+     行标不同宽的话，每一行里按键的起点都不一样，整屏看着参差；
+     而写死一个数又不行 —— 六种语言的最长行标差一倍以上（中文「转动冷却」56px，
+     俄语「Перезарядка поворота」要 150px 以上），写死哪个都会在别的语言里撑破或留白。
+     没测出来时（DOM 桩环境）退回贴合文字。 */
+  .rowLabel { color: var(--dim); text-align: right; flex: 0 0 auto; white-space: nowrap;
+              width: var(--labelW, auto); }
 
   /* 尺寸输入。原来是两排固定尺寸按钮（三维 15/20/25/30/40/50、四维 5/6/8/10/15/20），
      现在改成直接填数字：范围由 BoardLimits 统一约束，越界在失焦时夹回来并给一行提示。 */
@@ -724,7 +734,7 @@
   /* 同样的信息量，英文的字符数比中文多，固定的 92px 会更早开始内部滚动。
      这里可以放宽（它只影响总高，不影响"两种模式高度相等"——那个不变量靠的是
      这块高度【恒定】，而不是靠它恰好是 92）。 */
-  html.lang-en #sizeSummary { height: 108px; }
+  html.lang-en #sizeSummary { height: 96px; }
 
   /* ---------- 竖屏：左右分栏翻成上下分栏 ----------
      判据用 CSS 的 orientation，不用 JS 量 innerWidth/innerHeight：纯 CSS 在 JS 跑起来
@@ -6661,6 +6671,8 @@ const Game = {
     this.syncCoolRow();
     // 档位名换了语言就要重刷（它是 say() 写的，applyStatic 管不到）
     this.syncAiLevel();
+    // 行标换了语言、宽度就变了，同宽那条得重量一次
+    this.syncLabelWidth();
     this.refreshSetupSummary();
     // 这两个是 JS 写的、不挂 data-i18n 的元素，applyStatic 管不到它们。
     // refreshHint 只在 WebGL2 失败时动手，正常情况下它直接返回。
@@ -7266,6 +7278,7 @@ const Game = {
     this.syncCoolRow();
     this.syncOrderRow();
     this.syncAiLevel();
+    this.syncLabelWidth();
     this.refreshSetupSummary();
     this.ensurePreview();
     this.uploadPreviewInstances();
@@ -8905,6 +8918,33 @@ const Game = {
   },
 
   /**
+   * 把所有行标钉成同宽 —— 宽度按【当前语言里最长的那一条】实测。
+   *
+   * 【为什么必须实测，不能写死】六种语言里最长的行标差一倍以上：中文最长是「转动冷却」，
+   * 英文是「Rotation cooldown」，俄语更长。写死任何一个数，都会在另一种语言里
+   * 要么撑破（那一行折行）、要么白留一大块。
+   *
+   * 【为什么要点名一个个取，不用 querySelectorAll(".rowLabel")】DOM 桩只认五个选择器，
+   * 类选择器在桩里会静默返回空数组 —— 于是这段在任何测试里都是空操作，
+   * 只有真浏览器里才跑。点名取则桩里也能走一遍（量出来是桩的假尺寸，但不会静默跳过）。
+   */
+  syncLabelWidth() {
+    const setup = this.el.setup;
+    if (!setup || !setup.style || typeof setup.style.setProperty !== "function") return;
+    const ids = ["rowLabelMode", "rowLabelFirst", "rowLabelAi", "rowLabelOrder",
+                 "rowLabelSize3d", "rowLabelSize4d", "rowLabelCool"];
+    let w = 0;
+    for (const id of ids) {
+      const el = this.el[id];
+      if (!el || typeof el.getBoundingClientRect !== "function") continue;
+      const r = el.getBoundingClientRect();
+      if (r && isFinite(r.width) && r.width > w) w = r.width;
+    }
+    if (!(w > 0)) return;
+    setup.style.setProperty("--labelW", Math.ceil(w) + "px");
+  },
+
+  /**
    * 把拉条的外观刷成当前档位：填充比例、颜色、右边的档位名。
    * **两件事都只写在父元素上**（--pct / data-lv），轨道的渐变和滑块的颜色都由 CSS 读它们 ——
    * 原生滑块的轨道和滑块是伪元素，写不进内联样式；写在父元素的自定义属性上才能被它们继承到。
@@ -9139,6 +9179,9 @@ const Game = {
   resize() {
     const r = this.el.view.getBoundingClientRect();
     this.camera.frameBoard(r.width / Math.max(1, r.height), true);
+    // 视口变了，起始界面那一列的可用宽度也变了 —— 行标重新量一次；
+    // 顺带把 --compact 也重读（它决定按键要不要收一档，同样影响这一行的宽度）
+    if (this.setupOpen) this.syncLabelWidth();
     // 平移量的边界是"半个视口"，转屏会改视口尺寸 —— 不重新夹一次的话，
     // 横屏里拖出来的平移量在竖屏下可能已经越界（棋盘贴边甚至露不出一半）
     this.pan3dBy(0, 0);
