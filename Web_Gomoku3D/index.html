@@ -482,8 +482,14 @@
      --pct 是已填充的比例，由 JS 写；轨道的背景是一条硬停止的渐变，
      所以左边是填充色、右边是空轨 —— 就是常见的那种滑条长相。 */
   #aiLevel {
+    position: relative;
     display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
     --lv: #4f7fa0; --pct: 25%;
+  }
+  /* 档位名【脱离文档流】挂在拉条右边。留着它在流里的话，.row 居中的是
+     "拉条 + 名字"这一整块，拉条本身就会偏左半个名字的宽度 —— 看着像没居中。 */
+  #aiLevelName {
+    position: absolute; left: 100%; margin-left: 8px;
   }
   #aiLevel[data-lv="0"] { --lv: #8a7f6b; }
   #aiLevel[data-lv="1"] { --lv: #4f7fa0; }
@@ -514,8 +520,14 @@
   }
   #aiLevelName {
     font-size: 13.5px; font-weight: 600; color: var(--lv);
-    white-space: nowrap; min-width: 3.2em;
+    white-space: nowrap;
   }
+  /* 没选「人机」时整条淡下去、点击无响应 —— **和 #coolRow 在三维下的处理是同一套**
+     （那四个冷却键在三维模式下也是淡显 + disabled，不是藏起来）。
+     藏起来会留下一条空白，或者把这一行整个摘掉让下面所有行上移；
+     淡显则一眼看得出"这里有个控件，只是现在用不着"。 */
+  #aiRange:disabled { opacity: .45; cursor: default; }
+  #aiLevel.dim #aiLevelName { opacity: .45; }
 
   /* 固定高度。【这是按钮跳动的第二个根因，比行数变化更隐蔽】：
      这段文案的长度在两种模式下差一倍以上 —— 三维 15³ 是 2 行，四维 8³ 因为有实测数据
@@ -2564,9 +2576,10 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
        拖不动。样式上把系统外观整个去掉（appearance:none）、自己画轨和滑块，
        方角 + 描边，和这一页其他按钮是同一套语言。
 
-       【没选人机时整行用 visibility:hidden 而不是 display:none】
-       后者会把这一行从布局里摘掉，下面所有行一起上移、而 #setup 是居中的 ——
-       等于整屏跳一下。前者只让它看不见，槽位还在。手机端尤其不能让它跳。
+       【没选人机时**不隐藏，只淡显 + 不可点**】和 #coolRow 在三维下的处理同一套：
+       藏起来要么留一条空白（visibility），要么把这一行整个摘掉、让下面所有行上移
+       （display:none，而 #setup 是居中的，等于整屏跳一下）。淡显则一眼看得出
+       "这里有个控件，只是现在用不着"，而且高度不变、不跳。
 
        【#aiLevelName 上没有 data-i18n】它的字是 JS 写进去的（随档位变），
        而带 data-i18n 的元素会被 applyStatic 覆写 —— 两条通路抢同一个元素。
@@ -2576,7 +2589,7 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
     <button class="mini sel" id="aiHuman" data-ai="human" data-i18n="aiHuman">人类</button>
     <button class="mini" id="aiCpu" data-ai="cpu" data-i18n="aiCpu">人机</button>
   </div>
-  <div class="row hide" id="aiLevelRow">
+  <div class="row" id="aiLevelRow">
     <div id="aiLevel">
       <input type="range" id="aiRange" min="0" max="4" step="1" value="1">
       <span id="aiLevelName"></span>
@@ -8873,8 +8886,10 @@ const Game = {
       // dataset.ai 就是 setupAi 的取值本身（human/cpu），少一张表就少一处会漂移的地方
       if (el) el.classList.toggle("sel", el.dataset.ai === this.setupAi);
     }
-    // 没选人机时拉条看不见，但槽位留着（见 #aiRow 的 HTML 注释：不能让整列跳）
-    if (this.el.aiLevelRow) this.el.aiLevelRow.classList.toggle("hide", this.setupAi !== "cpu");
+    // 没选人机时**淡显 + 不可点**，不是藏起来 —— 和 #coolRow 在三维下同一套，见 CSS 那段注释
+    const dim = this.setupAi !== "cpu";
+    if (this.el.aiRange) this.el.aiRange.disabled = dim;
+    if (this.el.aiLevel) this.el.aiLevel.classList.toggle("dim", dim);
     this.syncAiLevel();
     this.syncOrderRow();
     this.refreshSetupSummary();

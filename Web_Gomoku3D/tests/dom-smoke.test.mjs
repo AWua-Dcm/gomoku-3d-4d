@@ -2987,13 +2987,15 @@ step("电脑对手：人类/人机是开关，选了人机才看得见拉条；�
   let on = AI_SEGS.filter(id => Game.el[id].classList.contains("sel"));
   if (on.length !== 1 || on[0] !== "aiHuman")
     throw new Error("应恰好选中「人类」，实际 " + JSON.stringify(on));
-  if (!Game.el.aiLevelRow.classList.contains("hide")) throw new Error("选了人类时拉条那一行应当看不见");
+  if (!Game.el.aiRange.disabled) throw new Error("选了人类时拉条应当不可点");
+  if (!Game.el.aiLevel.classList.contains("dim")) throw new Error("选了人类时拉条应当淡显");
 
   Game.setSetupAi("cpu");
   on = AI_SEGS.filter(id => Game.el[id].classList.contains("sel"));
   if (on.length !== 1 || on[0] !== "aiCpu")
     throw new Error("应恰好选中「人机」，实际 " + JSON.stringify(on));
-  if (Game.el.aiLevelRow.classList.contains("hide")) throw new Error("选了人机时拉条应当看得见");
+  if (Game.el.aiRange.disabled) throw new Error("选了人机时拉条应当可点");
+  if (Game.el.aiLevel.classList.contains("dim")) throw new Error("选了人机时拉条不该淡显");
 
   // 五档都能选到：滑块的 value、右边的名字、颜色标记都要跟着走
   const names = new Set(), lvs = new Set();

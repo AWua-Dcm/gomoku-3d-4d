@@ -2029,7 +2029,13 @@ try {
       vis: ["aiHuman","aiCpu","aiRange","aiLevelName","orderMe","orderCpu"]
              .map((id) => document.getElementById(id).getClientRects().length > 0),
       selCount: sel.length, selIs: sel[0],
-      hidden: document.getElementById("aiLevelRow").classList.contains("hide"),
+      dimmed: document.getElementById("aiRange").disabled,
+      lvCenterOff: (() => {
+        // 拉条自己应当落在这一行的正中：档位名脱离文档流挂在右边，不参与居中
+        const r = document.getElementById("aiRange").getBoundingClientRect();
+        const row = document.getElementById("aiLevelRow").getBoundingClientRect();
+        return Math.round((r.left + r.right) / 2 - (row.left + row.right) / 2);
+      })(),
       lv: document.getElementById("aiLevel").dataset.lv,
       lvName: document.getElementById("aiLevelName").textContent,
       rangeVal: document.getElementById("aiRange").value,
@@ -2050,7 +2056,11 @@ try {
   check(AS.vis.every(Boolean), "人机那两行的六个键都看得见", JSON.stringify(AS.vis));
   check(AS.selCount === 1 && AS.selIs === "aiCpu",
     "人类/人机里恰好选中「人机」", JSON.stringify([AS.selCount, AS.selIs]));
-  check(AS.hidden === false, "选了人机时拉条看得见");
+  check(AS.dimmed === false, "选了人机时拉条可点（不淡显）");
+  // 拉条本身要在这一行的正中间 —— 档位名如果在文档流里，居中的就是"拉条+名字"那一整块，
+  // 拉条会偏左半个名字的宽度。这里钉住"偏差不超过 1px"。
+  check(Math.abs(AS.lvCenterOff) <= 1, "拉条自己落在这一行的正中（档位名不参与居中）",
+        "偏 " + AS.lvCenterOff + "px");
   check(AS.lv === "4" && AS.rangeVal === "4" && AS.lvName.length > 0,
     "拉条停在最高档，右边写着档位名", JSON.stringify([AS.lv, AS.rangeVal, AS.lvName]));
   check(AS.pct === "100.0%", "填充比例跟着档位走", AS.pct);
@@ -2082,7 +2092,23 @@ try {
   check(dragged.v === "4" && dragged.lv === "4",
     "拉条拖得动：按住滑块拖到最右，档位跟着到最高档", JSON.stringify(dragged));
   check(dragged.pct === "100.0%", "拖完之后填充比例也跟到了底", dragged.pct);
-  await ev("Game.setSetupLevel(4); 1");
+
+  // 选「人类」时：淡显 + 不可点，**但不隐藏** —— 和 #coolRow 在三维下同一套。
+  // 隐藏（visibility）会留一条空白，摘掉（display:none）会让下面所有行上移、整屏跳一下。
+  const humanLv = JSON.parse(await ev(`(() => {
+    Game.setSetupAi("human");
+    const r = document.getElementById("aiRange");
+    return JSON.stringify({
+      disabled: r.disabled,
+      dim: document.getElementById("aiLevel").classList.contains("dim"),
+      rowH: Math.round(document.getElementById("aiLevelRow").getBoundingClientRect().height),
+      vis: document.getElementById("aiLevelRow").getClientRects().length > 0,
+    });
+  })()`));
+  check(humanLv.disabled && humanLv.dim, "选了人类时拉条淡显且不可点", JSON.stringify(humanLv));
+  check(humanLv.vis && humanLv.rowH > 0,
+    "选了人类时拉条那一行仍然占位（切回人机时不会整屏跳）", humanLv.rowH + "px");
+  await ev("Game.setSetupAi(\"cpu\"); Game.setSetupLevel(4); 1");
   check(AS.orderDisabled[0] === false && AS.orderDisabled[1] === false,
     "选了电脑时「谁先下」是可用的", JSON.stringify(AS.orderDisabled));
   check(AS.labelWrapped.every((n) => n <= 1), "人机那两行的行标没有折行", JSON.stringify(AS.labelWrapped));
