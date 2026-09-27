@@ -473,6 +473,40 @@
      gap 和 .row 的 gap 一样是 10px，所以它嵌在行里看不出接缝。 */
   #coolGrid { display: grid; grid-template-columns: repeat(2, auto); gap: 10px; }
 
+  /* 电脑强度拉条：一条**圆头**的轨道 + 一个会滑过去的圆头滑块。
+     【为什么是"滑块"而不是"五格各自高亮"】后者是五个方块拼起来的样子，
+     一眼看去像一组按钮；而这里要表达的是"一条刻度上选了某一档"，
+     所以选中态必须是**同一个东西在移动**（就像那些 AI 应用里的思考强度选择器）。
+
+     【滑块怎么动】#aiThumb 绝对定位在轨道里，setSetupAi 把它挪到选中那一格的
+     位置和宽度上，left/width 各有 .18s 过渡 —— 换档时是滑过去而不是跳过去。
+     每格仍然是独立的 button，所以键盘能走、点击语义和页面别处一致、测试也照旧。
+
+     【为什么不用 input[type=range]】它是系统原生外观，和这一页的宣纸风格不是一回事；
+     而且手机竖屏上纵向滚动时，横向拖动条很容易误触。 */
+  #aiLevel {
+    position: relative; display: flex; align-items: stretch; flex: 0 0 auto;
+    padding: 3px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--well); overflow: hidden;
+  }
+  #aiThumb {
+    position: absolute; top: 3px; bottom: 3px; left: 3px; width: 0;
+    border-radius: 999px; background: var(--accent); z-index: 0;
+    transition: left .18s ease, width .18s ease;
+  }
+  #aiLevel .seg {
+    position: relative; z-index: 1;
+    border: 0; border-radius: 999px; padding: 6px 12px;
+    font-size: 13px; font-weight: 600; white-space: nowrap;
+    background: transparent; color: var(--dim); transition: color .18s ease;
+  }
+  #aiLevel .seg.sel { color: #f7f2e8; }
+  /* 选了「人类」时这条整体置灰 —— 和 #coolRow 在三维下禁用同一条理由：
+     保留位置而不是藏起来，免得整列重排、按钮一起跳。 */
+  #aiLevel.off { opacity: .45; }
+  #aiLevel.off #aiThumb { background: var(--dim); }
+  #aiLevel.off .seg { cursor: default; }
+
   /* 固定高度。【这是按钮跳动的第二个根因，比行数变化更隐蔽】：
      这段文案的长度在两种模式下差一倍以上 —— 三维 15³ 是 2 行，四维 8³ 因为有实测数据
      会加到 4 行，15³ 再加"一层里常常只有一两颗子"那条能到 5~6 行。
@@ -1017,10 +1051,14 @@
 
 ## 11. 人机对战
 
-- **起始界面可以选「对手」**：人类（同机轮流）/ 电脑 · 弱 / 电脑 · 中 / 电脑 · 强。
-  **三档的差别在"算多远"**：弱档只看眼前一步；中档会算一层（我下完他会怎么应）；
-  强档往下算四层。所以强档会主动躲开"我下这里、他下一手就成四"这类局面，弱档看不出来。
-  三档都刻意不去做得太强 —— 低级难度把玩家打得没脾气是这类功能最常见的毛病。
+- **起始界面可以选「对手」**：人类（同机轮流），或者电脑的五档强度
+  **低 / 中 / 高 / 极高 / 极限**。**差别在"算多远"，以及最高档会不会算杀**：
+  低档只看眼前一步；中档算一层（我下完他会怎么应）；高档三层；极高四层；
+  极限档在四层之外还会**算杀** —— 连续冲四的强制取胜路线，每一步对手都只有一个应手。
+  所以高档以上会主动躲开"我下这里、他下一手就成四"这类局面，低档看不出来。
+  五档都刻意不去做得太强 —— 低级难度把玩家打得没脾气是这类功能最常见的毛病。
+- **极限档会下出"你还没看出危险就已经输了"的棋** —— 那是算杀算出来的，不是走运。
+  它也可能在开局就布下十几手之后才兑现的陷阱。
 - **两个选择各管一件事**：「谁先手」选的是**哪个颜色**先走（顺带也就定了谁背长连判负），
   「谁先下」选的是**哪个人**执那个颜色。所以「黑棋先手 + 电脑」= 电脑执黑走第一手、你执白。
   起始界面底下那句总结会把「你执哪个色」写出来。
@@ -1260,13 +1298,16 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 
 ## 11. Playing the computer
 
-- **The start screen has an "Opponent" row**: Human (two players, one device) / CPU · easy /
-  CPU · medium / CPU · hard. **The tiers differ in how far they look ahead**: the easy tier sees one
-  move ahead; the medium tier looks one reply ahead (what the board looks like after you answer);
-  the hard tier searches four plies. That is why the hard tier walks away from positions where your
-  next move would make an open four, while the easy tier happily walks into them. All three stay
-  deliberately on the weak side — an "easy" opponent that beats beginners every time is the usual
-  failure of this feature.
+- **The start screen has an "Opponent" row**: Human (two players, one device), or five computer
+  strengths **Low / Mid / High / Very high / Ultra**. **They differ in how far they look ahead, and
+  whether the top tier proves forced wins**: Low sees one move; Mid one reply; High three plies;
+  Very high four. Ultra adds a **kill search** on top of that — a forced sequence of fours, where
+  every one of your replies is forced. So High and above walk away from positions where your next
+  move would make an open four, while Low happily walks into them. All five stay deliberately on
+  the weak side — an "easy" opponent that beats beginners every time is the usual failure of this
+  feature.
+- **Ultra will beat you before you see the danger.** That is the kill search, not luck: it can set
+  a trap in the opening that only pays off a dozen moves later.
 - **Two choices, two different jobs.** "First player" picks the **colour** that goes first (which is
   also the colour that carries the overline loss); "Who starts" picks **which of the two** plays that
   colour. So "Black first + Computer" means the computer plays Black and opens, and you play White.
@@ -1508,12 +1549,15 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 
 ## 11. コンピュータとの対戦
 
-- **開始画面に「対戦相手」の行がある**：人間（同じ端末で交互に）/ コンピュータ · 弱 / 中 / 強。
-  **3 段階の違いは「どこまで読むか」**です：弱は一手先だけ、中は一手先の応手まで
-  （自分が打ったあと相手がどう受けるか）、強は四手先まで読みます。だから強は
-  「ここに打つと次の相手の一手で活四になる」という局面を避け、弱は平気で踏み込みます。
-  3 段階とも**わざと弱め**に振ってあります —— 「簡単」な相手が初心者を毎回負かしてしまうのは
-  この手の機能でありがちな失敗なので。
+- **開始画面に「対戦相手」の行がある**：人間（同じ端末で交互に）、またはコンピュータの
+  5 段階 **弱 / 中 / 強 / 最強 / 極**。**違いは「どこまで読むか」と、最上位が殺しを読むかどうか**：
+  弱は一手先だけ、中は一手先の応手まで、強は三手先、最強は四手先まで読みます。
+  極はその上に**殺し（連続四の強制成勝）**を載せます —— 相手の応手が毎回一つに限られる
+  手順を、十数手先まで読み切ります。だから強以上は「ここに打つと次の相手の一手で活四に
+  なる」という局面を避け、弱は平気で踏み込みます。5 段階とも**わざと弱め**に振ってあります ——
+  「簡単」な相手が初心者を毎回負かしてしまうのはこの手の機能でありがちな失敗なので。
+- **極は「危険に気づく前に負けている」手を打ちます** —— それは殺しが読んだ結果で、偶然ではありません。
+  開局で十数手後に効いてくる罠を仕掛けてくることもあります。
 - **2 つの選択は役割が違う**：「誰が先手」は**どの色**が先に打つか（＝長連による負けを負う側）を選び、
   「誰が先に打つか」は**2 人のどちら**がその色を持つかを選びます。つまり
   「黒が先手 + コンピュータ」ならコンピュータが黒で初手を打ち、あなたは白です。
@@ -1749,12 +1793,15 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 ## 11. 컴퓨터와의 대국
 
-- **시작 화면에 「상대」 줄이 있습니다**: 사람(같은 기기에서 번갈아) / 컴퓨터 · 하 / 중 / 상.
-  **세 단계의 차이는 "얼마나 멀리 읽는가"** 입니다: 하 단계는 한 수 앞만, 중 단계는
-  한 수 앞의 응수까지(내가 둔 뒤 상대가 어떻게 받는지), 상 단계는 네 수 앞까지 읽습니다.
-  그래서 상 단계는 "여기에 두면 다음 상대 수에 활사가 된다" 같은 국면을 피하고,
-  하 단계는 그냥 밟고 들어갑니다. 세 단계 모두 **일부러 약한 쪽**으로 맞췄습니다 —
-  "쉬움" 상대가 초보자를 매번 이기는 것은 이런 기능에서 흔한 실패라서요.
+- **시작 화면에 「상대」 줄이 있습니다**: 사람(같은 기기에서 번갈아), 또는 컴퓨터의
+  다섯 단계 **하 / 중 / 상 / 최상 / 극**. **차이는 "얼마나 멀리 읽는가"와, 최상위가 죽음을 읽는지**입니다:
+  하 단계는 한 수 앞만, 중 단계는 응수까지, 상 단계는 세 수, 최상 단계는 네 수 앞까지 읽습니다.
+  극 단계는 그 위에 **연속 사(死) 읽기**를 얹습니다 — 상대의 응수가 매번 하나로 강제되는
+  수순을 십여 수 앞까지 읽어냅니다. 그래서 상 이상은 "여기에 두면 다음 상대 수에 활사가
+  된다" 같은 국면을 피하고, 하 단계는 그냥 밟고 들어갑니다. 다섯 단계 모두 **일부러 약한 쪽**으로
+  맞췄습니다 — "쉬움" 상대가 초보자를 매번 이기는 것은 이런 기능에서 흔한 실패라서요.
+- **극 단계는 "위험을 알아차리기 전에 이미 진" 수를 둡니다** — 연속 사 읽기 결과지, 운이 아닙니다.
+  초반에 십여 수 뒤에나 드러나는 함정을 깔아둘 수도 있습니다.
 - **두 선택은 역할이 다릅니다**: 「누가 선수인가」는 **어느 색**이 먼저 두는지(곧 장련 패배를 지는 쪽)를,
   「누가 먼저 두는가」는 **두 사람 중 누가** 그 색을 잡는지를 고릅니다. 즉
   「흑 선수 + 컴퓨터」면 컴퓨터가 흑으로 첫 수를 두고 당신은 백입니다.
@@ -1990,12 +2037,16 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 ## 11. Игра с компьютером
 
-- **На стартовом экране есть строка «Соперник»**: человек (двое по очереди на одном устройстве) /
-  компьютер · слабый / средний / сильный. **Уровни различаются тем, как далеко они считают**:
-  слабый смотрит на один ход вперёд; средний — на один ответный ход (что будет, когда вы ответите);
-  сильный считает на четыре полухода. Поэтому сильный уходит из позиций, где ваш следующий ход
-  сделал бы открытую четвёрку, а слабый спокойно туда входит. Все три уровня намеренно смещены
-  в слабую сторону — «лёгкий» соперник, обыгрывающий новичка каждый раз, это обычная беда таких функций.
+- **На стартовом экране есть строка «Соперник»**: человек (двое по очереди на одном устройстве)
+  либо пять уровней компьютера **Слаб / Сред / Сильн / Оч. сильн / Ультра**. **Уровни различаются тем,
+  как далеко они считают и умеет ли верхний доказывать выигрыш**: Слаб видит один ход, Сред — один
+  ответный ход, Сильн — три полухода, Оч. сильн — четыре. Ультра сверх этого считает **серии четвёрок**
+  (вынужденное выигрывание: у вас каждый раз ровно один ответ). Поэтому Сильн и выше уходят из позиций,
+  где ваш следующий ход сделал бы открытую четвёрку, а Слаб спокойно туда входит. Все пять уровней
+  намеренно смещены в слабую сторону — «лёгкий» соперник, обыгрывающий новичка каждый раз, это
+  обычная беда таких функций.
+- **Ультра обыграет вас раньше, чем вы увидите опасность.** Это работа серий четвёрок, а не везение:
+  она может поставить ловушку уже в дебюте, которая сработает через десяток ходов.
 - **Два выбора делают разное.** «Первый игрок» выбирает **цвет**, который ходит первым (он же несёт
   поражение за перебор); «Кто ходит» выбирает, **кто из двоих** играет этим цветом. То есть
   «Первыми ходят чёрные + Компьютер» — компьютер играет чёрными и начинает, а вы белыми.
@@ -2232,13 +2283,16 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 
 ## 11. Jouer contre l'ordinateur
 
-- **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil) /
-  ordinateur · facile / moyen / difficile. **Les niveaux diffèrent par la profondeur de calcul** :
-  le facile ne voit qu'un coup d'avance ; le moyen voit la réponse d'après (ce que donne le plateau
-  quand vous répondez) ; le difficile calcule quatre demi-coups. C'est pourquoi le difficile évite
-  les positions où votre coup suivant ferait un quatre ouvert, alors que le facile y entre sans
-  broncher. Les trois restent volontairement faibles : un adversaire « facile » qui bat les débutants
+- **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil), ou cinq
+  forces d'ordinateur **Bas / Moyen / Haut / Très haut / Ultra**. **Elles diffèrent par la profondeur de
+  calcul, et par la capacité du niveau supérieur à prouver un gain forcé** : Bas voit un coup, Moyen
+  une réponse, Haut trois demi-coups, Très haut quatre. Ultra ajoute par-dessus une **recherche de
+  gain forcé** (suite ininterrompue de quatre : chacune de vos réponses est forcée). Haut et au-dessus
+  évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que Bas y entre sans
+  broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat les débutants
   à tous les coups est le défaut habituel de cette fonction.
+- **Ultra vous battra avant que vous ne voyiez le danger.** C'est le résultat de la recherche de gain
+  forcé, pas de la chance : il peut poser une trappe dès l'ouverture qui ne paiera que dix coups plus tard.
 - **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
   aussi la défaite pour alignement trop long) ; « Qui commence » choisit **lequel des deux** joue cette
   couleur. Ainsi « Noirs en premier + Ordinateur » : l'ordinateur joue Noirs et ouvre, vous jouez
@@ -2488,19 +2542,25 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
     <button id="firstWhite" data-first="2" data-i18n="firstWhite">白棋先手</button>
   </div>
 
-  <!-- 对手：人类 / 电脑（弱 / 中 / 强）。
-       【四个键排一行，而不是"对手"+"难度"两行】拆成两行就必须回答"人类 + 电脑·强"
-       是什么意思 —— 一个无意义的状态，得单独定义、单独禁用、单独测。
-       一行四个键是**一组单选**，和上面的三维/四维、黑先/白先、下面的 3/5/8/10 手
-       是同一套写法：一个状态变量、零个非法组合，而且比两行少占一行高度 ——
-       起始界面是定高的纵向 flex 列，每一行都要还。
-       四个键加 .mini：不加的话 393px 竖屏上"电脑·弱"会把这行折成三行。 -->
+  <!-- 对手：人类 / 电脑（五档强度拉条）。
+       【为什么人类是按钮、强度是拉条】"就是人类"和"电脑有多强"是两种不同的东西：
+       前者是一个开关，后者是一条有顺序的刻度。做成拉条之后，
+       "低 → 极限"的递进关系一眼看得出来，而四个并列的按钮看不出来。
+       这也正是当下那些 AI 产品里"思考强度"选择器的样子。
+       【一行装得下吗】行标 + 人类 + 五格 ≈ 320px，393px 竖屏可用约 349px —— 刚好。
+       语言切到俄语/法语时会变长，那时这一行会折成两行；宁可折行也不能让文字互相压。
+       【每一格仍然是 button】所以键盘能走、点击语义和别处一致，测试也照旧。 -->
   <div class="row" id="aiRow">
     <div class="rowLabel" id="rowLabelAi" data-i18n="rowLabelAi">对手</div>
     <button class="mini sel" id="aiHuman" data-ai="human" data-i18n="aiHuman">人类</button>
-    <button class="mini" id="aiEasy" data-ai="weak" data-i18n="aiEasy">电脑·弱</button>
-    <button class="mini" id="aiMed" data-ai="medium" data-i18n="aiMed">电脑·中</button>
-    <button class="mini" id="aiHard" data-ai="strong" data-i18n="aiHard">电脑·强</button>
+    <div id="aiLevel">
+      <span id="aiThumb"></span>
+      <button class="seg" id="aiLow"   data-ai="low"    data-i18n="aiLow">低</button>
+      <button class="seg" id="aiMed"   data-ai="medium" data-i18n="aiMed">中</button>
+      <button class="seg" id="aiHigh"  data-ai="high"   data-i18n="aiHigh">高</button>
+      <button class="seg" id="aiXHigh" data-ai="xhigh"  data-i18n="aiXHigh">极高</button>
+      <button class="seg" id="aiUltra" data-ai="ultra"  data-i18n="aiUltra">极限</button>
+    </div>
   </div>
 
   <!-- 谁先下：谁去执那个"先手"。
@@ -3858,7 +3918,7 @@ class FourDSession {
    -------------------------------------------------------------------------- */
 
 /** 三档难度。参数表按这三档取 —— 别在别处写 if (level === ...)。 */
-const AI_LEVELS = ["weak", "medium", "strong"];
+const AI_LEVELS = ["low", "medium", "high", "xhigh", "ultra"];
 
 /**
  * 三档的参数。**调强弱只调这一张表。**
@@ -3868,11 +3928,14 @@ const AI_LEVELS = ["weak", "medium", "strong"];
  * （每对 40 局、两色各半，脚本是一次性的，数在 commit message 里）：
  *   · 深度 0 的三个配置**互相之间打平**（44% / 42.5%）—— 光调 noise / 防守权重拉不开差距
  *   · 但**任何**带搜索的配置打深度 0 都是 **40:0**
- *   · 深度 1 → 2 是 70%，2 → 3 是 82.5%，3 → 4 是 60%
- * 所以梯度只能这么给：弱 = 不搜索，中 = 浅搜索，强 = 深搜索。
- * 深度 0 那几档之间没有可靠的强弱关系，这跟直觉相反，但量出来就是这样。
+ *   · 深度 1 打不搜索 92.5%，深 3 打深 2 72.5%，深 4 打深 3 62.5%
+ * 所以梯度只能这么给：low 不搜索，往上逐级加深度，最高档再加算杀（VCF）。
  *
- * 【深度 0 才用的旋钮】weak 用，中/强 用不到（它们走搜索）：
+ * 【注意深度 2 是个坑】实测**深 2 打不过深 1**（换成新评估后是 47.5%，之前是 22.5%）。
+ * 奇偶深度下叶子所处的"轮到谁"不同，评估的含义跟着翻转，中间那一档反而吃亏。
+ * 所以这张表**故意跳过了深度 2** —— 不是漏了。
+ *
+ * 【深度 0 才用的旋钮】只有 low 用得到（其余都走搜索）：
  *   · defWeight  防守权重，小于 1 就是"偏进攻、防守不足"
  *   · pOpenThree 对方做出活三时真的去堵的概率
  *   · topK/topProb  从前几名里随机挑，错得像新手而不是像坏掉
@@ -3883,21 +3946,29 @@ const AI_LEVELS = ["weak", "medium", "strong"];
  *   · branch       每个节点最多展开几个候选。**实测是越小越强**（支 4 打支 8 是 22.5%），
  *                  原因是叶子评估本身很粗，展开得越宽越容易被这个粗评估带偏。
  *                  要变强请加深度，别加宽度。
+ *   · vcf          要不要先算一遍杀（连续冲四取胜）。**这是最高档的全部底气** ——
+ *                  冲四只有一个应手，所以能搜到十几层，而常规搜索同样时间只够三四层。
  *
  * 【两条硬规则任何一档都不许破，所以它们不在这张表里，而是判断链的第 1、3 步】
  *   · 能立刻赢就必须赢
  *   · 绝不主动走成"长连自尽"（本作先手连 6 是负，不是胜）
  */
 const AI_PARAMS = {
-  weak: { topK: 4, topProb: 0.40, noise: 0.55, defWeight: 0.50,
-          pOpenThree: 0.30, wantGapped: false, rotChance: 0.15, rotProbe: 6,
-          searchDepth: 0, branch: 4 },
+  low: { topK: 4, topProb: 0.40, noise: 0.55, defWeight: 0.50,
+         pOpenThree: 0.30, rotChance: 0.15, rotProbe: 6,
+         searchDepth: 0, branch: 4, vcf: false },
   medium: { topK: 2, topProb: 0.72, noise: 0.28, defWeight: 0.80,
-            pOpenThree: 0.70, wantGapped: false, rotChance: 0.50, rotProbe: 10,
-            searchDepth: 1, branch: 4 },
-  strong: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 1.05,
-            pOpenThree: 1.00, wantGapped: true, rotChance: 1.00, rotProbe: 14,
-            searchDepth: 4, branch: 4 },
+            pOpenThree: 0.70, rotChance: 0.50, rotProbe: 10,
+            searchDepth: 1, branch: 4, vcf: false },
+  high: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 0.90,
+          pOpenThree: 1.00, rotChance: 0.75, rotProbe: 12,
+          searchDepth: 3, branch: 4, vcf: false },
+  xhigh: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 1.00,
+           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 14,
+           searchDepth: 4, branch: 4, vcf: false },
+  ultra: { topK: 1, topProb: 1.00, noise: 0.00, defWeight: 1.00,
+           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 16,
+           searchDepth: 4, branch: 4, vcf: true },
 };
 
 /**
@@ -3917,11 +3988,17 @@ const AI_SEARCH_DROP = [        // [候选数下限, 允许的最大深度]
  * 眠三 ≈ 活二（都还差得远）。
  */
 const AI_W = {
-  FOUR_OPEN: 1e5,      // 活四：两头都能成五，挡不住
-  FOUR_BLOCKED: 1e4,   // 冲四：一头能成五 —— 它其实由第 3 步兜底，这里只是排序用
-  THREE_OPEN: 1e3,     // 活三：弱/中档"偶尔不堵"就堵在这一档上
-  THREE_BLOCKED: 1e2,
-  TWO_OPEN: 1e2,
+  WIN: 1e7,            // 这一手就成五
+  // 活四和双四同一档：都是一手挡不住的。这两个数是阈值，不是随便取的 ——
+  // 深度 0 那条路径用它判断"对方在这里能不能做出挡不住的形状"。
+  OPEN_FOUR: 5e6,      // 活四：挡一头还有另一头
+  DOUBLE_FOUR: 5e6,    // 双四：一手堵不住两处
+  FOUR_THREE: 1e6,
+  FOUR: 1e5,           // 冲四：一头成五
+  DOUBLE_THREE: 2e4,   // 双活三：同样是一手堵不住两处
+  THREE: 1e3,          // 活三
+  TWO: 40,             // 活二 —— 这一档是"梯度"的来源，别删
+  SUICIDE: -1e7,       // 受限方走出长连 = 当场判负，比任何好棋都糟
 };
 
 /** 候选点数的上界。真实对局远到不了；到了就用等距抽样，见 aiCandidates。 */
@@ -4022,87 +4099,89 @@ function aiCenterDist(board, x, y, z) {
 }
 
 /**
- * 一个"连续子长度 + 活头数"值多少分。
- * **按 winLength 相对取值，不许写死 5** —— winLength 是可配的（测试里就跑 4 和 6）。
- */
-function aiRunValue(run, openEnds, winLength) {
-  if (run >= winLength) return AI_W.FOUR_OPEN * 100;      // 1e7：真的成五了
-  if (run === winLength - 1) {
-    if (openEnds === 2) return AI_W.FOUR_OPEN;
-    return openEnds === 1 ? AI_W.FOUR_BLOCKED : 0;
-  }
-  if (run === winLength - 2) {
-    if (openEnds === 2) return AI_W.THREE_OPEN;
-    return openEnds === 1 ? AI_W.THREE_BLOCKED : 0;
-  }
-  if (run === winLength - 3) return openEnds === 2 ? AI_W.TWO_OPEN : 0;
-  return 10 * openEnds + run;
-}
-
-/**
- * 一个点对 player 的形状分。**只用于排序，不用于判胜负** —— 胜负一律问 judge。
+ * 一个点的**威胁计数**。评估和排序都用它。
  *
- * 【为什么复用 countRun】它已经同时数了正反两个方向，这正是"落子把两段接起来时会漏算"
- * 那个经典 bug 的解药。自己再写一遍就是第二份会漂移的实现。
+ * 【为什么从"取最强威胁"改成"按方向数威胁"】旧写法是 `max(各方向的棋型分)`，
+ * 那是一个**几乎没梯度的分段常数**：只有"最强的那一处威胁换了身份"时值才会变，
+ * 两个活三和三个活三算出来一样大。后果是搜索越宽越容易被噪声带偏
+ * （同类 JS 引擎实测：把评估改成"按类计数 + 量纲对齐"值 **+131 elo**，
+ *  而同一批实验里单纯调权重是 0 到 −70）。
  *
- * 【两头必须先 inBounds 再取值】getOrDefault 对越界返回 EMPTY，直接拿它当"这一头是空的"，
- * 会把棋盘边上的一片死路算成活路。
+ * 【为什么用滑窗而不是"连续子长度"】滑窗天然认得跳形（X_XXX、XX_XX、X_XX_X），
+ * 而那些正是"下一手就成五"的真威胁。旧写法只数连续子，所以还得另加一个跳形补偿项；
+ * 现在那个补偿项可以整个删掉。
+ *
+ * 【长连是负的，而且只有受限方在乎】方向上的连续子超过 winLength 时：
+ * 受限方（先手）那叫**自尽**，是不折不扣的大负分；非受限方那叫赢。旧写法一刀切
+ * 按"成五"算，等于让受限方兴高采烈地往六连上撞。
+ *
+ * @returns {wins, fours, openFours, threes, twos, over}
+ *   wins      这一手直接成五的方向数
+ *   fours     还需要再补一颗就成五的方向数（冲四 / 活四 / 跳四都算）
+ *   openFours 其中"两头都空"的那几个 —— 单靠挡是挡不住的
+ *   over      这一手会长连的方向数（受限方的自尽）
  */
-function aiShapeAt(board, x, y, z, player, winLength) {
-  let total = 0, best = 0;
+function aiThreatAt(board, x, y, z, player, winLength, restricted) {
+  let wins = 0, fours = 0, openFours = 0, threes = 0, twos = 0, over = 0;
   for (let i = 0; i < DIRS13.length; i++) {
-    const d = DIRS13[i];
-    const nd = DIRS13_NEG[i];
+    const d = DIRS13[i], nd = DIRS13_NEG[i];
     AI_PT.x = x; AI_PT.y = y; AI_PT.z = z;
     const neg = RuleEngine.countRun(board, AI_PT, nd, player);
     const pos = RuleEngine.countRun(board, AI_PT, d, player);
     const run = 1 + neg + pos;
+    if (run > winLength) { over++; continue; }          // 长连：受限方自尽，另一方可不算错
     const ax = x - (neg + 1) * d[0], ay = y - (neg + 1) * d[1], az = z - (neg + 1) * d[2];
     const bx = x + (pos + 1) * d[0], by = y + (pos + 1) * d[1], bz = z + (pos + 1) * d[2];
     const openA = board.inBounds(ax, ay, az) && board.get(ax, ay, az) === EMPTY;
     const openB = board.inBounds(bx, by, bz) && board.get(bx, by, bz) === EMPTY;
-    const v = aiRunValue(run, (openA ? 1 : 0) + (openB ? 1 : 0), winLength);
-    total += v;
-    if (v > best) best = v;
+
+    // 滑窗：覆盖本点的每个 winLength 长窗口里，对手子不能有；再补 need 颗就成五
+    let need = winLength;
+    for (let s = -(winLength - 1); s <= 0 && need > 0; s++) {
+      let ok = true, mine = 0;
+      for (let k = 0; k < winLength; k++) {
+        if (s + k === 0) continue;                       // 本点算自己那一颗
+        const px = x + (s + k) * d[0], py = y + (s + k) * d[1], pz = z + (s + k) * d[2];
+        if (!board.inBounds(px, py, pz)) { ok = false; break; }
+        const v = board.get(px, py, pz);
+        if (v === EMPTY) continue;
+        if (v === player) mine++; else { ok = false; break; }
+      }
+      if (!ok) continue;
+      const gap = winLength - (mine + 1);
+      if (gap < need) need = gap;
+    }
+    if (need === 0) wins++;
+    else if (need === 1) { fours++; if (run === winLength - 1 && openA && openB) openFours++; }
+    else if (need === 2) threes++;
+    else if (need === 3) twos++;
+    // need >= winLength-1 记 0：这个方向连"眠二"都算不上
   }
-  return { total: total, best: best };
+  return { wins: wins, fours: fours, openFours: openFours, threes: threes, twos: twos, over: over };
 }
 
 /**
- * 跳形（X_XXX / XX_XX）的附加分。**只有强档用得上**。
+ * 威胁计数 → 分。**两个功能别名：既当叶子评估，也当候选排序键。**
  *
- * 【先把话说清楚，别把它说成"弱档看不见跳子"】countRun 本来就两头都数，
- * 所以当**空档本身就是候选点**时，弱档也看得见（那正是"我这一手能不能成五"，
- * 由第 1 步的 judge 兜底，与这里无关）。这一项管的是另一种情况：
- * 对方已经摆着 XXX_X 这种形状、**我此刻要不要提前去搅它**。
- * 弱/中档不提前反应，只在他真要成五的那一手才动手 —— 这才是"不会下跳"的电脑该有的样子。
- *
- * 做法：沿每个方向枚举所有覆盖该点的 winLength 长窗口，窗内没有对方子（也没有出界格）
- * 才算数，然后看"加上本点之后窗内我方有几颗"。
+ * 【量纲必须对齐】阈值和分值必须落在同一把尺子上 —— 同类引擎里最大的一笔实测收益
+ * （+131 elo）就是修这个：它的"有没有四"判断写在了另一个量纲上，于是那个分支**从来没触发过**。
  */
-function aiGappedBonus(board, x, y, z, player, winLength) {
-  let bonus = 0;
-  const wl = winLength;
-  for (let i = 0; i < DIRS13.length; i++) {
-    const d = DIRS13[i];
-    for (let s = -(wl - 1); s <= 0; s++) {
-      let mine = 0, foe = 0, ok = true;
-      for (let k = 0; k < wl; k++) {
-        const px = x + (s + k) * d[0], py = y + (s + k) * d[1], pz = z + (s + k) * d[2];
-        if (!board.inBounds(px, py, pz)) { ok = false; break; }
-        if (s + k === 0) continue;                       // 本点在窗内，算自己那一颗
-        const v = board.cells[px + board.nx * (py + board.ny * pz)];
-        if (v === player) mine++;
-        else if (v !== EMPTY) { foe++; break; }
-      }
-      if (!ok || foe > 0) continue;
-      const filled = mine + 1;                           // 含本点
-      if (filled === wl - 1) bonus += AI_W.THREE_OPEN - AI_W.THREE_BLOCKED;   // 跳四
-      else if (filled === wl - 2) bonus += AI_W.THREE_BLOCKED;                // 跳三
-    }
-  }
-  return bonus;
+function aiThreatValue(t) {
+  if (t.over > 0) return AI_W.SUICIDE;              // 自尽：比什么都糟
+  if (t.wins > 0) return AI_W.WIN;
+  if (t.openFours > 0) return AI_W.OPEN_FOUR;       // 活四：挡一头还有另一头，等于赢
+  if (t.fours >= 2) return AI_W.DOUBLE_FOUR;        // 双四：一手挡不住两处
+  if (t.fours >= 1 && t.threes >= 1) return AI_W.FOUR_THREE;
+  if (t.fours >= 1) return AI_W.FOUR;
+  if (t.threes >= 2) return AI_W.DOUBLE_THREE;      // 双活三：同样是一手挡不住两处
+  return t.threes * AI_W.THREE + t.twos * AI_W.TWO; // ← 梯度在这里
 }
+
+/* 【这里原来有一个 aiGappedBonus（跳形补偿项），已经删掉】
+   它干的事是"沿 13 个方向枚举 winLength 长窗口、数窗内自己的子"。
+   现在的 aiThreatAt 用的就是同一个滑窗，只是把结果按"再补几颗成五"分成了 wins/fours/threes/twos
+   四档，所以跳形天然就被算进去了，不再需要单独补一项。
+   留着它反而会重复计分 —— 同一个窗口会被加两次。 */
 
 /**
  * 把 player 临时放上去、问引擎、再原样还原。**全项目唯一一处"假设落子"。**
@@ -4136,14 +4215,14 @@ function aiBand(cand, axis, layer) {
 }
 
 /** 一条带里"我最好的一手"值多少 —— 净掉对方的威胁。转动前后的差值就是这一转的价值。 */
-function aiBandBest(board, band, mover, foe, params, winLength) {
+function aiBandBest(board, band, mover, foe, params, winLength, moverRestricted, foeRestricted) {
   let best = 0;
   for (let i = 0; i < band.length; i += 3) {
     const x = band[i], y = band[i + 1], z = band[i + 2];
-    const mine = aiShapeAt(board, x, y, z, mover, winLength);
-    if (mine.best >= AI_W.FOUR_OPEN * 100) return mine.total;   // 已经能成五，不用再算
-    const theirs = aiShapeAt(board, x, y, z, foe, winLength);
-    const v = mine.total + params.defWeight * theirs.total;
+    const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRestricted));
+    if (mine >= AI_W.WIN) return mine;                          // 已经能成五，不用再算
+    const theirs = aiThreatValue(aiThreatAt(board, x, y, z, foe, winLength, foeRestricted));
+    const v = mine + params.defWeight * theirs;
     if (v > best) best = v;
   }
   return best;
@@ -4180,15 +4259,17 @@ function aiPickRotation(session, params, winLength, mover, foe, cand, stats) {
   list.sort((a, b) => (b[3] - a[3]) || (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b[2]));
 
   const limit = params.rotProbe < list.length ? params.rotProbe : list.length;
+  const moverRes = session.rules.isRestricted(mover, session.firstPlayer);
+  const foeRes = session.rules.isRestricted(foe, session.firstPlayer);
   let best = null;
   for (let i = 0; i < limit; i++) {
     const axis = list[i][0], layer = list[i][1], turns = list[i][2];
     const band = aiBand(cand, axis, layer);
-    const before = aiBandBest(board, band, mover, foe, params, winLength);
+    const before = aiBandBest(board, band, mover, foe, params, winLength, moverRes, foeRes);
     let after = before;
     // 判定和旋转都在 probeRotate 里，求值夹在中间，还原走它的 finally
     const o = session.probeRotate(RotationMove.fromClockwiseTurns(axis, layer, turns), () => {
-      after = aiBandBest(board, band, mover, foe, params, winLength);
+      after = aiBandBest(board, band, mover, foe, params, winLength, moverRes, foeRes);
     });
     if (stats) stats.rotProbes++;
     if (!o.accepted) continue;                        // 被拒 / 没变化 / 会造线
@@ -4235,11 +4316,15 @@ const AI_ORDER_W = 1;
  */
 const AI_EVAL_W = 0.5;
 
-/** 某一方"最强的一手威胁"能到哪一档。用 .best（单方向最高档）而不是 .total。 */
-function aiThreatBest(board, cands, player, winLength) {
+/**
+ * 某一方"在这个盘面上能拿到的最好一手"值多少。
+ * 旧写法取的是"最强的那一处威胁"，梯度很差；现在取的是威胁计数的完整分值 ——
+ * 双四 / 四三 / 双三 / 冲四 / 活三 / 活二 各自有自己的档位，相邻局面之间有连续变化。
+ */
+function aiThreatBest(board, cands, player, winLength, restricted) {
   let best = 0;
   for (let i = 0; i < cands.length; i += 3) {
-    const v = aiShapeAt(board, cands[i], cands[i + 1], cands[i + 2], player, winLength).best;
+    const v = aiThreatValue(aiThreatAt(board, cands[i], cands[i + 1], cands[i + 2], player, winLength, restricted));
     if (v > best) best = v;
   }
   return best;
@@ -4256,9 +4341,9 @@ function aiThreatBest(board, cands, player, winLength) {
  *     也变成了我的分数，等于替对手高兴。
  * 折扣的物理含义是"下一步是我走，不是他走"：我的威胁是即时的，他的隔一手。
  */
-function aiEvalLeaf(board, cands, mover, foe, winLength) {
-  return aiThreatBest(board, cands, mover, winLength) -
-         AI_EVAL_W * aiThreatBest(board, cands, foe, winLength);
+function aiEvalLeaf(board, cands, mover, foe, winLength, moverRes, foeRes) {
+  return aiThreatBest(board, cands, mover, winLength, moverRes) -
+         AI_EVAL_W * aiThreatBest(board, cands, foe, winLength, foeRes);
 }
 
 /**
@@ -4269,9 +4354,9 @@ function aiEvalLeaf(board, cands, mover, foe, winLength) {
  * 搜索永远看不到它。第一版就是这么输的：白棋眼看着黑棋连成三个不去堵，平均 9 手就完蛋。
  * 现有那套深度 0 的打分用的是加号，所以它反而会堵。
  */
-function aiOrderKey(board, x, y, z, mover, foe, winLength) {
-  return aiShapeAt(board, x, y, z, mover, winLength).total +
-         AI_ORDER_W * aiShapeAt(board, x, y, z, foe, winLength).total;
+function aiOrderKey(board, x, y, z, mover, foe, winLength, moverRes, foeRes) {
+  return aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes)) +
+         AI_ORDER_W * aiThreatValue(aiThreatAt(board, x, y, z, foe, winLength, foeRes));
 }
 
 /** 搜索内的排序：分值降序，然后按坐标升序 —— 全序，同分也确定。 */
@@ -4299,12 +4384,13 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
   }
   const cands = aiCandidates(board, AI_CANDIDATE_CAP);
   if (depth <= 0 || cands.length === 0) {
-    return aiEvalLeaf(board, cands, mover, foe, tune.winLength);
+    return aiEvalLeaf(board, cands, mover, foe, tune.winLength, tune.moverRes, tune.foeRes);
   }
   const sc = [];
   for (let i = 0; i < cands.length; i += 3) {
     const x = cands[i], y = cands[i + 1], z = cands[i + 2];
-    sc.push({ x: x, y: y, z: z, v: aiOrderKey(board, x, y, z, mover, foe, tune.winLength) });
+    sc.push({ x: x, y: y, z: z,
+              v: aiOrderKey(board, x, y, z, mover, foe, tune.winLength, tune.moverRes, tune.foeRes) });
   }
   sc.sort(aiSearchCompare);
 
@@ -4321,6 +4407,108 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
     if (alpha >= beta) break;                    // 剪枝
   }
   return best === -Infinity ? 0 : best;
+}
+
+/* --------------------------------------------------------------------------
+   算杀（VCF：连续冲四取胜）。
+
+   【这是让五子棋 AI 变强的正统路线，也是 ultra 档的全部底气】
+   冲四有一个决定性性质：**对方只有一个合法应手**（堵在成五点）。所以攻击方的
+   分支因子是"能做出几个冲四"，防守方是 1 —— 于是能搜到十几层，而普通 α-β 在
+   同样时间里只够搜三四层。强五子棋引擎（Rapfi、Yixin）都是靠它吃饭的。
+
+   【本作的三维棋盘对算杀格外有利】13 个方向意味着一颗子经常同时在两三个方向上
+   补出四 —— 也就是"双四"，而双四对方一手堵不住。所以这里证明出必胜的深度通常很短。
+
+   【硬规矩：算杀的着法不能造成长连】受限方走出六连是**当场判负**。
+   一手"冲四"如果同时把它接成六连，那一手不是杀招，是自尽 —— 必须排除。
+   三维比平面更容易撞上这种情况（方向多了），所以这一条不能省。
+
+   【为什么先用"根节点算杀"而不是塞进叶子】叶子版更强（Rapfi 就是那么做的），
+   但代价是每个叶子都要付一次搜索，节点预算一失控就会卡住一整秒。
+   先做根节点版：正常搜索前先算一次杀，算出来就直接走 —— 这一步便宜，而且立刻有用。
+   -------------------------------------------------------------------------- */
+
+/** 算杀的节点上限与深度上限。超了就当"没算出来"，不能拖住整手棋。 */
+const AI_VCF_NODES = 400;
+const AI_VCF_DEPTH = 12;
+
+/**
+ * 在 attacker 的回合，找出 attacker 的所有"能补成五"的点。
+ * 返回 {wins:[[x,y,z]…], fours:[[x,y,z]…]}。wins 非空表示已经能赢。
+ */
+function aiVcfThreats(session, attacker, out) {
+  const board = session.board, rules = session.rules, fp = session.firstPlayer;
+  const wl = rules.winLength;
+  const res = rules.isRestricted(attacker, fp);
+  const cands = aiCandidates(board, AI_CANDIDATE_CAP);
+  out.wins.length = 0; out.fours.length = 0;
+  for (let i = 0; i < cands.length; i += 3) {
+    const x = cands[i], y = cands[i + 1], z = cands[i + 2];
+    const t = aiThreatAt(board, x, y, z, attacker, wl, res);
+    if (t.over > 0) continue;                 // 自尽点：算杀里绝不能走
+    if (t.wins > 0) out.wins.push(x, y, z);
+    else if (t.fours > 0) out.fours.push(x, y, z);
+  }
+  return out;
+}
+
+/** 复用同一对数组，避免每个节点都分配。算杀是深度优先、不重入的。 */
+const AI_VCF_A = { wins: [], fours: [] };
+const AI_VCF_B = { wins: [], fours: [] };
+
+/** 对方有没有"下一手就成五"的点，有几个。>=2 说明我方先手也救不回来。 */
+function aiVcfFoeWins(session, cands, foe) {
+  let n = 0;
+  for (let i = 0; i < cands.length; i += 3) {
+    const o = aiOutcomeAt(session, cands[i], cands[i + 1], cands[i + 2], foe, null);
+    if (o && o.status === MoveStatus.Win) n++;
+  }
+  return n;
+}
+
+/**
+ * 算杀主循环。找到必胜就返回第一步的坐标，否则 null。
+ * **只走冲四**，所以每一层对方只有一个应手。
+ */
+function aiVcf(session, attacker, depth, stats) {
+  if (depth <= 0) return null;
+  if (stats) { stats.vcfNodes++; if (stats.vcfNodes > AI_VCF_NODES) return null; }
+  const board = session.board, rules = session.rules, fp = session.firstPlayer;
+  const foe = opponentOf(attacker);
+  const wl = rules.winLength;
+
+  const mine = aiVcfThreats(session, attacker, AI_VCF_A);
+  if (mine.wins.length > 0) return { x: mine.wins[0], y: mine.wins[1], z: mine.wins[2], win: true };
+  if (mine.fours.length === 0) return null;
+
+  // 对方已经有两个成五点 → 他先赢，我这边再怎么冲四都来不及
+  const cands = aiCandidates(board, AI_CANDIDATE_CAP);
+  if (aiVcfFoeWins(session, cands, foe) >= 2) return null;
+
+  for (let i = 0; i < mine.fours.length; i += 3) {
+    const x = mine.fours[i], y = mine.fours[i + 1], z = mine.fours[i + 2];
+    board.set(x, y, z, attacker);
+    const after = aiVcfThreats(session, attacker, AI_VCF_B);
+    if (after.wins.length >= 6) {
+      // 两个以上成五点：对手一手堵不住 → 这一手就是胜着
+      board.set(x, y, z, EMPTY);
+      return { x: x, y: y, z: z, win: true };
+    }
+    if (after.wins.length === 3) {
+      // 恰好一个成五点 → 对方的应手是唯一的，堵上去
+      const bx = after.wins[0], by = after.wins[1], bz = after.wins[2];
+      board.set(bx, by, bz, foe);
+      const sub = aiVcf(session, attacker, depth - 1, stats);
+      board.set(bx, by, bz, EMPTY);
+      if (sub) {
+        board.set(x, y, z, EMPTY);
+        return { x: x, y: y, z: z, win: true };
+      }
+    }
+    board.set(x, y, z, EMPTY);
+  }
+  return null;
 }
 
 /**
@@ -4340,14 +4528,17 @@ function aiSearchMove(session, safe, params, stats) {
   }
   if (depth <= 0) return null;
 
+  const moverRes = rules.isRestricted(mover, session.firstPlayer);
+  const foeRes = rules.isRestricted(foe, session.firstPlayer);
   const sc = [];
   for (let i = 0; i < safe.length; i += 3) {
     const x = safe[i], y = safe[i + 1], z = safe[i + 2];
-    sc.push({ x: x, y: y, z: z, v: aiOrderKey(board, x, y, z, mover, foe, winLength) });
+    sc.push({ x: x, y: y, z: z,
+              v: aiOrderKey(board, x, y, z, mover, foe, winLength, moverRes, foeRes) });
   }
   sc.sort(aiSearchCompare);
 
-  const tune = { winLength: winLength, branch: params.branch };
+  const tune = { winLength: winLength, branch: params.branch, moverRes: moverRes, foeRes: foeRes };
   let best = null, alpha = -Infinity;
   const k = params.branch < sc.length ? params.branch : sc.length;
   for (let i = 0; i < k; i++) {
@@ -4367,27 +4558,28 @@ function aiSearchMove(session, safe, params, stats) {
  * **弱档走的就是这条路**；中/强 走搜索，搜索降档降到 0 时也会落到这里。
  */
 function aiGreedyMove(session, safe, params, rng, winLength, mover) {
-  const board = session.board;
+  const board = session.board, rules = session.rules, fp = session.firstPlayer;
   const foe = opponentOf(mover);
+  const moverRes = rules.isRestricted(mover, fp);
+  const foeRes = rules.isRestricted(foe, fp);
   const scored = [];
   for (let i = 0; i < safe.length; i += 3) {
     const x = safe[i], y = safe[i + 1], z = safe[i + 2];
-    const mine = aiShapeAt(board, x, y, z, mover, winLength);
-    const theirs = aiShapeAt(board, x, y, z, foe, winLength);
-    if (params.wantGapped) theirs.total += aiGappedBonus(board, x, y, z, foe, winLength);
+    const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes));
+    const theirsT = aiThreatAt(board, x, y, z, foe, winLength, foeRes);
+    const theirs = aiThreatValue(theirsT);
     // 每个候选恰好消耗一次随机数 —— 消耗顺序是"同种子必然同结果"那条契约的一部分
     const jitter = 1 + params.noise * (rng() * 2 - 1);
-    scored.push({ x: x, y: y, z: z, atk: mine.total, def: theirs.total, defBest: theirs.best,
-                  jitter: jitter, score: (mine.total + params.defWeight * theirs.total) * jitter,
+    scored.push({ x: x, y: y, z: z, atk: mine, def: theirs, defOpen: theirsT.openFours,
+                  jitter: jitter, score: (mine + params.defWeight * theirs) * jitter,
                   d: aiCenterDist(board, x, y, z) });
   }
 
   // 对方有活三：按 pOpenThree 决定堵还是不堵。
   //
-  // 【档位别认错】"对方有活三"在形状分里的长相是 **defBest >= FOUR_OPEN** ——
-  // 因为那里量的是"对方在那个点落一子会做出什么"，活三的堵点正是对方做**活四**的点。
-  // 第一版按 `defBest === THREE_OPEN` 判，结果一个活三都认不出来，三档全都百分百去堵。
-  // 同理，"对方已经有四连"的堵点量出来是 WIN，那一类在第 3 步就已经返回了，走不到这里。
+  // 【档位别认错】"对方有活三"的长相是 **defOpen >= 1**，也就是"对方在那个点落一子会做出活四" ——
+  // 活三的堵点正是对方做**活四**的点。第一版按"能做出活三"判，结果一个活三都认不出来，
+  // 三档全都百分百去堵。同理"对方已经有四连"的堵点量出来是 WIN，那一类在第 3 步就返回了。
   //
   // 【为什么这里是一个显式分支，而不是给防守项乘一个系数】系数是调不出来的 ——
   // 压小了等于根本不堵，压大了等于必堵，中间没有能用的档位。这不是推理，是实测：
@@ -4395,16 +4587,16 @@ function aiGreedyMove(session, safe, params, rng, winLength, mover) {
   let blockAt = null;
   for (let i = 0; i < scored.length; i++) {
     const c = scored[i];
-    if (c.defBest < AI_W.FOUR_OPEN) continue;
-    if (!blockAt || c.defBest > blockAt.defBest ||
-        (c.defBest === blockAt.defBest && c.def > blockAt.def)) blockAt = c;
+    if (c.defOpen < 1) continue;
+    if (!blockAt || c.defOpen > blockAt.defOpen ||
+        (c.defOpen === blockAt.defOpen && c.def > blockAt.def)) blockAt = c;
   }
   if (blockAt) {
     if (rng() < params.pOpenThree) return blockAt;
     // 决定不堵：那就得把这一手的吸引力**真的**拿掉。
     // 只把防守项压小是不够的 —— 压完它还是比棋盘上其他点高，结果还是堵。
     for (let i = 0; i < scored.length; i++) {
-      if (scored[i].defBest >= AI_W.FOUR_OPEN) scored[i].score = scored[i].atk * scored[i].jitter;
+      if (scored[i].defOpen >= 1) scored[i].score = scored[i].atk * scored[i].jitter;
     }
   }
   scored.sort(aiCompare);
@@ -4451,7 +4643,7 @@ function aiChooseMove(session, opts) {
 
   // stats 只给测试量计算量用：它是"耗时上界"这类断言的抓手，用计数器而不是墙钟，
   // 免得测试在慢机器上随机变红。
-  if (stats) { stats.candidates = 0; stats.judgeCalls = 0; stats.rotProbes = 0; stats.searchNodes = 0; }
+  if (stats) { stats.candidates = 0; stats.judgeCalls = 0; stats.rotProbes = 0; stats.searchNodes = 0; stats.vcfNodes = 0; }
 
   const cand = aiCandidates(board, AI_CANDIDATE_CAP);
   if (stats) stats.candidates = cand.length / 3;
@@ -4496,10 +4688,14 @@ function aiChooseMove(session, opts) {
   // 填满，而那种局面早就终局了），但真为空时也只能认输 —— 返回 none 会变成"电脑不动了"。
   if (safe.length === 0) return { kind: "place", x: cand[0], y: cand[1], z: cand[2] };
 
-  // ---- 4. 出招：搜索档走 α-β，其余走深度 0 的打分。
+  // ---- 4. 出招：先算杀，算不出再走 α-β 搜索，再不行走深度 0 的打分。
   // 【硬规则已经走完了】上面能赢的直接赢了、必堵的直接堵了、自尽点已经剔掉，
-  // 所以这里两条路都只管"剩下的候选里哪个最好"。
-  let move = params.searchDepth > 0 ? aiSearchMove(session, safe, params, stats) : null;
+  // 所以这里几条路都只管"剩下的候选里哪个最好"。
+  // 【算杀为什么排在最前】它找的是**强制胜**（对手每一步都只有一个应手），
+  // 找到了就是赢棋，而且比同深度的 α-β 便宜得多。找不到才退回常规搜索。
+  let move = null;
+  if (params.vcf) move = aiVcf(session, mover, AI_VCF_DEPTH, stats);
+  if (!move && params.searchDepth > 0) move = aiSearchMove(session, safe, params, stats);
   if (!move) move = aiGreedyMove(session, safe, params, rng, winLength, mover);
 
   // ---- 5. 四维：把转动当成另一个候选动作，只有它确实更能改善局面时才占掉这一手
@@ -4779,9 +4975,11 @@ const STATIC_TEXT = { en: {
   "rowLabelFirst": "First player",
   "rowLabelAi": "Opponent",
   "aiHuman": "Human",
-  "aiEasy": "CPU·easy",
-  "aiMed": "CPU·mid",
-  "aiHard": "CPU·hard",
+  "aiLow": "Low",
+  "aiMed": "Mid",
+  "aiHigh": "High",
+  "aiXHigh": "Very high",
+  "aiUltra": "Ultra",
   "rowLabelOrder": "Who starts",
   "orderMe": "Me",
   "orderCpu": "Computer",
@@ -4952,9 +5150,11 @@ STATIC_TEXT.ja = {
   "rowLabelFirst": "先手",
   "rowLabelAi": "対戦相手",
   "aiHuman": "人間",
-  "aiEasy": "CPU·弱",
-  "aiMed": "CPU·中",
-  "aiHard": "CPU·強",
+  "aiLow": "弱",
+  "aiMed": "中",
+  "aiHigh": "強",
+  "aiXHigh": "最強",
+  "aiUltra": "極",
   "rowLabelOrder": "先に打つ人",
   "orderMe": "自分",
   "orderCpu": "コンピュータ",
@@ -5062,9 +5262,11 @@ STATIC_TEXT.ko = {
   "rowLabelFirst": "선수",
   "rowLabelAi": "상대",
   "aiHuman": "사람",
-  "aiEasy": "컴퓨터·하",
-  "aiMed": "컴퓨터·중",
-  "aiHard": "컴퓨터·상",
+  "aiLow": "하",
+  "aiMed": "중",
+  "aiHigh": "상",
+  "aiXHigh": "최상",
+  "aiUltra": "극",
   "rowLabelOrder": "먼저 두는 쪽",
   "orderMe": "나",
   "orderCpu": "컴퓨터",
@@ -5172,9 +5374,11 @@ STATIC_TEXT.ru = {
   "rowLabelFirst": "Первый игрок",
   "rowLabelAi": "Соперник",
   "aiHuman": "Человек",
-  "aiEasy": "ПК·слабый",
-  "aiMed": "ПК·средний",
-  "aiHard": "ПК·сильный",
+  "aiLow": "Слаб",
+  "aiMed": "Сред",
+  "aiHigh": "Сильн",
+  "aiXHigh": "Оч. сильн",
+  "aiUltra": "Ультра",
   "rowLabelOrder": "Кто ходит",
   "orderMe": "Я",
   "orderCpu": "Компьютер",
@@ -5294,9 +5498,11 @@ STATIC_TEXT.fr = {
   "rowLabelFirst": "Premier joueur",
   "rowLabelAi": "Adversaire",
   "aiHuman": "Humain",
-  "aiEasy": "ordi·facile",
-  "aiMed": "ordi·moyen",
-  "aiHard": "ordi·difficile",
+  "aiLow": "Bas",
+  "aiMed": "Moyen",
+  "aiHigh": "Haut",
+  "aiXHigh": "Très haut",
+  "aiUltra": "Ultra",
   "rowLabelOrder": "Qui commence",
   "orderMe": "Moi",
   "orderCpu": "Ordinateur",
@@ -6293,7 +6499,7 @@ const Game = {
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
-      "aiHuman","aiEasy","aiMed","aiHard","orderMe","orderCpu",
+      "aiHuman","aiLow","aiMed","aiHigh","aiXHigh","aiUltra","aiLevel","aiThumb","orderMe","orderCpu",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
@@ -6408,6 +6614,9 @@ const Game = {
     if (this.session) this.refreshTexts();
     this.syncSetupInputs();
     this.syncCoolRow();
+    // 拉条上的字换了语言，每一格的宽度就变了 —— 滑块得重新量一次位置，
+    // 否则它会停在上一种语言算出来的宽度上（俄语比中文宽得多）。
+    this.syncAiThumb();
     this.refreshSetupSummary();
     // 这两个是 JS 写的、不挂 data-i18n 的元素，applyStatic 管不到它们。
     // refreshHint 只在 WebGL2 失败时动手，正常情况下它直接返回。
@@ -7012,6 +7221,7 @@ const Game = {
     this.syncSetupInputs();
     this.syncCoolRow();
     this.syncOrderRow();
+    this.syncAiThumb();
     this.refreshSetupSummary();
     this.ensurePreview();
     this.uploadPreviewInstances();
@@ -7645,10 +7855,10 @@ const Game = {
     on("firstBlack", () => this.setSetupFirst(BLACK));
     on("firstWhite", () => this.setSetupFirst(WHITE));
 
-    // ---- 电脑对手。四个键是一组单选，data-ai 的取值就是 setupAi 本身。
-    // 【只能走 this.el[id] + addEventListener，不能 querySelectorAll(".aiBtn")】——
+    // ---- 电脑对手：「人类」一个键 + 强度拉条五格，data-ai 的取值就是 setupAi 本身。
+    // 【只能走 this.el[id] + addEventListener，不能 querySelectorAll(".seg")】——
     // DOM 桩只认五个选择器，写成类选择器会在桩里静默返回空数组（见 syncOrderRow 的注释）。
-    for (const id of ["aiHuman", "aiEasy", "aiMed", "aiHard"]) {
+    for (const id of ["aiHuman", "aiLow", "aiMed", "aiHigh", "aiXHigh", "aiUltra"]) {
       on(id, () => this.setSetupAi(this.el[id].dataset.ai));
     }
     on("orderMe", () => this.setSetupOrder("me"));
@@ -8622,12 +8832,17 @@ const Game = {
   },
 
   setSetupAi(v) {
-    this.setupAi = (v === "weak" || v === "medium" || v === "strong") ? v : "human";
-    for (const id of ["aiHuman", "aiEasy", "aiMed", "aiHard"]) {
+    this.setupAi = (v === "low" || v === "medium" || v === "high" ||
+                    v === "xhigh" || v === "ultra") ? v : "human";
+    for (const id of ["aiHuman", "aiLow", "aiMed", "aiHigh", "aiXHigh", "aiUltra"]) {
       const el = this.el[id];
-      // dataset.ai 就是 setupAi 的取值本身（human/weak/medium/strong），所以这里不用另建一张表
+      // dataset.ai 就是 setupAi 的取值本身（human/low/medium/high/xhigh/ultra），
+      // 所以这里不用另建一张表 —— 少一张表就少一处会和 HTML 漂移的地方
       if (el) el.classList.toggle("sel", el.dataset.ai === this.setupAi);
     }
+    // 选了「人类」时整条拉条置灰（保留位置，见 #aiLevel.off 的 CSS 注释）
+    if (this.el.aiLevel) this.el.aiLevel.classList.toggle("off", this.setupAi === "human");
+    this.syncAiThumb();
     this.syncOrderRow();
     this.refreshSetupSummary();
   },
@@ -8637,6 +8852,28 @@ const Game = {
     if (this.el.orderMe) this.el.orderMe.classList.toggle("sel", this.setupOrder === "me");
     if (this.el.orderCpu) this.el.orderCpu.classList.toggle("sel", this.setupOrder === "cpu");
     this.refreshSetupSummary();
+  },
+
+  /**
+   * 把圆头滑块挪到当前那一档上。**只有真实浏览器里做** —— 桩里没有 offsetLeft/offsetWidth，
+   * 量出来是 undefined，写进去会变成一个 NaN 宽度。
+   */
+  syncAiThumb() {
+    const thumb = this.el.aiThumb;
+    if (!thumb || !thumb.style) return;
+    let target = null;
+    for (const id of ["aiLow", "aiMed", "aiHigh", "aiXHigh", "aiUltra"]) {
+      const el = this.el[id];
+      if (el && el.classList.contains("sel")) { target = el; break; }
+    }
+    // 没选中任何一档（= 人类）时把滑块缩到最左边，别让它停在上一次的档位上误导人
+    if (!target || !target.offsetWidth) {
+      thumb.style.width = "0px";
+      thumb.style.left = "3px";
+      return;
+    }
+    thumb.style.left = target.offsetLeft + "px";
+    thumb.style.width = target.offsetWidth + "px";
   },
 
   /**
@@ -8873,7 +9110,7 @@ if (typeof module !== "undefined" && module.exports) {
                      EMPTY, BLACK, WHITE, opponentOf, cnOf, fingerprint,
                      AXIS_X, AXIS_Y, AXIS_Z, RotationDirection, RotateStatus,
                      RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName,
-                     aiChooseMove, aiCandidates, aiShapeAt, aiRng, AI_LEVELS, AI_PARAMS };
+                     aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS };
 }
 </script>
 </body>

@@ -209,13 +209,16 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 
 ## 11. Playing the computer
 
-- **The start screen has an "Opponent" row**: Human (two players, one device) / CPU · easy /
-  CPU · medium / CPU · hard. **The tiers differ in how far they look ahead**: the easy tier sees one
-  move ahead; the medium tier looks one reply ahead (what the board looks like after you answer);
-  the hard tier searches four plies. That is why the hard tier walks away from positions where your
-  next move would make an open four, while the easy tier happily walks into them. All three stay
-  deliberately on the weak side — an "easy" opponent that beats beginners every time is the usual
-  failure of this feature.
+- **The start screen has an "Opponent" row**: Human (two players, one device), or five computer
+  strengths **Low / Mid / High / Very high / Ultra**. **They differ in how far they look ahead, and
+  whether the top tier proves forced wins**: Low sees one move; Mid one reply; High three plies;
+  Very high four. Ultra adds a **kill search** on top of that — a forced sequence of fours, where
+  every one of your replies is forced. So High and above walk away from positions where your next
+  move would make an open four, while Low happily walks into them. All five stay deliberately on
+  the weak side — an "easy" opponent that beats beginners every time is the usual failure of this
+  feature.
+- **Ultra will beat you before you see the danger.** That is the kill search, not luck: it can set
+  a trap in the opening that only pays off a dozen moves later.
 - **Two choices, two different jobs.** "First player" picks the **colour** that goes first (which is
   also the colour that carries the overline loss); "Who starts" picks **which of the two** plays that
   colour. So "Black first + Computer" means the computer plays Black and opens, and you play White.

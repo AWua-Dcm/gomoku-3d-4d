@@ -1867,7 +1867,7 @@ try {
       // 上面那条"对局界面"就变成人机局了，后面所有几何断言都会在一个会自动走棋的
       // 棋盘上做。所以下面那条最后会把 setupAi 复位成 human。
       ["起始界面·人机", `Game.openSetup(); Game.setSetupMode(false);
-                         Game.setSetupAi("strong"); Game.setSetupOrder("cpu"); 1`],
+                         Game.setSetupAi("ultra"); Game.setSetupOrder("cpu"); 1`],
       ["对局界面·人机", `Game.closeSetup(); Game.newGame([15,15,15], 1);
                          Game.cancelAiTimer(); Game.runAi();
                          Game.setSetupAi("human"); Game.cancelAiTimer(); 1`],
@@ -1991,21 +1991,24 @@ try {
 
   await ev(`(() => {
     Game.setLang("zh"); Game.openSetup(); Game.setSetupMode(false);
-    Game.setSetupAi("strong"); Game.setSetupOrder("cpu");
+    Game.setSetupAi("ultra"); Game.setSetupOrder("cpu");
     return 1;
   })()`);
   await sleep(150);
   const aiSetupRaw = await ev(`(() => {
-    const aiIds = ["aiHuman","aiEasy","aiMed","aiHard"];
+    const aiIds = ["aiHuman","aiLow","aiMed","aiHigh","aiXHigh","aiUltra"];
     const sel = aiIds.filter((id) => document.getElementById(id).classList.contains("sel"));
     const labelLines = (el) => { const rg = document.createRange(); rg.selectNodeContents(el); return rg.getClientRects().length; };
     const sum = document.getElementById("sizeSummary");
     return JSON.stringify({
-      vis: ["aiHuman","aiEasy","aiMed","aiHard","orderMe","orderCpu"]
+      vis: ["aiHuman","aiLow","aiMed","aiHigh","aiXHigh","aiUltra","orderMe","orderCpu"]
              .map((id) => document.getElementById(id).getClientRects().length > 0),
       selCount: sel.length, selIs: sel[0],
-      aiRowLines: [...new Set(["aiHuman","aiEasy","aiMed","aiHard"]
-                     .map((id) => Math.round(document.getElementById(id).getBoundingClientRect().top)))].length,
+      off: document.getElementById("aiLevel").classList.contains("off"),
+      // 【不能拿 top 去数行数】拉条比按钮高一两像素，而 .row 是 align-items:center ——
+      // 居中对齐让它们 top 不同，于是同一行被数成两行。量整行高度才是对的：
+      // 单行时约 40px（#setup .row 的 min-height），折行必定 >= 80px。
+      aiRowH: Math.round(document.getElementById("aiRow").getBoundingClientRect().height),
       orderDisabled: [document.getElementById("orderMe").disabled, document.getElementById("orderCpu").disabled],
       labelWrapped: ["rowLabelAi","rowLabelOrder"].map((id) => labelLines(document.getElementById(id))),
       summary: sum.textContent, summaryScrolls: sum.scrollHeight > sum.clientHeight + 1,
@@ -2015,15 +2018,23 @@ try {
   })()`);
   const AS = JSON.parse(aiSetupRaw);
   check(AS.vis.every(Boolean), "人机那两行的六个键都看得见", JSON.stringify(AS.vis));
-  check(AS.selCount === 1 && AS.selIs === "aiHard",
-    "四个对手键恰好一个亮着（选的是「电脑·强」）", JSON.stringify([AS.selCount, AS.selIs]));
-  check(AS.aiRowLines === 1, "四个对手键在同一行（1280 宽的窗口下）", AS.aiRowLines + " 行");
+  check(AS.selCount === 1 && AS.selIs === "aiUltra",
+    "拉条六格里恰好一格亮着（选的是「极限」）", JSON.stringify([AS.selCount, AS.selIs]));
+  check(AS.off === false, "选了电脑时拉条不置灰", String(AS.off));
+  check(AS.aiRowH <= 48, "人类键 + 五格拉条在同一行（1280 宽的窗口下）", AS.aiRowH + "px 高");
   check(AS.orderDisabled[0] === false && AS.orderDisabled[1] === false,
     "选了电脑时「谁先下」是可用的", JSON.stringify(AS.orderDisabled));
   check(AS.labelWrapped.every((n) => n <= 1), "人机那两行的行标没有折行", JSON.stringify(AS.labelWrapped));
   check(AS.summary.indexOf("你执") >= 0 && AS.summary.indexOf("电脑执") >= 0,
     "起始界面把「我执哪个色」说清楚了（光看按钮的选中态推不出来）", AS.summary.slice(-70));
   check(!AS.summaryScrolls, "#sizeSummary 里多出来的那一行没有把它挤到要滚动才看得见");
+  // 留一张「选中电脑档」的截图：拉条的滑块只有在这一屏才看得见（选了人类时它是收起的）。
+  // 先把上一种语言扫描时留下的提示清掉 —— 它不会随语言重刷（提示是当时那一瞬的话），
+  // 留在图上会是一句外语压在中文界面上。
+  await ev(`Game.el.toast.classList.remove("on"); 1`);
+  await sleep(250);
+  await shot("8-起始界面-电脑档");
+
   check(AS.docOver <= 1 && AS.setupOver <= 1,
     "起始界面加了人机两行之后没有横向溢出", "doc " + AS.docOver + " / setup " + AS.setupOver);
 

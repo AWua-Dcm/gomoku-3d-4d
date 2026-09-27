@@ -206,13 +206,16 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 
 ## 11. Jouer contre l'ordinateur
 
-- **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil) /
-  ordinateur · facile / moyen / difficile. **Les niveaux diffèrent par la profondeur de calcul** :
-  le facile ne voit qu'un coup d'avance ; le moyen voit la réponse d'après (ce que donne le plateau
-  quand vous répondez) ; le difficile calcule quatre demi-coups. C'est pourquoi le difficile évite
-  les positions où votre coup suivant ferait un quatre ouvert, alors que le facile y entre sans
-  broncher. Les trois restent volontairement faibles : un adversaire « facile » qui bat les débutants
+- **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil), ou cinq
+  forces d'ordinateur **Bas / Moyen / Haut / Très haut / Ultra**. **Elles diffèrent par la profondeur de
+  calcul, et par la capacité du niveau supérieur à prouver un gain forcé** : Bas voit un coup, Moyen
+  une réponse, Haut trois demi-coups, Très haut quatre. Ultra ajoute par-dessus une **recherche de
+  gain forcé** (suite ininterrompue de quatre : chacune de vos réponses est forcée). Haut et au-dessus
+  évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que Bas y entre sans
+  broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat les débutants
   à tous les coups est le défaut habituel de cette fonction.
+- **Ultra vous battra avant que vous ne voyiez le danger.** C'est le résultat de la recherche de gain
+  forcé, pas de la chance : il peut poser une trappe dès l'ouverture qui ne paiera que dix coups plus tard.
 - **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
   aussi la défaite pour alignement trop long) ; « Qui commence » choisit **lequel des deux** joue cette
   couleur. Ainsi « Noirs en premier + Ordinateur » : l'ordinateur joue Noirs et ouvre, vous jouez

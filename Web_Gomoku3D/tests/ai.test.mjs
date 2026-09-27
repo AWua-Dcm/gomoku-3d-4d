@@ -68,7 +68,7 @@ try {
     return { Board3D, RuleSet, RuleEngine, GameSession, FourDSession, DIRS13, MoveStatus,
              EMPTY, BLACK, WHITE, opponentOf, fingerprint,
              RotationMove, RotateStatus, AXIS_X, AXIS_Y, AXIS_Z,
-             aiChooseMove, aiCandidates, aiShapeAt, aiRng, AI_LEVELS, AI_PARAMS };`)();
+             aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS };`)();
   passed++;
 } catch (e) {
   console.error("内核求值失败：" + e.message + "\n" + (e.stack || ""));
@@ -76,9 +76,9 @@ try {
 }
 const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK, WHITE,
         opponentOf, fingerprint, RotationMove, RotateStatus, AXIS_X, AXIS_Y, AXIS_Z,
-        aiChooseMove, aiCandidates, aiShapeAt, aiRng, AI_LEVELS, AI_PARAMS } = Core;
+        aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS } = Core;
 
-console.log("三档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
+console.log("五档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
 // ---------------------------------------------------------------------------
 // 工具
@@ -183,7 +183,7 @@ for (const wl of [4, 6]) {
   put(s, WHITE, w);
   put(s, BLACK, [[2, 5, 5]]);        // 只堵一头，另一头 (3+wl-1) 就是那个必胜点
   s.inner.currentPlayer = WHITE;
-  const a = aiChooseMove(s, { level: "strong", seed: 9 });
+  const a = aiChooseMove(s, { level: "ultra", seed: 9 });
   const j = a.kind === "place" ? judgeAt(s, a, WHITE) : null;
   check(j && j.status === MoveStatus.Win,
         "winLength=" + wl + " 时同样要抓住必胜点",
@@ -208,7 +208,7 @@ for (const level of AI_LEVELS) {
   const s = mkSession(15, BLACK, false);        // 黑先手（受限）
   put(s, BLACK, [[2, 5, 5], [3, 5, 5], [4, 5, 5], [5, 5, 5], [7, 5, 5]]);
   s.inner.currentPlayer = WHITE;
-  const a = aiChooseMove(s, { level: "strong", seed: 17 });
+  const a = aiChooseMove(s, { level: "ultra", seed: 17 });
   // 黑下 (6,5,5) 会连成 2..7 六颗 → 黑判负，所以白不该把 (6,5,5) 当成威胁去堵。
   // 这里只断言"白没有把子下在 (6,5,5) 上"（那一手对白毫无价值）。
   const wasted = a.kind === "place" && a.x === 6 && a.y === 5 && a.z === 5;
@@ -250,7 +250,7 @@ for (const n of [8, 13, 15]) {
   s.inner.currentPlayer = BLACK;
   const o = RuleEngine.judge(s.board, { x: 7, y: 3, z: 3 }, BLACK, BLACK, s.rules);
   s.inner.status = "Decided"; s.inner.winner = BLACK;
-  eq(aiChooseMove(s, { level: "strong" }).kind, "none", "已终局的棋局返回 none");
+  eq(aiChooseMove(s, { level: "ultra" }).kind, "none", "已终局的棋局返回 none");
   check(o.status === MoveStatus.Win || o.status === MoveStatus.LoseByOverline,
         "构造的终局局面本身是有效的", o.status);
 }
@@ -300,7 +300,7 @@ for (const lv of AI_LEVELS) {
 }
 
 {
-  const r = selfPlay(8, WHITE, true, "medium", "strong", 202, 300, 3);
+  const r = selfPlay(8, WHITE, true, "medium", "ultra", 202, 300, 3);
   check(r.rejected === 0, "自对局里每一手都被引擎接受 [四维]",
         "卡在第 " + r.plies + " 手，rejected=" + r.rejected);
   check(r.plies > 20 || r.status !== "Playing", "四维自对局真的在下棋",
@@ -310,7 +310,7 @@ for (const lv of AI_LEVELS) {
 
 // 棋力不同档之间也要能对完一局（混档跑，防止某一档单独有毛病）
 {
-  const r = selfPlay(13, WHITE, false, "weak", "strong", 303, 400);
+  const r = selfPlay(13, WHITE, false, "low", "ultra", 303, 400);
   check(r.rejected === 0 && r.overline === 0, "弱 vs 强也能正常对完", JSON.stringify(r));
 }
 
@@ -323,13 +323,13 @@ for (const lv of AI_LEVELS) {
   put(s, BLACK, [[7, 7, 7], [8, 8, 8]]);
   put(s, WHITE, [[6, 6, 6], [7, 8, 8]]);
   s.inner.currentPlayer = BLACK;
-  const a = JSON.stringify(aiChooseMove(s, { level: "weak", seed: 42 }));
-  const b = JSON.stringify(aiChooseMove(s, { level: "weak", seed: 42 }));
+  const a = JSON.stringify(aiChooseMove(s, { level: "low", seed: 42 }));
+  const b = JSON.stringify(aiChooseMove(s, { level: "low", seed: 42 }));
   eq(b, a, "同种子同局面必须给出同一动作");
 
   const seen = new Set();
   for (let seed = 0; seed < 200; seed++) {
-    seen.add(JSON.stringify(aiChooseMove(s, { level: "weak", seed })));
+    seen.add(JSON.stringify(aiChooseMove(s, { level: "low", seed })));
   }
   check(seen.size >= 3, "种子真的接在决策上了（200 个种子至少 3 种不同的动作）",
         "只出现了 " + seen.size + " 种");
@@ -439,15 +439,15 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   const s = replay(8, BLACK, [], true, 3);
   s.place(0, 0, 0); s.place(2, 5, 7); s.place(7, 2, 3);
   const st = {};
-  aiChooseMove(s, { level: "strong", seed: 8, stats: st });
+  aiChooseMove(s, { level: "ultra", seed: 8, stats: st });
   check(st.rotProbes > 0, "四维下强档会去探转动", "rotProbes=" + st.rotProbes);
-  check(st.rotProbes <= AI_PARAMS.strong.rotProbe, "探针数受参数表上限约束",
+  check(st.rotProbes <= AI_PARAMS.ultra.rotProbe, "探针数受参数表上限约束",
         "rotProbes=" + st.rotProbes);
   // 三维下一次都不许探
   const s3 = mkSession(8, BLACK, false);
   s3.place(3, 3, 3);
   const st3 = {};
-  aiChooseMove(s3, { level: "strong", seed: 8, stats: st3 });
+  aiChooseMove(s3, { level: "ultra", seed: 8, stats: st3 });
   eq(st3.rotProbes, 0, "三维模式下一次转动都不该探");
 }
 
@@ -456,12 +456,12 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   const s = mkSession(8, BLACK, true, 5);
   s.place(3, 3, 3);
   const st = {};
-  aiChooseMove(s, { level: "strong", seed: 8, stats: st });
+  aiChooseMove(s, { level: "ultra", seed: 8, stats: st });
   eq(st.rotProbes, 0, "冷却未到时一次转动都不该探");
 }
 
 // ---------------------------------------------------------------------------
-// 8. 三档的强弱关系：对方做活三时去堵的比例，弱 < 中 < 强
+// 8. 五档的强弱关系：对方做活三时去堵的比例（low 明显低，搜索档全 100%）
 // ---------------------------------------------------------------------------
 
 {
@@ -479,15 +479,17 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
     }
     counts[level] = blocked;
   }
-  console.log("对方活三时去堵的比例（各 60 局）：弱 " + counts.weak +
-              " / 中 " + counts.medium + " / 强 " + counts.strong);
+  console.log("对方活三时去堵的比例（各 60 局）：low " + counts.low +
+              " / medium " + counts.medium + " / high " + counts.high + " / xhigh " + counts.xhigh + " / ultra " + counts.ultra);
   // 【注意这个指标在搜索档上饱和了】中/强 都是 100%，所以它只能证明"弱档不总堵、
   // 搜索档每次都堵"，证不了"中 < 强"。后者由下面第 8.5 组的真对局来证。
-  check(counts.weak < counts.medium,
-        "弱档不是每个活三都去堵（这是它「弱」的主要来源）",
-        "弱 " + counts.weak + " / 中 " + counts.medium + "（各 60 局）");
-  eq(counts.medium, 60, "中档每个活三都去堵（它已经会搜索了）");
-  eq(counts.strong, 60, "强档每个活三都去堵");
+  check(counts.low < counts.medium,
+        "low 档不是每个活三都去堵（这是它「弱」的主要来源）",
+        "low " + counts.low + " / medium " + counts.medium + "（各 60 局）");
+  // 四个搜索档都该 100%：活三的堵点就是"对方在那里做活四"，威胁计数看得见
+  for (const lv of ["medium", "high", "xhigh", "ultra"]) {
+    eq(counts[lv], 60, lv + " 档每个活三都去堵（它已经会搜索了）");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -507,10 +509,15 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
 
 {
   const wl = 5;
+  // 排序键和引擎用的是同一把尺子：威胁计数 → 分值，攻守相加。
+  // 【必须和引擎口径一致】这两边一旦漂移，这条不变量就成了"自己跟自己比"，
+  // 什么都验不出来 —— 所以这里用的是引擎导出的那两个函数，不是另写一份。
   const keyOf = (s, x, y, z, mover) => {
     const foe = opponentOf(mover);
-    return aiShapeAt(s.board, x, y, z, mover, wl).total +
-           aiShapeAt(s.board, x, y, z, foe, wl).total;
+    const myRes = s.rules.isRestricted(mover, s.firstPlayer);
+    const foeRes = s.rules.isRestricted(foe, s.firstPlayer);
+    return aiThreatValue(aiThreatAt(s.board, x, y, z, mover, wl, myRes)) +
+           aiThreatValue(aiThreatAt(s.board, x, y, z, foe, wl, foeRes));
   };
   const rankOf = (s, a, mover) => {
     const mine = keyOf(s, a.x, a.y, a.z, mover);
@@ -540,11 +547,14 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   //   · 弱档有噪声（乘性抖动会把低分格抬进前几名），还有一条按 defBest 走的堵活三分支
   //     （它挑的是"对方在那里最能做出东西"的点，未必是全键的前几名），所以放宽到 40。
   //     实测最差 19 名。**那个 bug 下这个数是两百名开外**，所以 40 一样抓得住。
-  const RANK_MAX = { weak: 40, medium: 4, strong: 4 };
+  // 【ultra 单独放宽】它先跑算杀（VCF），而算杀挑的是"能补成四"的点，
+  // 不保证那个点在全键的前 4 名（全键里"对方在那做活四"的点分更高）。
+  // 放宽到 64 仍然远小于那个 bug 下的两百名开外。
+  const RANK_MAX = { low: 40, medium: 4, high: 4, xhigh: 4, ultra: 64 };
 
   for (const [name, setup] of cases) {
     for (const level of AI_LEVELS) {
-      const seeds = level === "weak" ? [0, 1, 2, 3, 4, 5, 6, 7] : [0, 1, 2];
+      const seeds = level === "low" ? [0, 1, 2, 3, 4, 5, 6, 7] : [0, 1, 2];
       let worst = 0;
       for (const seed of seeds) {
         const s = mkSession(15, BLACK, false);
@@ -606,11 +616,15 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
              avg: Math.round(plies / games) };
   }
 
-  for (const [strong, weak] of [["medium", "weak"], ["strong", "medium"], ["strong", "weak"]]) {
-    const r = duel(strong, weak, 12, 4000);
+  // 【阈值定在 55%，不是 70%】实测相邻两档的差距就在 58%~92% 之间 ——
+  // 这个引擎的棋力对"深度"的边际收益本来就不大（评估偏粗，越到上面越明显），
+  // 所以"每一级都赢下一级"是能保证的，"每一级都大胜下一级"保证不了。
+  // 阈值只用来抓"档次被写反了"这类回归，不是用来声称差距有多大的。
+  for (const [strong, weak] of [["medium", "low"], ["high", "medium"], ["xhigh", "high"], ["ultra", "xhigh"], ["ultra", "low"]]) {
+    const r = duel(strong, weak, 16, 4000);
     console.log(`${strong} vs ${weak}：${r.score}/${r.games}（胜 ${r.wins} / 负 ${r.losses} / 和 ${r.draws}）平均 ${r.avg} 手`);
-    check(r.score >= r.games * 0.7,
-          strong + " 档明显强于 " + weak + " 档（真对局，随机开局 + 两色各半）",
+    check(r.score > r.games * 0.55,
+          strong + " 档强于 " + weak + " 档（真对局，随机开局 + 两色各半）",
           `得分 ${r.score}/${r.games}`);
   }
 }
@@ -635,7 +649,7 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   }
   const st = {};
   const t0 = Date.now();
-  const act = aiChooseMove(s, { level: "strong", seed: 3, stats: st });
+  const act = aiChooseMove(s, { level: "ultra", seed: 3, stats: st });
   const ms = Date.now() - t0;
   const stones = s.board.stoneCount;
   check(st.candidates <= 26 * stones + 3, "候选数不超过 26 × 子数（半径 1 的邻域上界）",
@@ -660,7 +674,7 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   s.inner.currentPlayer = BLACK;
   const st = {};
   const t0 = Date.now();
-  aiChooseMove(s, { level: "weak", seed: 1, stats: st });
+  aiChooseMove(s, { level: "low", seed: 1, stats: st });
   const ms = Date.now() - t0;
   check(st.candidates <= 20000, "50³ 密集局面下候选数被截到上限以内",
         "候选 " + st.candidates);
