@@ -200,6 +200,9 @@ A rotation does not count as move number N; the Nth move always means the Nth pl
 Once someone places a stone, that rotation has landed and can no longer be taken back on its own — otherwise it would become a
 time machine spanning many moves.
 
+> **It is back on the panel once you press Confirm.** The preview pair **takes its place** while the
+> preview is up; it does not remove it. Once the rotation has landed, that button is its undo.
+
 Undoing also returns the cooldown to what it was before the rotation.
 
 ### 10.7 Sizes

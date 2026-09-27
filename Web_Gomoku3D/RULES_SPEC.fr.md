@@ -197,6 +197,10 @@ Une rotation ne compte pas comme « le N-ième coup » ; le N-ième coup désign
 
 Dès que quelqu'un pose un pion, cette rotation est acquise et ne peut plus être retirée à part — sinon elle deviendrait une machine à remonter le temps qui traverse plusieurs coups.
 
+> **Elle revient sur le panneau dès que vous appuyez sur « Confirmer ».** Les deux boutons de
+> l'aperçu **prennent sa place** le temps de l'aperçu, ils ne la suppriment pas. Une fois la rotation
+> acquise, c'est ce bouton qui l'annule.
+
 Après une annulation, la recharge revient elle aussi à son état d'avant la rotation.
 
 ### 10.7 Tailles

@@ -2475,6 +2475,7 @@ try {
     goDisabled: document.getElementById("rotGo").disabled,
     goOff: document.getElementById("rotGo").classList.contains("off"),
     reOff: document.getElementById("rotRestore").classList.contains("off"),
+    reDisabled: document.getElementById("rotRestore").disabled,
     cfOff: document.getElementById("rotConfirm").classList.contains("off"),
     caOff: document.getElementById("rotCancel").classList.contains("off"),
     attn: document.getElementById("rotConfirm").classList.contains("attn"),
@@ -2560,6 +2561,23 @@ try {
   check(committed.goOff === false && committed.cfOff === true && committed.attn === false,
     "落地之后两个键换回去、亮圈收掉",
     JSON.stringify({goOff: committed.goOff, cfOff: committed.cfOff, attn: committed.attn}));
+
+  // 【「恢复本次转动」不能因为加了这两步就再也点不到】它是确定之后的后悔药：
+  // 确定完那一行会换回去，这时候它必须**看得见、而且点得动**。
+  // 只有人和人下的时候有这条路 —— 人机模式下它一直是禁用的，那是另一条早就定下的规矩
+  // （撤销电脑刚做的那次转动，撤完回合又回到电脑，电脑立刻再转一次，看起来像按钮坏了）。
+  check(!committed.reOff && !committed.reDisabled,
+    "确定之后「恢复本次转动」回到那一行，而且是可以点的（预览这两步没把它顶掉）",
+    JSON.stringify({ reOff: committed.reOff, reDisabled: committed.reDisabled }));
+  await clickEl("rotRestore");
+  const restored = JSON.parse(await ev(rotSnap));
+  check(restored.rots === 0 && restored.board === setup4d.board && !restored.preview,
+    "点「恢复本次转动」真的把刚才那一次撤掉了（盘面逐格还原）",
+    JSON.stringify({ rots: restored.rots, preview: restored.preview }));
+  check(JSON.stringify(restored.row) === JSON.stringify(setup4d.row) && !restored.goOff &&
+        !restored.reOff && restored.cfOff,
+    "撤完之后那一行仍然停在平时那两个键上（没有卡在确定/取消）",
+    JSON.stringify(restored.row));
 
   const consoleRot = drainConsole();
   check(consoleRot.length === 0, "四维转动那一节控制台没有输出", consoleRot.join("\n      "));
