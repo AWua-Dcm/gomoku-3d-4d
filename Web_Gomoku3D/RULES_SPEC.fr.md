@@ -214,6 +214,9 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
   évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que Bas y entre sans
   broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat les débutants
   à tous les coups est le défaut habituel de cette fonction.
+  **En 4D, chaque niveau calcule un ou deux demi-coups plus loin** : une rotation déplace toute une
+  formation, et à la profondeur « 3D » l'ordinateur ne voit pas que son propre dernier coup vient d'être
+  déplacé — il offre alors un coup gratuit.
 - **Ultra vous battra avant que vous ne voyiez le danger.** C'est le résultat de la recherche de gain
   forcé, pas de la chance : il peut poser une trappe dès l'ouverture qui ne paiera que dix coups plus tard.
 - **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
@@ -225,8 +228,14 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
   menaces doubles : c'est délibéré, pas un bug.
 - **Annuler retire votre coup et la réponse de l'ordinateur ensemble.** « Restaurer la rotation » est
   indisponible contre l'ordinateur : utilisez Annuler.
-- **En 4D, l'ordinateur tourne aussi des couches**, mais rarement (au niveau facile, environ une fois
-  sur dix), et une rotation ne fait jamais gagner.
+- **En 4D, l'ordinateur tourne aussi des couches, mais seulement quand cela vaut un coup.** Il ne tourne
+  jamais « pour voir » : uniquement si la rotation casse réellement un **trois ouvert ou mieux** chez
+  l'adversaire, ou si elle fait monter sa propre forme d'un cran entier. Une rotation qui laisserait un
+  trois ouvert à l'adversaire, il ne la choisit pas lui-même.
+  L'ancien critère — « tourner si le meilleur coup à ma disposition dans la bande touchée a augmenté » —
+  produisait trois rotations par partie, un tour sur trois, dont seulement un tiers faisait réellement
+  baisser la menace. Au niveau facile, la rotation n'est toujours envisagée qu'une fois sur dix environ.
+  Une rotation ne fait jamais gagner : elle ne fait que casser des formations et déplacer vos pierres.
 
 ## 12. Ce que ce jeu ne fait pas
 

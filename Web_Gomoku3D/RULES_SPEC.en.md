@@ -212,7 +212,9 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 - **The start screen has an "Opponent" row**: Human (two players, one device), or five computer
   strengths **Low / Mid / High / Very high / Ultra**. **They differ in how far they look ahead, and
   whether the top tier proves forced wins**: Low sees one move; Mid one reply; High three plies;
-  Very high four. Ultra adds a **kill search** on top of that — a forced sequence of fours, where
+  Very high four. **In 4D every tier looks one or two plies deeper** — a rotation can move a whole
+  formation, and at 3D depth the computer cannot see that its own last move has just been slid away.
+  Ultra adds a **kill search** on top of that — a forced sequence of fours, where
   every one of your replies is forced. So High and above walk away from positions where your next
   move would make an open four, while Low happily walks into them. All five stay deliberately on
   the weak side — an "easy" opponent that beats beginners every time is the usual failure of this
@@ -228,8 +230,13 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
   not a bug.
 - **Undo takes back your move and the computer's reply together.** "Restore this rotation" is not
   available against the computer — use Undo instead.
-- **In 4D the computer rotates layers too**, but not often (the easy tier considers it about once in
-  ten), and a rotation can never win the game.
+- **In 4D the computer rotates layers, but only when it is worth a move.** It never rotates just to see
+  what happens: it does so only when the rotation would genuinely break up an opponent's **open three or
+  worse**, or when it lifts its own shape a whole tier. A rotation that would leave the opponent an open
+  three is one it rejects itself. The old rule — "rotate if the best move available to me in the affected
+  band went up" — rotated three times a game, one turn in three, and only a third of those actually
+  lowered the threat. The easy tier still only considers it about once in ten turns. A rotation can never
+  win the game; it only breaks up formations and slides your own stones around.
 
 ## 12. What this game does not do
 

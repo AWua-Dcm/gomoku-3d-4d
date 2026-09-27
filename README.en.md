@@ -7,7 +7,7 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-40725_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-40734_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
@@ -81,7 +81,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
 
 ```
-11733 + 19408 + 98 + 114 + 107 + 8845 + 115 + 305 = 40725 assertions, all green
+11733 + 19408 + 98 + 123 + 107 + 8845 + 115 + 305 = 40734 assertions, all green
 ```
 
 Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -94,7 +94,7 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
-| `node Web_Gomoku3D/tests/ai.test.mjs` | 114 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, compute ceiling) |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 123 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 107 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
@@ -256,6 +256,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.27
 
+- 🎨 **v2.10.9** Colour tweaks: ghost-layer stones are a shade deeper, and the 3D static grid is now a greyer, paler tone (it used to be a warm brown that read as too loud once a whole board was covered); in 4D the computer no longer rotates layers constantly — it rotates only when that genuinely breaks up an open three or better, and its 4D search now goes deeper
 - 🐛 **v2.10.8** Fixed a few problems
 - 🐛 **v2.10.7** Fixed a few problems
 - 🎨 **v2.10.6** Start screen: in all six languages the row labels share one column width and the buttons have a uniform minimum width, so every row lines up; the column was tightened to keep "Start game" above the fold

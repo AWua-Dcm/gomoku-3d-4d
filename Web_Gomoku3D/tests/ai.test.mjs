@@ -68,7 +68,8 @@ try {
     return { Board3D, RuleSet, RuleEngine, GameSession, FourDSession, DIRS13, MoveStatus,
              EMPTY, BLACK, WHITE, opponentOf, fingerprint,
              RotationMove, RotateStatus, AXIS_X, AXIS_Y, AXIS_Z,
-             aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS };`)();
+             aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS,
+             aiThreatBest, aiTier, AI_W };`)();
   passed++;
 } catch (e) {
   console.error("内核求值失败：" + e.message + "\n" + (e.stack || ""));
@@ -76,7 +77,8 @@ try {
 }
 const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK, WHITE,
         opponentOf, fingerprint, RotationMove, RotateStatus, AXIS_X, AXIS_Y, AXIS_Z,
-        aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS } = Core;
+        aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS,
+        aiThreatBest, aiTier, AI_W } = Core;
 
 console.log("五档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
@@ -312,6 +314,101 @@ for (const lv of AI_LEVELS) {
 {
   const r = selfPlay(13, WHITE, false, "low", "ultra", 303, 400);
   check(r.rejected === 0 && r.overline === 0, "弱 vs 强也能正常对完", JSON.stringify(r));
+}
+
+// ---------------------------------------------------------------------------
+// 5b. 四维转动：**只在必要的时候转**
+//
+// 用户报的两件事：「不要一直旋转」「发现对方要连成四颗/三颗时，有旋转机会就立马旋转」。
+// 原来那条判据（"转动层 ±1 带里我最好的一手变高了就转"）实测每局转 3 次、占自己回合的
+// 三分之一，而其中只有三分之一真的把对方的最强威胁压下去过 —— 慢镜头里还有
+// "对方一点威胁都没有时它照样转，转完对方原地点了同一格"这种白送一手。
+//
+// 这一组把新判据钉成**不变量**（跑完整局，每一手都真的喂给引擎）：
+//   · 转完永远不许给对方留下活三以上 —— 那是把必须回应的麻烦从别人手里接过来
+//   · 转之前对方就有活三以上的（拆形）→ 转完必须真的低于活三
+//   · 转之前对方没有威胁的（调形）→ 我自己必须真的跨了一档
+// 再加一条上界：转动占自己回合的比例不许超过 1/6（现在是 3~7%，留了一倍余量）。
+// ---------------------------------------------------------------------------
+function selfPlayRotAudit(n, firstPlayer, lvBlack, lvWhite, seed, maxPlies, cooldown) {
+  const s = mkSession(n, firstPlayer, true, cooldown);
+  const rng = rngOf(seed);
+  const winLength = s.rules.winLength;
+  const threat = (who) => aiThreatBest(s.board, aiCandidates(s.board, 20000), who, winLength,
+                                       s.rules.isRestricted(who, s.firstPlayer));
+  const bad = [];
+  let plies = 0, rotations = 0, myTurns = 0;
+  while (s.status === "Playing" && plies < maxPlies) {
+    const me = s.currentPlayer, you = opponentOf(me);
+    const mineBefore = threat(me), foeBefore = threat(you);
+    const act = aiChooseMove(s, { level: me === BLACK ? lvBlack : lvWhite,
+                                  seed: (rng() * 4294967296) >>> 0 });
+    if (act.kind === "none") break;
+    myTurns++;
+    const r = applyAction(s, act);
+    if (!r || r.status === MoveStatus.Rejected || (act.kind === "rotate" && !r.accepted)) {
+      bad.push("第 " + plies + " 手被引擎拒了");
+      break;
+    }
+    if (act.kind === "rotate") {
+      rotations++;
+      const foeAfter = threat(you), mineAfter = threat(me);
+      if (foeAfter >= AI_W.THREE) {
+        bad.push("第 " + plies + " 手：转完还给对方留了活三以上（" + foeAfter + "）");
+      } else if (foeBefore >= AI_W.THREE) {
+        if (!(foeAfter < foeBefore)) {
+          bad.push("第 " + plies + " 手：对方本来有活三以上，转完却没降下去");
+        }
+      } else if (!(aiTier(mineAfter) > aiTier(mineBefore))) {
+        bad.push("第 " + plies + " 手：既没拆对方的形、自己也没跨档，白转一手");
+      }
+    }
+    if (s.status === "Playing" && s.currentPlayer === me) { bad.push("第 " + plies + " 手回合没翻转"); break; }
+    plies++;
+  }
+  return { bad, plies, rotations, myTurns, status: s.status };
+}
+
+for (const lv of ["medium", "high", "xhigh", "ultra"]) {
+  const r = selfPlayRotAudit(10, BLACK, lv, lv, 771, 140, 3);
+  check(r.bad.length === 0,
+    "四维转动的不变量 [" + lv + "]：转完不给对方留活三、拆形真的拆掉了、调形真的跨了档",
+    r.bad.slice(0, 3).join("；"));
+}
+{
+  // 上界的样本要够大：单档跑一局可能刚好一手都没转，那种"0 ≤ 上界"是空转的。
+  let rotations = 0, turns = 0;
+  for (const lv of ["medium", "high", "xhigh", "ultra"]) {
+    for (let g = 0; g < 3; g++) {
+      const r = selfPlayRotAudit(10, BLACK, lv, lv, 900 + g * 13, 140, 3);
+      rotations += r.rotations; turns += r.myTurns;
+    }
+  }
+  check(turns > 60, "前置：转动比例的样本量够（真跑了不少手）", "回合 " + turns);
+  check(rotations / Math.max(1, turns) <= 1 / 6,
+    "四维里转动是可数的少数派（不超过自己回合的 1/6），不是「一直在转」",
+    "转了 " + rotations + " 次 / 自己走了 " + turns + " 手 = " +
+    (100 * rotations / Math.max(1, turns)).toFixed(1) + "%");
+  console.log("四维转动审计：" + rotations + " 次转动 / " + turns + " 个回合");
+}
+
+// 四维要比三维想得深。**这条是源码级的** —— 只验"参数接上了"，
+// 深度到底带来多少棋力靠上面那组自对局的强弱关系，以及人工试玩。
+{
+  const fn = fullScript.slice(fullScript.indexOf("function aiSearchMove"),
+                              fullScript.indexOf("function aiGreedyMove"));
+  check(fn.indexOf("rotationEnabled") >= 0 && fn.indexOf("depth4d") >= 0,
+    "搜索在四维下用的是 depth4d（三维下仍用 searchDepth）",
+    "aiSearchMove 里没有读到 rotationEnabled / depth4d");
+  const shallow = AI_LEVELS.filter((l) => (AI_PARAMS[l].depth4d || 0) < (AI_PARAMS[l].searchDepth || 0));
+  check(shallow.length === 0,
+    "四维的深度没有一档比三维浅（否则就是「四维反而想得更少」）", shallow.join(","));
+  // 【为什么只点名中/高，而不是"至少三档变深"】顶两档停在 4 是**量出来的**：
+  // 深 5 一手要 280~380ms，超过程序自己定的大约 260ms 那条线，手机还要再慢三四倍。
+  // 所以这条钉的是"该深的那两档确实深了"，不是"深的档数够多"。
+  const deeper = AI_LEVELS.filter((l) => (AI_PARAMS[l].depth4d || 0) > (AI_PARAMS[l].searchDepth || 0));
+  check(deeper.indexOf("medium") >= 0 && deeper.indexOf("high") >= 0,
+    "四维下中档和高档确实比三维想得深", "实际加深的是 " + (deeper.join(",") || "（一档都没有）"));
 }
 
 // ---------------------------------------------------------------------------

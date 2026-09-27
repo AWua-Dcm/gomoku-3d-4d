@@ -30,7 +30,13 @@
     --panel-hi:  #e6dcc8;
     --cell:      #e9e1d1;   /* 二维板面 */
     --cell-hint: #cec0a4;
-    --border:    #b7a98f;   /* 也是三维静态格线的颜色 */
+    --border:    #b7a98f;
+    /* 三维静态格线（那层灰网）的颜色。**为什么不复用 --border**：--border 是暖褐色，
+       画在同样暖的纸底上那层网是「有颜色的」，一大片铺开之后偏亮、偏跳；
+       而它同时又是所有按钮和边框的颜色，改它等于把整套界面都改了。
+       这里单独取一个更灰、更浅的色：R−B 从 40 收到 17（去色），亮度从 64% 提到 74%（变浅），
+       叠上 0.55 的透明度之后落在纸上比原来浅 9 个色阶，色相从暖褐变成中性灰。 */
+    --grid:      #c5beb4;
     --text:      #2f2a23;   /* 墨 */
     --dim:       #6d6353;
     --black:     #1c1a16;
@@ -1095,6 +1101,8 @@
   **低 / 中 / 高 / 极高 / 极限**。**差别在"算多远"，以及最高档会不会算杀**：
   低档只看眼前一步；中档算一层（我下完他会怎么应）；高档三层；极高四层；
   极限档在四层之外还会**算杀** —— 连续冲四的强制取胜路线，每一步对手都只有一个应手。
+  **四维模式里各档还要再深一到两层**：转动会把整个阵型挪走，浅一层看不出来
+  「我刚落的那一手已经被转没了」，于是会走出白送一手棋。
   所以高档以上会主动躲开"我下这里、他下一手就成四"这类局面，低档看不出来。
   五档都刻意不去做得太强 —— 低级难度把玩家打得没脾气是这类功能最常见的毛病。
 - **极限档会下出"你还没看出危险就已经输了"的棋** —— 那是算杀算出来的，不是走运。
@@ -1106,7 +1114,11 @@
   看不见双威胁 —— 这是刻意的，不是 bug。
 - **悔棋一次退回你落子之前**：电脑的应手会一并撤掉。人机对战里「恢复本次转动」不对玩家开放，
   要退回去请用「悔棋」。
-- **四维模式下电脑也会转动层**，但转得不多（弱档大约十次里才考虑一次），而且转动永远赢不了棋。
+- **四维模式下电脑也会转动层，而且只在必要的时候转。** 它不会「试试看」：只有转完能真的把
+  对方**活三以上**的阵型拆掉（或者自己的形跨了一个档）时才动手；转完反而给对方留下活三的那一转，
+  它自己就不会选。从前的判据是「转完我这一带能拿到的最好一手变高了就转」，实测每局转三次、
+  占自己回合的三分之一，其中只有三分之一真的把对方的威胁压下去过。弱档还是大约十次里才考虑一次。
+  转动永远赢不了棋 —— 它只能拆别人的形、挪自己的子。
 
 ## 12. 本作没有做的事
 
@@ -1341,7 +1353,9 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 - **The start screen has an "Opponent" row**: Human (two players, one device), or five computer
   strengths **Low / Mid / High / Very high / Ultra**. **They differ in how far they look ahead, and
   whether the top tier proves forced wins**: Low sees one move; Mid one reply; High three plies;
-  Very high four. Ultra adds a **kill search** on top of that — a forced sequence of fours, where
+  Very high four. **In 4D every tier looks one or two plies deeper** — a rotation can move a whole
+  formation, and at 3D depth the computer cannot see that its own last move has just been slid away.
+  Ultra adds a **kill search** on top of that — a forced sequence of fours, where
   every one of your replies is forced. So High and above walk away from positions where your next
   move would make an open four, while Low happily walks into them. All five stay deliberately on
   the weak side — an "easy" opponent that beats beginners every time is the usual failure of this
@@ -1357,8 +1371,13 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
   not a bug.
 - **Undo takes back your move and the computer's reply together.** "Restore this rotation" is not
   available against the computer — use Undo instead.
-- **In 4D the computer rotates layers too**, but not often (the easy tier considers it about once in
-  ten), and a rotation can never win the game.
+- **In 4D the computer rotates layers, but only when it is worth a move.** It never rotates just to see
+  what happens: it does so only when the rotation would genuinely break up an opponent's **open three or
+  worse**, or when it lifts its own shape a whole tier. A rotation that would leave the opponent an open
+  three is one it rejects itself. The old rule — "rotate if the best move available to me in the affected
+  band went up" — rotated three times a game, one turn in three, and only a third of those actually
+  lowered the threat. The easy tier still only considers it about once in ten turns. A rotation can never
+  win the game; it only breaks up formations and slides your own stones around.
 
 ## 12. What this game does not do
 
@@ -1596,6 +1615,8 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
   手順を、十数手先まで読み切ります。だから強以上は「ここに打つと次の相手の一手で活四に
   なる」という局面を避け、弱は平気で踏み込みます。5 段階とも**わざと弱め**に振ってあります ——
   「簡単」な相手が初心者を毎回負かしてしまうのはこの手の機能でありがちな失敗なので。
+  **4D では各段階とももう一〜二手深く読みます** —— 回転は陣形ごと動かすので、
+  浅いままだと「自分が置いたばかりの手がもう動かされた」ことに気づけず、一手を無駄にします。
 - **極は「危険に気づく前に負けている」手を打ちます** —— それは殺しが読んだ結果で、偶然ではありません。
   開局で十数手後に効いてくる罠を仕掛けてくることもあります。
 - **2 つの選択は役割が違う**：「誰が先手」は**どの色**が先に打つか（＝長連による負けを負う側）を選び、
@@ -1606,8 +1627,12 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
   それでも活三を止め損ねたり、二重の脅威を見落としたりします。これは意図的です。
 - **「取り消し」はあなたの手とコンピュータの応手をまとめて戻します。**
   コンピュータ対戦では「この回転を戻す」は使えません —— 取り消しを使ってください。
-- **4D ではコンピュータも層を回します**が、頻度は低めです（弱では十回に一回程度しか検討しません）。
-  そして回転で勝つことはできません。
+- **4D ではコンピュータも層を回しますが、回すのは必要なときだけです。** 「試しに回す」ことはしません：
+  相手の**活三以上**を本当に崩せるとき、または自分の形が一段上がるときだけ回します。
+  回した結果かえって相手に活三を残してしまう手は、自分から選びません。
+  以前の判定は「回したあと自分の側で一番良い手の値が上がったら回す」で、実測では一局に三回・
+  自分の手番の三分の一を占め、そのうち本当に相手の脅威を下げたのは三分の一だけでした。
+  弱では今も十回に一回程度しか検討しません。回転で勝つことはできません。
 
 ## 12. 本作がやっていないこと
 
@@ -1840,6 +1865,8 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   수순을 십여 수 앞까지 읽어냅니다. 그래서 상 이상은 "여기에 두면 다음 상대 수에 활사가
   된다" 같은 국면을 피하고, 하 단계는 그냥 밟고 들어갑니다. 다섯 단계 모두 **일부러 약한 쪽**으로
   맞췄습니다 — "쉬움" 상대가 초보자를 매번 이기는 것은 이런 기능에서 흔한 실패라서요.
+  **4D에서는 모든 단계가 한두 수 더 깊게 읽습니다** — 회전은 진형 전체를 옮기므로,
+  얕게 읽으면 "방금 둔 내 수가 이미 옮겨졌다"는 것을 알아채지 못해 한 수를 헛되게 씁니다.
 - **극 단계는 "위험을 알아차리기 전에 이미 진" 수를 둡니다** — 연속 사 읽기 결과지, 운이 아닙니다.
   초반에 십여 수 뒤에나 드러나는 함정을 깔아둘 수도 있습니다.
 - **두 선택은 역할이 다릅니다**: 「누가 선수인가」는 **어느 색**이 먼저 두는지(곧 장련 패배를 지는 쪽)를,
@@ -1850,8 +1877,12 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   그래도 활삼을 놓치거나 두 겹 위협을 보지 못합니다. 이는 의도된 것입니다.
 - **「되돌리기」는 당신의 수와 컴퓨터의 응수를 함께 되돌립니다.**
   컴퓨터 대국에서는 「이번 회전 되돌리기」를 쓸 수 없습니다 — 되돌리기를 쓰세요.
-- **4D에서는 컴퓨터도 층을 돌립니다**, 다만 자주는 아닙니다(하 단계는 열 번에 한 번 정도만 따집니다).
-  그리고 회전으로 이길 수는 없습니다.
+- **4D에서는 컴퓨터도 층을 돌리지만, 돌리는 것은 필요한 때뿐입니다.** "일단 돌려 보자"는 하지 않습니다:
+  상대의 **활삼 이상**을 정말로 부술 수 있을 때, 또는 자기 모양이 한 단계 올라갈 때만 돌립니다.
+  돌린 결과 오히려 상대에게 활삼을 남기는 수는 스스로 고르지 않습니다.
+  예전 판정은 "돌린 뒤 내 쪽에서 가장 좋은 수의 값이 올라가면 돌린다"였고, 실측으로 한 판에 세 번·
+  자기 차례의 삼분의 일을 차지했으며, 그중 정말로 상대의 위협을 낮춘 것은 삼분의 일뿐이었습니다.
+  하 단계는 지금도 열 번에 한 번 정도만 따집니다. 회전으로 이길 수는 없습니다.
 
 ## 12. 이 게임이 하지 않은 것
 
@@ -2085,6 +2116,9 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   где ваш следующий ход сделал бы открытую четвёрку, а Слаб спокойно туда входит. Все пять уровней
   намеренно смещены в слабую сторону — «лёгкий» соперник, обыгрывающий новичка каждый раз, это
   обычная беда таких функций.
+  **В 4D каждый уровень считает на один-два полухода глубже**: поворот сдвигает весь строй,
+  и на «трёхмерной» глубине компьютер не замечает, что его собственный ход только что уехал, —
+  то есть дарит сопернику целый ход.
 - **Ультра обыграет вас раньше, чем вы увидите опасность.** Это работа серий четвёрок, а не везение:
   она может поставить ловушку уже в дебюте, которая сработает через десяток ходов.
 - **Два выбора делают разное.** «Первый игрок» выбирает **цвет**, который ходит первым (он же несёт
@@ -2096,8 +2130,14 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   намеренно, а не является ошибкой.
 - **Отмена возвращает и ваш ход, и ответ компьютера.** «Вернуть этот поворот» в игре с компьютером
   недоступно — пользуйтесь отменой.
-- **В 4D компьютер тоже поворачивает слои**, но нечасто (на слабом уровне — примерно один раз из
-  десяти), и поворот никогда не приносит победу.
+- **В 4D компьютер тоже поворачивает слои, но только тогда, когда это стоит хода.** Он не крутит
+  «просто посмотреть»: поворот делается, только если он действительно разрушает **открытую тройку
+  или сильнее** у соперника, либо поднимает его собственный строй на целую ступень. Поворот, после
+  которого у соперника остаётся открытая тройка, он сам не выберет.
+  Прежний критерий — «повернуть, если лучший мой ход в затронутой полосе стал дороже» — давал три
+  поворота за партию, каждый третий свой ход, и лишь треть из них действительно снижала угрозу.
+  На слабом уровне, как и раньше, поворот рассматривается примерно один раз из десяти.
+  Победу поворот не приносит никогда: он только ломает чужие построения и двигает свои камни.
 
 ## 12. Чего в этой игре нет
 
@@ -2331,6 +2371,9 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
   évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que Bas y entre sans
   broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat les débutants
   à tous les coups est le défaut habituel de cette fonction.
+  **En 4D, chaque niveau calcule un ou deux demi-coups plus loin** : une rotation déplace toute une
+  formation, et à la profondeur « 3D » l'ordinateur ne voit pas que son propre dernier coup vient d'être
+  déplacé — il offre alors un coup gratuit.
 - **Ultra vous battra avant que vous ne voyiez le danger.** C'est le résultat de la recherche de gain
   forcé, pas de la chance : il peut poser une trappe dès l'ouverture qui ne paiera que dix coups plus tard.
 - **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
@@ -2342,8 +2385,14 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
   menaces doubles : c'est délibéré, pas un bug.
 - **Annuler retire votre coup et la réponse de l'ordinateur ensemble.** « Restaurer la rotation » est
   indisponible contre l'ordinateur : utilisez Annuler.
-- **En 4D, l'ordinateur tourne aussi des couches**, mais rarement (au niveau facile, environ une fois
-  sur dix), et une rotation ne fait jamais gagner.
+- **En 4D, l'ordinateur tourne aussi des couches, mais seulement quand cela vaut un coup.** Il ne tourne
+  jamais « pour voir » : uniquement si la rotation casse réellement un **trois ouvert ou mieux** chez
+  l'adversaire, ou si elle fait monter sa propre forme d'un cran entier. Une rotation qui laisserait un
+  trois ouvert à l'adversaire, il ne la choisit pas lui-même.
+  L'ancien critère — « tourner si le meilleur coup à ma disposition dans la bande touchée a augmenté » —
+  produisait trois rotations par partie, un tour sur trois, dont seulement un tiers faisait réellement
+  baisser la menace. Au niveau facile, la rotation n'est toujours envisagée qu'une fois sur dix environ.
+  Une rotation ne fait jamais gagner : elle ne fait que casser des formations et déplacer vos pierres.
 
 ## 12. Ce que ce jeu ne fait pas
 
@@ -4007,6 +4056,20 @@ const AI_LEVELS = ["low", "medium", "high", "xhigh", "ultra"];
  *                  要变强请加深度，别加宽度。
  *   · vcf          要不要先算一遍杀（连续冲四取胜）。**这是最高档的全部底气** ——
  *                  冲四只有一个应手，所以能搜到十几层，而常规搜索同样时间只够三四层。
+ *   · depth4d      四维模式下用多深。**只对四维生效**：三维的棋盘上转动不存在，
+ *                  多出来的深度就是纯耗时，所以 searchDepth 那个数一个字不动。
+ *                  四维为什么要加深：转动让"对方下一步能做什么"这件事多了一整个维度
+ *                  （他可以转、把整个阵型挪走），浅一层就看不见，于是电脑会走出
+ *                  "刚落完就被转没了"的棋。加深度是唯一能看见它的办法。
+ *                  **这张表是量出来的，不是拍的**（15³ 四维、整局逐手计时、每档 6 局、
+ *                  取最慢的一手）：定稿这一版最慢 94ms（中档），其余各档 54~72ms。
+ *                  深度每加一层代价大约翻四倍（branch=4）：深 4 约 60ms、**深 5 约 280~380ms**
+ *                  （同一组参数跑两次就是这个区间），已经超过程序自己定的那条约 260ms 的线，
+ *                  手机还要再慢三四倍 —— 所以顶两档停在 4，没有再往上加。
+ *                  以后想加深，先把这条量一遍，别只看深度数字好看。
+ *                  （顺带量到一件事：**极限档的算杀几乎不要钱** —— 同样的局面，
+ *                  ultra 带算杀 274ms、xhigh 不算杀 275ms，差别在噪声里。）
+ *                  低档的 0 是刻意的：不搜索是「低」这一档的定义，加深它等于毁掉整条阶梯。
  *
  * 【两条硬规则任何一档都不许破，所以它们不在这张表里，而是判断链的第 1、3 步】
  *   · 能立刻赢就必须赢
@@ -4015,19 +4078,19 @@ const AI_LEVELS = ["low", "medium", "high", "xhigh", "ultra"];
 const AI_PARAMS = {
   low: { topK: 4, topProb: 0.40, noise: 0.55, defWeight: 0.50,
          pOpenThree: 0.30, rotChance: 0.15, rotProbe: 6,
-         searchDepth: 0, branch: 4, vcf: false },
+         searchDepth: 0, depth4d: 0, branch: 4, vcf: false },
   medium: { topK: 2, topProb: 0.72, noise: 0.28, defWeight: 0.80,
-            pOpenThree: 0.70, rotChance: 0.50, rotProbe: 10,
-            searchDepth: 1, branch: 4, vcf: false },
+            pOpenThree: 0.70, rotChance: 0.50, rotProbe: 8,
+            searchDepth: 1, depth4d: 3, branch: 4, vcf: false },
   high: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 0.90,
-          pOpenThree: 1.00, rotChance: 0.75, rotProbe: 12,
-          searchDepth: 3, branch: 4, vcf: false },
+          pOpenThree: 1.00, rotChance: 0.75, rotProbe: 10,
+          searchDepth: 3, depth4d: 4, branch: 4, vcf: false },
   xhigh: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 1.00,
-           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 14,
-           searchDepth: 4, branch: 4, vcf: false },
+           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 12,
+           searchDepth: 4, depth4d: 4, branch: 4, vcf: false },
   ultra: { topK: 1, topProb: 1.00, noise: 0.00, defWeight: 1.00,
-           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 16,
-           searchDepth: 4, branch: 4, vcf: true },
+           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 14,
+           searchDepth: 4, depth4d: 4, branch: 4, vcf: true },
 };
 
 /**
@@ -4263,41 +4326,46 @@ function aiOutcomeAt(session, x, y, z, player, stats) {
   return o;
 }
 
-/** 用转动轴之外的两个自由度筛出"该层 ±1"那一带。转动只动一层，带外前后完全一样。 */
-function aiBand(cand, axis, layer) {
-  const out = [];
-  for (let i = 0; i < cand.length; i += 3) {
-    const v = axis === AXIS_X ? cand[i] : (axis === AXIS_Y ? cand[i + 1] : cand[i + 2]);
-    if (v >= layer - 1 && v <= layer + 1) out.push(cand[i], cand[i + 1], cand[i + 2]);
-  }
-  return out;
-}
-
-/** 一条带里"我最好的一手"值多少 —— 净掉对方的威胁。转动前后的差值就是这一转的价值。 */
-function aiBandBest(board, band, mover, foe, params, winLength, moverRestricted, foeRestricted) {
-  let best = 0;
-  for (let i = 0; i < band.length; i += 3) {
-    const x = band[i], y = band[i + 1], z = band[i + 2];
-    const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRestricted));
-    if (mine >= AI_W.WIN) return mine;                          // 已经能成五，不用再算
-    const theirs = aiThreatValue(aiThreatAt(board, x, y, z, foe, winLength, foeRestricted));
-    const v = mine + params.defWeight * theirs;
-    if (v > best) best = v;
-  }
-  return best;
+/**
+ * 威胁分落在哪一档。**只用来判断"是不是跨了一档"** ——
+ * 转动要花掉整整一手，档内的数字变化（活二 40 → 80、活三 1000 → 3000）
+ * 根本不值一手棋，只有跨档才值。见 aiRotationProbe。
+ */
+function aiTier(v) {
+  if (v >= AI_W.WIN) return 6;
+  if (v >= AI_W.OPEN_FOUR) return 5;      // 活四 / 双四
+  if (v >= AI_W.FOUR_THREE) return 4;
+  if (v >= AI_W.FOUR) return 3;           // 冲四
+  if (v >= AI_W.DOUBLE_THREE) return 2;   // 双活三
+  if (v >= AI_W.THREE) return 1;          // 活三
+  return 0;                               // 活二及以下，也包括"自尽点"（那是好事，不是威胁）
 }
 
 /**
- * 四维：挑一个转动，挑不出就返回 null。
+ * 四维：试一遍转动，返回满足条件的那个（没有就返回 null）。
  *
  * 【转动永远赢不了棋】引擎会整体回滚任何"转出 winLength 连线"的转动（它不能区分是谁的线），
- * 所以转动的价值只可能在"拆对手的结构 / 调自己的结构"上。这也意味着**它绝不该排在
- * "能赢的一手"和"必须堵的一手"前面** —— 那两步在调用方已经先走过了。
+ * 所以转动的价值只可能在"拆对手的结构 / 调自己的结构"上。这也意味着调用方**必须**让它
+ * 排在"能赢的一手"和"必须堵的一手"后面 —— 那两步在任何档位都不许被跳过。
  *
- * 【判据】只有"转完之后我在受影响的那一带能拿到的最好一手"确实**变高**了才转。
- * 一进一出用的是同一个 aiBandBest，所以差值的单位和落子的分数是同一把尺子。
+ * ---- 判据重写过一次，理由是一局一局数出来的 ----
+ * 原来算的是"转动轴 ±1 那条带里、我最好的一手值多少（含对方那一项）"，
+ * 转完比转前高就转。实测（10³、冷却 3 手、ultra 4 局）：
+ * **平均每局转 3 次、占自己回合的 1/3，而其中只有 1/3 真的让对方的最强威胁降下来。**
+ * 慢镜头里最能说明问题的一手是"对方一点威胁都没有时它照样转" —— 转完对方
+ * 在原地点了同一格，等于白送一手。
+ * 错在三处：① 那个量取的是带内的**最大值**，一堆不相干的形状凑起来也能把它抬高；
+ * ② 它只看转动的那一层附近，看不见"转完对方在别处成了活三"；
+ * ③ 没有"值不值一整手"的概念，档内的数字浮动也算赢。
+ *
+ * 现在改成两条各管一件事的规则，**都要跨档**才算数：
+ *   ① brk（拆形）：对方本来有活三以上（我下一手必须回应），转完他没活三了
+ *      → 这一手不但拆了阵型，还省下了原本要去堵的那一手。取转完对方威胁最低的。
+ *   ② build（调形）：对方本来就没有要我回应的威胁，而我自己的威胁跨了一档
+ *      （活二→活三 这种档内的不算）→ 才值得花一手去转。
+ * 调用方只在"落子本身做不出活三以上"时才接受 build —— 落子已经够好就别转了。
  */
-function aiPickRotation(session, params, winLength, mover, foe, cand, stats) {
+function aiRotationProbe(session, params, winLength, mover, foe, cand, stats, before, mode) {
   const board = session.board;
   if (!board.isCube) return null;          // 转动在数学上不存在，引擎也会拒 —— 别浪费探针
   const n = board.size;
@@ -4320,20 +4388,46 @@ function aiPickRotation(session, params, winLength, mover, foe, cand, stats) {
   const limit = params.rotProbe < list.length ? params.rotProbe : list.length;
   const moverRes = session.rules.isRestricted(mover, session.firstPlayer);
   const foeRes = session.rules.isRestricted(foe, session.firstPlayer);
-  let best = null;
+  const beforeTier = aiTier(mode === "brk" ? before.foe : before.mine);
+  let best = null, bestFoe = 0, bestMine = 0, bestTier = -1;
   for (let i = 0; i < limit; i++) {
     const axis = list[i][0], layer = list[i][1], turns = list[i][2];
-    const band = aiBand(cand, axis, layer);
-    const before = aiBandBest(board, band, mover, foe, params, winLength, moverRes, foeRes);
-    let after = before;
+    let afterMine = 0, afterFoe = 0;
     // 判定和旋转都在 probeRotate 里，求值夹在中间，还原走它的 finally
     const o = session.probeRotate(RotationMove.fromClockwiseTurns(axis, layer, turns), () => {
-      after = aiBandBest(board, band, mover, foe, params, winLength, moverRes, foeRes);
+      // 【为什么量整盘而不是转动的那一层】转动只动一层的子，但它改的是**这些子参与的所有线**；
+      // 一条线上的其他格子可以落在很远的层上。只量那一层附近，"转完对方在别处成了活三"
+      // 就完全看不见 —— 而那正是转动最该被拦住的一种后果。
+      //
+      // 【候选点必须重算，不能用传进来的 cand】cand 是"已有子的格子周围一圈"，
+      // 而转动**把这些子搬到别处去了** —— 新位置上邻接的格子可以完全不在旧集合里。
+      // 拿旧集合去量，就会看漏"转完对方在新位置成了活三"这种局面，
+      // 也就会批准一次把对方送成活三的转动。（自对局审计抓到过一次：转完对方正好是活三。）
+      // aiCandidates 是 O(子数×26) 的，和后面那次扫描比可以忽略。
+      const live = aiCandidates(board, AI_CANDIDATE_CAP);
+      afterMine = aiThreatBest(board, live, mover, winLength, moverRes);
+      afterFoe = aiThreatBest(board, live, foe, winLength, foeRes);
     });
     if (stats) stats.rotProbes++;
     if (!o.accepted) continue;                        // 被拒 / 没变化 / 会造线
-    if (after > before && (!best || after - before > best.gain)) {
-      best = { kind: "rotate", axis: axis, layer: layer, turns: turns, gain: after - before };
+
+    if (mode === "brk") {
+      // 拆形：把对方压回"不用我回应"的档位。压下去之后越低越好；
+      // 同样低时挑我自己最好的那一手 —— 转完还顺便做了个活三，没有理由不要。
+      if (afterFoe >= AI_W.THREE) continue;
+      if (!best || afterFoe < bestFoe || (afterFoe === bestFoe && afterMine > bestMine)) {
+        best = { kind: "rotate", axis: axis, layer: layer, turns: turns };
+        bestFoe = afterFoe; bestMine = afterMine;
+      }
+    } else {
+      // 调形：自己的威胁必须**跨档**，而且不能顺手给对面做出一个要我回应的威胁。
+      const t = aiTier(afterMine);
+      if (afterFoe >= AI_W.THREE) continue;
+      if (t <= beforeTier || t < 1) continue;
+      if (!best || t > bestTier || (t === bestTier && afterMine > bestMine)) {
+        best = { kind: "rotate", axis: axis, layer: layer, turns: turns };
+        bestTier = t; bestMine = afterMine;
+      }
     }
   }
   return best;
@@ -4580,7 +4674,12 @@ function aiSearchMove(session, safe, params, stats) {
   const mover = session.currentPlayer, foe = opponentOf(mover);
 
   // 降档：深度是耗时的指数项，候选数是线性项，棋盘一大就先砍深度
-  let depth = params.searchDepth;
+  //
+  // 【四维加深】转动让"对方下一步能做什么"多了一整维（他能把整个阵型挪走），
+  // 浅一层就看不见，电脑会走出"刚落完就被转没了"的棋。branch 和棋盘尺寸都没变，
+  // 所以加深的代价只是常数倍，和三维那档是完全一样的一次搜索。
+  // 三维下 depth4d 不参与 —— 那里转动根本不存在，多出来的深度就是纯耗时。
+  let depth = session.rotationEnabled ? params.depth4d : params.searchDepth;
   const count = safe.length / 3;
   for (let i = 0; i < AI_SEARCH_DROP.length; i++) {
     if (count >= AI_SEARCH_DROP[i][0] && depth > AI_SEARCH_DROP[i][1]) depth = AI_SEARCH_DROP[i][1];
@@ -4747,25 +4846,53 @@ function aiChooseMove(session, opts) {
   // 填满，而那种局面早就终局了），但真为空时也只能认输 —— 返回 none 会变成"电脑不动了"。
   if (safe.length === 0) return { kind: "place", x: cand[0], y: cand[1], z: cand[2] };
 
-  // ---- 4. 出招：先算杀，算不出再走 α-β 搜索，再不行走深度 0 的打分。
-  // 【硬规则已经走完了】上面能赢的直接赢了、必堵的直接堵了、自尽点已经剔掉，
-  // 所以这里几条路都只管"剩下的候选里哪个最好"。
+  // ---- 4. 四维：转动。判定和探针都在 aiRotationProbe 里，这里只排顺序。
+  //
+  // 【顺序是这样定的，别随意挪】
+  //   · 上面能赢的已经赢了、必堵的已经堵了 —— 转动绝不许插到那两步前面去。
+  //   · **拆形（brk）排在落子之前**：对方已经有活三以上的时候，我下一手本来就得去回应他，
+  //     转动如果能把他压回去，等于既不丢先手、又省下那一手。
+  //   · **调形（build）排在落子之后**：它没有"必须回应"这个前提，就只是一手普通的棋，
+  //     该和落子比一比。所以先看落子能不能自己做出活三以上，做得出来就不转了。
+  //   · 探针有代价（每次一次整盘扫描 + 一次引擎转动判定），所以两条路各自只在
+  //     "真的可能成立"时才去探：brk 要求对方当前已经有活三，build 要求落子那手不够好。
+  let rot = null;
+  if (!o.noRotation && params.rotChance > 0 && params.rotProbe > 0 &&
+      typeof session.probeRotate === "function" &&
+      session.rotationEnabled && session.canRotate && rng() < params.rotChance) {
+    const moverRes0 = session.rules.isRestricted(mover, session.firstPlayer);
+    const foeRes0 = session.rules.isRestricted(foe, session.firstPlayer);
+    const before = {
+      mine: aiThreatBest(board, cand, mover, winLength, moverRes0),
+      foe: aiThreatBest(board, cand, foe, winLength, foeRes0),
+    };
+    if (before.foe >= AI_W.THREE) {
+      rot = aiRotationProbe(session, params, winLength, mover, foe, cand, stats, before, "brk");
+      if (rot) return rot;
+    } else {
+      rot = { before: before };
+    }
+  }
+
+  // ---- 5. 出招：先算杀，算不出再走 α-β 搜索，再不行走深度 0 的打分。
   // 【算杀为什么排在最前】它找的是**强制胜**（对手每一步都只有一个应手），
   // 找到了就是赢棋，而且比同深度的 α-β 便宜得多。找不到才退回常规搜索。
   let move = null;
   if (params.vcf) move = aiVcf(session, mover, AI_VCF_DEPTH, stats);
   if (!move && params.searchDepth > 0) move = aiSearchMove(session, safe, params, stats);
   if (!move) move = aiGreedyMove(session, safe, params, rng, winLength, mover);
-
-  // ---- 5. 四维：把转动当成另一个候选动作，只有它确实更能改善局面时才占掉这一手
-  if (!o.noRotation && params.rotChance > 0 &&
-      typeof session.probeRotate === "function" &&
-      session.rotationEnabled && session.canRotate && rng() < params.rotChance) {
-    const rot = aiPickRotation(session, params, winLength, mover, foe, cand, stats);
-    if (rot) return rot;
-  }
-
   if (!move) return { kind: "none" };
+
+  // ---- 6. 调形转动：落子这一手自己就做得出活三以上 → 直接落，别转了。
+  // 只有落子是"平淡的一手"时，才值得花这一手去把整层挪一挪。
+  if (rot && rot.before) {
+    const myRes = session.rules.isRestricted(mover, session.firstPlayer);
+    const placeTier = aiTier(aiThreatValue(aiThreatAt(board, move.x, move.y, move.z, mover, winLength, myRes)));
+    if (placeTier < 1) {
+      const b = aiRotationProbe(session, params, winLength, mover, foe, cand, stats, rot.before, "build");
+      if (b) return b;
+    }
+  }
   return { kind: "place", x: move.x, y: move.y, z: move.z };
 }
 
@@ -4834,7 +4961,7 @@ function fingerprint(s) {
    -------------------------------------------------------------------------- */
 const FALLBACK_COLORS = {
   "--bg": "#efe8db", "--panel": "#f7f2e8", "--panel-hi": "#e6dcc8",
-  "--cell": "#e9e1d1", "--cell-hint": "#cec0a4", "--border": "#b7a98f",
+  "--cell": "#e9e1d1", "--cell-hint": "#cec0a4", "--border": "#b7a98f", "--grid": "#c5beb4",
   "--text": "#2f2a23", "--dim": "#6d6353", "--black": "#1c1a16", "--white": "#fdfaf2",
   "--accent": "#2f5d7c", "--gold": "#9c6b1f", "--danger": "#9c3428", "--ok": "#4a6b45",
   "--hover-line": "#c8452e", "--line2d": "#3a332a", "--well": "#ddd3bd",
@@ -6914,7 +7041,12 @@ const Game = {
     const winSet = new Set();
     if (win) for (const p of win) winSet.add(p[0] + "," + p[1] + "," + p[2]);
 
-    const GHOST_ALPHA = 0.42;
+    // 幽灵子的不透明度（非当前层的子）。原来 0.42，一屏淡子铺开之后整体发白、
+    // 和"真正的子"分不太开；提到 0.52 让它沉下去一点，又还没到会被误看成实子的地步。
+    // 【为什么改这里而不是改幽灵子的颜色】颜色走调色板（--black / --white），
+    // 那两个色是三维和二维面板共用的；为了"淡一点/深一点"去动它们，
+    // 等于把实子和面板上的子一起改了。
+    const GHOST_ALPHA = 0.52;
     // 球体网格是【直径】为 1 的，所以下面 push 进去的 w 就是世界空间里的直径，
     // 数值和右侧面板的圆（半径 cs*0.34 → 直径 0.68）对齐，两个视图里子看起来一样大
     board.forEachStone((x, y, z, s) => {
@@ -7452,7 +7584,7 @@ const Game = {
     // 这正是"只隐藏静态灰网"这个产品选择在代码里的落点，dom-smoke 有一条测试
     // 盯着关闭时 active 仍然被画。
     if (this.gridVisible) {
-      Renderer.drawLines("static", this.staticGridCount, vp, Palette.rgba("--border", 0.55), 1.0);
+      Renderer.drawLines("static", this.staticGridCount, vp, Palette.rgba("--grid", 0.55), 1.0);
     }
     Renderer.drawLines("active", this.activeGridCount, vp, Palette.rgba("--accent", 0.80), 1.0);
     // 待转的那一层（绿）：四维模式下才画。和蓝色的"当前层"是两个独立的东西 ——
