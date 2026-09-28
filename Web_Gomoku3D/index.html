@@ -4193,51 +4193,72 @@ class FourDSession {
    于是内核的文案表 CORE_TEXT 一个字都不用动。
    -------------------------------------------------------------------------- */
 
-/** 三档难度。参数表按这三档取 —— 别在别处写 if (level === ...)。 */
+/** 五档难度。参数表按这五档取 —— 别在别处写 if (level === ...)。 */
 const AI_LEVELS = ["low", "medium", "high", "xhigh", "ultra"];
 
 /**
- * 三档的参数。**调强弱只调这一张表。**
+ * 五档的参数。**调强弱只调这一张表。**
  *
- * 【三档的强弱是靠什么拉开的 —— 实测，不是想当然】
- * 弱档不搜索，中/强两档各带一层 α-β。这个分法来自一组随机开局的对局测量
- * （每对 40 局、两色各半，脚本是一次性的，数在 commit message 里）：
- *   · 深度 0 的三个配置**互相之间打平**（44% / 42.5%）—— 光调 noise / 防守权重拉不开差距
+ * 【档与档之间差在哪 —— 实测，不是想当然】
+ * 低档不搜索（这是「低」这一档的定义），中/高/极高/极限逐级加深，极限档另外会算杀。
+ * 这个分法来自随机开局、两色各半、**配对计分**的自对局（每组 24~60 局；脚本是一次性的，
+ * 数在 commit message 里）：
+ *   · 深度 0 的几个配置**互相之间打平**（44% / 42.5%）—— 光调 noise / 防守权重拉不开差距
  *   · 但**任何**带搜索的配置打深度 0 都是 **40:0**
- *   · 深度 1 打不搜索 92.5%，深 3 打深 2 72.5%，深 4 打深 3 62.5%
- * 所以梯度只能这么给：low 不搜索，往上逐级加深度，最高档再加算杀（VCF）。
+ *   · 深 3 打深 2 是 83.3%，深 5 打深 3 是 75.0%，深 6 打深 5 是 62.5%
+ *   · **深 2 打深 1 只有 29.2%、深 4 打深 3 只有 33.3%** —— 这两对是"更深反而更弱"
  *
- * 【注意深度 2 是个坑】实测**深 2 打不过深 1**（换成新评估后是 47.5%，之前是 22.5%）。
- * 奇偶深度下叶子所处的"轮到谁"不同，评估的含义跟着翻转，中间那一档反而吃亏。
- * 所以这张表**故意跳过了深度 2** —— 不是漏了。
+ * 【所以深度一律用奇数】上表最后一行不是笔误。偶数深度实测整体吃亏（2 和 4 都打不过
+ * 比它浅一层的奇数深度），只有 6 打 5 是赢的（62.5%，落在 24 局的噪声里），所以这不是
+ * 一条"偶数一定差"的定律 —— **但也没人能解释清楚为什么**，通行说法是叶子评估和
+ * "轮到谁"绑得太紧（aiEvalLeaf 里那个 0.5 折扣是给"该走的那一方"满权的），
+ * 奇偶一翻含义就变；要根治得做静止搜索，这一版没做。
+ * 于是这张表**不解它，只避开它**：阶梯按 1 / 3 / 5 排，跳过的偶数深度不是漏了。
+ * ai.test.mjs 里有一条"深度一律是奇数"的断言钉着这件事，以后想加深度先读那条。
  *
  * 【深度 0 才用的旋钮】只有 low 用得到（其余都走搜索）：
  *   · defWeight  防守权重，小于 1 就是"偏进攻、防守不足"
  *   · pOpenThree 对方做出活三时真的去堵的概率
  *   · topK/topProb  从前几名里随机挑，错得像新手而不是像坏掉
  *   · noise      打分的乘性抖动
+ *   【低档这一版一个字没改 —— 试过三条"让它强一点"的路，实测全是负的】
+ *     ① 对方的活三活二按 0.35 折价（"先长大自己"）：120 局 46.7%
+ *     ② 活三堵点概率 0.30 → 0.55（"多堵一点"）：120 局 40.8%
+ *     ③ 抖动 0.55 → 0.35（"少犯点错"）：120 局 47.5%
+ *   三条都不升反降，所以维持原样。低档的定义就是"不搜索"，而它手上那几个旋钮
+ *   都指向"更像新手"、不指向"更强" —— 想让它强，得给它搜索，那就不叫低档了。
  *
  * 【搜索档才用的旋钮】
- *   · searchDepth  往下算几层。0 = 不搜索
- *   · branch       每个节点最多展开几个候选。**实测是越小越强**（支 4 打支 8 是 22.5%），
- *                  原因是叶子评估本身很粗，展开得越宽越容易被这个粗评估带偏。
- *                  要变强请加深度，别加宽度。
- *   · vcf          要不要先算一遍杀（连续冲四取胜）。**这是最高档的全部底气** ——
- *                  冲四只有一个应手，所以能搜到十几层，而常规搜索同样时间只够三四层。
+ *   · searchDepth  三维往下算几层。0 = 不搜索。**只用奇数**，理由见上
  *   · depth4d      四维模式下用多深。**只对四维生效**：三维的棋盘上转动不存在，
  *                  多出来的深度就是纯耗时，所以 searchDepth 那个数一个字不动。
  *                  四维为什么要加深：转动让"对方下一步能做什么"这件事多了一整个维度
  *                  （他可以转、把整个阵型挪走），浅一层就看不见，于是电脑会走出
  *                  "刚落完就被转没了"的棋。加深度是唯一能看见它的办法。
- *                  **这张表是量出来的，不是拍的**（15³ 四维、整局逐手计时、每档 6 局、
- *                  取最慢的一手）：定稿这一版最慢 94ms（中档），其余各档 54~72ms。
- *                  深度每加一层代价大约翻四倍（branch=4）：深 4 约 60ms、**深 5 约 280~380ms**
- *                  （同一组参数跑两次就是这个区间），已经超过程序自己定的那条约 260ms 的线，
- *                  手机还要再慢三四倍 —— 所以顶两档停在 4，没有再往上加。
- *                  以后想加深，先把这条量一遍，别只看深度数字好看。
- *                  （顺带量到一件事：**极限档的算杀几乎不要钱** —— 同样的局面，
- *                  ultra 带算杀 274ms、xhigh 不算杀 275ms，差别在噪声里。）
  *                  低档的 0 是刻意的：不搜索是「低」这一档的定义，加深它等于毁掉整条阶梯。
+ *   · branch       每个节点最多展开几个候选。**实测是越小越强**（支 4 打支 8 是 22.5%），
+ *                  原因是叶子评估本身很粗，展开得越宽越容易被这个粗评估带偏。
+ *                  要变强请加深度，别加宽度。
+ *   · vcf          根节点那一遍算杀（连续冲四取胜）。冲四只有一个应手，所以能搜到
+ *                  十几层，而常规搜索同样时间只够三四层 —— 这是极限档的底气。
+ *   · idMax        迭代加深到几层为止（0 = 不加深）。**只有极限档开**：先搜 searchDepth
+ *                  那一层，再用上一层的首选着法当"第一候选"去搜更深的一层；预算
+ *                  （AI_ID_NODES）用完就整层作废、退回上一层。加深的边际收益不大
+ *                  （实测深 6 打深 5 只有 62.5%，24 局），所以它只在便宜局面上生效。
+ *                  **降过档的密盘一律不加深**（那种局面本来就是候选太多、只能少算）。
+ *
+ * 【耗时表 —— 整局逐手计时，15³，本机，每档 4 局自对局】
+ *   档位     三维（中位 / 95% / 最慢）        四维（中位 / 95% / 最慢）
+ *   低        0 /    1 /    2ms                0 /    3 /    5ms
+ *   中        2 /    4 /    4ms               13 /   31 /   35ms
+ *   高       12 /   28 /   29ms               97 /  364 /  411ms
+ *   极高     95 /  355 /  396ms              103 /  363 /  408ms
+ *   极限    175 /  346 /  352ms              179 /  350 /  361ms
+ * 深度每加一层代价大约翻四倍（branch=4）—— 上表里 中→高→极高 那两跳就是它。
+ * **极限档是全档最贵的一档**（中位 175ms，不到极高档的两倍；最慢那一手 352ms，
+ * 手机上还要再慢三四倍）—— 这是刻意的取舍：极限档的定义就是"能算多算多少"，
+ * 它的迭代加深还带着节点预算，所以最坏情况不会失控。哪一档觉得慢，改这张表里的
+ * searchDepth / idMax，别去改别处。
  *
  * 【两条硬规则任何一档都不许破，所以它们不在这张表里，而是判断链的第 1、3 步】
  *   · 能立刻赢就必须赢
@@ -4246,19 +4267,19 @@ const AI_LEVELS = ["low", "medium", "high", "xhigh", "ultra"];
 const AI_PARAMS = {
   low: { topK: 4, topProb: 0.40, noise: 0.55, defWeight: 0.50,
          pOpenThree: 0.30, rotChance: 0.15, rotProbe: 6,
-         searchDepth: 0, depth4d: 0, branch: 4, vcf: false },
+         searchDepth: 0, depth4d: 0, branch: 4, vcf: false, idMax: 0 },
   medium: { topK: 2, topProb: 0.72, noise: 0.28, defWeight: 0.80,
             pOpenThree: 0.70, rotChance: 0.50, rotProbe: 8,
-            searchDepth: 1, depth4d: 3, branch: 4, vcf: false },
+            searchDepth: 1, depth4d: 3, branch: 4, vcf: false, idMax: 0 },
   high: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 0.90,
           pOpenThree: 1.00, rotChance: 0.75, rotProbe: 10,
-          searchDepth: 3, depth4d: 4, branch: 4, vcf: false },
+          searchDepth: 3, depth4d: 5, branch: 4, vcf: false, idMax: 0 },
   xhigh: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 1.00,
            pOpenThree: 1.00, rotChance: 1.00, rotProbe: 12,
-           searchDepth: 4, depth4d: 4, branch: 4, vcf: false },
+           searchDepth: 5, depth4d: 5, branch: 4, vcf: false, idMax: 0 },
   ultra: { topK: 1, topProb: 1.00, noise: 0.00, defWeight: 1.00,
            pOpenThree: 1.00, rotChance: 1.00, rotProbe: 14,
-           searchDepth: 4, depth4d: 4, branch: 4, vcf: true },
+           searchDepth: 5, depth4d: 5, branch: 4, vcf: true, idMax: 6 },
 };
 
 /**
@@ -4636,19 +4657,37 @@ const AI_ORDER_W = 1;
  * 这个数不需要精确 —— 它是"隔一手"这个定性事实的数值化，不是拟合出来的参数。
  */
 const AI_EVAL_W = 0.5;
+/**
+ * 叶子评估里"次强的那一处威胁"的折扣（见 aiThreatBest）。
+ * 取 0 就是老写法（只取最强一处）；取太大等于把"远处不相干的一手"也算成我的实力。
+ */
+const AI_EVAL_TOP2 = 0.25;
 
 /**
- * 某一方"在这个盘面上能拿到的最好一手"值多少。
- * 旧写法取的是"最强的那一处威胁"，梯度很差；现在取的是威胁计数的完整分值 ——
- * 双四 / 四三 / 双三 / 冲四 / 活三 / 活二 各自有自己的档位，相邻局面之间有连续变化。
+ * 【量过、没留下的一条】曾经给打分档（low）加过一个"对方的活三活二不算硬威胁、
+ * 按 0.35 折价"的旋钮，想让它在对面还没成势时先长大自己。120 局同档 A/B 是 46.7%
+ * （对照组 50.0%）—— 不升反微降，所以撤了。理由也说得通：**堵一个"他马上要做的活三"
+ * 本来就是好棋**，折价等于把好棋让出去。真正要修的"跟着玩家跑"在排序那边（见
+ * aiSearchCompare），不在打分这边。
+ */
+
+/**
+ * 某一方"在这个盘面上能拿到的最好一手"值多少 = 最强的那一处 + 次强那一处的折扣。
+ *
+ * 【为什么要把次强那一处也加进来】只取最大值时，"手里攥着两处独立的活三"和
+ * "只有一处"算出来一样大 —— 而前者是赢棋的形状（他一手挡不住两处）。这个信息
+ * 在**同一个点**上早就有了（aiThreatValue 认得双三/四三），跨点的那一份却是空白。
+ *
+ * 【折扣 0.25 是量出来的，不是拍的】见 AI_EVAL_TOP2。
  */
 function aiThreatBest(board, cands, player, winLength, restricted) {
-  let best = 0;
+  let best = 0, second = 0;
   for (let i = 0; i < cands.length; i += 3) {
     const v = aiThreatValue(aiThreatAt(board, cands[i], cands[i + 1], cands[i + 2], player, winLength, restricted));
-    if (v > best) best = v;
+    if (v > best) { second = best; best = v; }
+    else if (v > second) second = v;
   }
-  return best;
+  return best + AI_EVAL_TOP2 * second;
 }
 
 /**
@@ -4676,13 +4715,37 @@ function aiEvalLeaf(board, cands, mover, foe, winLength, moverRes, foeRes) {
  * 现有那套深度 0 的打分用的是加号，所以它反而会堵。
  */
 function aiOrderKey(board, x, y, z, mover, foe, winLength, moverRes, foeRes) {
-  return aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes)) +
-         AI_ORDER_W * aiThreatValue(aiThreatAt(board, x, y, z, foe, winLength, foeRes));
+  const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes));
+  AI_ORDER.mine = mine;              // 平手时要用它，见 aiSearchCompare
+  return mine + AI_ORDER_W * aiThreatValue(aiThreatAt(board, x, y, z, foe, winLength, foeRes));
 }
 
-/** 搜索内的排序：分值降序，然后按坐标升序 —— 全序，同分也确定。 */
+/**
+ * aiOrderKey 的副产品。**模块级可变状态，和 AI_PT / aiSeenBits 同一类**：
+ * 它只是一个"多带一个返回值"的通道（热循环里返回对象是白给的 GC 压力），
+ * 调用方拿到就直接塞进节点、下一次调用就覆盖 —— 不参与任何决策的时序。
+ */
+const AI_ORDER = { mine: 0 };
+
+/**
+ * 搜索内的排序：分值降序 → **我这一手自己做成的形** → 离中心近 → 坐标升序。全序，同分也确定。
+ *
+ * 【第二项是 v2.10.14 修的那个 bug 的位置，别删】
+ * 原来第二项直接就是坐标。开局时"贴我这颗子"和"贴玩家那颗子"**恰好同分**
+ * （都是活二 40，两边各二十几个点全是 40），于是前 4 名（搜索只看这 4 个）由坐标决定 ——
+ * 永远是坐标最小那一角，也就是玩家下棋的那一层。搜索再聪明也没用，它压根没看到自己那一带。
+ * 平手时"自己做成形"比"挡住对方一颗散子"值钱：前者是能长大的形，后者对面还有二十几个
+ * 同样的点可以下（挡一个散子几乎不减少他什么）。所以平手一律先看这一项。
+ * 再平手才退到老规矩：离中心近优先（打分档的 aiCompare 一直是这么排的）。
+ *
+ * 【这两项的先后是量过的】把顺序对调（离中心近优先、"自己做成形"排第二）之后，
+ * 同档 A/B 40 局：中档只剩 30%、高档 37.5% —— 也就是说这一项的顺序本身就值二十几个
+ * 百分点。**别以为它只是个 tie-break 就随手调。**
+ */
 function aiSearchCompare(a, b) {
   if (b.v !== a.v) return b.v - a.v;
+  if (b.mine !== a.mine) return b.mine - a.mine;
+  if (a.d !== b.d) return a.d - b.d;
   if (a.x !== b.x) return a.x - b.x;
   if (a.y !== b.y) return a.y - b.y;
   return a.z - b.z;
@@ -4694,6 +4757,12 @@ function aiSearchCompare(a, b) {
  */
 function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
   if (stats) stats.searchNodes++;
+  // 迭代加深的预算（见 AI_ID_NODES）。**只对"加深的那一层"设防**：基准层必须搜完，
+  // 它是"搜不完就退回"的那个退路 —— 连它都被砍，这一手就没有搜索结果可用了。
+  if (tune.guard) {
+    if (aiNodesLeft <= 0) return 0;      // 这一层已经废了（调用方会丢掉整层），别再算了
+    aiNodesLeft--;
+  }
   const board = session.board, rules = session.rules, fp = session.firstPlayer;
   const foe = opponentOf(mover);
   // 上一手分出了胜负就到此为止。**这是唯一可靠的终局判据**：恰好 5 连赢、长连判负，
@@ -4710,8 +4779,9 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
   const sc = [];
   for (let i = 0; i < cands.length; i += 3) {
     const x = cands[i], y = cands[i + 1], z = cands[i + 2];
-    sc.push({ x: x, y: y, z: z,
-              v: aiOrderKey(board, x, y, z, mover, foe, tune.winLength, tune.moverRes, tune.foeRes) });
+    const v = aiOrderKey(board, x, y, z, mover, foe, tune.winLength, tune.moverRes, tune.foeRes);
+    sc.push({ x: x, y: y, z: z, v: v, mine: AI_ORDER.mine,
+              d: aiCenterDist(board, x, y, z) });
   }
   sc.sort(aiSearchCompare);
 
@@ -4750,19 +4820,52 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
    先做根节点版：正常搜索前先算一次杀，算出来就直接走 —— 这一步便宜，而且立刻有用。
    -------------------------------------------------------------------------- */
 
-/** 算杀的节点上限与深度上限。超了就当"没算出来"，不能拖住整手棋。 */
-const AI_VCF_NODES = 400;
+/** 算杀的深度上限。超了就当"没算出来"，不能拖住整手棋。 */
 const AI_VCF_DEPTH = 12;
+
+/**
+ * 算杀的**每手总预算**，单位是"扫过多少个候选点"（所有调用共用，一次 aiChooseMove
+ * 重置一次）。
+ *
+ * 【为什么要有它】原来的节点上限记在 `stats` 上，而 stats 是可选参数 ——
+ * 界面那条路上根本不传，于是真实对局里算杀**从来没有上限**。根节点上一次还算便宜
+ * （实测它几乎不花钱），但算杀一旦进搜索（叶子也调），就得有个硬预算。
+ * 【为什么单位是点不是节点】见 aiVcf 里那段：一格的代价正比于候选数。
+ * 2e6 这个数是从 15³ 中盘（约 235 个候选）反推的：470/格 → 约 4000 格 ——
+ * 与进搜索之前那条路上实测的用量同一量级。
+ */
+const AI_VCF_BUDGET = 2000000;
+let aiVcfLeft = AI_VCF_BUDGET;
+
+/**
+ * 迭代加深的**节点预算**（按"一手"计，aiChooseMove 开头重置）。
+ *
+ * 【先记一笔量过的、没留下的一条路】曾经试过"算杀进叶子"（每个叶子问一遍
+ * "我能不能连着冲四赢"）—— 同档 A/B 40 局正好 50.0%（对照组也是 50.0%，
+ * 说明测量台没坏），也就是**一分棋力都不多**，而单手耗时翻了倍。
+ * 所以没留。这条记在这里，免得以后有人再想一遍。
+ *
+ * 【预算为什么按节点数记，不按墙钟】同局面同种子必须在任何机器上给出同一动作。
+ * 1200 这个数的依据：15³ 自对局实测，深 5 的中位 175 格、最深 450 格；
+ * 深 6 的中位 427、最深 912。给 1200，深 5 一定搜得完，深 6 在多数局面上也搜得完，
+ * 搜不完就整层作废、退回深 5 —— 越深越强的边际收益本来就不大（实测深 6 打深 5
+ * 是 62.5%，24 局），不值得为它把最坏情况拖到几秒。
+ */
+const AI_ID_NODES = 1200;
+let aiNodesLeft = AI_ID_NODES;
 
 /**
  * 在 attacker 的回合，找出 attacker 的所有"能补成五"的点。
  * 返回 {wins:[[x,y,z]…], fours:[[x,y,z]…]}。wins 非空表示已经能赢。
+ *
+ * 【候选由调用方传进来】调用方本来就要算一遍（要查对方的成五点），
+ * 这里自己再算一遍是白扫一整盘；而且算杀的预算正是按"扫了多少个点"记的，
+ * 必须让调用方在扫之前就能记账，见 aiVcf。
  */
-function aiVcfThreats(session, attacker, out) {
+function aiVcfThreats(session, attacker, out, cands) {
   const board = session.board, rules = session.rules, fp = session.firstPlayer;
   const wl = rules.winLength;
   const res = rules.isRestricted(attacker, fp);
-  const cands = aiCandidates(board, AI_CANDIDATE_CAP);
   out.wins.length = 0; out.fours.length = 0;
   for (let i = 0; i < cands.length; i += 3) {
     const x = cands[i], y = cands[i + 1], z = cands[i + 2];
@@ -4778,7 +4881,7 @@ function aiVcfThreats(session, attacker, out) {
 const AI_VCF_A = { wins: [], fours: [] };
 const AI_VCF_B = { wins: [], fours: [] };
 
-/** 对方有没有"下一手就成五"的点，有几个。>=2 说明我方先手也救不回来。 */
+/** 对方有没有"下一手就成五"的点，有几个。>=1 就说明：我冲我的四，他根本不搭理我。 */
 function aiVcfFoeWins(session, cands, foe) {
   let n = 0;
   for (let i = 0; i < cands.length; i += 3) {
@@ -4794,23 +4897,39 @@ function aiVcfFoeWins(session, cands, foe) {
  */
 function aiVcf(session, attacker, depth, stats) {
   if (depth <= 0) return null;
-  if (stats) { stats.vcfNodes++; if (stats.vcfNodes > AI_VCF_NODES) return null; }
   const board = session.board, rules = session.rules, fp = session.firstPlayer;
   const foe = opponentOf(attacker);
   const wl = rules.winLength;
 
-  const mine = aiVcfThreats(session, attacker, AI_VCF_A);
+  // 【预算记的是"扫了多少个点"，不是"走了几个节点"】一格的开销正比于候选数：
+  // 15³ 中盘两百多个点、50³ 密集七千五百个 —— 同样走一格，后者贵三十倍。
+  // 按节点记账时，那种盘面上几十个叶子就能把整手预算吃光（实测：50³ 密集局面
+  // 极限档单手 2.9 秒）。按点记账，密盘自动只放行很少几格，稀盘照旧。
+  // **是计数不是墙钟** —— 同一局面同一种子必须在任何机器上给出同一动作。
+  const cands = aiCandidates(board, AI_CANDIDATE_CAP);
+  const cost = cands.length * 2;      // 一个节点要扫两遍：找我的冲四、查他的成五点
+  if (aiVcfLeft < cost) return null;
+  aiVcfLeft -= cost;
+  if (stats) stats.vcfNodes++;
+
+  const mine = aiVcfThreats(session, attacker, AI_VCF_A, cands);
   if (mine.wins.length > 0) return { x: mine.wins[0], y: mine.wins[1], z: mine.wins[2], win: true };
   if (mine.fours.length === 0) return null;
 
-  // 对方已经有两个成五点 → 他先赢，我这边再怎么冲四都来不及
-  const cands = aiCandidates(board, AI_CANDIDATE_CAP);
-  if (aiVcfFoeWins(session, cands, foe) >= 2) return null;
+  // 【对方只要有一处"下一手就成五"，算杀立刻作废】整条算杀链的前提是"我的每个冲四
+  // 对方都必须应"（所以他每层只剩一个应手）。可他要是自己能成五，就压根不会来堵我 ——
+  // 我冲我的四，他直接连成五个赢棋。>=2 那种显然没救的情况原来就挡着，一处的那种
+  // 原来漏了。**根节点调用时这条路走不到**（第 3 步"对方能赢就堵"排在算杀前面），
+  // 但算杀进搜索之后叶子上的调用没有那一步兜着，所以这一条是必须的。
+  if (aiVcfFoeWins(session, cands, foe) >= 1) return null;
 
   for (let i = 0; i < mine.fours.length; i += 3) {
     const x = mine.fours[i], y = mine.fours[i + 1], z = mine.fours[i + 2];
     board.set(x, y, z, attacker);
-    const after = aiVcfThreats(session, attacker, AI_VCF_B);
+    const afterCands = aiCandidates(board, AI_CANDIDATE_CAP);
+    if (aiVcfLeft < afterCands.length) { board.set(x, y, z, EMPTY); return null; }
+    aiVcfLeft -= afterCands.length;
+    const after = aiVcfThreats(session, attacker, AI_VCF_B, afterCands);
     if (after.wins.length >= 6) {
       // 两个以上成五点：对手一手堵不住 → 这一手就是胜着
       board.set(x, y, z, EMPTY);
@@ -4847,34 +4966,63 @@ function aiSearchMove(session, safe, params, stats) {
   // 浅一层就看不见，电脑会走出"刚落完就被转没了"的棋。branch 和棋盘尺寸都没变，
   // 所以加深的代价只是常数倍，和三维那档是完全一样的一次搜索。
   // 三维下 depth4d 不参与 —— 那里转动根本不存在，多出来的深度就是纯耗时。
-  let depth = session.rotationEnabled ? params.depth4d : params.searchDepth;
+  const base = session.rotationEnabled ? params.depth4d : params.searchDepth;
+  let depth = base;
   const count = safe.length / 3;
   for (let i = 0; i < AI_SEARCH_DROP.length; i++) {
     if (count >= AI_SEARCH_DROP[i][0] && depth > AI_SEARCH_DROP[i][1]) depth = AI_SEARCH_DROP[i][1];
   }
   if (depth <= 0) return null;
+  // 迭代加深的层数上限。**降过档的盘面不加深**（那种局面本来就是"候选太多、
+  // 只能少算几层"，再往上加就是自找超时）；params.idMax 缺省 0 = 不加深。
+  let maxDepth = depth;
+  if (params.idMax > depth && depth === base) maxDepth = params.idMax;
 
   const moverRes = rules.isRestricted(mover, session.firstPlayer);
   const foeRes = rules.isRestricted(foe, session.firstPlayer);
   const sc = [];
   for (let i = 0; i < safe.length; i += 3) {
     const x = safe[i], y = safe[i + 1], z = safe[i + 2];
-    sc.push({ x: x, y: y, z: z,
-              v: aiOrderKey(board, x, y, z, mover, foe, winLength, moverRes, foeRes) });
+    const v = aiOrderKey(board, x, y, z, mover, foe, winLength, moverRes, foeRes);
+    sc.push({ x: x, y: y, z: z, v: v, mine: AI_ORDER.mine,
+              d: aiCenterDist(board, x, y, z) });
   }
   sc.sort(aiSearchCompare);
 
   const tune = { winLength: winLength, branch: params.branch, moverRes: moverRes, foeRes: foeRes };
-  let best = null, alpha = -Infinity;
   const k = params.branch < sc.length ? params.branch : sc.length;
-  for (let i = 0; i < k; i++) {
-    const m = sc[i];
-    board.set(m.x, m.y, m.z, mover);
-    const v = -aiNegamax(session, depth - 1, -Infinity, -alpha, foe,
-                         { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats);
-    board.set(m.x, m.y, m.z, EMPTY);
-    if (!best || v > best.v) best = { x: m.x, y: m.y, z: m.z, v: v };
-    if (v > alpha) alpha = v;
+  let best = null;
+
+  // 迭代加深：一层一层加上去，**每层把上一层选出来的那一手挪到最前**（PV 优先）。
+  // α-β 的剪枝全指望"先搜最好的那一手"：先搜到好的，后面的兄弟节点早早被剪掉。
+  // 上一层刚好免费告诉我们它是谁。只加深的档位才走这个循环（其余档 maxDepth === depth，
+  // 循环只跑一圈，和加这段代码之前一模一样）。
+  const order = sc;
+  for (let d = depth; d <= maxDepth; d++) {
+    tune.guard = (d > depth);       // 基准层不设防，加深的那些层才记账
+    if (tune.guard && aiNodesLeft <= 0) break;
+    let iterBest = null, alpha = -Infinity;
+    for (let i = 0; i < k; i++) {
+      const m = order[i];
+      board.set(m.x, m.y, m.z, mover);
+      const v = -aiNegamax(session, d - 1, -Infinity, -alpha, foe,
+                           { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats);
+      board.set(m.x, m.y, m.z, EMPTY);
+      if (!iterBest || v > iterBest.v) iterBest = { x: m.x, y: m.y, z: m.z, v: v };
+      if (v > alpha) alpha = v;
+    }
+    if (aiNodesLeft < 0) break;        // 这一层没搜完，**整层丢掉**，用上一层的
+    best = iterBest;
+    if (d === maxDepth) break;
+    // 下一层：把这层的首选挪到队首
+    for (let i = 1; i < k; i++) {
+      if (order[i].x === best.x && order[i].y === best.y && order[i].z === best.z) {
+        const mv = order[i];
+        for (let j = i; j > 0; j--) order[j] = order[j - 1];
+        order[0] = mv;
+        break;
+      }
+    }
   }
   return best;
 }
@@ -4966,6 +5114,8 @@ function aiChooseMove(session, opts) {
   const params = AI_PARAMS[o.level] || AI_PARAMS.medium;
   const rng = aiRng(o.seed === undefined ? 1 : o.seed);
   const stats = o.stats || null;
+  aiVcfLeft = AI_VCF_BUDGET;      // 算杀的预算按"一手"重置，见 AI_VCF_BUDGET
+  aiNodesLeft = AI_ID_NODES;      // 迭代加深的预算同上
 
   // stats 只给测试量计算量用：它是"耗时上界"这类断言的抓手，用计数器而不是墙钟，
   // 免得测试在慢机器上随机变红。

@@ -254,6 +254,10 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
+### 2026.09.29
+
+- ✨ **v2.10.14** The computer opponent is much stronger: fixed "its second stone wanders off to the player's layer" (a searching tier only expands the top 4 of its ordering, and extending its own stone tied exactly with blocking the player's, so the tie went to the lowest coordinates — the top 4 always landed in one corner); the leaf evaluation now adds up the two best threats instead of only the best one; Very high goes from 4 plies to 5 and Ultra now deepens iteratively (6 plies when it can afford them); the kill search no longer misses the case where the opponent has a five of its own
+
 ### 2026.09.28
 
 - 🎨 **v2.10.13** Reworked the start-screen background: the light is staged again so the demo board's lower edge no longer dissolves into the paper (the two washes used to sit on different light paths, so the page read flat and a near-white wireframe on an equally bright sheet had no structure); the vermilion seal now carries a soft glow as the page's single point of light
