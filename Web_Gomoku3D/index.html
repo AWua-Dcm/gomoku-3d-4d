@@ -60,16 +60,34 @@
        必须靠这圈深色轮廓才能读出来 —— 二维面板和三维着色器用的是同一个颜色。 */
     --stone-edge: #4a4034;
     /* 宣纸质感：全部用 CSS 渐变叠出来，不引任何外部图片 —— 这是 file:// 单文件的前提。
-       两个大半径 radial 当晕染，两组 1px 交叉细纹当纸纤维（alpha 只有 0.03，
+       三个大半径 radial 当晕染，两组 1px 交叉细纹当纸纤维（alpha 只有 0.03，
        是"能感觉到"的量级，再高就变成条纹布了）。
+
+       【v2.11.0：三个晕染是一次"重新打光"，不是"加了三个装饰"】
+       改之前是两个 radial：左上白高光 + 右下暖褐。两个不在一个光路上，画面读起来是【平】的。
+       平最明显的后果是【演示盘的下沿化进纸里】：线框立方体是近白色的
+       （--white #fdfaf2 那一支），压在同样亮的暖白纸上，底边那一片直接看不见，
+       整个立方体像浮着而不是立着。改完之后三层方向一致，画面才有体积：
+         · 左上 17% 16%  暖白高光  —— 光从左上来（原来那层，保留，只调淡一点点）
+         · 左下  4% 98%  暖褐积墨  —— 给立方体一个【落点】，下沿不再悬空
+         · 右上 96%  2%  冷月光    —— 冷色从右上传进来，和左下的暖墨成对角
+       左下那一汪是这次改动的关键：alpha 只有 .19，但演示盘下三分之一压在它上面，
+       白线框立刻读得出结构。三层的参数是照着【实测的演示盘包围盒】调的
+       （藏起画布前后对拍，差分区域就是立方体占的地方，1600×900 下是 x[17..655] y[186..874]）。
+
+       【为什么三层都用百分比定位】.paper 和 #stage.preview #view 是【两个不一样大的盒子】
+       （整个视口 / 左边 42%），而且下面那个还带着 background-attachment: fixed。
+       百分比是相对【定位区域】算的，两边都钉在视口上，所以落在同一处，
+       42% 那条缝才不会回来。写死像素就会又裂开。
 
        【为什么它是变量而不是直接写在 .paper 里】：三维画布也要用同一份 ——
        见下面的 `#stage.preview #view`。两边各抄一份的话，改了这里忘了那里，
        起始界面左右之间就会重新裂出一条缝，而且那种缝看起来像"显示器问题"，
        不像代码问题。 */
     --paper-img:
-      radial-gradient(circle at 16% 18%, rgba(255,255,255,.60), transparent 44%),
-      radial-gradient(circle at 84% 82%, rgba(150,126,86,.11), transparent 50%),
+      radial-gradient(circle at 17% 16%, rgba(255,255,255,.50), transparent 46%),
+      radial-gradient(ellipse 60% 55% at 4% 98%, rgba(72,60,42,.19), transparent 66%),
+      radial-gradient(ellipse 48% 44% at 96% 2%, rgba(176,206,220,.26), transparent 68%),
       repeating-linear-gradient(0deg,  rgba(122,102,70,.030) 0 1px, transparent 1px 4px),
       repeating-linear-gradient(90deg, rgba(122,102,70,.030) 0 1px, transparent 1px 4px);
   }
@@ -412,13 +430,26 @@
   }
 
   .titleRow { display: flex; align-items: center; gap: 14px; }
-  /* 印章：朱砂底 + 楷体字。用字体而不是画一个图形，是为了不引任何外部资源。 */
+  /* 印章：朱砂底 + 楷体字。用字体而不是画一个图形，是为了不引任何外部资源。
+
+     【v2.11.0 加的两圈外发光】全页【唯一】一处"发光"就放在这里。
+     为什么挑印章：它是整页唯一一个实心方块，也是唯一一个本来就有"重量"的元素，
+     给它通电最省，读起来就是"指示灯亮着"。三条纪律：
+       · 发光色【就是它自己的朱砂】（rgba(156,52,40)），只换 alpha，不换色相 ——
+         套一圈青色会变成两支颜色打架，而且红配青正是最容易出"色彩颤动"的那一组
+        （互补色不同波长在晶状体上的聚焦面不同，浅底上更明显）。
+       · 两圈（10px / 26px）：浅色底上单层柔光会被纸白吃掉，两层才堆得出辉光。
+       · 整页只有这一处。按钮一个都没加，用的是【面积】而不是【颜色】来当强调。
+     实测对局界面不受影响：.seal 只存在于 #setup 里，对局时 #setup 是 display:none。 */
   .seal {
     width: 46px; height: 46px; flex: 0 0 auto; border-radius: 4px;
     background: var(--danger); color: #f7f2e8;
     display: flex; align-items: center; justify-content: center;
     font-size: 27px; line-height: 1; padding-bottom: 3px;
-    box-shadow: inset 0 0 0 1px rgba(247,242,232,.55);
+    box-shadow:
+      inset 0 0 0 1px rgba(247,242,232,.55),
+      0 0 10px rgba(156,52,40,.42),
+      0 0 26px rgba(156,52,40,.20);
   }
   #setup h1 { font-size: 38px; margin: 0; font-weight: 600; letter-spacing: 2px; }
   #setup .sub { color: var(--dim); font-size: 14.5px; margin-top: 4px; }
