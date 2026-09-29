@@ -3275,6 +3275,12 @@ step("教学：每一关都至少存在一个合法动作能过关", () => {
     const lv = levels[i];
     const probe = lv.build();
     const board = probe.board;
+    // 【开局时目标不许已经成立】第一关原来就是这个毛病：三颗子摆在 y=0 上，
+    // 再补一颗就是四连 —— 于是"最强威胁 ≥ 四"开局就成立，一进教学就显示"过关"。
+    // 可解性断言查的是"存在某个动作能过关"，它查不到"不用动手就已经过关" —— 两件事。
+    if (lv.goal(probe)) {
+      throw new Error("第 " + (i + 1) + " 关开局就已经过关了 —— 玩家一进去就看到「过关」");
+    }
     let solution = null;
     // 【每个候选都重建一局】最初写的是"落一手、查 goal、再把 cells 恢复回去" ——
     // 那只恢复了棋盘，**没有恢复 currentPlayer / status / history**：第一次落子之后

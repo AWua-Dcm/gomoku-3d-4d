@@ -313,10 +313,12 @@
   #tutBody { color: var(--dim); }
   #tutDone { margin-top: 6px; color: var(--accent); font-weight: 600; }
   #tutDone:empty { display: none; }
-  /* 退出固定右下角 —— 第几关都在同一个位置，不用找。 */
-  #tutExit { position: absolute; right: 16px; bottom: 16px; z-index: 20; }
-  #tutNext { position: absolute; right: 96px; bottom: 16px; z-index: 20; }
-  #tutExit.off, #tutNext.off { display: none; }
+  /* 过关之后在右下角出现「下一关」。
+     【退出不在这里】它是把那一行原有的「设置」键**改名**来的 ——
+     多一颗键会让那一行变宽、也让玩家多找一次；而"在教学里，设置就是退出"
+     本来就是这一行的语义。见 syncTutorialUi。 */
+  #tutNext { position: absolute; right: 16px; bottom: 16px; z-index: 20; }
+  #tutNext.off { display: none; }
 
   #timelineWrap { height: 30px; background: var(--well); border: 1px solid var(--border);
                   border-radius: 4px; flex: 0 0 auto; overflow: hidden; }
@@ -2735,7 +2737,6 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
       <div id="tutBody"></div>
       <div id="tutDone"></div>
     </div>
-    <button id="tutExit" class="off" data-i18n="tutExit">退出</button>
     <!-- 文案走 data-i18n（元素 id → STATIC_TEXT），不进 TEXT ——
          它是静态的一颗键，不是会被 JS 改写的两态按钮。 -->
     <button id="tutNext" class="off" data-i18n="tutNext">下一关</button>
@@ -4354,6 +4355,12 @@ class FourDSession {
   get rotationEnabled() { return this.inner.rules.allowRotation; }
   /** v3.0.0「晨昏」的相位。三维模式下恒为 0。 */
   get phase() { return this.inner.phase | 0; }
+  // 【这些转发不能省】界面上那句"黎明 · 还有 N 格"读的是 handsUntilFlip，
+  // 而它挂在**内层**的 GameSession 上 —— 不转发就是 undefined，
+  // 页面上直接显示成"还有 undefined 格"。
+  get phaseTarget() { return this.inner.phaseTarget | 0; }
+  get elapsedInPhase() { return this.inner.elapsedInPhase | 0; }
+  get handsUntilFlip() { return this.inner.handsUntilFlip; }
 
   canPlace(x, y, z) { return this.inner.canPlace(x, y, z); }
   place(x, y, z, lang = "zh", mode) { return this.inner.place(x, y, z, lang, mode); }
@@ -5844,6 +5851,13 @@ function aiVcf(session, attacker, depth, stats) {
    【预算】和 aiVcf 共用 aiVcfLeft（单位是"扫过多少个候选点"），理由见 aiVcf 那段。
    -------------------------------------------------------------------------- */
 
+/**
+ * v3.0.0「晨昏」：异相位的子画多透明。**和幽灵层那一档要能区分开** ——
+ * 幽灵层是"不在当前层"（GHOST_ALPHA），这一档是"不在当前相位"，
+ * 两者可能同时成立（一层里既有幽灵又有异相位子），所以它比幽灵更淡一档。
+ */
+const PHASE_DIM_ALPHA = 0.35;
+
 /** 每个 VCT 节点最多试几个活三着法。超过就判未知。 */
 const AI_VCT_M = 6;
 /** 每个活三着法最多穷举几个对方应手。**超过这个数必须判未知，不许猜。** */
@@ -6648,8 +6662,7 @@ const STATIC_TEXT = { en: {
   "firstWhite": "White first",
   "dimCube": "Link all three axes",
   "startBtn": "Start game",
-  "tutExit": "Exit", "tutNext": "Next",
-  "tutExit": "Exit",
+  "tutNext": "Next",
   "tutorialBtn": "Tutorial",
 
   // ---- 起始界面的规则摘要（含 <br>）。英文读者看到的是同一件事的白话说法，
@@ -6691,8 +6704,9 @@ const TEXT = { en: {
   "aiLv.xhigh": "Very high",
   "aiLv.ultra": "Ultra",
   "phase.dawn": "Dawn", "phase.night": "Long night",
-"tut.1.title": "Rotation: turn the layer until it connects",
-"tut.1.body": "Your three stones lie on the y=0 line, and one more sits alone at (0,3). Turn layer z=0 — the horizontal three swings onto x=0 and meets that stone, making a four. (A rotation costs the whole turn, so weigh whether it is worth it.)",
+  "tutExit": "Exit",
+"tut.1.title": "Rotation: turn the blocker away, turn your own stone in",
+"tut.1.body": "The vertical line in the corner: two of your stones sit on it, and a white stone at the bottom blocks it. You have one more stone at the far corner of that bottom layer. Turn the bottom layer clockwise — the white stone swings away and yours drops into the gap, and the line comes alive.",
 "tut.2.title": "Wrapping: the edges connect",
 "tut.2.body": "The six faces are joined: the right of x=14 is x=0. Your four stones straddle the edge — fill the gap to make five.",
 "tut.3.title": "Day and night: a line does not always count",
@@ -6840,7 +6854,7 @@ STATIC_TEXT.ja = {
   "firstWhite": "白が先手",
   "dimCube": "3軸を連動",
   "startBtn": "対局開始",
-  "tutExit": "終了", "tutNext": "次の関",
+  "tutNext": "次の関",
   "tutorialBtn": "ゲームの説明",
   "ruleNote": "ルール：空いているマスならどこにでも着手できます（重力はありません）。先手は<b>ちょうど5連</b>を作らなければならず、6連以上は長連で負けです。後手は5連以上で勝ちです。<br>勝ちの方向は13通り：3軸 + 面対角線6本 + 体対角線4本。右のパネルでレイヤーを切り替えて石を置きます。",
 };
@@ -6861,8 +6875,9 @@ TEXT.ja = {
   "aiLv.xhigh": "最強",
   "aiLv.ultra": "極",
   "phase.dawn": "黎明", "phase.night": "長い夜",
-"tut.1.title": "回転：層を回してつなげる",
-"tut.1.body": "あなたの三石は y=0 の線上にあり、もう一石だけ (0,3) に孤立しています。z=0 の層を回すと、横三が x=0 に移り、その石とつながって四になります。（回転は一手を使うので、値打ちがあるか見極めて。）",
+  "tutExit": "終了",
+"tut.1.title": "回転：邪魔な石をどけて、自分の石を入れる",
+"tut.1.body": "角の縦の線：下から二番目と三番目があなたの石で、一番下は白石に塞がれています。その最下層の反対側の角にもう一石あります。最下層を時計回りに回すと、白石がどいてあなたの石が空きに入り、この線が生きます。",
 "tut.2.title": "貫通：境界をまたいでもつながる",
 "tut.2.body": "六面はつながっています：x=14 の右は x=0 です。あなたの四石は境界をまたいでいます。隙間を埋めれば五です。",
 "tut.3.title": "昼夜：つながっても数えられない",
@@ -6968,7 +6983,7 @@ STATIC_TEXT.ko = {
   "firstWhite": "백 선수",
   "dimCube": "세 축 연동",
   "startBtn": "게임 시작",
-  "tutExit": "나가기", "tutNext": "다음 단계",
+  "tutNext": "다음 단계",
   "tutorialBtn": "게임 안내",
   "ruleNote": "규칙: 빈칸이면 어디든 착수할 수 있습니다 — 중력은 없습니다. 선수는 <b>정확히 다섯</b>을 이어야 하며, 여섯 이상은 장련(長連) 반칙으로 패배합니다. 후수는 다섯 이상이면 승리합니다.<br>승리 방향은 13개입니다: 축 3 + 면 대각선 6 + 공간 대각선 4. 오른쪽 패널에서 레이어를 넘기며 돌을 놓으세요.",
 };
@@ -6989,8 +7004,9 @@ TEXT.ko = {
   "aiLv.xhigh": "최상",
   "aiLv.ultra": "극",
   "phase.dawn": "여명", "phase.night": "긴 밤",
-"tut.1.title": "회전: 층을 돌려 이어 붙이기",
-"tut.1.body": "세 개의 돌은 y=0 선 위에 있고, 하나는 (0,3)에 홀로 있습니다. z=0 층을 돌리면 가로 삼이 x=0으로 옮겨 그 돌과 만나 사가 됩니다. (회전은 한 수를 쓰니 값어치가 있는지 따져 보세요.)",
+  "tutExit": "나가기",
+"tut.1.title": "회전: 막는 돌을 돌려내고 내 돌을 들여보내기",
+"tut.1.body": "모서리의 세로줄: 아래에서 둘째·셋째가 내 돌이고 맨 아래는 백돌이 막고 있습니다. 그 맨 아래 층 반대편 모서리에 내 돌이 하나 더 있습니다. 맨 아래 층을 시계 방향으로 돌리면 백돌이 비켜나고 내 돌이 빈자리에 들어가 그 줄이 살아납니다.",
 "tut.2.title": "관통: 경계를 넘어도 이어집니다",
 "tut.2.body": "여섯 면은 이어져 있습니다: x=14의 오른쪽은 x=0입니다. 네 개의 돌이 경계에 걸쳐 있으니 빈칸을 채우면 오가 됩니다.",
 "tut.3.title": "낮과 밤: 이어도 세지 않습니다",
@@ -7099,7 +7115,7 @@ STATIC_TEXT.ru = {
   "firstWhite": "Первыми ходят белые",
   "dimCube": "Связать все три оси",
   "startBtn": "Начать игру",
-  "tutExit": "Выйти", "tutNext": "Дальше",
+  "tutNext": "Дальше",
   "tutorialBtn": "Обучение",
   "ruleNote": "Правила: ходить можно в любую пустую клетку — гравитации нет. Первый игрок должен собрать <b>ровно пять</b> в ряд; шесть и более — перебор и поражение. Второй игрок побеждает при пяти и более.<br>Победных направлений 13: 3 оси + 6 диагоналей граней + 4 диагонали куба. Переключайте слои на панели справа и ставьте камни.",
 };
@@ -7124,8 +7140,9 @@ TEXT.ru = {
   "aiLv.xhigh": "Оч. сильн",
   "aiLv.ultra": "Ультра",
   "phase.dawn": "Рассвет", "phase.night": "Долгая ночь",
-"tut.1.title": "Поворот: крутите слой, пока не сойдётся",
-"tut.1.body": "Три ваших камня лежат на линии y=0, а ещё один стоит особняком в (0,3). Поверните слой z=0 — горизонтальная тройка перейдёт на x=0 и встретит этот камень, получится четвёрка. (Поворот стоит целого хода — взвесьте, стоит ли.)",
+  "tutExit": "Выйти",
+"tut.1.title": "Поворот: уберите помеху, введите свой камень",
+"tut.1.body": "Вертикаль в углу: два ваших камня на ней, а нижний закрыт белым. Ещё один ваш камень стоит в дальнем углу этого нижнего слоя. Поверните нижний слой по часовой — белый уйдёт, ваш камень встанет в пробел, и линия оживёт.",
 "tut.2.title": "Склейка: края соединены",
 "tut.2.body": "Шесть граней сшиты: справа от x=14 идёт x=0. Ваши четыре камня стоят по обе стороны края — заполните разрыв, и будет пять.",
 "tut.3.title": "День и ночь: линия не всегда считается",
@@ -7239,7 +7256,7 @@ STATIC_TEXT.fr = {
   "firstWhite": "Blancs en premier",
   "dimCube": "Lier les trois axes",
   "startBtn": "Commencer la partie",
-  "tutExit": "Quitter", "tutNext": "Suivant",
+  "tutNext": "Suivant",
   "tutorialBtn": "Didacticiel",
   "ruleNote": "Règles : vous pouvez jouer sur n'importe quelle case vide — il n'y a pas de gravité. Le premier joueur doit aligner <b>exactement cinq</b> pions ; six ou plus est un alignement trop long, ce qui fait perdre. Le second joueur gagne avec cinq ou plus.<br>Il y a 13 directions gagnantes : 3 axes + 6 diagonales de face + 4 grandes diagonales. Utilisez le panneau de droite pour parcourir les couches et poser des pions.",
 };
@@ -7261,8 +7278,9 @@ TEXT.fr = {
   "aiLv.high": "Haut",
   "aiLv.xhigh": "Très haut",
   "phase.dawn": "Aube", "phase.night": "Longue nuit",
-"tut.1.title": "Rotation : tournez la couche jusqu'à ce que ça se rejoigne",
-"tut.1.body": "Vos trois pierres sont sur la ligne y=0, et une autre est isolée en (0,3). Faites tourner la couche z=0 : la trois horizontale passe sur x=0 et rejoint cette pierre — cela fait une quatre. (Une rotation coûte le tour entier : pesez si cela vaut le coup.)",
+  "tutExit": "Quitter",
+"tut.1.title": "Rotation : écartez la gêneuse, amenez votre pierre",
+"tut.1.body": "La verticale du coin : deux de vos pierres sont dessus, et la plus basse est bouchée par une blanche. Vous en avez une autre au coin opposé de cette couche du bas. Faites tourner cette couche dans le sens horaire : la blanche s'écarte, la vôtre tombe dans le trou, et la ligne revit.",
 "tut.2.title": "Pliage : les bords se rejoignent",
 "tut.2.body": "Les six faces sont cousues : à droite de x=14 vient x=0. Vos quatre pierres chevauchent le bord — comblez le trou et vous avez cinq.",
 "tut.3.title": "Jour et nuit : une ligne ne compte pas toujours",
@@ -8248,7 +8266,7 @@ const Game = {
     const ids = ["gl","modeGhost","modeSlice","modeGrid","stoneAll","stoneBlack","stoneWhite",
       "sliceGroup","sliceDown","sliceUp","sliceLabel",
       "coords","hint","hintbox","hintToggle","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
-      "tutBar","tutStep","tutTitle","tutBody","tutDone","tutExit","tutNext",
+      "tutBar","tutStep","tutTitle","tutBody","tutDone","tutNext",
       "chip","status","rule","info","boardWrap","timelineWrap","timeline","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","tutorialBtn","view","stage","previewTag",
@@ -8448,6 +8466,55 @@ const Game = {
   // ------------------------------------------------------------------ 一局棋
 
   /** 开一局。dims 收数字（立方）或 [x,y,z]（长方体）—— 与内核同一套约定。 */
+  /**
+   * 给会话挂上界面的事件回调。**只挂一次** —— newGame 建新会话时挂，
+   * 之后换局走的是 session.reset()（回调还在）。
+   * 教学会自己建会话，所以它也要走这里 —— 两条路必须挂同一套，
+   * 否则"教学里落子之后界面不更新"这种问题只会出现在教学那一侧。
+   */
+  wireSession() {
+    this.session.onMoveApplied.push((s, rec, o) => this.onMoveApplied(rec, o));
+    this.session.onMoveUndone.push((s, rec) => this.onMoveUndone(rec));
+    this.session.onReset.push(() => this.onReset());
+    this.session.onRotationApplied.push((s, rec, o) => this.onRotationApplied(rec, o));
+    this.session.onRotationUndone.push((s, rec) => this.onRotationUndone(rec));
+  },
+
+  /**
+   * 视图状态复位。**开新局和进教学都要做同一套** —— 否则"上一局关掉的格线"
+   * 会静悄悄地跟到下一局，而玩家看到的只是"新棋盘怎么没有格线"。
+   * （悔棋、换先手都不走这里。）
+   * @param nz 当前棋盘的层数，用来把转动面板的层号夹回范围内
+   */
+  resetViewState(nz) {
+    this.activeLayer = 0;
+    this.ghostMode = true;
+    this.gridVisible = true;
+    this.stoneFilter = 0;
+    this.hover = null;
+    // 换局时把转动面板复位：上一局的层号可能已经越界，方向/次数留着也会让人以为选好了。
+    this.rotAxis = AXIS_Z;
+    this.rotClockwise = true;
+    this.rotTurns = 1;
+    this.rotLayer = Math.max(0, Math.min(nz - 1, this.rotLayer));
+    // 预览状态也一起清掉。这里【不调 dropRotPreview()】—— 那会把棋子转回去，
+    // 而此刻旧 session 马上就要被整个换掉，转回去纯属白算（而且换 session 的分支里
+    // this.session 可能还是 null）。直接置空就够，盘面是新的。
+    this.rotPreview = null;
+    this.placeMode = 0;
+  },
+
+  /**
+   * 把一个【外部建好的会话】接进界面。教学关用它 —— 关卡自己带着预设局面和规则，
+   * 不能走 newGame（那条路会按设置页的 fourD / 冷却 / 相位重建规则）。
+   */
+  adoptSession(session) {
+    this.session = session;
+    this.wireSession();
+    this.resetViewState(session.board.dims[2]);
+    this.onBoardChanged(true);
+  },
+
   newGame(dims, first) {
     const d = normalizeDims(dims);
     const rules = new RuleSet();
@@ -8469,32 +8536,11 @@ const Game = {
     // 它和裸 GameSession 的等价性由 FourDCoreTests / rotation.test.mjs 逐格钉住。
     if (!this.session) {
       this.session = FourDSession.create(d, first, rules);
-      this.session.onMoveApplied.push((s, rec, o) => this.onMoveApplied(rec, o));
-      this.session.onMoveUndone.push((s, rec) => this.onMoveUndone(rec));
-      this.session.onReset.push(() => this.onReset());
-      this.session.onRotationApplied.push((s, rec, o) => this.onRotationApplied(rec, o));
-      this.session.onRotationUndone.push((s, rec) => this.onRotationUndone(rec));
+      this.wireSession();
     } else {
       this.session.reset(d, first, rules);
     }
-    this.activeLayer = 0;
-    // 视图状态跟着新局复位。ghostMode 一直都是这么做的，gridVisible 属于同一类，
-    // 一并在开新局时回到默认 —— 否则"上一局关掉的格线"会静悄悄地跟到下一局，
-    // 而玩家看到的只是"新棋盘怎么没有格线"。
-    // （只影响"设置 → 开始游戏"这条路；悔棋、换先手都不会走到这里。）
-    this.ghostMode = true;
-    this.gridVisible = true;
-    this.stoneFilter = 0;
-    this.hover = null;
-    // 换局时把转动面板复位：上一局的层号可能已经越界，方向/次数留着也会让人以为选好了。
-    this.rotAxis = AXIS_Z;
-    this.rotClockwise = true;
-    this.rotTurns = 1;
-    this.rotLayer = Math.max(0, Math.min(d[2] - 1, this.rotLayer));
-    // 预览状态也一起清掉。这里【不调 dropRotPreview()】—— 那会把棋子转回去，
-    // 而此刻旧 session 马上就要被整个换掉，转回去纯属白算（而且下面换 session 的
-    // 分支里 this.session 可能还是 null）。直接置空就够，盘面是新的。
-    this.rotPreview = null;
+    this.resetViewState(d[2]);
     // 人机对战的配置在开局这一刻从起始界面拍下来。放在 newGame 里而不是「开始游戏」
     // 那个 handler 里：任何调用 newGame 的路径（脚本、测试、控制台）拿到的行为都一样。
     // aiMyColor 一旦定下就不再变 —— 换先手是"改为另一方先走"，不是两个人换座位。
@@ -8619,6 +8665,9 @@ const Game = {
     const GHOST_ALPHA = 0.52;
     // 球体网格是【直径】为 1 的，所以下面 push 进去的 w 就是世界空间里的直径，
     // 数值和右侧面板的圆（半径 cs*0.34 → 直径 0.68）对齐，两个视图里子看起来一样大
+    // 晨昏开着吗、现在是哪个相位 —— 三档透明度要用。关掉时 phOn 为 false，行为逐位不变。
+    const phOn = this.session.rules.phasePeriod > 0;
+    const curPhase = this.session.phase | 0;
     board.forEachStone((x, y, z, s) => {
       // 切片模式：z 大于当前层的棋子完全不画。
       // 这是切片模式和幽灵层模式的本质区别 ——
@@ -8628,21 +8677,29 @@ const Game = {
       // 只看黑 / 只看白：被滤掉的子整颗都不画。**放在这里而不是更外面**，
       // 是为了让过滤和"切片""幽灵层"共用同一个出口 —— 三个视图状态各写一处的话，
       // 迟早有一个分支只判了其中一个条件。
-      if (this.stoneFilter && s !== this.stoneFilter) return;
+      // 【判色必须走 colourOf】晨昏开着时格子值里编了相位：永夜的黑子是 5，
+      // 拿它和 BLACK(1) 比永远不等 —— 于是永夜整盘棋都会被当成白棋。
+      if (this.stoneFilter && colourOf(s) !== this.stoneFilter) return;
 
       // 颜色全部走调色板（值在上面解析好了）。白子原来是纯白 [1,1,1]，
       // 和二维面板的 --white 其实不是同一个色 —— 那种"三维和面板差一点点"的偏差
       // 肉眼几乎发现不了，但换主题时就会放大成两个色调。
-      const rgb = winSet.has(board.index(x, y, z)) ? cWin : (s === BLACK ? cBlack : cWhite);
+      const rgb = winSet.has(board.index(x, y, z)) ? cWin : (colourOf(s) === BLACK ? cBlack : cWhite);
+
+      // 【v3.0.0「晨昏」的第三档】异相位的子淡显。
+      // 棋盘本身看不出相位（一盘子实心子，哪颗是黎明哪颗是永夜只能看深浅），
+      // 而相位决定那条线算不算数 —— 不画出来，第三关那种"两条四连一条算一条不算"
+      // 的局面在盘面上完全无法区分，那一关就没法玩。
+      const offPhase = phOn && phaseOf(s) !== curPhase;
 
       const p = this.worldOf(x, y, z, dims, cs);
       const ghost = this.ghostMode && z !== this.activeLayer;
       if (ghost) {
         ghPos.push(p[0], p[1], p[2], cs * 0.60);
-        ghCol.push(rgb[0], rgb[1], rgb[2], GHOST_ALPHA);
+        ghCol.push(rgb[0], rgb[1], rgb[2], GHOST_ALPHA * (offPhase ? 0.6 : 1));
       } else {
         opqPos.push(p[0], p[1], p[2], cs * 0.68);
-        opqCol.push(rgb[0], rgb[1], rgb[2], 1.0);
+        opqCol.push(rgb[0], rgb[1], rgb[2], offPhase ? PHASE_DIM_ALPHA : 1.0);
       }
     });
 
@@ -8656,7 +8713,8 @@ const Game = {
     // 光晕会孤零零地套在一格空白上，看着像"这里有个看不见的子"。
     const lastFilteredOut = !!last && !!this.stoneFilter && last.player !== this.stoneFilter;
     if (last && !lastFilteredOut) {
-      if (board.getOrDefault(last.x, last.y, last.z) === last.player) {
+      // 【判色要走 colourOf】同上：永夜里那一格的值是 5/6，和 last.player（1/2）不等。
+      if (colourOf(board.getOrDefault(last.x, last.y, last.z)) === last.player) {
         const p = this.worldOf(last.x, last.y, last.z, dims, cs);
         ghPos.push(p[0], p[1], p[2], cs * 0.88);
         const acc = Palette.rgb("--accent");
@@ -8946,7 +9004,7 @@ const Game = {
     const black = Palette.rgb("--black"), white = Palette.rgb("--white");
     board.forEachStone((x, y, z, s) => {
       const p = this.worldOf(x, y, z, dims, cs);
-      const rgb = (s === BLACK) ? black : white;
+      const rgb = (colourOf(s) === BLACK) ? black : white;
       opqPos.push(p[0], p[1], p[2], cs * 0.68);
       opqCol.push(rgb[0], rgb[1], rgb[2], 1.0);
     });
@@ -9300,6 +9358,9 @@ const Game = {
     const size = this.setCanvasSize(canvas, ctx);
     const w = canvas.clientWidth, h = canvas.clientHeight;   // CSS 像素，用于布局计算
     ctx.clearRect(0, 0, w, h);
+    // 晨昏开着吗、现在是哪个相位 —— 二维这边也要淡显异相位的子，和三维那三档对齐。
+    const cPhaseOn = this.session.rules.phasePeriod > 0;
+    const cPhase = this.session.phase | 0;
 
     const dims = this.session.board.dims;
     const nx = dims[0], ny = dims[1];
@@ -9365,15 +9426,18 @@ const Game = {
       for (let i = 0; i < nx; i++) {
         const s = board.get(i, j, this.activeLayer);
         if (s === EMPTY) continue;
+        // 异相位的子淡显（和三维那三档对齐）
+        ctx.globalAlpha = (cPhaseOn && phaseOf(s) !== cPhase) ? PHASE_DIM_ALPHA : 1;
         ctx.beginPath();
         ctx.arc(px(i), py(j), cs * 0.34, 0, Math.PI * 2);
-        ctx.fillStyle = Palette.hex(s === BLACK ? "--black" : "--white");
+        ctx.fillStyle = Palette.hex(colourOf(s) === BLACK ? "--black" : "--white");
         ctx.fill();
         // 描边是必须的：淡板面和白子的对比度只有 1.3:1，
         // 不描边的话白子和板面基本看不出区别。黑子也一起描，两种子的边界感才一致。
         ctx.strokeStyle = Palette.hex("--stone-edge");
         ctx.lineWidth = Math.max(1, cs * 0.06);
         ctx.stroke();
+        ctx.globalAlpha = 1;
       }
     }
   },
@@ -9521,6 +9585,9 @@ const Game = {
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    // 晨昏开着吗、现在是哪个相位 —— 二维这边也要淡显异相位的子，和三维那三档对齐。
+    const cPhaseOn = this.session.rules.phasePeriod > 0;
+    const cPhase = this.session.phase | 0;
 
     const cw = canvas.clientWidth, ch = canvas.clientHeight;
     const dims = this.session.board.dims;
@@ -9560,15 +9627,17 @@ const Game = {
           for (let x = 0; x < nx; x++) {
             const s = board.get(x, y, z);
             if (s === EMPTY) continue;
+            ctx.globalAlpha = (cPhaseOn && phaseOf(s) !== cPhase) ? PHASE_DIM_ALPHA : 1;
             // canvas 的 y 向下，而三维世界里 y 向上，这里翻一下，缩略图才和 3D 视图同向
             const sx = x0 + x * cs, sy = y0 + (ny - 1 - y) * cs;
-            ctx.fillStyle = Palette.hex(s === BLACK ? "--black" : "--white");
+            ctx.fillStyle = Palette.hex(colourOf(s) === BLACK ? "--black" : "--white");
             ctx.fillRect(sx - px * 0.5, sy - px * 0.5, px, px);
             if (px >= 2.5) {
               ctx.strokeStyle = Palette.hex("--stone-edge");
               ctx.lineWidth = 1;
               ctx.strokeRect(sx - px * 0.5 + 0.5, sy - px * 0.5 + 0.5, px - 1, px - 1);
             }
+            ctx.globalAlpha = 1;
           }
         }
       }
@@ -9708,7 +9777,9 @@ const Game = {
     on("undoBtn", () => this.undo());
     on("restartBtn", () => this.restart());
     on("swapBtn", () => this.swapFirst());
-    on("setupBtn", () => this.openSetup());
+    // 【教学里这颗键是「退出」】同一颗键、同一个位置，只在教学模式下换名字和动作 ——
+    // 比另加一颗键省地方，也不用玩家到处找。
+    on("setupBtn", () => { if (this.tutActive) this.tutorialExit(); else this.openSetup(); });
     // 语言按钮：点开/收起列表（列表里选一个才切语言）。
     // 老版本是"点一下 = 切到另一种"，那套只在两种语言之间成立 —— 六种语言下，
     // 循环着点要么点不到目标语言，要么根本看不出有哪些可选。
@@ -9811,7 +9882,6 @@ const Game = {
       });
     }
     on("tutorialBtn", () => this.startTutorial());
-    on("tutExit", () => this.tutorialExit());
     on("tutNext", () => {
       const n = this.tutorialLevels().length;
       this.tutorialBuild((this.tutIndex + 1) % n);      // 最后一关之后回到第一关
@@ -10844,16 +10914,24 @@ const Game = {
    */
   tutorialLevels() {
     return [
-      { // ---- 第一关：转动（跨层拼四）
+      { // ---- 第一关：转动（把挡子转走、把自己的子转进来）
         build: () => {
           const r = new RuleSet();
           r.allowRotation = true;
           r.rotationCooldownPlacements = 0;      // 教学关里随时可转，别让冷却挡住教学
           const s = GameSession.create(10, BLACK, r);
-          s.board.set(7, 0, 0, BLACK);
-          s.board.set(8, 0, 0, BLACK);
+          // 竖着一条 z 线在 (x,y)=(0,0)：第 1、2 层是我的，第 0 层被白子堵着。
+          // 【为什么是两颗而不是三颗 —— 这一条改了两版才对】三颗时，**另一端是空的**，
+          // 补一颗就是四连 —— 于是"最強威胁 ≥ 四"开局就成立，一进去就显示"过关"。
+          // 而把两端都堵死又不行：那样转完也成不了四（线还是死的）。
+          // 两颗、只堵一头，才是"现在够不着、转一下才够得着"。
+          s.board.set(0, 0, 1, BLACK);
+          s.board.set(0, 0, 2, BLACK);
+          s.board.set(0, 0, 0, WHITE);
+          // 第 0 层上我还有一颗在 (9,0)：顺时针转一次（(u,v)→(v, 9−u)），
+          // 它正好落到 (0,0) —— 挡子被转到 (0,9) 去，我的子补进那个空位，
+          // 这条线就从两连变成三连（补第 3 层就是四连）。
           s.board.set(9, 0, 0, BLACK);
-          s.board.set(0, 3, 0, BLACK);
           return s;
         },
         goal: (s) => {
@@ -10894,10 +10972,11 @@ const Game = {
   tutorialText(i, which) {
     const t = which === "title";
     if (i === 0) {
-      return t ? say(() => "转动：把本层转到接得上", "tut.1.title")
-               : say(() => "你的三颗子在 y=0 那条线上，还有一颗孤零零在 (0,3)。" +
-                           "转动 z=0 这一层 —— 横三会转到 x=0 上，正好接上那一颗，变成四连。" +
-                           "（转动占掉整个回合，所以要看值不值。）", "tut.1.body");
+      return t ? say(() => "转动：把挡路的转走，把自己的转进来", "tut.1.title")
+               : say(() => "竖着那条线（棋盘左上角那个位置）下面是你的两颗，最底下那颗是白子 —— " +
+                           "它把这条线堵死了。你在最底层还有一颗在右边角落。" +
+                           "顺时针转一下最底层：白子被转到别处，你的那颗正好补进空位，" +
+                           "这条线就活了。", "tut.1.body");
     }
     if (i === 1) {
       return t ? say(() => "贯通：隔着边界也能连", "tut.2.title")
@@ -10912,6 +10991,9 @@ const Game = {
 
   /** 进入教学（第 0 关）。**关掉设置页、进对局视图** —— 这就是"铺满屏幕"的实现。 */
   startTutorial() {
+    // 进教学时把「设置」这颗键的原文案记下来 —— 退出时要原样还回去。
+    // （不能写死"设置"两个字：六种语言各不相同，而且切语言时它还会变。）
+    this.setupBtnLabel = this.el.setupBtn ? this.el.setupBtn.textContent : "";
     this.tutIndex = 0;
     this.tutActive = true;
     this.closeSetup();
@@ -10922,13 +11004,15 @@ const Game = {
     const levels = this.tutorialLevels();
     if (i < 0 || i >= levels.length) return this.tutorialExit();
     this.tutIndex = i;
-    const s = levels[i].build();
-    // 【教学里没有电脑】三关都是"自己走、达成目标"，所以会话直接交给自己；
-    // 手动清掉待走的电脑着，否则定时器会插一手进来把局面搞乱。
+    const raw = levels[i].build();
+    // 【教学里没有电脑】三关都是"自己走、达成目标"。
+    // 先清掉待走的电脑着、把 aiMode 关掉 —— 否则定时器会插一手进来把局面搞乱。
     this.cancelAiTimer();
     this.aiMode = false;
-    this.session = FourDSession.wrap(s);
-    this.bindSession();
+    // 【为什么是 adoptSession 而不是 newGame】newGame 按设置页的 fourD / 冷却 / 相位
+    // 重建规则，而每一关有它自己的规则（第一关要随时可转、第二关要贯通、第三关要相位）。
+    // adoptSession 把界面那一套（挂事件、复位视图、重画）做全，规则用关卡自己的。
+    this.adoptSession(FourDSession.wrap(raw));
     this.tutPassed = false;
     this.syncTutorialUi();
     this.refreshTexts();
@@ -10947,6 +11031,9 @@ const Game = {
   tutorialExit() {
     this.tutActive = false;
     this.tutPassed = false;
+    if (this.el.setupBtn && this.setupBtnLabel !== undefined) {
+      this.el.setupBtn.textContent = this.setupBtnLabel;
+    }
     this.aiMode = this.setupAi !== "human";
     this.syncTutorialUi();
     this.openSetup();
@@ -10956,7 +11043,9 @@ const Game = {
   syncTutorialUi() {
     const on = !!this.tutActive;
     if (this.el.tutBar) this.el.tutBar.classList.toggle("off", !on);
-    if (this.el.tutExit) this.el.tutExit.classList.toggle("off", !on);
+    // 【教学里「设置」就是「退出」】不另加一颗键 —— 多一颗键会让那一行变宽，
+    // 也让玩家多找一次。改名之后它在那儿、位置不变，语义正好。
+    if (this.el.setupBtn && on) this.el.setupBtn.textContent = say(() => "退出", "tutExit");
     // 「下一关」只在过关后出现；最后一关过后它写"重来"（回到第一关）
     // 【文案不在这里写】它是 data-i18n 的静态键（STATIC_TEXT），走 applyStatic 那条路。
     // 这里只切显隐。最后一关按下去会绕回第一关 —— 教学是个环，不用多一个"再来一遍"状态。
