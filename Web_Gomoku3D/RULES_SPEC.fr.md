@@ -221,9 +221,17 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 
 - **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil), ou cinq
   forces d'ordinateur **Bas / Moyen / Haut / Très haut / Ultra**. **Elles diffèrent par la profondeur de
-  calcul, et par la capacité du niveau supérieur à prouver un gain forcé** : Bas voit un coup, Moyen
-  une réponse, Haut trois demi-coups, Très haut quatre. Ultra ajoute par-dessus une **recherche de
-  gain forcé** (suite ininterrompue de quatre : chacune de vos réponses est forcée). Haut et au-dessus
+  calcul, par la capacité du niveau supérieur à prouver un gain forcé, et par leur façon de décider
+  s'il faut faire tourner une couche en 4D** : Bas voit un coup, Moyen une réponse, Haut trois
+  demi-coups, Très haut cinq. Ultra aussi cinq, mais approfondit davantage quand il en a les moyens
+  (approfondissement itératif).
+  Ultra ajoute par-dessus une **recherche de gain forcé** : les suites ininterrompues de quatre
+  (chacune de vos réponses est forcée) et les **suites de trois ouvertes**. Ces dernières sont bien plus
+  difficiles, car une trois ouverte vous laisse plusieurs réponses : il doit **essayer chacune de vos
+  réponses** pour que cela compte, et s'il ne peut pas toutes les essayer il répond « inconnu » plutôt
+  que d'annoncer un gain qui ne tient pas.
+  En 4D, Très haut et Ultra **évaluent aussi une rotation avec la même recherche qu'un coup** :
+  savoir si une rotation vaut un tour complet se décide sur la même échelle que poser une pierre. Haut et au-dessus
   évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que Bas y entre sans
   broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat les débutants
   à tous les coups est le défaut habituel de cette fonction.

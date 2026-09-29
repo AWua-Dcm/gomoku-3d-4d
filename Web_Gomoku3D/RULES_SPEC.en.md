@@ -222,12 +222,19 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 ## 11. Playing the computer
 
 - **The start screen has an "Opponent" row**: Human (two players, one device), or five computer
-  strengths **Low / Mid / High / Very high / Ultra**. **They differ in how far they look ahead, and
-  whether the top tier proves forced wins**: Low sees one move; Mid one reply; High three plies;
-  Very high four. **In 4D every tier looks one or two plies deeper** — a rotation can move a whole
-  formation, and at 3D depth the computer cannot see that its own last move has just been slid away.
-  Ultra adds a **kill search** on top of that — a forced sequence of fours, where
-  every one of your replies is forced. So High and above walk away from positions where your next
+  strengths **Low / Mid / High / Very high / Ultra**. **They differ in how far they look ahead,
+  whether they prove forced wins, and how they decide whether to rotate in 4D**: Low sees one move;
+  Mid one reply; High three plies; Very high five. Ultra is five as well, but deepens further when it
+  can afford to (iterative deepening).
+  Ultra also runs a **kill search** — forced-win sequences: runs of fours (where each of your replies
+  is forced to a single square), and runs of open threes. The latter is far harder, because an open
+  three leaves you more than one defence: it has to **try every one of your replies** before it counts,
+  and if it cannot try them all it says "unknown" rather than claim a win that does not hold.
+  In 4D, Very high and Ultra also **value a rotation with the same search they use for a move** —
+  whether a rotation is worth a whole turn is decided on the same scale as placing a stone; Low, Mid
+  and High keep the cheaper tier heuristics.
+  **In 4D every tier looks one or two plies deeper** — a rotation can move a whole formation, and at
+  3D depth the computer cannot see that its own last move has just been slid away. So High and above walk away from positions where your next
   move would make an open four, while Low happily walks into them. All five stay deliberately on
   the weak side — an "easy" opponent that beats beginners every time is the usual failure of this
   feature.

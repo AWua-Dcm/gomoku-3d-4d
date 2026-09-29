@@ -1200,9 +1200,14 @@
 ## 11. 人机对战
 
 - **起始界面可以选「对手」**：人类（同机轮流），或者电脑的五档强度
-  **低 / 中 / 高 / 极高 / 极限**。**差别在"算多远"，以及最高档会不会算杀**：
-  低档只看眼前一步；中档算一层（我下完他会怎么应）；高档三层；极高四层；
-  极限档在四层之外还会**算杀** —— 连续冲四的强制取胜路线，每一步对手都只有一个应手。
+  **低 / 中 / 高 / 极高 / 极限**。**差别在"算多远"、会不会算杀，以及四维下怎么判断该不该转动**：
+  低档只看眼前一步；中档算一层（我下完他会怎么应）；高档三层；极高五层；
+  极限也是五层，但够便宜时会再多算几层（迭代加深）。
+  极限档另外会**算杀** —— 强制取胜路线的搜索：连续冲四（你的应手每次都被逼成唯一一个），
+  以及连续活三。后者难得多，因为活三的应手不止一个，它必须**把你的每个应手都试一遍**才算数；
+  试不完就宁可判"不知道"，绝不报一个站不住的"必胜"。
+  极高和极限在四维下还会**拿同一段搜索去给转动估值**：转一下值不值一整手，
+  和落子放在同一个尺度上比；低 / 中 / 高仍然用便宜的档位启发式。
   **四维模式里各档还要再深一到两层**：转动会把整个阵型挪走，浅一层看不出来
   「我刚落的那一手已经被转没了」，于是会走出白送一手棋。
   所以高档以上会主动躲开"我下这里、他下一手就成四"这类局面，低档看不出来。
@@ -1465,12 +1470,19 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 ## 11. Playing the computer
 
 - **The start screen has an "Opponent" row**: Human (two players, one device), or five computer
-  strengths **Low / Mid / High / Very high / Ultra**. **They differ in how far they look ahead, and
-  whether the top tier proves forced wins**: Low sees one move; Mid one reply; High three plies;
-  Very high four. **In 4D every tier looks one or two plies deeper** — a rotation can move a whole
-  formation, and at 3D depth the computer cannot see that its own last move has just been slid away.
-  Ultra adds a **kill search** on top of that — a forced sequence of fours, where
-  every one of your replies is forced. So High and above walk away from positions where your next
+  strengths **Low / Mid / High / Very high / Ultra**. **They differ in how far they look ahead,
+  whether they prove forced wins, and how they decide whether to rotate in 4D**: Low sees one move;
+  Mid one reply; High three plies; Very high five. Ultra is five as well, but deepens further when it
+  can afford to (iterative deepening).
+  Ultra also runs a **kill search** — forced-win sequences: runs of fours (where each of your replies
+  is forced to a single square), and runs of open threes. The latter is far harder, because an open
+  three leaves you more than one defence: it has to **try every one of your replies** before it counts,
+  and if it cannot try them all it says "unknown" rather than claim a win that does not hold.
+  In 4D, Very high and Ultra also **value a rotation with the same search they use for a move** —
+  whether a rotation is worth a whole turn is decided on the same scale as placing a stone; Low, Mid
+  and High keep the cheaper tier heuristics.
+  **In 4D every tier looks one or two plies deeper** — a rotation can move a whole formation, and at
+  3D depth the computer cannot see that its own last move has just been slid away. So High and above walk away from positions where your next
   move would make an open four, while Low happily walks into them. All five stay deliberately on
   the weak side — an "easy" opponent that beats beginners every time is the usual failure of this
   feature.
@@ -1735,10 +1747,16 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 ## 11. コンピュータとの対戦
 
 - **開始画面に「対戦相手」の行がある**：人間（同じ端末で交互に）、またはコンピュータの
-  5 段階 **弱 / 中 / 強 / 最強 / 極**。**違いは「どこまで読むか」と、最上位が殺しを読むかどうか**：
-  弱は一手先だけ、中は一手先の応手まで、強は三手先、最強は四手先まで読みます。
-  極はその上に**殺し（連続四の強制成勝）**を載せます —— 相手の応手が毎回一つに限られる
-  手順を、十数手先まで読み切ります。だから強以上は「ここに打つと次の相手の一手で活四に
+  5 段階 **弱 / 中 / 強 / 最強 / 極**。**違いは「どこまで読むか」、殺しを読むかどうか、
+  そして 4D で回転すべきかどうかの判断方法**です：
+  弱は一手先だけ、中は一手先の応手まで、強は三手先、最強は五手先まで読みます。
+  極も五手先ですが、余裕があるときはさらに深く読みます（反復深化）。
+  極はさらに**殺し**を載せます —— 強制成勝の手順を読む探索で、連続四（あなたの応手が毎回
+  ただ一マスに強制される手順）と、**連続活三**の両方を見ます。後者は格段に難しく、
+  活三はあなたの応手が一つではないため、**あなたの応手を一つ残らず試して**初めて勝ちと数えます。
+  試し切れないときは「不明」と判断し、成り立たない「必勝」は決して名乗りません。
+  4D では最強と極が**着手と同じ探索で回転の価値も測ります** —— 回転が一手分の価値があるかを
+  着手と同じ尺度で比べます。弱・中・強は従来どおり安い段階ヒューリスティックのままです。だから強以上は「ここに打つと次の相手の一手で活四に
   なる」という局面を避け、弱は平気で踏み込みます。5 段階とも**わざと弱め**に振ってあります ——
   「簡単」な相手が初心者を毎回負かしてしまうのはこの手の機能でありがちな失敗なので。
   **4D では各段階とももう一〜二手深く読みます** —— 回転は陣形ごと動かすので、
@@ -1997,10 +2015,17 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 ## 11. 컴퓨터와의 대국
 
 - **시작 화면에 「상대」 줄이 있습니다**: 사람(같은 기기에서 번갈아), 또는 컴퓨터의
-  다섯 단계 **하 / 중 / 상 / 최상 / 극**. **차이는 "얼마나 멀리 읽는가"와, 최상위가 죽음을 읽는지**입니다:
-  하 단계는 한 수 앞만, 중 단계는 응수까지, 상 단계는 세 수, 최상 단계는 네 수 앞까지 읽습니다.
-  극 단계는 그 위에 **연속 사(死) 읽기**를 얹습니다 — 상대의 응수가 매번 하나로 강제되는
-  수순을 십여 수 앞까지 읽어냅니다. 그래서 상 이상은 "여기에 두면 다음 상대 수에 활사가
+  다섯 단계 **하 / 중 / 상 / 최상 / 극**. **차이는 "얼마나 멀리 읽는가", 죽음을 읽는지,
+  그리고 4D에서 회전할지 말지를 어떻게 판단하는가**입니다:
+  하 단계는 한 수 앞만, 중 단계는 응수까지, 상 단계는 세 수, 최상 단계는 다섯 수 앞까지 읽습니다.
+  극 단계도 다섯 수지만, 여유가 있으면 더 깊게 읽습니다(반복 심화).
+  극 단계는 그 위에 **죽음 읽기**를 얹습니다 — 강제 승리 수순을 읽는 탐색으로,
+  연속 사(상대의 응수가 매번 한 칸으로 강제되는 수순)와 **연속 활삼**을 함께 봅니다.
+  후자는 훨씬 어렵습니다. 활삼은 상대의 응수가 하나가 아니므로
+  **상대의 응수를 하나도 빠뜨리지 않고 다 시도해야** 비로소 승리로 셉니다.
+  다 시도할 수 없으면 "모름"으로 판단하고, 성립하지 않는 "필승"은 결코 내세우지 않습니다.
+  4D에서는 최상과 극이 **착수와 같은 탐색으로 회전의 가치도 재봅니다** — 회전이 한 수 값어치가
+  있는지를 착수와 같은 자로 비교합니다. 하·중·상은 기존의 저렴한 단계 휴리스틱 그대로입니다. 그래서 상 이상은 "여기에 두면 다음 상대 수에 활사가
   된다" 같은 국면을 피하고, 하 단계는 그냥 밟고 들어갑니다. 다섯 단계 모두 **일부러 약한 쪽**으로
   맞췄습니다 — "쉬움" 상대가 초보자를 매번 이기는 것은 이런 기능에서 흔한 실패라서요.
   **4D에서는 모든 단계가 한두 수 더 깊게 읽습니다** — 회전은 진형 전체를 옮기므로,
@@ -2261,9 +2286,15 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 - **На стартовом экране есть строка «Соперник»**: человек (двое по очереди на одном устройстве)
   либо пять уровней компьютера **Слаб / Сред / Сильн / Оч. сильн / Ультра**. **Уровни различаются тем,
-  как далеко они считают и умеет ли верхний доказывать выигрыш**: Слаб видит один ход, Сред — один
-  ответный ход, Сильн — три полухода, Оч. сильн — четыре. Ультра сверх этого считает **серии четвёрок**
-  (вынужденное выигрывание: у вас каждый раз ровно один ответ). Поэтому Сильн и выше уходят из позиций,
+  как далеко они считают, умеют ли доказывать выигрыш и как решают, стоит ли поворачивать слой в 4D**:
+  Слаб видит один ход, Сред — один ответный ход, Сильн — три полухода, Оч. сильн — пять.
+  Ультра тоже пять, но при возможности считает глубже (итеративное углубление).
+  Сверх этого Ультра считает **вынужденные выигрыши**: серии четвёрок (у вас каждый раз ровно один
+  ответ) и **серии открытых троек**. Второе намного труднее: у открытой тройки у вас не один ответ,
+  поэтому движок обязан **перебрать все ваши ответы**, и только тогда засчитывает выигрыш;
+  если перебрать не удалось — он говорит «неизвестно», а не объявляет несуществующий выигрыш.
+  В 4D Оч. сильн и Ультра ещё и **оценивают поворот тем же поиском, что и ход**: стоит ли поворот
+  целого хода, решается на той же шкале, что и постановка камня. Поэтому Сильн и выше уходят из позиций,
   где ваш следующий ход сделал бы открытую четвёрку, а Слаб спокойно туда входит. Все пять уровней
   намеренно смещены в слабую сторону — «лёгкий» соперник, обыгрывающий новичка каждый раз, это
   обычная беда таких функций.
@@ -2529,9 +2560,17 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 
 - **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil), ou cinq
   forces d'ordinateur **Bas / Moyen / Haut / Très haut / Ultra**. **Elles diffèrent par la profondeur de
-  calcul, et par la capacité du niveau supérieur à prouver un gain forcé** : Bas voit un coup, Moyen
-  une réponse, Haut trois demi-coups, Très haut quatre. Ultra ajoute par-dessus une **recherche de
-  gain forcé** (suite ininterrompue de quatre : chacune de vos réponses est forcée). Haut et au-dessus
+  calcul, par la capacité du niveau supérieur à prouver un gain forcé, et par leur façon de décider
+  s'il faut faire tourner une couche en 4D** : Bas voit un coup, Moyen une réponse, Haut trois
+  demi-coups, Très haut cinq. Ultra aussi cinq, mais approfondit davantage quand il en a les moyens
+  (approfondissement itératif).
+  Ultra ajoute par-dessus une **recherche de gain forcé** : les suites ininterrompues de quatre
+  (chacune de vos réponses est forcée) et les **suites de trois ouvertes**. Ces dernières sont bien plus
+  difficiles, car une trois ouverte vous laisse plusieurs réponses : il doit **essayer chacune de vos
+  réponses** pour que cela compte, et s'il ne peut pas toutes les essayer il répond « inconnu » plutôt
+  que d'annoncer un gain qui ne tient pas.
+  En 4D, Très haut et Ultra **évaluent aussi une rotation avec la même recherche qu'un coup** :
+  savoir si une rotation vaut un tour complet se décide sur la même échelle que poser une pierre. Haut et au-dessus
   évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que Bas y entre sans
   broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat les débutants
   à tous les coups est le défaut habituel de cette fonction.

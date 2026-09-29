@@ -228,9 +228,10 @@ and it is stated here rather than papered over.
 ## ⚠️ Known limitations
 
 - **The computer opponent is not an engine.** Five tiers (Low / Mid / High / Very high / Ultra) differ
-  in how far they look, and whether the top tier runs a **kill search** (a forced run of fours). Even
-  Ultra does not recognise gapped shapes, does not see double threats, and has no opening book or
-  joseki — good enough as a sparring partner; for a serious game, use a dedicated engine.
+  in how far they look, whether they run a **kill search** (forced-win search: runs of fours, and runs
+  of open threes), and how they decide whether to rotate in 4D. Threat counting uses a sliding window,
+  so **it does recognise gapped shapes and double threats**; but it has no opening book, no joseki and
+  no quiescence search — good enough as a sparring partner; for a serious game, use a dedicated engine.
   (Cross-machine networking: the **server and protocol are implemented and tested**
   — `Web_Gomoku3D/server.js`, 8960 assertions in step 8 — but the page is not wired to it,
   so you cannot actually play across machines yet. Design and trade-offs:
@@ -255,6 +256,15 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
 ### 2026.09.29
+
+- 🔧 **v2.10.15** Board size upper limit lowered from 50 to 30 (`8 – 30`)
+- ✨ **v2.10.15** Computer opponent: **4D rotation now competes with placing a stone** — Very high and
+  Ultra value "rotate" and "place" with the same search and take whichever scores higher (Low / Mid /
+  High keep the cheaper tier heuristics, but no tier skips rotation by chance any more). Ultra also
+  gains a **kill search over open threes** (VCT), and any win it claims must survive a check that tries
+  *every* defence. Added a Zobrist transposition table.
+- 🎨 **v2.10.15** Setup screen: at Ultra the slider shifts up a few pixels and a small line appears
+  below it — "Thinking time may increase noticeably" — without moving any other control
 
 - ✨ **v2.10.14** The computer opponent is much stronger: fixed "its second stone wanders off to the player's layer" (a searching tier only expands the top 4 of its ordering, and extending its own stone tied exactly with blocking the player's, so the tie went to the lowest coordinates — the top 4 always landed in one corner); the leaf evaluation now adds up the two best threats instead of only the best one; Very high goes from 4 plies to 5 and Ultra now deepens iteratively (6 plies when it can afford them); the kill search no longer misses the case where the opponent has a five of its own
 
