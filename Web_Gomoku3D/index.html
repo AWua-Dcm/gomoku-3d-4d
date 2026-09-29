@@ -297,6 +297,13 @@
        · 两指的平移仍然会派发 pointer 事件给我们：pan-y 只让浏览器接管单指竖拖。 */
   #layerBase { touch-action: pan-y; }
 
+  /* v3.0.0「晨昏」的时间轴。高度写死 —— 它是棋盘的固定对手，
+     写死才能保证"棋盘让出去的正好是这一条"。 */
+  #timelineWrap { height: 30px; background: var(--well); border: 1px solid var(--border);
+                  border-radius: 4px; flex: 0 0 auto; overflow: hidden; }
+  #timelineWrap.off { display: none; }
+  #timeline { display: block; width: 100%; height: 100%; }
+
   #navRow { display: flex; align-items: center; gap: 8px; }
   #layerLabel { flex: 1 1 auto; text-align: center; font-size: 14px; }
 
@@ -2788,6 +2795,12 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
       <canvas id="layerOverlay"></canvas>
     </div>
 
+    <!-- v3.0.0「晨昏」的时间轴。**放在平面棋盘下方**，棋盘让它一部分位置 ——
+         #boardWrap 是 flex:1 1 auto，所以这里加一条固定高度的东西，棋盘会自动让出来，
+         不用改棋盘的 CSS。三维下整条隐藏（晨昏只在四维）。
+         一列一手，底色带画相位（黎明 / 永夜），圆点画那一手是谁下的。 -->
+    <div id="timelineWrap"><canvas id="timeline"></canvas></div>
+
     <div id="navRow">
       <button id="prevLayer" class="mini">＜</button>
       <div id="layerLabel"></div>
@@ -3373,7 +3386,7 @@ function sideName(s, lang = "zh") {
 }
 
 /** 走子记录 */
-function MoveRecord(x, y, z, player, moveNumber) {
+function MoveRecord(x, y, z, player, moveNumber, phase) {
   // 【这里必须把原型接上，不能直接 return 一个字面量】函数体 return 对象时，
   // `new` 得到的是那个字面量、不是 this —— 而字面量的原型是 Object.prototype，
   // 下面挂的那个 toString 就永远够不着：rec.toString() 走的是
@@ -3382,7 +3395,11 @@ function MoveRecord(x, y, z, player, moveNumber) {
   // 接上原型之后 `new MoveRecord(...)` 和 `MoveRecord(...)` 两种写法都对
   // （RotationMove / RotationRecord 是 class，本来就没这个问题）。
   return Object.assign(Object.create(MoveRecord.prototype),
-                       { x: x, y: y, z: z, player: player, moveNumber: moveNumber });
+                       { x: x, y: y, z: z, player: player, moveNumber: moveNumber,
+                         // v3.0.0「晨昏」：这一手落下时的相位。**必须记在走子记录上** ——
+                         // 相位现在是状态（催/缓会改它），不能事后按手数反推。
+                         // 时间轴要按它画底色带；关掉晨昏时恒为 0，与以前逐位相同。
+                         phase: phase | 0 });
 }
 MoveRecord.prototype.toString = function (lang = "zh") {
   return ct("move.record", lang, { n: this.moveNumber, who: sideName(this.player, lang),
@@ -3939,7 +3956,7 @@ class GameSession {
       return outcome;
     }
 
-    const record = new MoveRecord(x, y, z, player, this.history.length + 1);
+    const record = new MoveRecord(x, y, z, player, this.history.length + 1, this.phase);
     this.history.push(record);
     this.lastOutcome = outcome;
 
@@ -8147,7 +8164,7 @@ const Game = {
     const ids = ["gl","modeGhost","modeSlice","modeGrid","stoneAll","stoneBlack","stoneWhite",
       "sliceGroup","sliceDown","sliceUp","sliceLabel",
       "coords","hint","hintbox","hintToggle","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
-      "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
+      "chip","status","rule","info","boardWrap","timelineWrap","timeline","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","tutorialBtn","view","stage","previewTag",
       "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","aiHint","orderMe","orderCpu",
@@ -8187,6 +8204,7 @@ const Game = {
     this.ctxBase = this.el.layerBase.getContext("2d");
     this.ctxOverlay = this.el.layerOverlay.getContext("2d");
     this.ctxStrip = this.el.strip.getContext("2d");
+    this.ctxTimeline = this.el.timeline ? this.el.timeline.getContext("2d") : null;
 
     if (!Renderer.init(this.el.gl)) {
       this.glFailed = true;     // 语言切换时靠它决定 #hint 写哪一段
@@ -8466,6 +8484,7 @@ const Game = {
     this.drawLayerBase();
     this.drawLayerOverlay();
     this.drawStrip();
+    this.drawTimeline();
     this.refreshTexts();
   },
 
@@ -9343,6 +9362,67 @@ const Game = {
     const x0 = (w - totalW) / 2, y0 = (h - totalH) / 2;
     const col = i % cols, row = Math.floor(i / cols);
     return { x: x0 + col * (avail + pad), y: y0 + row * (avail + pad), size: avail, cols: cols, rows: rows };
+  },
+
+  /**
+   * v3.0.0「晨昏」的时间轴：一列一手，底色带画相位，圆点画那一手是谁下的。
+   *
+   * 【为什么要它】晨昏把"这一手是什么时候下的"变成了影响胜负的东西（相位决定
+   * 那条线算不算数），而棋盘本身**看不出相位** —— 一盘子实心子，哪颗是黎明哪颗是永夜
+   * 只能看颜色深浅。时间轴是把那条隐形的轴画出来：一眼看到"我们正在哪个相位、
+   * 已经走了几手、离翻转还有多远"。
+   *
+   * 【三维下隐藏】晨昏只在四维开，所以整条 #timelineWrap 挂 .off。
+   */
+  drawTimeline() {
+    if (!this.session || !this.ctxTimeline || !this.el.timeline) return;
+    const on = this.session.rules.phasePeriod > 0;
+    if (this.el.timelineWrap) this.el.timelineWrap.classList.toggle("off", !on);
+    if (!on) return;
+
+    const canvas = this.el.timeline, ctx = this.ctxTimeline;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+
+    const cw = canvas.clientWidth, ch = canvas.clientHeight;
+    const hist = this.session.history;
+    // 【列宽固定，走远了就只显示最近的一段】压缩列宽会让"一手"越走越看不清，
+    // 而时间轴要读的正是"最近这几手"。
+    const colW = 8;
+    const slots = Math.max(1, Math.floor(cw / colW));
+    const from = Math.max(0, hist.length - slots);
+    const x0 = 0;
+
+    ctx.font = "9px system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    for (let i = from; i < hist.length; i++) {
+      const rec = hist[i];
+      const x = x0 + (i - from) * colW;
+      // 底色带：黎明用亮底、永夜用暗底
+      ctx.fillStyle = Palette.hex(rec.phase === 0 ? "--panel" : "--panel-hi");
+      ctx.fillRect(x, 0, colW, ch);
+      // 那一手是谁下的：一颗小圆点
+      ctx.beginPath();
+      ctx.arc(x + colW / 2, ch / 2 + 2, 2.6, 0, Math.PI * 2);
+      ctx.fillStyle = Palette.hex(rec.player === BLACK ? "--black" : "--white");
+      ctx.fill();
+      ctx.strokeStyle = Palette.hex("--stone-edge");
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+    }
+    // 当前该谁走：最后一格右边画一条竖线，当"游标"
+    ctx.fillStyle = Palette.hex("--accent");
+    ctx.fillRect(x0 + (hist.length - from) * colW, 0, 1.5, ch);
+    // 相位名 + 倒计时，铺在最左边（有历史时才显示，免得开局糊一片）
+    if (hist.length > 0) {
+      const p = this.session.phase | 0;
+      ctx.fillStyle = Palette.hex("--dim");
+      ctx.fillText(p === 0 ? "☀" : "☾", 2, 8);
+    }
   },
 
   drawStrip() {
@@ -10243,6 +10323,7 @@ const Game = {
     this.drawLayerBase();
     this.drawLayerOverlay();
     this.drawStrip();
+    this.drawTimeline();
     this.refreshTexts();
   },
 
@@ -11099,6 +11180,7 @@ const Game = {
     this.drawLayerBase();
     this.drawLayerOverlay();
     this.drawStrip();
+    this.drawTimeline();
   },
 
   /**
