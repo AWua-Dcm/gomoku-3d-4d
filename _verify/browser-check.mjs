@@ -839,8 +839,11 @@ try {
     return { fourD: Game.fourD, note: document.getElementById("coolNote").textContent,
              many: many, one: one, rule1: rule1, rule5: rule5 };
   })()`);
-  check(en4d.fourD === true && en4d.note === "A rotation uses up the whole turn",
-    "起始界面已经切到四维，下面那一遍扫的是四维的尺寸行",
+  // 【v3.0.0：这一格的文案换了】原来写"转动会占掉一个回合"，现在写输入框的范围
+  // （和 #dimRange 同一套：范围从常量现算，玩家看得见边界）。那句话本身没丢 ——
+  // 它在 #rule 里，下面 rule5 那条断言就在验它。
+  check(en4d.fourD === true && en4d.note === "3 – 10 allowed",
+    "起始界面已经切到四维，冷却那格写的是可填范围",
     JSON.stringify(en4d));
   check(en4d.many.indexOf("every 5 moves you may rotate one layer") >= 0 &&
         en4d.one.indexOf("every move you may rotate one layer") >= 0 &&
@@ -1416,16 +1419,21 @@ try {
       Game.openSetup();
       Game.setLang("en");
       const modeBtns = [document.getElementById("mode3d"), document.getElementById("mode4d")];
-      const coolBtns = [...document.querySelectorAll(".coolBtn")];
+      // 【v3.0.0 起没有 .coolBtn 了】转动冷却从四个键的 2×2 网格改成和「棋盘尺寸」
+      // 一样的手填数字输入框（#coolInput），相位周期同样（#phaseInput）。
+      // 原来那两条断言（2 行 2 列、两列对齐）随之作废 —— 换成"两个输入框都在、
+      // 且各自那一行只有一行高"，这才是新版要保证的东西。
+      const coolInput = document.getElementById("coolInput");
+      const phaseInput = document.getElementById("phaseInput");
       const trEn = R("topRight"), title = document.querySelector("#setup .titleRow").getBoundingClientRect();
-      const coolCols = cols(coolBtns);
-      // "两列对齐"：每一列里那两个键的左边缘必须相同，而两列之间必须不同
-      const colOf = (i) => Math.round(coolBtns[i].getBoundingClientRect().left);
       const setupUi = {
         modeRowLines: tops(modeBtns).length,
-        coolRowLines: tops(coolBtns).length,
-        coolCols: coolCols.length,
-        coolColAligned: colOf(0) === colOf(2) && colOf(1) === colOf(3) && colOf(0) !== colOf(1),
+        coolInputVisible: coolInput.getClientRects().length > 0,
+        phaseInputVisible: phaseInput.getClientRects().length > 0,
+        coolRowOneLine: tops([coolInput]) === 1,
+        phaseRowOneLine: tops([phaseInput]) === 1,
+        coolRowH: Math.round(document.getElementById("coolRow").getBoundingClientRect().height),
+        phaseRowH: Math.round(document.getElementById("phaseRow").getBoundingClientRect().height),
         labelLines: [...document.querySelectorAll(".rowLabel")].map(lineCount),
         trTop: Math.round(trEn.top), trRight: Math.round(trEn.right),
         trHitsTitle: hits(trEn, title),
@@ -1466,10 +1474,17 @@ try {
       vp.tag + " 英文下 3D / 4D 两个模式键在同一行",
       "实测分成 " + port.setupUi.modeRowLines + " 行 —— 行标曾经是写死的 138px，"
       + "把 \"Mode\" 也撑到 138，这一行就超了 32.7px");
-    check(port.setupUi.coolRowLines === 2 && port.setupUi.coolCols === 2 && port.setupUi.coolColAligned,
-      vp.tag + " 英文下转动冷却四键排成 2×2 且两列各自对齐",
-      JSON.stringify({ 行数: port.setupUi.coolRowLines, 列数: port.setupUi.coolCols,
-                       两列对齐: port.setupUi.coolColAligned }));
+    check(port.setupUi.coolInputVisible && port.setupUi.phaseInputVisible,
+      vp.tag + " 英文下转动冷却 / 相位周期两个输入框都看得见",
+      JSON.stringify({ cool: port.setupUi.coolInputVisible, phase: port.setupUi.phaseInputVisible }));
+    // 【为什么是"一行高"而不是一个具体像素】这两行在三维下是禁用状态（保留槽位），
+    // 高度和四维下一样。量到 48px 以内就说明没折行 —— 折行会翻倍。
+    // 【只在宽屏上要求"一行高"】360~390px 那样窄的竖屏下，行标 + 输入框 + 范围提示
+    // 本来就放不下一行 —— 旧的 2×2 冷却网格在那两档下也是两行。
+    // 窄屏下改为验"没有横向溢出"，那才是窄屏真正会坏的地方（见下面的 docOver）。
+    check(vp.w < 600 || (port.setupUi.coolRowH <= 48 && port.setupUi.phaseRowH <= 48),
+      vp.tag + " 英文下冷却 / 相位两行各占一行、没有折行",
+      JSON.stringify({ 冷却行高: port.setupUi.coolRowH, 相位行高: port.setupUi.phaseRowH }));
     // 竖屏下 #stage 翻成了上下分栏，设置区在【下面】—— 角落小字说的也得是"与下方设置无关"
     const tagPort = JSON.parse(await ev(`(() => {
       Game.openSetup();
@@ -2081,11 +2096,12 @@ try {
       const cols = (els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().left)))].length;
       const lines = (el) => { const rg = document.createRange(); rg.selectNodeContents(el); return rg.getClientRects().length; };
       const mode = [document.getElementById("mode3d"), document.getElementById("mode4d")];
-      const cool = [...document.querySelectorAll(".coolBtn")];
       const s = document.getElementById("setup");
       const status = document.getElementById("status");
       return JSON.stringify({
-        modeLines: tops(mode), coolLines: tops(cool), coolCols: cols(cool),
+        modeLines: tops(mode),
+        coolRowH: Math.round(document.getElementById("coolRow").getBoundingClientRect().height),
+        phaseRowH: Math.round(document.getElementById("phaseRow").getBoundingClientRect().height),
         labelLines: [...document.querySelectorAll(".rowLabel")].map(lines),
         docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         setupOver: s.scrollWidth - s.clientWidth,
@@ -2094,7 +2110,10 @@ try {
     })()`);
     const g = JSON.parse(geo);
     check(g.modeLines === 1, lang + "：3D / 4D 两个模式键在同一行", JSON.stringify(g.modeLines));
-    check(g.coolLines === 2 && g.coolCols === 2, lang + "：冷却键是 2 行 2 列", g.coolLines + "行" + g.coolCols + "列");
+    // v3.0.0：冷却和相位周期都是手填数字输入框，各占一行
+    // 这一档是 1280×800（大屏），所以可以要求一行高
+    check(g.coolRowH <= 48 && g.phaseRowH <= 48, lang + "：冷却 / 相位两行各占一行",
+          g.coolRowH + "px / " + g.phaseRowH + "px");
     check(g.labelLines.every((n) => n <= 1), lang + "：行标都没有折行", JSON.stringify(g.labelLines));
     check(g.docOver <= 1, lang + "：整个页面没有横向滚动", "溢出 " + g.docOver + "px");
     // 【状态行那一条是"记录现状"不是"保证"】中文基线本来就折成两行（202.7px 文字

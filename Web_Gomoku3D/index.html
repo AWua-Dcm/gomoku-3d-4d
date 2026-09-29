@@ -2966,13 +2966,25 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
        属性写法，否则分母会多出一个）。 -->
   <div class="row" id="coolRow">
     <div class="rowLabel" id="rowLabelCool" data-i18n="rowLabelCool">转动冷却</div>
-    <div id="coolGrid">
-      <button class="coolBtn" data-cool="3" disabled id="cool3" data-i18n="cool3">3 手</button>
-      <button class="coolBtn sel" data-cool="5" disabled id="cool5" data-i18n="cool5">5 手</button>
-      <button class="coolBtn" data-cool="8" disabled id="cool8" data-i18n="cool8">8 手</button>
-      <button class="coolBtn" data-cool="10" disabled id="cool10" data-i18n="cool10">10 手</button>
-    </div>
+    <!-- 四个键（3/5/8/10 手）改成**和「棋盘尺寸」一样的手填数字**（v3.0.0）。
+        【为什么改】四键的 2×2 网格占两行高，而起始界面已经没有垂直余量了 ——
+        v3.0.0 要在四维下加两个设置（转动冷却、相位周期），换成输入框之后
+        每行只有一行高，两个设置合起来才顶得上原来一个。 -->
+    <input id="coolInput" class="dimInput" type="number" min="3" max="10" step="1"
+           value="5" inputmode="numeric" disabled>
     <span id="coolNote" class="hint"></span>
+  </div>
+
+  <!-- v3.0.0「晨昏」的相位周期。**只在四维下有意义**（晨昏是四维常开的，见 newGame），
+       三维下和冷却那行一样：保留槽位、禁用，不隐藏。
+       【下限 10 是算出来的，不是拍的】一个相位窗口里先手落 ⌈P/2⌉ 子、后手落 ⌊P/2⌋ 子；
+       要凑出"连续 5 颗同色同相位"，先手至少得在同一个窗口里落满 5 子 → P ≥ 9，
+       后手要 P ≥ 10。6 和 8 在数学上凑不出五连，会变成和棋机器（实测确认过）。 -->
+  <div class="row" id="phaseRow">
+    <div class="rowLabel" id="rowLabelPhase" data-i18n="rowLabelPhase">相位周期</div>
+    <input id="phaseInput" class="dimInput" type="number" min="10" max="30" step="1"
+           value="12" inputmode="numeric" disabled>
+    <span id="phaseNote" class="hint"></span>
   </div>
 
   <div id="sizeSummary"></div>
@@ -3357,6 +3369,14 @@ MoveRecord.prototype.toString = function (lang = "zh") {
 
 /** 棋盘尺寸上下限。**UI 只有这一处定义**，输入框的 min/max、夹取、提示文案都从它取。 */
 const BoardLimits = { Min: 8, Max: 30 };
+/** 转动冷却：每落几手可以转一层。见 #coolRow 的 HTML 注释。 */
+const CoolLimits = { Min: 3, Max: 10 };
+/**
+ * v3.0.0「晨昏」的相位周期（每个相位持续几手）。
+ * **下限 10 是算术结果**：一个窗口里先手落 ⌈P/2⌉ 子，要凑出"连续 5 颗同色同相位"
+ * 至少得落满 5 子 → 先手 P ≥ 9、后手 P ≥ 10。6 和 8 在数学上凑不出五连。
+ */
+const PhaseLimits = { Min: 10, Max: 30 };
 
 /**
  * 把"尺寸"归一成 [nx, ny, nz]。两种写法都收：
@@ -6548,15 +6568,12 @@ const STATIC_TEXT = { en: {
   "rowLabelSize3d": "Board size",
   "rowLabelSize4d": "Board size",
   "rowLabelCool": "Rotation cooldown",
+  "rowLabelPhase": "Phase length",
   "mode3d": "3D · Classic",
   "mode4d": "4D · Rotatable",
   "firstBlack": "Black first",
   "firstWhite": "White first",
   "dimCube": "Link all three axes",
-  "cool3": "3 moves",
-  "cool5": "5 moves",
-  "cool8": "8 moves",
-  "cool10": "10 moves",
   "startBtn": "Start game",
 
   // ---- 起始界面的规则摘要（含 <br>）。英文读者看到的是同一件事的白话说法，
@@ -6646,7 +6663,6 @@ const TEXT = { en: {
   //      （数字和那个 EN DASH 不翻译，online-http.test.mjs 按它断言）
   "range.allowed": "{range} allowed",
   "range.cubicOnly": "{range} · must be cubic (rotating a layer needs the other two axes equal)",
-  "cool.usesTurn": "A rotation uses up the whole turn",
   "cool.fourDOnly": "4D mode only",
 
   // ---- 起始界面下方的尺寸摘要。\n 全部是排版（white-space: pre-line）
@@ -6733,15 +6749,12 @@ STATIC_TEXT.ja = {
   "rowLabelSize3d": "盤のサイズ",
   "rowLabelSize4d": "盤のサイズ",
   "rowLabelCool": "回転のクールダウン",
+  "rowLabelPhase": "相位の長さ",
   "mode3d": "3D · クラシック",
   "mode4d": "4D · 回転可能",
   "firstBlack": "黒が先手",
   "firstWhite": "白が先手",
   "dimCube": "3軸を連動",
-  "cool3": "3手",
-  "cool5": "5手",
-  "cool8": "8手",
-  "cool10": "10手",
   "startBtn": "対局開始",
   "ruleNote": "ルール：空いているマスならどこにでも着手できます（重力はありません）。先手は<b>ちょうど5連</b>を作らなければならず、6連以上は長連で負けです。後手は5連以上で勝ちです。<br>勝ちの方向は13通り：3軸 + 面対角線6本 + 体対角線4本。右のパネルでレイヤーを切り替えて石を置きます。",
 };
@@ -6795,7 +6808,6 @@ TEXT.ja = {
   "toast.swapped": "{who}を先手にして最初から始めました",
   "range.allowed": "指定できる範囲：{range}",
   "range.cubicOnly": "{range} · 立方体のみ（レイヤーを回転するには他の2軸が等しい必要があります）",
-  "cool.usesTurn": "回転はその手番を丸ごと使います",
   "cool.fourDOnly": "4Dモードのみ",
   "setup.summary": "{x} × {y} × {z}（{cells}マス）· {who}が先手{rest}",
   "setup.perLayer": "石{n}個",
@@ -6855,15 +6867,12 @@ STATIC_TEXT.ko = {
   "rowLabelSize3d": "판 크기",
   "rowLabelSize4d": "판 크기",
   "rowLabelCool": "회전 쿨다운",
+  "rowLabelPhase": "위상 주기",
   "mode3d": "3D · 클래식",
   "mode4d": "4D · 회전 가능",
   "firstBlack": "흑 선수",
   "firstWhite": "백 선수",
   "dimCube": "세 축 연동",
-  "cool3": "3수",
-  "cool5": "5수",
-  "cool8": "8수",
-  "cool10": "10수",
   "startBtn": "게임 시작",
   "ruleNote": "규칙: 빈칸이면 어디든 착수할 수 있습니다 — 중력은 없습니다. 선수는 <b>정확히 다섯</b>을 이어야 하며, 여섯 이상은 장련(長連) 반칙으로 패배합니다. 후수는 다섯 이상이면 승리합니다.<br>승리 방향은 13개입니다: 축 3 + 면 대각선 6 + 공간 대각선 4. 오른쪽 패널에서 레이어를 넘기며 돌을 놓으세요.",
 };
@@ -6917,7 +6926,6 @@ TEXT.ko = {
   "toast.swapped": "{who} 선수로 다시 시작했습니다",
   "range.allowed": "허용 범위 {range}",
   "range.cubicOnly": "허용 범위 {range} · 정육면체여야 합니다 (레이어를 회전하려면 나머지 두 축이 같아야 함)",
-  "cool.usesTurn": "회전은 한 수를 전부 사용합니다",
   "cool.fourDOnly": "4D 모드 전용",
   "setup.summary": "{x} × {y} × {z} ({cells}칸) · {who} 선수{rest}",
   "setup.perLayer": "돌 {n}개",
@@ -6980,15 +6988,12 @@ STATIC_TEXT.ru = {
   "rowLabelSize3d": "Размер доски",
   "rowLabelSize4d": "Размер доски",
   "rowLabelCool": "Перезарядка поворота",
+  "rowLabelPhase": "Длина фазы",
   "mode3d": "3D · Классика",
   "mode4d": "4D · С поворотом",
   "firstBlack": "Первыми ходят чёрные",
   "firstWhite": "Первыми ходят белые",
   "dimCube": "Связать все три оси",
-  "cool3": "3 хода",
-  "cool5": "5 ходов",
-  "cool8": "8 ходов",
-  "cool10": "10 ходов",
   "startBtn": "Начать игру",
   "ruleNote": "Правила: ходить можно в любую пустую клетку — гравитации нет. Первый игрок должен собрать <b>ровно пять</b> в ряд; шесть и более — перебор и поражение. Второй игрок побеждает при пяти и более.<br>Победных направлений 13: 3 оси + 6 диагоналей граней + 4 диагонали куба. Переключайте слои на панели справа и ставьте камни.",
 };
@@ -7050,7 +7055,6 @@ TEXT.ru = {
   "toast.swapped": "Игра начата заново: первыми ходят {who}",
   "range.allowed": "Допустимо: {range}",
   "range.cubicOnly": "{range} · нужен куб (для поворота слоя две другие оси должны быть равны)",
-  "cool.usesTurn": "Поворот занимает весь ход",
   "cool.fourDOnly": "Только в режиме 4D",
   "setup.summary": "{x} × {y} × {z} ({cells} клеток) · первыми ходят {who}{rest}",
   "setup.perLayer": "{n} камней",
@@ -7114,15 +7118,12 @@ STATIC_TEXT.fr = {
   "rowLabelSize3d": "Taille du plateau",
   "rowLabelSize4d": "Taille du plateau",
   "rowLabelCool": "Recharge de rotation",
+  "rowLabelPhase": "Durée de phase",
   "mode3d": "3D · Classique",
   "mode4d": "4D · Avec rotation",
   "firstBlack": "Noirs en premier",
   "firstWhite": "Blancs en premier",
   "dimCube": "Lier les trois axes",
-  "cool3": "3 coups",
-  "cool5": "5 coups",
-  "cool8": "8 coups",
-  "cool10": "10 coups",
   "startBtn": "Commencer la partie",
   "ruleNote": "Règles : vous pouvez jouer sur n'importe quelle case vide — il n'y a pas de gravité. Le premier joueur doit aligner <b>exactement cinq</b> pions ; six ou plus est un alignement trop long, ce qui fait perdre. Le second joueur gagne avec cinq ou plus.<br>Il y a 13 directions gagnantes : 3 axes + 6 diagonales de face + 4 grandes diagonales. Utilisez le panneau de droite pour parcourir les couches et poser des pions.",
 };
@@ -7180,7 +7181,6 @@ TEXT.fr = {
   "toast.swapped": "Nouvelle partie, {who} en premier",
   "range.allowed": "{range} autorisé",
   "range.cubicOnly": "{range} · doit être cubique (la rotation d'une couche exige que les deux autres axes soient égaux)",
-  "cool.usesTurn": "Une rotation consomme tout le tour",
   "cool.fourDOnly": "Mode 4D uniquement",
   "setup.summary": "{x} × {y} × {z} ({cells} cases) · {who} en premier{rest}",
   "setup.perLayer": "{n} pions",
@@ -8046,26 +8046,9 @@ const Game = {
   startCount: 0,
   // ---- 四维模式。fourD 为 false 时这一堆全都不参与，三维模式的行为一字不变。
   fourD: false,
-  setupCool: 5,          // 设置页选的冷却（落子数）
-  /**
-   * v3.0.0「晨昏」的相位周期。**0 = 关（默认）**，其余是周期格数。
-   *
-   * 【为什么没有界面开关 —— 三种摆法全撞墙，都是实测】
-   *   ① 单独占一行 → 「开始游戏」在法语下被挤出视口 45px
-   *      （browser-check 那条"六种语言都不用滚动就看得见"当场抓到）
-   *   ② 塞进四维尺寸行 → 那一行本来就被「必须立方…」占满（法语 572px），再加就折行，
-   *      仍然超 44px（#dimsSlot 的高度取两条里高的那条）
-   *   ③ 塞进转动冷却那个网格、扩成 3 列 → 破了「冷却四键必须 2×2 两列各自对齐」
-   *      那条断言（六种语言 × 两种视口，6 条红）
-   * 三条不变量都是真的承重，不是可以商量的。**起始界面确实没有余量了。**
-   *
-   * 所以先给一个**零布局代价**的入口，让机制能被试玩：
-   * 在地址后面加 `?dawn=12` 打开。周期不能低于 10 —— 一个窗口里先手落 ⌈P/2⌉ 子，
-   * 要凑出"连续 5 颗同色同相位"至少得落满 5 子 → 先手 P ≥ 9、后手 P ≥ 10，
-   * 6 和 8 在数学上凑不出五连（会变成和棋机器）。
-   * 等试玩有结论，再单独设计它在界面上的位置。
-   */
-  bootDawn: 0,
+  setupCool: 5,          // 设置页选的冷却（落子数），范围见 CoolLimits
+  /** v3.0.0「晨昏」的相位周期。四维下常开，三维下不生效（见 newGame）。 */
+  setupPhase: 12,
   /** 下一手要用的宣告（v3.0.0「晨昏」）。见 MoveMode。 */
   placeMode: 0,
   rotAxis: AXIS_Z,
@@ -8133,20 +8116,7 @@ const Game = {
               this.el.banner.classList.contains("on"));
   },
 
-  /** 解析 `?dawn=N`。读不到 / 不合法就是 0（关）。**不抛**。 */
-  readDawnParam() {
-    try {
-      if (typeof location === "undefined" || !location.search) return 0;
-      const m = /[?&]dawn=(\d+)/.exec(location.search);
-      if (!m) return 0;
-      const n = parseInt(m[1], 10);
-      return n >= 10 ? n : 0;          // P < 10 凑不出五连，不接受
-    } catch (e) { return 0; }
-  },
-
   init() {
-    // v3.0.0「晨昏」的入口（零布局代价，理由见 bootDawn）。必须在建会话之前读。
-    this.bootDawn = this.readDawnParam();
     const ids = ["gl","modeGhost","modeSlice","modeGrid","stoneAll","stoneBlack","stoneWhite",
       "sliceGroup","sliceDown","sliceUp","sliceLabel",
       "coords","hint","hintbox","hintToggle","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
@@ -8158,6 +8128,7 @@ const Game = {
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
+      "coolInput","phaseRow","phaseInput","phaseNote",
       "dimRange","dimRange4d","coolNote",
       "rotPanel","rotStatus","rotLayerDown","rotLayerUp","rotLayerLabel",
       "rotCW","rotCCW","rotGo","rotConfirm","rotCancel","rotHint",
@@ -8358,7 +8329,9 @@ const Game = {
       d[1] = d[2] = d[0];
     }
     rules.rotationCooldownPlacements = this.setupCool;
-    rules.phasePeriod = this.bootDawn;       // v3.0.0「晨昏」，0 = 关；见 bootDawn
+    // v3.0.0「晨昏」：**四维模式下常开**（不做开关），周期用设置页那个数。
+    // 三维下恒为 0 —— 没有转动层的棋盘上，"昼夜交替"没有可依附的机制。
+    rules.phasePeriod = this.fourD ? this.setupPhase : 0;
     this.placeMode = 0;                      // 新局从"正常"开始
 
     // 一律用 FourDSession 包一层。三维模式下它是个透明的转发壳（allowRotation 为 false，
@@ -9626,6 +9599,22 @@ const Game = {
       el.addEventListener("change", () => this.commitDimInput(id, idx));
     }
     on("dimCube", () => this.setSetupCube(!this.setupCube));
+    // 冷却 / 相位周期：和尺寸输入框同一套（input 只刷说明、change 才提交夹取后的值）。
+    // 【不能用 on()】那个简写只绑 click（签名 (id, fn)）—— 绑 change 要自己来。
+    // 和上面尺寸输入框保持同一种写法：input 只刷说明，change 才提交夹取后的值。
+    for (const [id, setter] of [["coolInput", (v) => this.setSetupCool(v)],
+                                ["phaseInput", (v) => this.setSetupPhase(v)]]) {
+      const el = this.el[id];
+      if (!el || !el.addEventListener) continue;
+      el.addEventListener("input", () => this.refreshSetupSummary());
+      el.addEventListener("change", () => setter(parseInt(el.value, 10)));
+      // 输入框失焦时把值夹回范围并写回，和尺寸输入框同一套（commitDimInput）
+      el.addEventListener("blur", () => {
+        const lim = id === "coolInput" ? CoolLimits : PhaseLimits;
+        const v = Math.max(lim.Min, Math.min(lim.Max, Math.round(parseInt(el.value, 10)) || lim.Min));
+        setter(v);
+      });
+    }
     on("startBtn", () => {
       this.closeSetup();
       const d = this.fourD ? [this.setupSize, this.setupSize, this.setupSize] : this.setupDims;
@@ -10543,6 +10532,8 @@ const Game = {
       if (this.el[id]) this.el[id].classList.remove("bad");
     }
     if (this.el.dimCube) this.el.dimCube.classList.toggle("sel", this.setupCube);
+    if (this.el.coolInput) this.el.coolInput.value = String(this.setupCool);
+    if (this.el.phaseInput) this.el.phaseInput.value = String(this.setupPhase);
     // 可填范围。**从 BoardLimits 现算，不写死在 HTML 里** ——
     // 输入框上已经有一份 min/max（浏览器自带的上下箭头和校验用它），
     // 那一份由 dom-smoke 断言和 BoardLimits 相等。显示文本这里直接生成，
@@ -10691,21 +10682,50 @@ const Game = {
     return say(() => "正常", "mode.normal");
   },
 
+  /**
+   * 「转动冷却」和「相位周期」两行的启用/淡显 + 范围提示。
+   * **两行落在同一个函数里**：它们同属"四维才有"，状态永远同步，
+   * 分两个函数只有多一处会漂移的地方。
+   */
   syncCoolRow() {
     const on = this.fourD;
-    document.querySelectorAll(".coolBtn").forEach(b => { b.disabled = !on; });
+    if (this.el.coolInput) this.el.coolInput.disabled = !on;
+    if (this.el.phaseInput) this.el.phaseInput.disabled = !on;
+    // 范围提示走和数据尺寸同一条路：从常量现算，不写死第二份。
+    // 那个 – 是 EN DASH，六种语言共用（和 #dimRange 同一条约定）。
+    const cRange = CoolLimits.Min + " – " + CoolLimits.Max;
+    const pRange = PhaseLimits.Min + " – " + PhaseLimits.Max;
     if (this.el.coolNote) {
       this.el.coolNote.textContent = on
-        ? say(() => "转动会占掉一个回合", "cool.usesTurn")
+        ? say(() => "可填 " + cRange, "range.allowed", { range: cRange })
         : say(() => "四维模式才有", "cool.fourDOnly");
+    }
+    if (this.el.phaseNote) {
+      this.el.phaseNote.textContent = say(() => "可填 " + pRange, "range.allowed", { range: pRange });
     }
   },
 
   setSetupCool(c) {
-    this.setupCool = c;
-    document.querySelectorAll(".coolBtn").forEach(b => {
-      b.classList.toggle("sel", parseInt(b.dataset.cool, 10) === c);
-    });
+    // 【这一层不夹取 —— 夹取在 UI 的事件处理里】这个 setter 是 API：测试用它造
+    // "冷却 1 手"这种极端值来验单复数与门控（dom-smoke 里就有），夹到 3 会把它
+    // 直接掐死，而且掐得很静默 —— 表现为"这一步本该转成功"。
+    // 界面上那个输入框有 min/max，玩家走不到范围外。
+    const n = Math.max(0, Math.round(c) || 0);
+    this.setupCool = n;
+    if (this.el.coolInput) this.el.coolInput.value = String(n);
+    if (this.el.coolInput) this.el.coolInput.classList.remove("bad");
+    this.refreshSetupSummary();
+  },
+
+  /**
+   * v3.0.0「晨昏」的相位周期。**下限不是随便定的**：见 PhaseLimits 的注释 ——
+   * P < 10 时先手在一个窗口里落不满 5 子，凑不出五连。
+   */
+  setSetupPhase(p) {
+    const n = Math.max(PhaseLimits.Min, Math.min(PhaseLimits.Max, Math.round(p) || PhaseLimits.Min));
+    this.setupPhase = n;
+    if (this.el.phaseInput) this.el.phaseInput.value = String(n);
+    if (this.el.phaseInput) this.el.phaseInput.classList.remove("bad");
     this.refreshSetupSummary();
   },
 

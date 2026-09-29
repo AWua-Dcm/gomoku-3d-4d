@@ -212,7 +212,10 @@ for (const m of html.matchAll(/class="rotAxis[^"]*"\s+data-axis="(\d+)"/g)) rotA
 const rotTurnValues = [];
 for (const m of html.matchAll(/class="rotTurns[^"]*"\s+data-turns="(\d+)"/g)) rotTurnValues.push(parseInt(m[1], 10));
 const coolValues = [];
-for (const m of html.matchAll(/class="coolBtn[^"]*"\s+data-cool="(\d+)"/g)) coolValues.push(parseInt(m[1], 10));
+// 【v3.0.0 起没有 .coolBtn 了】转动冷却从四个按钮改成和「棋盘尺寸」一样的
+// 手填数字输入框（#coolInput，范围 CoolLimits）。四个键的 2×2 网格占两行高，
+// 而起始界面已经没有垂直余量再开一行给「相位周期」。
+// 这里保留一个空数组是为了不改下面那套"桩解析数量必须等于 HTML 里的数量"的机制。
 
 function group(sel, values, field) {
   return values.map((v) => {
@@ -224,7 +227,7 @@ function group(sel, values, field) {
 }
 const rotAxisEls = group(".rotAxis", rotAxisValues, "axis");
 const rotTurnEls = group(".rotTurns", rotTurnValues, "turns");
-const coolEls = group(".coolBtn", coolValues, "cool");
+const coolEls = [];
 
 // 这三组原来【一条长度断言都没有】。它们的取值靠上面那三条正则从 HTML 里抠，
 // 而正则要求 data-axis / data-turns / data-cool 紧跟 class —— 往中间插一个新属性
@@ -232,8 +235,7 @@ const coolEls = group(".coolBtn", coolValues, "cool");
 // 变成空操作，所有断言照样绿。这里把它钉死：抠出来的条数必须和 HTML 里 class 的
 // 出现次数一致。
 for (const [name, els, cls] of [["rotAxis", rotAxisEls, ".rotAxis"],
-                                ["rotTurns", rotTurnEls, ".rotTurns"],
-                                ["coolBtn", coolEls, ".coolBtn"]]) {
+                                ["rotTurns", rotTurnEls, ".rotTurns"],]) {
   const inHtml = (html.match(new RegExp('class="' + cls.slice(1) + '[^"]*"', "g")) || []).length;
   if (els.length !== inHtml || els.length === 0) {
     throw new Error(`桩解析 ${name} 得到 ${els.length} 个，HTML 里有 ${inHtml} 个 —— ` +
@@ -294,7 +296,7 @@ const documentStub = {
   querySelectorAll(sel) {
     if (sel === ".rotAxis") return rotAxisEls;
     if (sel === ".rotTurns") return rotTurnEls;
-    if (sel === ".coolBtn") return coolEls;
+    if (sel === ".coolBtn") return coolEls;   // v3.0.0 起恒为空
     if (sel === "[data-i18n]") return i18nEls;
     if (sel === "[data-i18n-html]") return i18nHtmlEls;
     return [];
