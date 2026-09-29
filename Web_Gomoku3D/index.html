@@ -4432,7 +4432,122 @@ function aiCenterDist(board, x, y, z) {
  *   openFours 其中"两头都空"的那几个 —— 单靠挡是挡不住的
  *   over      这一手会长连的方向数（受限方的自尽）
  */
+/**
+ * 一条方向上的「条带」读数。**为什么要有它 —— 这是本段唯一一处纯性能改动。**
+ *
+ * 老写法对每个方向要扫 5 个窗口 × 5 格 = 25 次棋盘读取，13 个方向就是 325 次，
+ * 而每个候选点要算两遍（攻方 + 守方）。条带把同一批格子**只读一次**：
+ * 沿该方向读 11 格存进数组，之后 5 个窗口全在这个数组上滑，
+ * 棋盘读取降到 13 × 11 = 143 次，**而且结果逐字段与老写法相同**（有对拍断言钉着）。
+ *
+ * 【为什么半宽是 5 而不是 4 —— 这里踩过一次，别改回去】
+ * 滑窗只需要 ±(winLength-1) = ±4 格。但同一次循环还要算 `run = 1 + neg + pos`，
+ * 而 **`run > winLength` 那个判据（长连自尽）必须准确**：半宽取 4 时，
+ * 一侧连着 5 颗以上的子会被截断成 4，于是 `run` 算成 5 而不是 6+，
+ * 长连判不出来 —— 反而继续往下算出 `need === 0`，**把"自尽"报成了"成五"**。
+ * 那不是棋力问题，是让电脑兴高采烈地往六连上撞。
+ * 对拍断言第一次跑就抓到了 13/16000 例，全部是"新报 wins、旧报 over"。
+ *
+ * 取半宽 = winLength 就够：`run > winLength` ⟺ `neg + pos > winLength - 1`，
+ * 而每侧封顶到 winLength 之后，`min(neg,5) + min(pos,5) ≥ 5` 与 `neg + pos ≥ 5` 等价。
+ * 见 ai.test.mjs 第 10 组（与 v2.10.14 原实现逐字段对拍）。
+ *
+ * winLength 恒为 5（RuleSet 的默认值，全项目没有第二处赋值它）。
+ * 下面有守卫：真出现别的 winLength 就退回走老路，绝不越界写。
+ *
+ * 【模块级可变缓冲，和 AI_PT / aiSeenBits 同一类】aiThreatAt 不递归、不重入，
+ * 调用方拿到的是六个计数（值类型），所以它不参与任何决策时序。
+ */
+const AI_STRIP_HALF = 5;                        // = winLength
+const AI_STRIP_LEN = AI_STRIP_HALF * 2 + 1;     // 11
+const AI_STRIP = new Uint8Array(AI_STRIP_LEN);
+const S_EMPTY = 0, S_MINE = 1, S_OTHER = 2, S_OUT = 3;
+
 function aiThreatAt(board, x, y, z, player, winLength, restricted) {
+  // winLength ≠ 5 时条带装不下 —— 退回老写法。**这条守卫不能省**：
+  // 条带是定长数组，不守卫就是静默越界写，会污染相邻的 TypedArray。
+  if (winLength !== 5) return aiThreatAtSlow(board, x, y, z, player, winLength, restricted);
+
+  let wins = 0, fours = 0, openFours = 0, threes = 0, twos = 0, over = 0;
+  const nx = board.nx, ny = board.ny, nz = board.nz;
+  const cells = board.cells;
+  const sy = nx, sz = nx * ny;          // 扁平步长：index = x + sy*y + sz*z
+  const half = AI_STRIP_HALF;           // 5 = winLength，见 AI_STRIP_HALF 上面那段推导
+  const strip = AI_STRIP;
+
+  for (let i = 0; i < DIRS13.length; i++) {
+    const d = DIRS13[i];
+    const dx = d[0], dy = d[1], dz = d[2];
+    // 【v3.0.0 要改这里】下面这段把"越界"当成 S_OUT（不能参与任何线）。
+    // 四维拓扑玩法（立方体六面贯通）要的恰恰相反：越界就绕回去。
+    // 改的时候注意三件事：
+    //   ① 绕回去之后同一条线可能把同一格走两遍（n 很小、winLength 也小的时候），
+    //      计数必须按"最多走 n 步"封顶，否则 run 会无限长；
+    //   ② 环绕下"端点是否为空"不再有"棋盘边缘"这个天然终止条件，
+    //      openA/openB 的判据要重写；
+    //   ③ Board3D.getOrDefault / inBounds 的语义会分叉（越界变成合法），
+    //      那个判断必须有唯一一处定义，否则渲染和规则会各绕各的。
+    // 读 9 格：偏移 -half..+half，第 half 位是本点自己
+    let px = x - half * dx, py = y - half * dy, pz = z - half * dz;
+    for (let k = 0; k < AI_STRIP_LEN; k++) {
+      let v;
+      if (px < 0 || py < 0 || pz < 0 || px >= nx || py >= ny || pz >= nz) {
+        v = S_OUT;
+      } else {
+        const c = cells[px + sy * py + sz * pz];
+        v = c === 0 ? S_EMPTY : (c === player ? S_MINE : S_OTHER);
+      }
+      strip[k] = v;
+      px += dx; py += dy; pz += dz;
+    }
+
+    // 本点自己那一格一定是自己的子（调用方已保证），不用读棋盘
+    strip[half] = S_MINE;
+
+    let neg = 0;
+    while (half - 1 - neg >= 0 && strip[half - 1 - neg] === S_MINE) neg++;
+    let pos = 0;
+    while (half + 1 + pos < AI_STRIP_LEN && strip[half + 1 + pos] === S_MINE) pos++;
+    const run = 1 + neg + pos;
+    if (run > winLength) { over++; continue; }
+
+    const openA = (half - neg - 1) >= 0 && strip[half - neg - 1] === S_EMPTY;
+    const openB = (half + pos + 1) < AI_STRIP_LEN && strip[half + pos + 1] === S_EMPTY;
+
+    // 滑窗：窗口起点偏移 s，覆盖 strip 下标 half+s .. half+s+winLength-1
+    // s ∈ [-(winLength-1), 0] = [-4, 0] → 下标落在 [half-4, half+4] = [1, 9]，
+    // 稳稳落在条带（0..10）内部。条带两端多出来的那一格（下标 0 和 10）只给
+    // 上面数 run 用 —— 窗口碰不到它们，所以加宽条带不改变 need 的结果。
+    let need = winLength;
+    for (let s = -(winLength - 1); s <= 0 && need > 0; s++) {
+      let ok = true, mine = 0;
+      const base = half + s;
+      for (let k = 0; k < winLength; k++) {
+        const idx = base + k;
+        if (idx === half) continue;              // 本点算自己那一颗
+        const v = strip[idx];
+        if (v === S_EMPTY) continue;
+        if (v === S_MINE) { mine++; continue; }
+        ok = false; break;                       // S_OTHER 或 S_OUT
+      }
+      if (!ok) continue;
+      const gap = winLength - (mine + 1);
+      if (gap < need) need = gap;
+    }
+    if (need === 0) wins++;
+    else if (need === 1) { fours++; if (run === winLength - 1 && openA && openB) openFours++; }
+    else if (need === 2) threes++;
+    else if (need === 3) twos++;
+    // need >= winLength-1 记 0：这个方向连"眠二"都算不上
+  }
+  return { wins: wins, fours: fours, openFours: openFours, threes: threes, twos: twos, over: over };
+}
+
+/**
+ * winLength ≠ 5 时的退路。**就是 v2.10.14 的原写法**，一个字没动。
+ * 全项目目前走不到这里（winLength 恒为 5），它存在的意义是"条带装不下时不许越界"。
+ */
+function aiThreatAtSlow(board, x, y, z, player, winLength, restricted) {
   let wins = 0, fours = 0, openFours = 0, threes = 0, twos = 0, over = 0;
   for (let i = 0; i < DIRS13.length; i++) {
     const d = DIRS13[i], nd = DIRS13_NEG[i];
@@ -9889,7 +10004,8 @@ if (typeof module !== "undefined" && module.exports) {
                      EMPTY, BLACK, WHITE, opponentOf, cnOf, fingerprint,
                      AXIS_X, AXIS_Y, AXIS_Z, RotationDirection, RotateStatus,
                      RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName,
-                     aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS };
+                     aiChooseMove, aiCandidates, aiThreatAt, aiThreatAtSlow, aiThreatValue,
+                     aiRng, AI_LEVELS, AI_PARAMS };
 }
 </script>
 </body>

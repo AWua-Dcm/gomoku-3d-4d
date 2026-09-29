@@ -78,7 +78,7 @@ try {
 const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK, WHITE,
         opponentOf, fingerprint, RotationMove, RotateStatus, AXIS_X, AXIS_Y, AXIS_Z,
         aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS,
-        aiThreatBest, aiTier, AI_W } = Core;
+        aiThreatBest, aiTier, AI_W, Board3D, aiThreatAtSlow } = Core;
 
 console.log("五档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
@@ -876,6 +876,153 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
           ms2 + "ms（候选 " + st2.candidates + "，算杀 " + st2.vcfNodes + " 格）");
     console.log("30³ 密集 · " + lv + "：用时 " + ms2 + "ms，算杀 " + st2.vcfNodes + " 格");
   }
+}
+
+// ---------------------------------------------------------------------------
+// 10. 威胁计数的「条带」重写必须是【无损】的
+//
+// 这一组是全计划里唯一一处"只求变快、不许改结果"的改动，所以判据只能是
+// **与旧实现逐字段对拍**。旧实现冻结在下面（aiThreatAtRef），它就是 v2.10.14 的那一段，
+// 一个字没动。【别以为这是废话】热循环重写最容易出的错是"大部分局面都对，
+// 只在某种跳形/边界上差一格" —— 那种错在自对局里根本看不出来，只会让棋力悄悄降一点。
+// ---------------------------------------------------------------------------
+
+/**
+ * 【冻结的基准】v2.10.14 的 aiThreatAt 原文。**不许改它**，也不许"顺手优化"。
+ * 它的唯一用途是给新实现当对拍基准 —— 改了它，对拍就变成了拿新实现跟自己比。
+ */
+const REF_DIRS = Core.DIRS13;
+const REF_NEG = REF_DIRS.map((d) => [-d[0], -d[1], -d[2]]);
+const REF_PT = { x: 0, y: 0, z: 0 };   // 提到函数外：在函数里 map 一遍会让基准每次都分配，
+                                       // 那样计时对拍就不公平了（基准慢的是分配，不是算法）
+function aiThreatAtRef(board, x, y, z, player, winLength, restricted) {
+  const DIRS = REF_DIRS;
+  const NEG = REF_NEG;
+  const PT = REF_PT;
+  let wins = 0, fours = 0, openFours = 0, threes = 0, twos = 0, over = 0;
+  for (let i = 0; i < DIRS.length; i++) {
+    const d = DIRS[i], nd = NEG[i];
+    PT.x = x; PT.y = y; PT.z = z;
+    const neg = RuleEngine.countRun(board, PT, nd, player);
+    const pos = RuleEngine.countRun(board, PT, d, player);
+    const run = 1 + neg + pos;
+    if (run > winLength) { over++; continue; }
+    const ax = x - (neg + 1) * d[0], ay = y - (neg + 1) * d[1], az = z - (neg + 1) * d[2];
+    const bx = x + (pos + 1) * d[0], by = y + (pos + 1) * d[1], bz = z + (pos + 1) * d[2];
+    const openA = board.inBounds(ax, ay, az) && board.get(ax, ay, az) === EMPTY;
+    const openB = board.inBounds(bx, by, bz) && board.get(bx, by, bz) === EMPTY;
+    let need = winLength;
+    for (let s = -(winLength - 1); s <= 0 && need > 0; s++) {
+      let ok = true, mine = 0;
+      for (let k = 0; k < winLength; k++) {
+        if (s + k === 0) continue;
+        const px = x + (s + k) * d[0], py = y + (s + k) * d[1], pz = z + (s + k) * d[2];
+        if (!board.inBounds(px, py, pz)) { ok = false; break; }
+        const v = board.get(px, py, pz);
+        if (v === EMPTY) continue;
+        if (v === player) mine++; else { ok = false; break; }
+      }
+      if (!ok) continue;
+      const gap = winLength - (mine + 1);
+      if (gap < need) need = gap;
+    }
+    if (need === 0) wins++;
+    else if (need === 1) { fours++; if (run === winLength - 1 && openA && openB) openFours++; }
+    else if (need === 2) threes++;
+    else if (need === 3) twos++;
+  }
+  return { wins: wins, fours: fours, openFours: openFours, threes: threes, twos: twos, over: over };
+}
+
+{
+  const STONES = [EMPTY, BLACK, WHITE];
+  let mismatches = 0, checked = 0;
+  const rng = rngOf(20260929);
+  for (let trial = 0; trial < 400; trial++) {
+    // 尺寸在边界上取：8（下限）和 30（新上限），外加一个长方体
+    const dims = trial % 3 === 0 ? [8, 8, 8] : (trial % 3 === 1 ? [30, 30, 30] : [8, 30, 30]);
+    const b = new Board3D(dims[0], dims[1], dims[2]);
+    const fill = 0.15 + 0.5 * rng();
+    for (let z = 0; z < dims[2]; z++)
+      for (let y = 0; y < dims[1]; y++)
+        for (let x = 0; x < dims[0]; x++)
+          if (rng() < fill) b.set(x, y, z, STONES[(rng() * 3) | 0]);
+    for (let k = 0; k < 40; k++) {
+      const x = (rng() * dims[0]) | 0, y = (rng() * dims[1]) | 0, z = (rng() * dims[2]) | 0;
+      const player = rng() < 0.5 ? BLACK : WHITE;
+      const a = aiThreatAt(b, x, y, z, player, 5, false);
+      const c = aiThreatAtRef(b, x, y, z, player, 5, false);
+      checked++;
+      if (a.wins !== c.wins || a.fours !== c.fours || a.openFours !== c.openFours ||
+          a.threes !== c.threes || a.twos !== c.twos || a.over !== c.over) {
+        mismatches++;
+        if (mismatches <= 3) {
+          console.log("  差异 @" + [x, y, z] + " " + dims + " player=" + player +
+                      " 新 " + JSON.stringify(a) + " 旧 " + JSON.stringify(c));
+        }
+      }
+    }
+  }
+  check(checked > 10000, "对拍样本量够", "只比了 " + checked + " 个点");
+  check(mismatches === 0, "条带重写与旧实现逐字段一致（无损）",
+        mismatches + " / " + checked + " 个点不一致");
+  console.log("威胁计数对拍：" + checked + " 个点，" + mismatches + " 处不一致");
+}
+
+{
+  // 条带是定长 9 的数组，winLength 一变大就会越界写。
+  // 这一条钉住"装不下时退回老路"，退回去的那条路也必须真的算对。
+  const b = new Board3D(20, 20, 20);
+  const rng = rngOf(777);
+  for (let k = 0; k < 400; k++) b.set((rng() * 20) | 0, (rng() * 20) | 0, (rng() * 20) | 0,
+                                      rng() < 0.5 ? BLACK : WHITE);
+  let bad = 0;
+  for (let k = 0; k < 200; k++) {
+    const x = (rng() * 20) | 0, y = (rng() * 20) | 0, z = (rng() * 20) | 0;
+    // winLength = 6：条带装不下，必须走慢路，且结果与参考实现一致
+    const a = aiThreatAt(b, x, y, z, BLACK, 6, false);
+    const c = aiThreatAtRef(b, x, y, z, BLACK, 6, false);
+    if (JSON.stringify(a) !== JSON.stringify(c)) bad++;
+  }
+  check(bad === 0, "winLength ≠ 5 时退回老写法，且结果一致", bad + " 处不一致");
+}
+
+{
+  // 【不是断言，是出数字】墙钟在慢机器上会抖，所以只打印不判红。
+  // 这个数进 commit message，是 3.3「走法生成优化」这半边的唯一证据。
+  //
+  // 【棋盘必须用真实局面，不能用密盘】条带的收益随盘面密度**急剧变化**：
+  // 老写法在密盘上大量窗口会撞到对手子而提前 break，条带却是固定读满 11 格，
+  // 于是密盘上只快 1.2×；而真实对局是稀疏局面（老写法要一路扫到底），那里快近 2×。
+  // 第一版用 30³ 塞 6000 子的密盘测，报出来 1.17×，把这条优化的价值说小了一半。
+  const b = new Board3D(15, 15, 15);
+  const rng = rngOf(31337);
+  let placed = 0, guard = 0;
+  while (placed < 40 && guard++ < 4000) {
+    const x = 3 + ((rng() * 9) | 0), y = 3 + ((rng() * 9) | 0), z = 3 + ((rng() * 9) | 0);
+    if (b.isEmpty(x, y, z)) { b.set(x, y, z, rng() < 0.5 ? BLACK : WHITE); placed++; }
+  }
+  const cands = aiCandidates(b, 20000);
+  // 【必须重复很多遍】一轮只有 600 多个候选、不到 1ms，而 Date.now() 的分辨率是 1ms ——
+  // 单轮计时会量出 "0ms vs 1ms，快 100×" 这种胡说，而它比不量还糟（会被人当真引用）。
+  // 所以固定跑 REPEATS 轮、报总耗时，比值按总耗时算。
+  const REPEATS = 200;
+  const bench = (fn) => {
+    const t0 = Date.now();
+    for (let r = 0; r < REPEATS; r++)
+      for (let i = 0; i < cands.length; i += 3)
+        for (const p of [BLACK, WHITE]) fn(b, cands[i], cands[i + 1], cands[i + 2], p, 5, false);
+    return Date.now() - t0;
+  };
+  bench(aiThreatAt); bench(aiThreatAtRef);          // 预热，甩掉 JIT 冷启动
+  let msNew = Infinity, msOld = Infinity;
+  for (let r = 0; r < 5; r++) { msNew = Math.min(msNew, bench(aiThreatAt));
+                                msOld = Math.min(msOld, bench(aiThreatAtRef)); }
+  check(msNew <= msOld, "条带版不比旧版慢（同机同批候选）",
+        "新 " + msNew + "ms vs 旧 " + msOld + "ms（各 " + REPEATS + " 轮）");
+  console.log("威胁计数（15³ 中盘 " + b.stoneCount + " 子、" + (cands.length / 3) +
+              " 候选 × 2 方 × " + REPEATS + " 轮）：新 " + msNew + "ms / 旧 " + msOld +
+              "ms（快 " + (msOld / Math.max(1, msNew)).toFixed(2) + "×）");
 }
 
 // ---------------------------------------------------------------------------
