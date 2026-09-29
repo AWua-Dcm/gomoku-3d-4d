@@ -4279,7 +4279,7 @@ const AI_PARAMS = {
            searchDepth: 5, depth4d: 5, branch: 4, vcf: false, idMax: 0, tt: true },
   ultra: { topK: 1, topProb: 1.00, noise: 0.00, defWeight: 1.00,
            pOpenThree: 1.00, rotChance: 1.00, rotProbe: 14,
-           searchDepth: 5, depth4d: 5, branch: 4, vcf: true, idMax: 6, tt: true },
+           searchDepth: 5, depth4d: 5, branch: 4, vcf: true, vct: true, idMax: 6, tt: true },
 };
 
 /**
@@ -5256,6 +5256,164 @@ function aiVcf(session, attacker, depth, stats) {
   return null;
 }
 
+/* --------------------------------------------------------------------------
+   算杀扩展：VCT（连续活三取胜）。
+
+   【和 aiVcf 的关系】aiVcf 只走冲四（对方应手唯一，所以每个节点只有一个分支）；
+   这里补上活三。**活三的应手不唯一**，所以下面每一步都必须把"对方能怎么防"想清楚。
+
+   【怎么定的"对方必须回应哪些点" —— 这是本段唯一需要小心的地方】
+   攻方走了某一手之后，重新数一遍攻方的威胁：
+     · 攻方的**成五点 ≥ 2**  → 对方一手堵不住 → 直接判胜。**这条是严格的。**
+     · 攻方**恰好 1 个成五点** → 对方不堵就当场输 → 他只能堵那里，应手唯一。**也是严格的。**
+     · 攻方**没有成五点、但有"做了就成四"的点**（活三就是这种）→
+       对方若不处理，攻方下一步成四，之后就是一连串冲四。
+       所以对方要防的是**攻方的那些"做四的点"**。
+       对方还可能用一手"不在这张表上"的棋拆掉攻方的形 —— 这一支**没有覆盖到**，
+       是这套实现残留的启发式部分，见下面 AI_VCT_D 那段。
+     · 攻方**既没有成五点也没有做四的点** → 这一手不构成强制，整支丢掉。
+
+   【截断即判未知，绝不报假胜着】任何一个应手被截掉，这一支就不算胜 ——
+   调用方拿到 null = "没找到"，不是"没有"。宁可少赢一手，也不许让电脑主动走出送死棋。
+   正确性有一条专测钉着（tests/ai.test.mjs 第 1d 组）：算杀报出的胜着，
+   必须经【穷举所有应手】的防守方验证过真的赢。
+
+   【预算】和 aiVcf 共用 aiVcfLeft（单位是"扫过多少个候选点"），理由见 aiVcf 那段。
+   -------------------------------------------------------------------------- */
+
+/** 每个 VCT 节点最多试几个活三着法。超过就判未知。 */
+const AI_VCT_M = 6;
+/** 每个活三着法最多穷举几个对方应手。**超过这个数必须判未知，不许猜。** */
+const AI_VCT_D = 4;
+/** VCT 的深度上限。比 VCF 浅 —— 活三的分支比冲四大得多。 */
+const AI_VCT_DEPTH = 8;
+
+/** 和 AI_VCF_A/B 同一套：复用数组，避免每个节点分配。算杀是深度优先、不重入的。 */
+const AI_VCT_A = { wins: [], fours: [] };
+const AI_VCT_B = { wins: [], fours: [] };
+const AI_VCT_C = { wins: [], fours: [] };
+
+/** 把算杀预算复位。**给测试用** —— 模块级的 let 解构不出来，只能走函数。 */
+function aiVcfBudgetReset() { aiVcfLeft = AI_VCF_BUDGET; }
+
+/**
+ * VCT 主循环。找到**强制胜**就返回第一步坐标，否则返回 null。
+ *
+ * 返回 null 的含义是"没找到"，不是"没有"：截断、预算用尽、深度用尽都返回 null。
+ */
+function aiVct(session, attacker, depth, stats) {
+  if (depth <= 0) return null;
+  const board = session.board, rules = session.rules;
+  const foe = opponentOf(attacker);
+
+  const cands = aiCandidates(board, AI_CANDIDATE_CAP);
+  aiPointsUsed += cands.length;
+  const cost = cands.length * 2;
+  if (aiVcfLeft < cost) return null;
+  aiVcfLeft -= cost;
+
+  const mine = aiVcfThreats(session, attacker, AI_VCT_A, cands);
+  if (mine.wins.length > 0) {
+    return { x: mine.wins[0], y: mine.wins[1], z: mine.wins[2], win: true };
+  }
+  if (mine.fours.length === 0) return null;      // 没有四可做，谈不上强制
+
+  // 对方自己能成五 → 我冲我的，他直接赢，整条链作废（和 aiVcf 同一条）
+  if (aiVcfFoeWins(session, cands, foe) >= 1) return null;
+
+  const nFour = mine.fours.length / 3;
+  // 冲四这一支应手唯一，最可靠，**先走完**（也最便宜）
+  for (let i = 0; i < mine.fours.length; i += 3) {
+    const r = aiVctAfter(session, attacker, foe, mine.fours[i], mine.fours[i + 1],
+                         mine.fours[i + 2], depth, stats);
+    if (r) return r;
+  }
+
+  // 再做一遍，这一遍专门试"活三"：也就是那些做了之后**没有直接成五、但做出了四**的点。
+  // 冲四在上面已经试过了，这里不重复。
+  // 【为什么单独一遍】活三的分支大得多，只在冲四全都失败之后才值得付出这个代价。
+  let tried = 0;
+  for (let i = 0; i < cands.length; i += 3) {
+    const x = cands[i], y = cands[i + 1], z = cands[i + 2];
+    // 跳过上面已经试过的冲四点
+    let isFour = false;
+    for (let j = 0; j < mine.fours.length; j += 3) {
+      if (mine.fours[j] === x && mine.fours[j + 1] === y && mine.fours[j + 2] === z) {
+        isFour = true; break;
+      }
+    }
+    if (isFour) continue;
+    const t = aiThreatAt(board, x, y, z, attacker, rules.winLength,
+                         rules.isRestricted(attacker, session.firstPlayer));
+    if (t.over > 0 || t.threes === 0) continue;   // 自尽点 / 不是活三
+    tried++;
+    if (tried > AI_VCT_M) return null;            // 活三太多 → 判未知，绝不猜
+    const r = aiVctAfter(session, attacker, foe, x, y, z, depth, stats);
+    if (r) return r;
+  }
+  return null;
+}
+
+/**
+ * 攻方在 (x,y,z) 落子之后，"这一手是不是强制手"的判定与递推。
+ * 返回 {x,y,z,win:true} 表示这一手能强制取胜，null 表示不能/不知道。
+ *
+ * **这个函数里没有任何猜测**：每一类分支要么是严格的，要么直接放弃（返回 null）。
+ */
+function aiVctAfter(session, attacker, foe, x, y, z, depth, stats) {
+  const board = session.board;
+  board.set(x, y, z, attacker);
+  const afterCands = aiCandidates(board, AI_CANDIDATE_CAP);
+  aiPointsUsed += afterCands.length;
+  if (aiVcfLeft < afterCands.length) { board.set(x, y, z, EMPTY); return null; }
+  aiVcfLeft -= afterCands.length;
+
+  const after = aiVcfThreats(session, attacker, AI_VCT_B, afterCands);
+  const nWins = after.wins.length / 3;
+
+  // 两个以上成五点：他一手堵不住 → 胜
+  if (nWins >= 2) { board.set(x, y, z, EMPTY); return { x: x, y: y, z: z, win: true }; }
+
+  let defs, nDefs;
+  if (nWins === 1) {
+    // 我下一手就成五：他只能堵那一点（不堵就当场输）。**应手唯一，严格。**
+    defs = [after.wins[0], after.wins[1], after.wins[2]];
+    nDefs = 1;
+  } else {
+    // 没有成五点，但有"做了就成四"的点（活三就是这种）。
+    // 他不处理，我下一步成四，后面就是一连串冲四。
+    // 应手 = ①堵我做四的点 ②他自己做四的点（反击）。
+    // 【②不能省】只列①的话，对方一手反击冲四就能把整条链打断，而那种应手根本不在表上 ——
+    // 实测就是这样漏掉的（探针抓到 1 例"被对方冲四驳倒"）。
+    const foeT = aiVcfThreats(session, foe, AI_VCT_C, afterCands);
+    const list = after.fours.slice();
+    for (let k = 0; k < foeT.fours.length; k += 3) {
+      const fx = foeT.fours[k], fy = foeT.fours[k + 1], fz = foeT.fours[k + 2];
+      let dup = false;
+      for (let j = 0; j < list.length; j += 3) {
+        if (list[j] === fx && list[j + 1] === fy && list[j + 2] === fz) { dup = true; break; }
+      }
+      if (!dup) list.push(fx, fy, fz);
+    }
+    nDefs = list.length / 3;
+    if (nDefs === 0) { board.set(x, y, z, EMPTY); return null; }        // 不强制
+    if (nDefs > AI_VCT_D) { board.set(x, y, z, EMPTY); return null; }   // 应手太多 → 判未知
+    defs = list;
+  }
+
+  // 【要害】把对方的每一个应手都试一遍。**任何一个防住，这一支就不成立。**
+  for (let f = 0; f < defs.length; f += 3) {
+    const fx = defs[f], fy = defs[f + 1], fz = defs[f + 2];
+    if (!board.inBounds(fx, fy, fz) || board.get(fx, fy, fz) !== EMPTY) continue;
+    board.set(fx, fy, fz, foe);
+    const sub = aiVct(session, attacker, depth - 1, stats);
+    board.set(fx, fy, fz, EMPTY);
+    if (!sub) { board.set(x, y, z, EMPTY); return null; }   // 他防住了 → 这一支作废
+  }
+  board.set(x, y, z, EMPTY);
+  return { x: x, y: y, z: z, win: true };
+}
+
 /**
  * 搜索出招。返回 {x,y,z,v}，或 null（没搜出东西，调用方退到打分路径）。
  * 调用方**已经走过硬规则链**：能赢的直接赢了、必堵的直接堵了、自尽点已经剔掉，
@@ -5414,7 +5572,7 @@ function aiChooseMove(session, opts) {
   // 【预算与置换表都按"一手"重置】**每手都重置**这件事同时把一条隐蔽的错法堵死了：
   // 悔棋 / 重开之后复用同一个 session 时，上一局的表项不可能残留成"残影"。
   const stats = o.stats || null;
-  aiVcfLeft = AI_VCF_BUDGET;          // 算杀的预算，见 AI_VCF_BUDGET
+  aiVcfBudgetReset();                 // 算杀的预算，见 AI_VCF_BUDGET
   aiNodesLeft = AI_ID_NODES;          // 迭代加深的预算同上
   aiPointsUsed = 0;                   // 单手扫过多少候选点，见 AI_POINT_BUDGET_MAX
   aiTtReset();                        // 置换表作废，见 AI_TT_GEN 那一段
@@ -5517,6 +5675,8 @@ function aiChooseMoveInner(session, opts) {
   // 找到了就是赢棋，而且比同深度的 α-β 便宜得多。找不到才退回常规搜索。
   let move = null;
   if (params.vcf) move = aiVcf(session, mover, AI_VCF_DEPTH, stats);
+  // 【顺序不能反】VCF 比 VCT 便宜得多、也更可靠（应手唯一），先 VCF 后 VCT。
+  if (!move && params.vct) move = aiVct(session, mover, AI_VCT_DEPTH, stats);
   if (!move && params.searchDepth > 0) move = aiSearchMove(session, safe, params, stats);
   if (!move) move = aiGreedyMove(session, safe, params, rng, winLength, mover);
   if (!move) return { kind: "none" };
@@ -10211,6 +10371,8 @@ if (typeof module !== "undefined" && module.exports) {
                      RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName,
                      aiChooseMove, aiCandidates, aiThreatAt, aiThreatAtSlow, aiThreatValue,
                      aiRng, AI_LEVELS, AI_PARAMS,
+                     aiVct, aiVcfBudgetReset,
+                     AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D, AI_POINT_BUDGET_MAX,
                      aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
                      TT_EXACT, TT_LOWER, TT_UPPER };
 }

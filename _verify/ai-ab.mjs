@@ -31,7 +31,7 @@ const PROJ = path.resolve(HERE, "..");
 const HTML_REL = "Web_Gomoku3D/index.html";
 
 function parseArgs(argv) {
-  const o = { mode: "3d", size: 15, cooldown: 3, games: 40, new: "HEAD", old: "HEAD" };
+  const o = { mode: "3d", size: 15, cooldown: 3, games: 40, new: "HEAD", old: "HEAD", nlv: "ultra", olv: "ultra" };
   for (let i = 0; i < argv.length; i += 2) {
     const k = String(argv[i] || "").replace(/^--/, "");
     const v = argv[i + 1];
@@ -41,6 +41,8 @@ function parseArgs(argv) {
     else if (k === "games") o.games = parseInt(v, 10);
     else if (k === "new") o.new = v;
     else if (k === "old") o.old = v;
+    else if (k === "nlv") o.nlv = v;
+    else if (k === "olv") o.olv = v;
     else { console.error("未知参数 --" + k); process.exit(2); }
   }
   if (o.mode !== "3d" && o.mode !== "4d") {
@@ -160,7 +162,9 @@ function duel(CA, n, fourD, cooldown, games, seedBase, lvA, lvB, maxPlies) {
 const o = parseArgs(process.argv.slice(2));
 const fourD = o.mode === "4d";
 const maxPlies = fourD ? 400 : 300;
-const control = o.new === o.old;
+// 【必须同时比档位】只比 revision 的话，"同一份内核、两边用不同档位"会被当成对照组，
+// 而那种跑法恰恰是用来验测量台分辨率的，误报会把人吓一跳。
+const control = o.new === o.old && o.nlv === o.olv;
 
 // 【--games 指的是总对局数，不是每侧】两个半场各跑一半，合起来才是 --games。
 // 这句话原来写成"每侧 N 局"，而实际每半场只有 N/2 —— 报告口径错了就是在骗人。
@@ -176,8 +180,8 @@ const CN = loadCore(readHtml(o.new), "新版");
 const CO = loadCore(readHtml(o.old), "旧版");
 
 // 两个半场：新版先执黑，再执白。这样"第一方优势"两边各照顾一次。
-const r1 = duel(CN, o.size, fourD, o.cooldown, half, 40001, "ultra", "ultra", maxPlies);
-const r2 = duel(CO, o.size, fourD, o.cooldown, half, 50001, "ultra", "ultra", maxPlies);
+const r1 = duel(CN, o.size, fourD, o.cooldown, half, 40001, o.nlv, o.olv, maxPlies);
+const r2 = duel(CO, o.size, fourD, o.cooldown, half, 50001, o.olv, o.nlv, maxPlies);
 
 const total = r1.games + r2.games;
 const newScore = r1.score + (r2.games - r2.score);   // r2 里新版执的是 B 方

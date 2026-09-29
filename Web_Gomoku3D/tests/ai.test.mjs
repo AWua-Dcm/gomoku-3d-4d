@@ -88,7 +88,9 @@ try {
              aiRng, AI_LEVELS, AI_PARAMS,
              aiThreatBest, aiTier, AI_W, Board3D,
              aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
-             TT_EXACT, TT_LOWER, TT_UPPER };`)();
+             TT_EXACT, TT_LOWER, TT_UPPER,
+             aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
+             aiOutcomeAt };`)();
   passed++;
 } catch (e) {
   console.error("内核求值失败：" + e.message + "\n" + (e.stack || ""));
@@ -99,7 +101,9 @@ const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK
         aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS,
         aiThreatBest, aiTier, AI_W, Board3D, aiThreatAtSlow,
         aiZobristBoard, aiZobristMove, aiTtReset, aiTtStore, aiTtProbe,
-        TT_EXACT, TT_LOWER, TT_UPPER } = Core;
+        TT_EXACT, TT_LOWER, TT_UPPER,
+        aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
+        aiOutcomeAt } = Core;
 
 console.log("五档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
@@ -250,6 +254,119 @@ function judgeAt(s, act, player) {
   const a8 = aiChooseMove(s, { level: "ultra", seed: 5 });
   check(a8.kind === "place" && s.board.inBounds(a8.x, a8.y, a8.z),
         "换尺寸重开之后出招仍落在盘内", JSON.stringify(a8));
+}
+
+// ---------------------------------------------------------------------------
+// 1d. 算杀【不许报假胜着】—— 全任务里正确性风险最高的一条
+//
+// 【为什么这一条最重要】VCF 的每个冲四对方只有一个应手，漏了也没关系。
+// VCT 不一样：活三对方有 2~3 个堵点，**只试一个应手就不构成证明** ——
+// 会报出一个根本不成立的"必胜"，电脑照着走就是主动送死，而玩家一眼看得出。
+//
+// 【判据】让 aiVct 报一个胜着，然后让防守方**穷举每一个合法应手**去防。
+// 只要有一个应手能让攻方再也找不到胜着，这个"胜着"就是假的。
+//
+// 【这条验证证明了什么、没证明什么 —— 必须说清楚】
+//   证明了：**防守方的穷举性**（aiVctFoes 有没有漏应手、有没有该截断时硬说赢了）。
+//   没证明：攻方那一侧用的还是被验的 aiVct —— 所以它不是端到端的形式化证明。
+//   它正对着的，恰好是本次最容易写错、后果最严重的那一类 bug。
+// ---------------------------------------------------------------------------
+
+/**
+ * 攻方走了 mv 之后，防守方能不能防住。
+ * 穷举防守方的所有合法应手（aiCandidates 的全集，不是"必须堵的点"），
+ * 每个应手之后都让攻方用 aiVct 再找一次胜着；**任何一个防住了就算被驳倒**。
+ *
+ * 每个应手各自重置算杀预算：这里要的是"攻方有没有续着"，不是"一手之内够不够用"。
+ */
+function foeCanRefute(s, attacker, mv, depth) {
+  const foe = opponentOf(attacker);
+  s.board.set(mv.x, mv.y, mv.z, attacker);
+  let refuted = false;
+  const cands = aiCandidates(s.board, 20000);
+  // 对方能直接成五 → 我这一手根本不是胜着
+  for (let i = 0; i < cands.length; i += 3) {
+    const o = aiOutcomeAt(s, cands[i], cands[i + 1], cands[i + 2], foe, null);
+    if (o && o.status === MoveStatus.Win) { refuted = true; break; }
+  }
+  if (!refuted && depth > 0) {
+    for (let i = 0; i < cands.length && !refuted; i += 3) {
+      const x = cands[i], y = cands[i + 1], z = cands[i + 2];
+      // 自尽点对方不会走，跳过（走了等于他送我赢）
+      const om = aiOutcomeAt(s, x, y, z, foe, null);
+      if (om && om.status === MoveStatus.LoseByOverline) continue;
+      s.board.set(x, y, z, foe);
+      aiVcfBudgetReset();
+      const sub = aiVct(s, attacker, depth, null);
+      s.board.set(x, y, z, EMPTY);
+      if (!sub) refuted = true;          // 他这一手防住了 → 那个"胜着"是假的
+    }
+  }
+  s.board.set(mv.x, mv.y, mv.z, EMPTY);
+  return refuted;
+}
+
+{
+  let fake = 0, checked = 0, refutedAt = "";
+  const rng = rngOf(99001);
+  // 【为什么用 10³ 而不是 15³】验证要穷举防守方的每个应手，而每个应手后面还要跑一次
+  // aiVct。15³ 中盘两三百个候选 × 每个一次算杀，一组就得上分钟。10³ 小得多，
+  // 而"防守方有几个应手"这件事和棋盘大小无关 —— 要验的性质在小盘上一样成立。
+  for (let trial = 0; trial < 400 && checked < 12; trial++) {
+    const s = mkSession(10, BLACK, false);
+    const open = 6 + ((rng() * 10) | 0);
+    for (let j = 0; j < open && s.status === "Playing"; j++) {
+      const em = [];
+      for (let z = 3; z < 8; z++) for (let y = 3; y < 8; y++) for (let x = 3; x < 8; x++) {
+        if (s.board.isEmpty(x, y, z)) em.push([x, y, z]);
+      }
+      if (em.length === 0) break;
+      const m = em[(rng() * em.length) | 0];
+      s.place(m[0], m[1], m[2]);
+    }
+    if (s.status !== "Playing") continue;
+    const attacker = s.currentPlayer;
+    aiVcfBudgetReset();
+    const mv = aiVct(s, attacker, 4, null);
+    if (!mv || mv.x < 0) continue;
+    checked++;
+    // 【验证深度必须不小于"宣称的深度" —— 这一条踩过】原来写的是 2，比上面那句
+    // `aiVct(s, attacker, 4, ...)` 浅：深度不够时递归会提前触底返回 null，
+    // 于是**真胜着被当成假的**，报出 7/12 —— 那是验证器自己的 bug，不是引擎的。
+    // 改成 4 之后剩 4/12，才是真的假胜着。
+    aiVcfBudgetReset();
+    if (foeCanRefute(s, attacker, mv, 4)) {
+      fake++;
+      if (fake <= 3) refutedAt += " @" + [mv.x, mv.y, mv.z] + "(" + open + "手)";
+    }
+  }
+  check(checked >= 6, "样本里至少出现了 6 个算杀报出的胜着", "只有 " + checked + " 个");
+  check(fake === 0, "算杀报出的胜着经【穷举所有应手】验证都真的赢",
+        fake + " 个假胜着：" + refutedAt);
+  console.log("算杀正确性：抽到 " + checked + " 个胜着经穷举应手验证，假胜着 " + fake + " 个");
+}
+
+{
+  // 【两条可以精确判定的不变量】上面那条是穷举验证，这两条是绝对判据：
+  //   ① 算杀绝不能把"受限方的长连自尽"当成胜着报出来 —— 那是当场判负的一手
+  //   ② 对方有"下一手就成五"时，算杀必须整个作废（前提是每个冲四对方都必须应）
+  const s = mkSession(15, BLACK, false);
+  buildSixOrFive(s, 5);                       // 白在 (7,5,5) 落子会连成六连
+  s.inner.firstPlayer = WHITE;                // 白是受限方 → 那一手判负
+  s.inner.currentPlayer = WHITE;
+  aiVcfBudgetReset();
+  const mv = aiVct(s, WHITE, AI_VCT_DEPTH, null);
+  check(!(mv && mv.x === 7 && mv.y === 5 && mv.z === 5),
+        "算杀不会把受限方的长连自尽当成胜着", JSON.stringify(mv));
+
+  const s2 = mkSession(15, BLACK, false);
+  // 黑有 4 连（马上成五），白这边什么都没有 —— 白执子时算杀必须返回 null
+  put(s2, BLACK, [[3, 5, 5], [4, 5, 5], [5, 5, 5], [6, 5, 5]]);
+  put(s2, WHITE, [[9, 9, 9]]);
+  s2.inner.currentPlayer = WHITE;
+  aiVcfBudgetReset();
+  const mv2 = aiVct(s2, WHITE, AI_VCT_DEPTH, null);
+  check(mv2 === null, "对方有一手成五时算杀整个作废", JSON.stringify(mv2));
 }
 
 // ---------------------------------------------------------------------------
