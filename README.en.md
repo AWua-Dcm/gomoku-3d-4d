@@ -257,14 +257,12 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.29
 
-- ✨ **v3.0.0** New 4D mechanics: **wrapping** (the six faces are joined, so a five may cross an edge)
-  and **day / night** (the board alternates phase, and only lines of the current phase count). A move
+- ✨ **v3.0.0** New 4D mechanics: **wrapping** (the six faces are joined, so a five may cross an
+  edge), **day / night** (the board alternates phase and only lines of the current phase count; a move
   may declare "hold" to stall the clock or "hasten" to push it — borrowed time is repaid out of the
-  next phase, so you can only shift it, never create it
-- ✨ **v3.0.0** New **tutorial**: in 4D a second button appears next to Start; three levels cover
+  next phase, so you can only shift it, never create it) and a **phase timeline** below the flat board
+  (one column per move, the background shows the phase); plus a **tutorial** whose three levels cover
   rotation, wrapping and day / night
-- 🎨 **v3.0.0** New **phase timeline** below the flat board (the board yields the space): one column
-  per move, the background shows the phase
 - 🎨 **v2.10.17** Setup screen: the mode bar is now two rows (how to look / whom to show); rotation
   cooldown becomes a typed number like the board size (3 – 10), and the freed row goes to the new
   "phase length" (10 – 30); at Ultra the slider shifts up a few pixels with a small note below it
