@@ -90,7 +90,7 @@ try {
              aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
              TT_EXACT, TT_LOWER, TT_UPPER,
              aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
-             aiOutcomeAt };`)();
+             aiOutcomeAt, aiRotationCandidates, AI_POINT_BUDGET_MAX };`)();
   passed++;
 } catch (e) {
   console.error("内核求值失败：" + e.message + "\n" + (e.stack || ""));
@@ -103,7 +103,7 @@ const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK
         aiZobristBoard, aiZobristMove, aiTtReset, aiTtStore, aiTtProbe,
         TT_EXACT, TT_LOWER, TT_UPPER,
         aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
-        aiOutcomeAt } = Core;
+        aiOutcomeAt, aiRotationCandidates, AI_POINT_BUDGET_MAX } = Core;
 
 console.log("五档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
@@ -378,6 +378,74 @@ function foeCanRefute(s, attacker, mv, depth) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// 1e. 转动候选的生成：全序、剔空层、limit<=0 表示不截断
+//
+// 【为什么要单独钉住"全序"】同一种子在不同引擎上必须排出同样的候选顺序，
+// 否则"同局面同种子同动作"这条契约就没了。平手时按 axis/layer/turns 升序兜底。
+// ---------------------------------------------------------------------------
+{
+  const s = mkSession(8, BLACK, true, 3);
+  // 往三个轴的不同层里放子，层里的子数刻意做成有平手
+  put(s, BLACK, [[1, 1, 1], [2, 2, 2], [3, 3, 3]]);   // x/y/z 三个轴的 layer 1,2,3 各 1 颗
+  put(s, WHITE, [[1, 5, 5], [1, 6, 6]]);              // 轴 X 的 layer 1 再多 2 颗 → 共 3 颗
+
+  const all = aiRotationCandidates(s, 0);
+  const limited = aiRotationCandidates(s, 5);
+
+  check(all.length > 5, "全枚举返回的候选数多于 5", "实际 " + all.length);
+  eq(limited.length, 5, "limit=5 时只返回 5 个");
+
+  // 层里有 0 颗子的层不许出现
+  let emptyLayer = 0;
+  for (const c of all) if (s.board.countLayerStones(c.axis, c.layer) === 0) emptyLayer++;
+  eq(emptyLayer, 0, "空层一个都不许出现在候选里");
+
+  // 全枚举 = 3 轴 × 8 层 × 3 次，减去空层
+  let nonEmpty = 0;
+  for (let a = 0; a < 3; a++) for (let l = 0; l < 8; l++) if (s.board.countLayerStones(a, l) > 0) nonEmpty++;
+  eq(all.length, nonEmpty * 3, "全枚举的个数 = 非空层数 × 3");
+
+  // 子多的层排在前面
+  const stonesOf = (c) => s.board.countLayerStones(c.axis, c.layer);
+  let sortedOk = true;
+  for (let i = 1; i < all.length; i++) if (stonesOf(all[i]) > stonesOf(all[i - 1])) sortedOk = false;
+  check(sortedOk, "候选按「层里子多」降序", JSON.stringify(all.slice(0, 6)));
+
+  // 全序：同样两次调用必须逐字段相同
+  const again = aiRotationCandidates(s, 0);
+  eq(JSON.stringify(all), JSON.stringify(again), "同一局面两次生成的候选顺序完全相同");
+
+  // 截断出来的 5 个必须是全枚举的前 5 个
+  eq(JSON.stringify(limited), JSON.stringify(all.slice(0, 5)), "截断就是取前 limit 个");
+
+  // 三维下转动不存在，不该被调到 —— 但立方盘以外也不该炸
+  const s3 = mkSession(8, BLACK, false);
+  put(s3, BLACK, [[1, 1, 1]]);
+  eq(aiRotationCandidates(s3, 0).length, 9, "三维会话上它只是普通地枚举 3 层 × 3 次");
+}
+
+{
+  // 冷却 0 / 1（每手都能转）时不许失控 —— 极限档要枚举几十个转动候选、每个跑一遍搜索。
+  // 【这是本次唯一可能把单手拖到几十秒的组合】所以单独钉一条计数上界。
+  for (const cd of [0, 1]) {
+    const s = mkSession(8, BLACK, true, cd);
+    const rng = rngOf(8080 + cd);
+    for (let j = 0; j < 8 && s.status === "Playing"; j++) {
+      const m = [(rng() * 8) | 0, (rng() * 8) | 0, (rng() * 8) | 0];
+      if (s.board.isEmpty(m[0], m[1], m[2])) s.place(m[0], m[1], m[2]);
+    }
+    if (s.status !== "Playing") continue;
+    const st = {};
+    const a = aiChooseMove(s, { level: "ultra", seed: 3, stats: st });
+    check(a.kind !== "none", "冷却 " + cd + " 时极限档仍然出得了招", JSON.stringify(a));
+    check(st.points <= AI_POINT_BUDGET_MAX,
+          "冷却 " + cd + " 时扫过的候选点仍然有上界", st.points + " 点（上界 " + AI_POINT_BUDGET_MAX + "）");
+    console.log("冷却 " + cd + " · 8³ · ultra：扫过 " + st.points + " 点，转动探针 " +
+                st.rotProbes + " 次");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 2. 两条硬规则之一：能立刻赢就必须赢。**而且长连规则两侧都要判对。**
 //
 // 【为什么这一组最重要】网上所有五子棋教程的写法都是 `run >= winLength → 赢`。
@@ -616,7 +684,13 @@ function selfPlayRotAudit(n, firstPlayer, lvBlack, lvWhite, seed, maxPlies, cool
         if (!(foeAfter < foeBefore)) {
           bad.push("第 " + plies + " 手：对方本来有活三以上，转完却没降下去");
         }
-      } else if (!(aiTier(mineAfter) > aiTier(mineBefore))) {
+      } else if (!AI_PARAMS[me === BLACK ? lvBlack : lvWhite].rotSearch &&
+                 !(aiTier(mineAfter) > aiTier(mineBefore))) {
+        // 【为什么这一条只对走启发式的档位生效】rotSearch 的档位（极高 / 极限）
+        // 是拿**真搜索**给转动估值的：它认为"转一下让整个阵型变好"值一整手，
+        // 哪怕威胁档位没跨。那不是"白转"，是另一套判据 —— 用旧尺子量新机制，量出来的
+        // 是尺子不对，不是机制不对。**上面那两条安全绳（不留活三、拆形真拆掉）对
+        // 所有档位一律生效，没有例外。**
         bad.push("第 " + plies + " 手：既没拆对方的形、自己也没跨档，白转一手");
       }
     }
@@ -821,8 +895,15 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   const st = {};
   aiChooseMove(s, { level: "ultra", seed: 8, stats: st });
   check(st.rotProbes > 0, "四维下强档会去探转动", "rotProbes=" + st.rotProbes);
-  check(st.rotProbes <= AI_PARAMS.ultra.rotProbe, "探针数受参数表上限约束",
-        "rotProbes=" + st.rotProbes);
+  // 【上限改成看 rotSearch】v2.10.15 起转动的比价方式分两套：
+  //   · 走启发式探针的档位 → 上限就是 rotProbe（它自己截断）
+  //   · rotSearch 的档位     → 上限是 rotMax（全枚举时 rotProbe 是 0 = 不截断）
+  // 原来这条断言只看 rotProbe，而极限档的 rotProbe 现在是 0，会误报。
+  // 8³ 全枚举上限 3 轴 × 8 层 × 3 次 = 72；rotMax=24 就是拿它截出来的。
+  const p = AI_PARAMS.ultra;
+  const cap = p.rotSearch ? (p.rotMax || 3 * 8 * 3) : p.rotProbe;
+  check(st.rotProbes <= cap, "探针数受参数表上限约束",
+        "rotProbes=" + st.rotProbes + " 上限=" + cap);
   // 三维下一次都不许探
   const s3 = mkSession(8, BLACK, false);
   s3.place(3, 3, 3);

@@ -4266,19 +4266,19 @@ const AI_LEVELS = ["low", "medium", "high", "xhigh", "ultra"];
  */
 const AI_PARAMS = {
   low: { topK: 4, topProb: 0.40, noise: 0.55, defWeight: 0.50,
-         pOpenThree: 0.30, rotChance: 0.15, rotProbe: 6,
+         pOpenThree: 0.30, rotChance: 1.00, rotProbe: 6,
          searchDepth: 0, depth4d: 0, branch: 4, vcf: false, idMax: 0, tt: false },
   medium: { topK: 2, topProb: 0.72, noise: 0.28, defWeight: 0.80,
-            pOpenThree: 0.70, rotChance: 0.50, rotProbe: 8,
+            pOpenThree: 0.70, rotChance: 1.00, rotProbe: 8,
             searchDepth: 1, depth4d: 3, branch: 4, vcf: false, idMax: 0, tt: false },
   high: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 0.90,
-          pOpenThree: 1.00, rotChance: 0.75, rotProbe: 10,
+          pOpenThree: 1.00, rotChance: 1.00, rotProbe: 10,
           searchDepth: 3, depth4d: 5, branch: 4, vcf: false, idMax: 0, tt: false },
   xhigh: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 1.00,
-           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 12,
+           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 12, rotSearch: true,
            searchDepth: 5, depth4d: 5, branch: 4, vcf: false, idMax: 0, tt: true },
   ultra: { topK: 1, topProb: 1.00, noise: 0.00, defWeight: 1.00,
-           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 14,
+           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 0, rotSearch: true, rotMax: 24,
            searchDepth: 5, depth4d: 5, branch: 4, vcf: true, vct: true, idMax: 6, tt: true },
 };
 
@@ -4776,15 +4776,16 @@ function aiTier(v) {
  *      （活二→活三 这种档内的不算）→ 才值得花一手去转。
  * 调用方只在"落子本身做不出活三以上"时才接受 build —— 落子已经够好就别转了。
  */
-function aiRotationProbe(session, params, winLength, mover, foe, cand, stats, before, mode) {
+/**
+ * 转动候选：3 轴 × n 层 × 3 个顺时次数，剔掉空层，按「层里子多」降序、
+ * 同分按 axis/layer/turns 升序 —— **全序，同一种子在不同引擎上必须排出同样的顺序**。
+ *
+ * `limit <= 0` 表示**不截断**（极限档要全枚举之后逐个真估值）。
+ * 空层必须剔掉：`rotateLayer` 对空层必定返回 false，探它纯属白花钱。
+ */
+function aiRotationCandidates(session, limit) {
   const board = session.board;
-  if (!board.isCube) return null;          // 转动在数学上不存在，引擎也会拒 —— 别浪费探针
   const n = board.size;
-
-  // 枚举 3 轴 × n 层 × 3 个顺时次数，两层免费预筛（都只 O(n²)）：
-  //   1) 层里一颗子都没有 → rotateLayer 必定返回 false → 白探
-  //   2) 全序排序：子多的层优先，同分按 axis/layer/turns 升序。
-  //      排序必须完全确定，否则同一种子在不同引擎上会排出不同的候选顺序。
   const list = [];
   for (let ai = 0; ai < 3; ai++) {
     const axis = AI_AXES[ai];
@@ -4795,14 +4796,24 @@ function aiRotationProbe(session, params, winLength, mover, foe, cand, stats, be
     }
   }
   list.sort((a, b) => (b[3] - a[3]) || (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b[2]));
+  const lim = (limit > 0 && limit < list.length) ? limit : list.length;
+  const out = [];
+  for (let i = 0; i < lim; i++) out.push({ axis: list[i][0], layer: list[i][1], turns: list[i][2] });
+  return out;
+}
 
-  const limit = params.rotProbe < list.length ? params.rotProbe : list.length;
+function aiRotationProbe(session, params, winLength, mover, foe, cand, stats, before, mode) {
+  const board = session.board;
+  if (!board.isCube) return null;          // 转动在数学上不存在，引擎也会拒 —— 别浪费探针
+
   const moverRes = session.rules.isRestricted(mover, session.firstPlayer);
   const foeRes = session.rules.isRestricted(foe, session.firstPlayer);
   const beforeTier = aiTier(mode === "brk" ? before.foe : before.mine);
+  const list = aiRotationCandidates(session, params.rotProbe);
+  const limit = list.length;
   let best = null, bestFoe = 0, bestMine = 0, bestTier = -1;
   for (let i = 0; i < limit; i++) {
-    const axis = list[i][0], layer = list[i][1], turns = list[i][2];
+    const axis = list[i].axis, layer = list[i].layer, turns = list[i].turns;
     let afterMine = 0, afterFoe = 0;
     // 判定和旋转都在 probeRotate 里，求值夹在中间，还原走它的 finally
     const o = session.probeRotate(RotationMove.fromClockwiseTurns(axis, layer, turns), () => {
@@ -4842,6 +4853,51 @@ function aiRotationProbe(session, params, winLength, mover, foe, cand, stats, be
     }
   }
   return best;
+}
+
+/**
+ * 一次转动值多少 —— **用和落子完全相同的搜索引擎估值**。这就是"同台竞价"的全部含义。
+ *
+ * 【为什么必须走 probeRotate 而不是自己转】转动判定只此一份（_tryRotate），
+ * 挑了一手引擎会拒的动作会让电脑【卡住不动】（回合不消耗，表现就是它再不动了）。
+ * probeRotate 无论成不成都会还原、不记账、不占回合，而且求值夹在中间、还原走 finally。
+ *
+ * 【为什么 mover 传的是对方】转动探针不改 currentPlayer，而转完实际轮到对方走。
+ * 不显式覆盖，aiSearchMove 会拿"转之前该谁走"去估值，视角整个反过来。
+ *
+ * 【为什么重算整盘哈希而不是增量】转动是整层置换，增量要逐格异或 n² 次；
+ * 全量重算也是 O(cellCount)，两者同量级，而全量重算不会写错。
+ *
+ * 转不成 / 没搜出东西都返回 -Infinity —— 调用方只在它更大时才采用。
+ */
+function aiRotationValue(session, params, rot, mover, stats) {
+  const board = session.board;
+  const rules = session.rules;
+  const foe = opponentOf(mover);
+  const winLength = rules.winLength;
+  const foeRes = rules.isRestricted(foe, session.firstPlayer);
+  let value = -Infinity;
+  const o = session.probeRotate(RotationMove.fromClockwiseTurns(rot.axis, rot.layer, rot.turns), () => {
+    const cands = aiCandidates(board, AI_CANDIDATE_CAP);
+    aiPointsUsed += cands.length;
+    // 【硬门槛：转完不许给对方留活三以上】这条和 aiRotationProbe 里那两条判据是同一句 ——
+    // 转完还把"必须回应的麻烦"留（甚至加强）给对方，等于把主动权白送出去。
+    // 估值本身看得见它（叶子评估里对方那一项），但那是打了折的近似，挡不住：
+    // 实测让搜索自由选时，它会转出"留给对方活四"的一手（转动不变量测试当场红）。
+    // 所以这一条必须是**门槛而不是分数**：先过滤，再比大小。
+    if (aiThreatBest(board, cands, foe, winLength, foeRes) >= AI_W.THREE) return;
+    const safe = [];
+    for (let i = 0; i < cands.length; i += 3) {
+      const m = aiOutcomeAt(session, cands[i], cands[i + 1], cands[i + 2], mover, stats);
+      if (m && m.status === MoveStatus.LoseByOverline) continue;   // 自尽点，和自己落子那条同一套
+      safe.push(cands[i], cands[i + 1], cands[i + 2]);
+    }
+    if (safe.length === 0) return;
+    const r = aiSearchMove(session, safe, params, stats, foe);
+    if (r) value = r.v;
+  });
+  if (stats) stats.rotProbes++;
+  return o.accepted ? value : -Infinity;
 }
 
 /** 打分排序：分数降序，然后中心距升序，最后按坐标升序 —— 全序，同分也确定。 */
@@ -5419,9 +5475,11 @@ function aiVctAfter(session, attacker, foe, x, y, z, depth, stats) {
  * 调用方**已经走过硬规则链**：能赢的直接赢了、必堵的直接堵了、自尽点已经剔掉，
  * 所以这里只管"剩下的候选里哪个最好"。
  */
-function aiSearchMove(session, safe, params, stats) {
+function aiSearchMove(session, safe, params, stats, moverOverride) {
   const board = session.board, rules = session.rules, winLength = rules.winLength;
-  const mover = session.currentPlayer, foe = opponentOf(mover);
+  // 【moverOverride 只有一个用途】四维给"转动之后的局面"估值时，会话的出子权**没有变**
+  // （转动探针不占回合），而转完实际轮到的是对方。不覆盖的话估值视角会整个反过来。
+  const mover = moverOverride || session.currentPlayer, foe = opponentOf(mover);
 
   // 降档：深度是耗时的指数项，候选数是线性项，棋盘一大就先砍深度
   //
@@ -5451,7 +5509,10 @@ function aiSearchMove(session, safe, params, stats) {
   // 这里必须调 aiZobristBoard（它顺带按尺寸把表建好），不能直接调 aiZobristMove。
   const rootHash = aiZobristBoard(board);
   const k = params.branch < sc.length ? params.branch : sc.length;
-  let best = null;
+  if (k === 0) return null;
+  // 【返回值必须永远带 v】调用方（四维的转动比价）要拿它和转动候选的估值比大小。
+  // 拿不到 v 就没法比，所以先按排序首位给一个兜底，搜完再覆盖。
+  let best = { x: sc[0].x, y: sc[0].y, z: sc[0].z, v: -Infinity };
 
   // 迭代加深：一层一层加上去，**每层把上一层选出来的那一手挪到最前**（PV 优先）。
   // α-β 的剪枝全指望"先搜最好的那一手"：先搜到好的，后面的兄弟节点早早被剪掉。
@@ -5484,6 +5545,15 @@ function aiSearchMove(session, safe, params, stats) {
         break;
       }
     }
+  }
+  if (best.v === -Infinity) {
+    // 一层都没搜完（预算一开始就不够）。**不能把 -Infinity 交出去** ——
+    // 调用方要拿这个数和转动候选比大小，-Infinity 会让"随便转一下"赢过任何落子。
+    // 用叶子评估补一个值，量级和搜索值同源，比大小才有意义。
+    board.set(best.x, best.y, best.z, mover);
+    best.v = aiEvalLeaf(board, aiCandidates(board, AI_CANDIDATE_CAP), mover, foe,
+                        winLength, moverRes, foeRes);
+    board.set(best.x, best.y, best.z, EMPTY);
   }
   return best;
 }
@@ -5642,31 +5712,38 @@ function aiChooseMoveInner(session, opts) {
   // 填满，而那种局面早就终局了），但真为空时也只能认输 —— 返回 none 会变成"电脑不动了"。
   if (safe.length === 0) return { kind: "place", x: cand[0], y: cand[1], z: cand[2] };
 
-  // ---- 4. 四维：转动。判定和探针都在 aiRotationProbe 里，这里只排顺序。
+  // ---- 4. 四维：转动候选。**这里不返回，只收集** —— 比价在第 6 步。
   //
-  // 【顺序是这样定的，别随意挪】
-  //   · 上面能赢的已经赢了、必堵的已经堵了 —— 转动绝不许插到那两步前面去。
-  //   · **拆形（brk）排在落子之前**：对方已经有活三以上的时候，我下一手本来就得去回应他，
-  //     转动如果能把他压回去，等于既不丢先手、又省下那一手。
-  //   · **调形（build）排在落子之后**：它没有"必须回应"这个前提，就只是一手普通的棋，
-  //     该和落子比一比。所以先看落子能不能自己做出活三以上，做得出来就不转了。
-  //   · 探针有代价（每次一次整盘扫描 + 一次引擎转动判定），所以两条路各自只在
-  //     "真的可能成立"时才去探：brk 要求对方当前已经有活三，build 要求落子那手不够好。
-  let rot = null;
-  if (!o.noRotation && params.rotChance > 0 && params.rotProbe > 0 &&
+  // 【为什么从"抢跑"改成"竞价"】老逻辑是：对方有活三以上的时候，转动只要能把对方
+  // 压回去就【无条件返回】，从不问"老实去堵是不是更好"；调形则只在落子做不出活三时才试。
+  // 慢镜头里那句"对方一点威胁都没有时它照样转、转完对方原地点了同一格"就是这个结构。
+  // 现在转动和落子进同一个候选池，各自跑同一段搜索估值，谁高走谁。
+  //
+  // 【硬规则的顺序一个字没动】上面能赢的已经赢了、必堵的已经堵了，
+  // 转动绝不许插到那两步前面。
+  //
+  // 【低/中/高保留廉价路径】它们本来就该快，"转得好不好"不是那几档的定义；
+  // 但四维每一档都要提升，所以 rotChance 一律给 1.0（不再按概率跳过候选生成），
+  // 只是低/中/高仍然走 aiRotationProbe 的档位启发式。
+  let rotCand = null;         // 启发式路径挑出来的**唯一**一个候选
+  let rotBefore = null;       // 它要用到的"转之前的威胁"，第 6 步接着用
+  let rotAll = null;          // 极限档：全枚举出来的候选表，第 6 步逐个真估值
+  if (!o.noRotation && params.rotChance > 0 && params.rotProbe >= 0 &&
       typeof session.probeRotate === "function" &&
       session.rotationEnabled && session.canRotate && rng() < params.rotChance) {
     const moverRes0 = session.rules.isRestricted(mover, session.firstPlayer);
     const foeRes0 = session.rules.isRestricted(foe, session.firstPlayer);
-    const before = {
+    rotBefore = {
       mine: aiThreatBest(board, cand, mover, winLength, moverRes0),
       foe: aiThreatBest(board, cand, foe, winLength, foeRes0),
     };
-    if (before.foe >= AI_W.THREE) {
-      rot = aiRotationProbe(session, params, winLength, mover, foe, cand, stats, before, "brk");
-      if (rot) return rot;
+    if (params.rotSearch && params.rotProbe === 0) {
+      // 极限档：全枚举，每个候选各自真估值（第 6 步）。rotProbe=0 就是"不截断"，
+      // 所以上面那个条件必须是 >= 0 而不是 > 0。
+      rotAll = aiRotationCandidates(session, params.rotMax || 0);
     } else {
-      rot = { before: before };
+      rotCand = aiRotationProbe(session, params, winLength, mover, foe, cand, stats, rotBefore,
+                                rotBefore.foe >= AI_W.THREE ? "brk" : "build");
     }
   }
 
@@ -5681,14 +5758,34 @@ function aiChooseMoveInner(session, opts) {
   if (!move) move = aiGreedyMove(session, safe, params, rng, winLength, mover);
   if (!move) return { kind: "none" };
 
-  // ---- 6. 调形转动：落子这一手自己就做得出活三以上 → 直接落，别转了。
-  // 只有落子是"平淡的一手"时，才值得花这一手去把整层挪一挪。
-  if (rot && rot.before) {
-    const myRes = session.rules.isRestricted(mover, session.firstPlayer);
-    const placeTier = aiTier(aiThreatValue(aiThreatAt(board, move.x, move.y, move.z, mover, winLength, myRes)));
-    if (placeTier < 1) {
-      const b = aiRotationProbe(session, params, winLength, mover, foe, cand, stats, rot.before, "build");
-      if (b) return b;
+  // ---- 6. 转动 vs 落子：**在同一个尺度上比大小**。
+  //
+  // 【平手时保持落子】用的是 `>` 不是 `>=`。转动要花掉整整一手、还会消耗冷却，
+  // 落子能拿到同样的估值时没有理由去转。
+  if (rotAll) {
+    let bestRot = null, bestRotV = move.v;
+    for (let i = 0; i < rotAll.length; i++) {
+      const rv = aiRotationValue(session, params, rotAll[i], mover, stats);
+      if (rv > bestRotV) { bestRotV = rv; bestRot = rotAll[i]; }
+    }
+    if (bestRot) return { kind: "rotate", axis: bestRot.axis, layer: bestRot.layer,
+                          turns: bestRot.turns };
+  } else if (rotCand) {
+    if (params.rotSearch) {
+      const rv = aiRotationValue(session, params, rotCand, mover, stats);
+      if (rv > move.v) {
+        return { kind: "rotate", axis: rotCand.axis, layer: rotCand.layer, turns: rotCand.turns };
+      }
+    } else {
+      // 低/中/高：老规矩 —— 落子这一手自己就做得出活三以上就不转（那一手已经够好），
+      // 只有落子是"平淡的一手"时才值得花这一手去把整层挪一挪。
+      const myRes = session.rules.isRestricted(mover, session.firstPlayer);
+      const placeTier = aiTier(aiThreatValue(aiThreatAt(board, move.x, move.y, move.z,
+                                                        mover, winLength, myRes)));
+      if (placeTier < 1) {
+        const b = aiRotationProbe(session, params, winLength, mover, foe, cand, stats, rotBefore, "build");
+        if (b) return b;
+      }
     }
   }
   return { kind: "place", x: move.x, y: move.y, z: move.z };
@@ -10371,6 +10468,7 @@ if (typeof module !== "undefined" && module.exports) {
                      RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName,
                      aiChooseMove, aiCandidates, aiThreatAt, aiThreatAtSlow, aiThreatValue,
                      aiRng, AI_LEVELS, AI_PARAMS,
+                     aiRotationCandidates, aiRotationValue,
                      aiVct, aiVcfBudgetReset,
                      AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D, AI_POINT_BUDGET_MAX,
                      aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,

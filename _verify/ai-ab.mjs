@@ -107,9 +107,9 @@ function applyAction(C, s, act) {
  * 只是两边换了个颜色。
  * @returns {aScore, plies, rotations}  aScore ∈ {1, 0.5, 0}
  */
-function playOne(C, n, fourD, cooldown, lvA, lvB, aIsBlack, seed, maxPlies) {
-  const s = mkSession(C, n, fourD, cooldown);
-  const rng = C.aiRng(seed);
+function playOne(CA, CB, n, fourD, cooldown, lvA, lvB, aIsBlack, seed, maxPlies) {
+  const s = mkSession(CA, n, fourD, cooldown);
+  const rng = CA.aiRng(seed);
   // 随机开局：固定开局下"N 局"其实是同一盘棋重复 N 次。
   // 落子范围取中心附近的一个盒子，免得开局就散在棋盘角落。
   const open = seed % 7;                      // 0..6 手
@@ -126,11 +126,13 @@ function playOne(C, n, fourD, cooldown, lvA, lvB, aIsBlack, seed, maxPlies) {
   }
   let plies = 0, rotations = 0;
   while (s.status === "Playing" && plies < maxPlies) {
-    const aToMove = (s.currentPlayer === C.BLACK) === aIsBlack;
+    const aToMove = (s.currentPlayer === CA.BLACK) === aIsBlack;
     const lv = aToMove ? lvA : lvB;
+    // ★ 这里必须按"轮到谁"选内核 —— 见 duel 上面那段。
+    const C = aToMove ? CA : CB;
     const act = C.aiChooseMove(s, { level: lv, seed: (rng() * 4294967296) >>> 0 });
     if (act.kind === "none") break;
-    const r = applyAction(C, s, act);
+    const r = applyAction(CA, s, act);
     if (act.kind === "rotate") rotations++;
     // 引擎拒了任何一手都是硬故障（电脑会卡住），立刻暴露
     if (!r || r.status === C.MoveStatus.Rejected || (act.kind === "rotate" && !r.accepted)) {
@@ -139,24 +141,43 @@ function playOne(C, n, fourD, cooldown, lvA, lvB, aIsBlack, seed, maxPlies) {
     }
     plies++;
   }
-  const aWon = (s.winner === C.BLACK && aIsBlack) || (s.winner === C.WHITE && !aIsBlack);
-  const aScore = s.winner === C.EMPTY ? 0.5 : (aWon ? 1 : 0);
-  return { aScore, plies, rotations };
+  const aWon = (s.winner === CA.BLACK && aIsBlack) || (s.winner === CA.WHITE && !aIsBlack);
+  const aScore = s.winner === CA.EMPTY ? 0.5 : (aWon ? 1 : 0);
+  return { aScore, plies, rotations, winColor: s.winner };
 }
 
 /** A 方视角的得分。games 必须是偶数，第 2k 局与第 2k+1 局配对。 */
-function duel(CA, n, fourD, cooldown, games, seedBase, lvA, lvB, maxPlies) {
+/**
+ * 跑 games 局，A 方是"新版"那个内核。
+ *
+ * ★【这里踩过一次，别再合并回一个参数】第一版只收一个内核 CA，然后把它同时喂给两边 ——
+ * 于是"新旧对拍"实际上跑的是**同一份内核自己打自己**，得分必然恒等于 50.0%。
+ * 症状极隐蔽：数字看着正常（50.0% 正是"一样强"的合理读数），
+ * 只有"两个半场都是 12/24"这种过分对称才露馅。
+ * 现在每局按"轮到谁"选内核（见 playOne），并且开头有一道断言把两份源码不同钉死。
+ */
+function duel(CA, CB, n, fourD, cooldown, games, seedBase, lvA, lvB, maxPlies) {
   let score = 0, wins = 0, losses = 0, draws = 0, plies = 0, rotations = 0;
+  const pairWins = [];
   for (let i = 0; i < games; i++) {
     const aIsBlack = i % 2 === 0;
     const seed = seedBase + (i >> 1) * 7919;    // 同 (i>>1) 的两局共享种子
-    const r = playOne(CA, n, fourD, cooldown, lvA, lvB, aIsBlack, seed, maxPlies);
+    const r = playOne(CA, CB, n, fourD, cooldown, lvA, lvB, aIsBlack, seed, maxPlies);
     score += r.aScore;
     plies += r.plies;
     rotations += r.rotations;
     if (r.aScore === 1) wins++; else if (r.aScore === 0) losses++; else draws++;
+    pairWins.push(r.winColor);
   }
-  return { score, wins, losses, draws, games, avg: Math.round(plies / games), rotations };
+  // 【为什么要数这个】配对设计（同开局、只对调颜色）在"胜者由颜色决定"时会**恒等于 50%**：
+  // 两局同色胜 → A 一胜一负。这时 50% 不说明两边一样强，只说明这个开局是颜色决定的。
+  let sameColorPairs = 0, pairs = 0;
+  for (let i = 0; i + 1 < pairWins.length; i += 2) {
+    pairs++;
+    if (pairWins[i] !== 0 && pairWins[i] === pairWins[i + 1]) sameColorPairs++;
+  }
+  return { score, wins, losses, draws, games, avg: Math.round(plies / games), rotations,
+           sameColorPairs, pairs };
 }
 
 const o = parseArgs(process.argv.slice(2));
@@ -176,12 +197,21 @@ if (control) {
   console.log("【对照组】新旧是同一份内核 —— 得分率必须是恰好 50.0%，否则测量台坏了。");
 }
 
-const CN = loadCore(readHtml(o.new), "新版");
-const CO = loadCore(readHtml(o.old), "旧版");
+const HTML_NEW = readHtml(o.new);
+const HTML_OLD = o.old === o.new ? HTML_NEW : readHtml(o.old);
+// 【守卫】新旧给了不同 revision，取回来的正文却一模一样 → 这次对拍毫无意义，
+// 而且它会伪装成"两边一样强（50.0%）"这种看起来完全合理的读数。**宁可当场报错。**
+if (o.new !== o.old && HTML_NEW === HTML_OLD) {
+  console.error("★ " + o.new + " 和 " + o.old + " 取回来的 index.html 逐字节相同 —— " +
+                "这次对拍比的是同一份内核，结果没有意义。检查 revision 或路径。");
+  process.exit(2);
+}
+const CN = loadCore(HTML_NEW, "新版");
+const CO = loadCore(HTML_OLD, "旧版");
 
 // 两个半场：新版先执黑，再执白。这样"第一方优势"两边各照顾一次。
-const r1 = duel(CN, o.size, fourD, o.cooldown, half, 40001, o.nlv, o.olv, maxPlies);
-const r2 = duel(CO, o.size, fourD, o.cooldown, half, 50001, o.olv, o.nlv, maxPlies);
+const r1 = duel(CN, CO, o.size, fourD, o.cooldown, half, 40001, o.nlv, o.olv, maxPlies);
+const r2 = duel(CO, CN, o.size, fourD, o.cooldown, half, 50001, o.olv, o.nlv, maxPlies);
 
 const total = r1.games + r2.games;
 const newScore = r1.score + (r2.games - r2.score);   // r2 里新版执的是 B 方
@@ -194,6 +224,9 @@ console.log("新版执白半场：" + (r2.games - r2.score) + "/" + r2.games);
 console.log("新版合计：" + newScore + "/" + total + " = " + pct + "%");
 console.log("平均 " + Math.round((r1.avg + r2.avg) / 2) + " 手，转动 " +
             (r1.rotations + r2.rotations) + " 次");
+console.log("配对里「同色胜」的比例：" + (r1.sameColorPairs + r2.sameColorPairs) + "/" +
+            (r1.pairs + r2.pairs) + "（接近 100% 说明配对里的 50.0% 是设计逼出来的，" +
+            "不代表两边一样强）");
 
 if (control) {
   const ok = Math.abs(newScore - total / 2) < 1e-9;
