@@ -4784,8 +4784,15 @@ function aiThreatAtSlow(board, x, y, z, player, winLength, restricted) {
  * 【量纲必须对齐】阈值和分值必须落在同一把尺子上 —— 同类引擎里最大的一笔实测收益
  * （+131 elo）就是修这个：它的"有没有四"判断写在了另一个量纲上，于是那个分支**从来没触发过**。
  */
-function aiThreatValue(t) {
-  if (t.over > 0) return AI_W.SUICIDE;              // 自尽：比什么都糟
+function aiThreatValue(t, restricted) {
+  // 【长连要看身份 —— 这里原来一刀切按"自尽"算，那是错的】
+  // 同一个 6 连：受限方（先手）走出它是**当场判负**，非受限方走出它是**赢**（judge 就是这么判的）。
+  // 原来不管谁都按 SUICIDE 记，于是"能连六颗取胜"的点被当成最差的点 ——
+  // 方向是**让 AI 回避取胜**，不是让它送死，所以一直没被发现。
+  // restricted 由调用方给（每个调用点本来就有 moverRes / foeRes）。
+  // 【为什么不改 aiThreatAt 而是改这里】aiThreatAt 的输出要和冻结的 v2.10.14 基准逐字段对拍
+  // （tests 第 10 组），它的 over 字段是"restriction 无关的原始计数"，一改对拍就失去意义。
+  if (t.over > 0) return restricted ? AI_W.SUICIDE : AI_W.WIN;
   if (t.wins > 0) return AI_W.WIN;
   if (t.openFours > 0) return AI_W.OPEN_FOUR;       // 活四：挡一头还有另一头，等于赢
   if (t.fours >= 2) return AI_W.DOUBLE_FOUR;        // 双四：一手挡不住两处
@@ -4870,6 +4877,11 @@ function aiTier(v) {
  */
 function aiRotationCandidates(session, limit) {
   const board = session.board;
+  // 【长方体上返回空表，不许抛】board.size 在非立方盘上会抛（那是刻意的，
+  // 见 Board3D.size 的注释）。但引擎的约定是"绝不出抛"，而 UIView 之外
+  // 程序化调用是能造出"长方盘 + allowRotation"这种组合的（_tryRotate 会拒它，但拒是拒，
+  // 不该在候选生成这一步就炸）。返回空表 = "没有可转的层"，语义正好。
+  if (!board.isCube) return [];
   const n = board.size;
   const list = [];
   for (let ai = 0; ai < 3; ai++) {
@@ -5056,7 +5068,7 @@ const AI_EVAL_TOP2 = 0.25;
 function aiThreatBest(board, cands, player, winLength, restricted) {
   let best = 0, second = 0;
   for (let i = 0; i < cands.length; i += 3) {
-    const v = aiThreatValue(aiThreatAt(board, cands[i], cands[i + 1], cands[i + 2], player, winLength, restricted));
+    const v = aiThreatValue(aiThreatAt(board, cands[i], cands[i + 1], cands[i + 2], player, winLength, restricted), restricted);
     if (v > best) { second = best; best = v; }
     else if (v > second) second = v;
   }
@@ -5088,9 +5100,9 @@ function aiEvalLeaf(board, cands, mover, foe, winLength, moverRes, foeRes) {
  * 现有那套深度 0 的打分用的是加号，所以它反而会堵。
  */
 function aiOrderKey(board, x, y, z, mover, foe, winLength, moverRes, foeRes) {
-  const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes));
+  const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes), moverRes);
   AI_ORDER.mine = mine;              // 平手时要用它，见 aiSearchCompare
-  return mine + AI_ORDER_W * aiThreatValue(aiThreatAt(board, x, y, z, foe, winLength, foeRes));
+  return mine + AI_ORDER_W * aiThreatValue(aiThreatAt(board, x, y, z, foe, winLength, foeRes), foeRes);
 }
 
 /**
@@ -5325,7 +5337,9 @@ function aiVcfThreats(session, attacker, out, cands) {
   for (let i = 0; i < cands.length; i += 3) {
     const x = cands[i], y = cands[i + 1], z = cands[i + 2];
     const t = aiThreatAt(board, x, y, z, attacker, wl, res);
-    if (t.over > 0) continue;                 // 自尽点：算杀里绝不能走
+    // 【长连也要看身份】受限方走出长连是自尽，算杀里绝不能走；
+    // 非受限方走出长连是**赢** —— 原来一刀切 continue，等于把胜着当自尽丢掉。
+    if (t.over > 0) { if (res) continue; out.wins.push(x, y, z); continue; }
     if (t.wins > 0) out.wins.push(x, y, z);
     else if (t.fours > 0) out.fours.push(x, y, z);
   }
@@ -5473,6 +5487,9 @@ function aiVct(session, attacker, depth, stats) {
   const cost = cands.length * 2;
   if (aiVcfLeft < cost) return null;
   aiVcfLeft -= cost;
+  // 【vcfNodes 是"算杀扫过多少格"的总数】VCT 原来不计数，于是日志里那一栏只数了 VCF，
+  // 看的人会以为极限档的算杀很便宜。单位保持一致：一格。
+  if (stats) stats.vcfNodes++;
 
   // ★【必须快照】AI_VCT_A 是模块级复用的缓冲，而下面的 aiVctAfter 会递归回 aiVct，
   // 那时 aiVcfThreats 会把同一张表**清空重填**。不快照的话，外层循环遍历的其实是
@@ -5500,23 +5517,30 @@ function aiVct(session, attacker, depth, stats) {
   // 再做一遍，这一遍专门试"活三"：也就是那些做了之后**没有直接成五、但做出了四**的点。
   // 冲四在上面已经试过了，这里不重复。
   // 【为什么单独一遍】活三的分支大得多，只在冲四全都失败之后才值得付出这个代价。
-  let tried = 0;
+  // 【活三着法要按威胁大小排序，不能按候选的原始顺序取前 6 个】
+  // cands 的顺序来自 aiCandidates（扫描棋子的顺序），和"这一手有多强"无关。
+  // 按原始顺序截断等于**随机丢掉可能更强的那几个活三** —— 而 VCT 的全部价值就在找到它们。
+  // 排完序取前 AI_VCT_M 个；仍不够时的截断照旧判未知（宁可少报，不可错报）。
+  const attRes = rules.isRestricted(attacker, session.firstPlayer);
+  const threes = [];
   for (let i = 0; i < cands.length; i += 3) {
     const x = cands[i], y = cands[i + 1], z = cands[i + 2];
-    // 跳过上面已经试过的冲四点
     let isFour = false;
     for (let j = 0; j < mine.fours.length; j += 3) {
       if (mine.fours[j] === x && mine.fours[j + 1] === y && mine.fours[j + 2] === z) {
         isFour = true; break;
       }
     }
-    if (isFour) continue;
-    const t = aiThreatAt(board, x, y, z, attacker, rules.winLength,
-                         rules.isRestricted(attacker, session.firstPlayer));
+    if (isFour) continue;                         // 上面已经试过了
+    const t = aiThreatAt(board, x, y, z, attacker, rules.winLength, attRes);
     if (t.over > 0 || t.threes === 0) continue;   // 自尽点 / 不是活三
-    tried++;
-    if (tried > AI_VCT_M) return null;            // 活三太多 → 判未知，绝不猜
-    const r = aiVctAfter(session, attacker, foe, x, y, z, depth, stats);
+    threes.push({ x: x, y: y, z: z, v: aiThreatValue(t, attRes) });
+  }
+  if (threes.length > AI_VCT_M) return null;      // 活三太多 → 判未知，绝不猜
+  // 全序：威胁值降序 → 坐标升序（同分也确定，保证同种子同结果）
+  threes.sort((a, b) => (b.v - a.v) || (a.x - b.x) || (a.y - b.y) || (a.z - b.z));
+  for (let i = 0; i < threes.length; i++) {
+    const r = aiVctAfter(session, attacker, foe, threes[i].x, threes[i].y, threes[i].z, depth, stats);
     if (r) return r;
   }
   return null;
@@ -5698,9 +5722,9 @@ function aiGreedyMove(session, safe, params, rng, winLength, mover) {
   const scored = [];
   for (let i = 0; i < safe.length; i += 3) {
     const x = safe[i], y = safe[i + 1], z = safe[i + 2];
-    const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes));
+    const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes), moverRes);
     const theirsT = aiThreatAt(board, x, y, z, foe, winLength, foeRes);
-    const theirs = aiThreatValue(theirsT);
+    const theirs = aiThreatValue(theirsT, foeRes);
     // 每个候选恰好消耗一次随机数 —— 消耗顺序是"同种子必然同结果"那条契约的一部分
     const jitter = 1 + params.noise * (rng() * 2 - 1);
     scored.push({ x: x, y: y, z: z, atk: mine, def: theirs, defOpen: theirsT.openFours,
@@ -5944,7 +5968,7 @@ function aiChooseMoveInner(session, opts) {
       // 只有落子是"平淡的一手"时才值得花这一手去把整层挪一挪。
       const myRes = session.rules.isRestricted(mover, session.firstPlayer);
       const placeTier = aiTier(aiThreatValue(aiThreatAt(board, move.x, move.y, move.z,
-                                                        mover, winLength, myRes)));
+                                                        mover, winLength, myRes), myRes));
       if (placeTier < 1) {
         const b = aiRotationProbe(session, params, winLength, mover, foe, cand, stats, rotBefore, "build");
         if (b) return b;
