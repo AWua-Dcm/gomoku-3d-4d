@@ -217,6 +217,53 @@ et comme les trois axes doivent pouvoir tourner, les trois doivent avoir la mêm
 Si la taille par défaut en 4D est 8 et non 15, c'est que **plus le plateau est grand, moins une couche contient de pions et moins la rotation se voit** —
 sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la plupart des rotations tombent sur « aucun changement ».
 
+### 10.8 Pliage (les six faces sont cousues)
+
+En 4D **les six faces du plateau sont reliées** : on sort d'un bord et on revient par le
+bord opposé. Idem pour les trois axes.
+
+Une cinq peut donc traverser un bord : deux pierres d'un côté et trois de l'autre forment
+une seule suite.
+
+- Le plateau a le même aspect et on pose les pierres de la même façon. **Une pierre n'a
+  qu'une seule position** ; elle n'est pas redessinée de l'autre côté.
+- La règle du six est inchangée : le premier joueur perd toujours à 6 alignées ou plus.
+  Le pliage allonge les lignes : vérifiez le bord opposé avant de conclure une cinq.
+  **Un anneau complet d'une couleur (N pierres) compte aussi comme un six.**
+- Les pierres de l'autre phase occupent quand même leur case et coupent les lignes.
+
+### 10.9 Jour et nuit (la phase)
+
+En 4D, le plateau alterne entre deux phases : **jour** et **nuit**. Chaque pierre retient la
+phase où elle a été posée.
+
+- **Seules les lignes de la phase en cours sont comptées.** Une cinq de nuit présente de jour
+  existe, mais ne compte pas ; à l'instant où la phase passe à la nuit, si elle est encore
+  là, elle est comptée aussitôt.
+- **Les pierres de l'autre phase occupent leur case et coupent les lignes** (elles sont
+  pleines, pas vides). Elles sont dessinées plus pâles, la phase se lit d'un coup d'œil.
+- La phase change tous les 12 coups (réglable sur l'écran de départ, de 10 à 30).
+
+Un coup peut être déclaré :
+
+| Déclaration | Effet |
+|---|---|
+| normal | l'horloge avance d'un cran |
+| retenir | l'horloge n'avance pas ; un cran est emprunté à la phase suivante |
+| hâter | l'horloge avance de deux crans, un emprunt est remboursé |
+
+**On ne peut que déplacer le temps, pas en créer** : un cycle complet vaut toujours
+2 × la période, et l'emprunt est déduit de la phase suivante. Aucune phase ne descend
+sous 2 coups, et l'emprunt comme le remboursement sont plafonnés.
+
+### 10.10 Didacticiel
+
+Une fois le 4D choisi, un bouton **Didacticiel** apparaît à côté de Commencer. Trois
+niveaux couvrent la rotation, le pliage et le jour / la nuit ; chacun est une position
+préparée avec un objectif. Il n'y a pas d'ordinateur dans le didacticiel ; un niveau
+réussi ouvre le suivant, et le bouton Réglages de cette ligne (il affiche **Quitter**
+dans le didacticiel) ramène à l'écran de départ.
+
 ## 11. Jouer contre l'ordinateur
 
 - **L'écran de départ a une ligne « Adversaire »** : humain (deux joueurs, un seul appareil), ou cinq
@@ -263,8 +310,8 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 
 - **Pas de double-trois ni de double-quatre.** Dans le renju traditionnel, le premier joueur a aussi des interdits comme
   « un coup qui forme à la fois deux trois ouverts / deux quatre » ; ce jeu n'implémente que la défaite pour alignement trop long. La sanction tombe après la pose du pion : il n'existe pas de « cette case est interdite ».
-- **L'ordinateur n'est pas un moteur d'échecs.** Même le niveau difficile ne calcule que quatre
-  demi-coups : il ne reconnaît pas les figures à trou, ne voit pas les menaces doubles, et n'a ni
-  ouvertures ni théorie. Bon partenaire d'entraînement ; pour jouer sérieusement, prenez un moteur dédié.
+- **L'ordinateur n'est pas un moteur d'échecs.** Son comptage de menaces utilise une fenêtre
+  glissante : **il reconnaît donc les formes trouées et les menaces doubles**. Mais il n'a ni
+  bibliothèque d'ouvertures, ni joseki, ni recherche de quiescence.
 - **Les rotations n'ont pas d'animation** : elles se font instantanément, seule la couche tournée est brièvement mise en évidence.
 - **Les rotations ne se font qu'avec les boutons du panneau**, pas en glissant directement dans la vue 3D.

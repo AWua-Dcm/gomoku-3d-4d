@@ -897,7 +897,14 @@ check(fullScript.indexOf("Math.random(") < 0,
 {
   const aiStart = fullScript.indexOf("电脑对手：");
   const aiEnd = fullScript.indexOf("aiChooseMove(session, opts)");
-  const aiBody = fullScript.slice(aiEnd);
+  // 【右端要收在 AI 那一段的末尾，不能一路切到文件末尾】原来是 slice(aiEnd)，
+  // 那时候 aiChooseMove 后面只剩几行；现在它后面还有整个 Game 对象 ——
+  // 教学关里那处 fullScan（tutFill 用它保证背景子不凑成连线）就被框进来了，
+  // 而那条断言的**本意**是"fullScan 不许进 aiChooseMove 的热路径"，与教学无关。
+  // 右端用和下面那条一样的边界（盘面指纹的注释），两条检查口径一致。
+  const aiTail = fullScript.indexOf("/**\n * 盘面指纹。");
+  if (aiTail <= aiEnd) throw new Error("找不到 AI 段的结尾边界，这条检查会空转");
+  const aiBody = fullScript.slice(aiEnd, aiTail);
   const hits = (aiBody.match(/fullScan/g) || []).length;
   eq(hits, 0, "aiChooseMove 的正文里不能出现 fullScan");
   // 整段 AI 代码（含注释）里只许在说明文字里提到它

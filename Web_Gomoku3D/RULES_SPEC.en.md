@@ -219,6 +219,51 @@ be rotatable, so all three must be the same length.
 4D defaults to 8 rather than 15 because **the bigger the board, the fewer stones a layer holds, and the less a rotation shows** —
 on a 15×15×15 board a layer holds less than one stone on average, and most rotations hit the "nothing changed" case.
 
+### 10.8 Wrapping (the six faces are joined)
+
+In 4D **the six faces of the board are connected**: walk off one edge and you come back in
+on the opposite one. This holds for all three axes.
+
+So a five may cross an edge — two stones on one side and three on the other are one run.
+
+- The board looks the same and you place stones the same way. **A stone has exactly one
+  position**; it is not drawn again on the far side.
+- The overline rule is unchanged: the first player still loses with 6 or more in a row.
+  Wrapping makes lines longer, so check the far side before completing a five.
+  **A full ring of one colour (N stones) is an overline too.**
+
+### 10.9 Day and night (the phase)
+
+In 4D the board alternates between two phases: **day** and **night**. Each stone remembers
+the phase it was placed in.
+
+- **Only lines of the current phase are settled.** A night five that exists during the day
+  is there, but does not count; the moment the phase turns to night and it is still there,
+  it settles at once.
+- **Stones of the other phase still occupy their cell and break lines** (they are solid,
+  not empty). They are drawn fainter, so you can tell at a glance which phase a stone
+  belongs to.
+- The phase turns every 12 moves (changeable on the start screen, 10 to 30).
+
+A move may declare:
+
+| Declaration | Effect |
+|---|---|
+| normal | the clock advances one step |
+| hold | the clock does not advance; one step is borrowed from the next phase |
+| hasten | the clock advances two steps, repaying one borrowed step |
+
+**You can only shift time, never create it**: a full cycle is always 2 × the period, and
+what you borrow is deducted from the next phase. No phase may be shorter than 2 moves, and
+borrowing and repaying are both capped.
+
+### 10.10 Tutorial
+
+Once 4D is selected, a **Tutorial** button appears next to Start. Three levels cover
+rotation, wrapping and day / night; each is a prepared position with a goal. There is no
+computer opponent in the tutorial; once you clear a level you can move on, and the row's
+Setup button (it reads **Exit** inside the tutorial) takes you back to the start screen.
+
 ## 11. Playing the computer
 
 - **The start screen has an "Opponent" row**: Human (two players, one device), or five computer
@@ -263,8 +308,9 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 - **No double-three or double-four restrictions.** In traditional Renju (Gomoku's competitive form) the first player is also
   barred from "one move making two open threes / two fours" and the like; this game implements the overline loss only. The
   penalty falls after the move — there is no cell you are forbidden to play.
-- **The computer opponent is not an engine.** Even the hardest tier only searches four plies: it does
-  not recognise gapped shapes, it does not see double threats, and it has no opening book or joseki.
+- **The computer opponent is not an engine.** Its threat counting uses a sliding window, so **it does
+  recognise gapped shapes and double threats**; but it has no opening book, no joseki and no quiescence
+  search.
   Good enough as a sparring partner; for a serious game, use a dedicated engine.
 - **Rotations are not animated**; they land instantly, with only a brief highlight on the rotated layer.
 - **Rotations can only be made with the panel buttons**, not by dragging in the 3D view.
