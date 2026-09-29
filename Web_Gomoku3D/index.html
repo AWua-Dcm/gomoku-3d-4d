@@ -299,6 +299,25 @@
 
   /* v3.0.0「晨昏」的时间轴。高度写死 —— 它是棋盘的固定对手，
      写死才能保证"棋盘让出去的正好是这一条"。 */
+  /* 教学条：左上角一块半透明卡片。**不遮棋盘** —— 它是说明，不是弹窗，
+     玩家要一边看一边在盘上落子。 */
+  #tutBar {
+    position: absolute; left: 14px; top: 96px; max-width: 340px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+    padding: 10px 12px; font-size: 12.5px; line-height: 1.55; color: var(--text);
+    pointer-events: none;                /* 别挡住盘上的点击 */
+  }
+  #tutBar.off { display: none; }
+  #tutStep { font-size: 11px; color: var(--dim); margin-bottom: 2px; }
+  #tutTitle { font-weight: 600; margin-bottom: 4px; }
+  #tutBody { color: var(--dim); }
+  #tutDone { margin-top: 6px; color: var(--accent); font-weight: 600; }
+  #tutDone:empty { display: none; }
+  /* 退出固定右下角 —— 第几关都在同一个位置，不用找。 */
+  #tutExit { position: absolute; right: 16px; bottom: 16px; z-index: 20; }
+  #tutNext { position: absolute; right: 96px; bottom: 16px; z-index: 20; }
+  #tutExit.off, #tutNext.off { display: none; }
+
   #timelineWrap { height: 30px; background: var(--well); border: 1px solid var(--border);
                   border-radius: 4px; flex: 0 0 auto; overflow: hidden; }
   #timelineWrap.off { display: none; }
@@ -2705,6 +2724,21 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
         Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · H 格线 · B 只看黑/白 · T 转动 · Y 恢复本次转动<br>
         绿框 = 待转的那一层 · 蓝框 = 当前层（四维模式下才有绿框）</div>
     </div>
+
+    <!-- v3.0.0 游戏教学。**铺满屏幕**：进入教学时把 #setup 关掉、直接进对局视图，
+         所以"满屏"是靠复用对局视图实现的，不是另搭一套。
+         条子挂左上（和模式条同一侧，但更靠下），退出固定在右下角 ——
+         退出永远在同一个位置，不管当前是第几关。 -->
+    <div id="tutBar" class="off">
+      <div id="tutStep"></div>
+      <div id="tutTitle"></div>
+      <div id="tutBody"></div>
+      <div id="tutDone"></div>
+    </div>
+    <button id="tutExit" class="off" data-i18n="tutExit">退出</button>
+    <!-- 文案走 data-i18n（元素 id → STATIC_TEXT），不进 TEXT ——
+         它是静态的一颗键，不是会被 JS 改写的两态按钮。 -->
+    <button id="tutNext" class="off" data-i18n="tutNext">下一关</button>
 
     <div id="banner">
       <button id="bannerClose" class="mini" data-i18n="bannerClose">关闭 Esc</button>
@@ -6614,6 +6648,8 @@ const STATIC_TEXT = { en: {
   "firstWhite": "White first",
   "dimCube": "Link all three axes",
   "startBtn": "Start game",
+  "tutExit": "Exit", "tutNext": "Next",
+  "tutExit": "Exit",
   "tutorialBtn": "Tutorial",
 
   // ---- 起始界面的规则摘要（含 <br>）。英文读者看到的是同一件事的白话说法，
@@ -6655,6 +6691,14 @@ const TEXT = { en: {
   "aiLv.xhigh": "Very high",
   "aiLv.ultra": "Ultra",
   "phase.dawn": "Dawn", "phase.night": "Long night",
+"tut.1.title": "Rotation: turn the layer until it connects",
+"tut.1.body": "Your three stones lie on the y=0 line, and one more sits alone at (0,3). Turn layer z=0 — the horizontal three swings onto x=0 and meets that stone, making a four. (A rotation costs the whole turn, so weigh whether it is worth it.)",
+"tut.2.title": "Wrapping: the edges connect",
+"tut.2.body": "The six faces are joined: the right of x=14 is x=0. Your four stones straddle the edge — fill the gap to make five.",
+"tut.3.title": "Day and night: a line does not always count",
+"tut.3.body": "You have two fours: one laid in the day, one in the night. It is day now, so only the day four counts — and in two moves the phase turns, and the chance is gone.",
+"tut.step": "Level {n} / {total}",
+"tut.passed": "Cleared — you have got it",
   "phase.left": " · {n} to go", "mode.label": "Play: ",
   "mode.normal": "normal", "mode.slow": "hold", "mode.fast": "hasten",
   "aiHint.ultra": "Thinking time may increase noticeably",
@@ -6796,6 +6840,7 @@ STATIC_TEXT.ja = {
   "firstWhite": "白が先手",
   "dimCube": "3軸を連動",
   "startBtn": "対局開始",
+  "tutExit": "終了", "tutNext": "次の関",
   "tutorialBtn": "ゲームの説明",
   "ruleNote": "ルール：空いているマスならどこにでも着手できます（重力はありません）。先手は<b>ちょうど5連</b>を作らなければならず、6連以上は長連で負けです。後手は5連以上で勝ちです。<br>勝ちの方向は13通り：3軸 + 面対角線6本 + 体対角線4本。右のパネルでレイヤーを切り替えて石を置きます。",
 };
@@ -6816,6 +6861,14 @@ TEXT.ja = {
   "aiLv.xhigh": "最強",
   "aiLv.ultra": "極",
   "phase.dawn": "黎明", "phase.night": "長い夜",
+"tut.1.title": "回転：層を回してつなげる",
+"tut.1.body": "あなたの三石は y=0 の線上にあり、もう一石だけ (0,3) に孤立しています。z=0 の層を回すと、横三が x=0 に移り、その石とつながって四になります。（回転は一手を使うので、値打ちがあるか見極めて。）",
+"tut.2.title": "貫通：境界をまたいでもつながる",
+"tut.2.body": "六面はつながっています：x=14 の右は x=0 です。あなたの四石は境界をまたいでいます。隙間を埋めれば五です。",
+"tut.3.title": "昼夜：つながっても数えられない",
+"tut.3.body": "四が二本あります。一本は昼に、一本は夜に置いたものです。いまは昼なので昼の四だけが数えられます。そして二手で位相が変わり、機会は消えます。",
+"tut.step": "第 {n} / {total} 関",
+"tut.passed": "クリア —— もう分かりましたね",
   "phase.left": " · 切り替わりまで {n}", "mode.label": "着手：",
   "mode.normal": "通常", "mode.slow": "遅らせる", "mode.fast": "早める",
   "aiHint.ultra": "思考時間が明らかに長くなることがあります",
@@ -6915,6 +6968,7 @@ STATIC_TEXT.ko = {
   "firstWhite": "백 선수",
   "dimCube": "세 축 연동",
   "startBtn": "게임 시작",
+  "tutExit": "나가기", "tutNext": "다음 단계",
   "tutorialBtn": "게임 안내",
   "ruleNote": "규칙: 빈칸이면 어디든 착수할 수 있습니다 — 중력은 없습니다. 선수는 <b>정확히 다섯</b>을 이어야 하며, 여섯 이상은 장련(長連) 반칙으로 패배합니다. 후수는 다섯 이상이면 승리합니다.<br>승리 방향은 13개입니다: 축 3 + 면 대각선 6 + 공간 대각선 4. 오른쪽 패널에서 레이어를 넘기며 돌을 놓으세요.",
 };
@@ -6935,6 +6989,14 @@ TEXT.ko = {
   "aiLv.xhigh": "최상",
   "aiLv.ultra": "극",
   "phase.dawn": "여명", "phase.night": "긴 밤",
+"tut.1.title": "회전: 층을 돌려 이어 붙이기",
+"tut.1.body": "세 개의 돌은 y=0 선 위에 있고, 하나는 (0,3)에 홀로 있습니다. z=0 층을 돌리면 가로 삼이 x=0으로 옮겨 그 돌과 만나 사가 됩니다. (회전은 한 수를 쓰니 값어치가 있는지 따져 보세요.)",
+"tut.2.title": "관통: 경계를 넘어도 이어집니다",
+"tut.2.body": "여섯 면은 이어져 있습니다: x=14의 오른쪽은 x=0입니다. 네 개의 돌이 경계에 걸쳐 있으니 빈칸을 채우면 오가 됩니다.",
+"tut.3.title": "낮과 밤: 이어도 세지 않습니다",
+"tut.3.body": "사가 둘 있습니다. 하나는 낮에, 하나는 밤에 놓은 것입니다. 지금은 낮이라 낮의 사만 셉니다. 두 수 뒤에 위상이 바뀌면 기회는 사라집니다.",
+"tut.step": "{n} / {total} 단계",
+"tut.passed": "통과 — 이제 아시겠죠",
   "phase.left": " · 전환까지 {n}", "mode.label": "착수: ",
   "mode.normal": "보통", "mode.slow": "늦추기", "mode.fast": "앞당기기",
   "aiHint.ultra": "생각 시간이 눈에 띄게 길어질 수 있습니다",
@@ -7037,6 +7099,7 @@ STATIC_TEXT.ru = {
   "firstWhite": "Первыми ходят белые",
   "dimCube": "Связать все три оси",
   "startBtn": "Начать игру",
+  "tutExit": "Выйти", "tutNext": "Дальше",
   "tutorialBtn": "Обучение",
   "ruleNote": "Правила: ходить можно в любую пустую клетку — гравитации нет. Первый игрок должен собрать <b>ровно пять</b> в ряд; шесть и более — перебор и поражение. Второй игрок побеждает при пяти и более.<br>Победных направлений 13: 3 оси + 6 диагоналей граней + 4 диагонали куба. Переключайте слои на панели справа и ставьте камни.",
 };
@@ -7061,6 +7124,14 @@ TEXT.ru = {
   "aiLv.xhigh": "Оч. сильн",
   "aiLv.ultra": "Ультра",
   "phase.dawn": "Рассвет", "phase.night": "Долгая ночь",
+"tut.1.title": "Поворот: крутите слой, пока не сойдётся",
+"tut.1.body": "Три ваших камня лежат на линии y=0, а ещё один стоит особняком в (0,3). Поверните слой z=0 — горизонтальная тройка перейдёт на x=0 и встретит этот камень, получится четвёрка. (Поворот стоит целого хода — взвесьте, стоит ли.)",
+"tut.2.title": "Склейка: края соединены",
+"tut.2.body": "Шесть граней сшиты: справа от x=14 идёт x=0. Ваши четыре камня стоят по обе стороны края — заполните разрыв, и будет пять.",
+"tut.3.title": "День и ночь: линия не всегда считается",
+"tut.3.body": "У вас две четвёрки: одна поставлена днём, другая ночью. Сейчас день, поэтому считается только дневная. А через два хода фаза сменится, и шанс уйдёт.",
+"tut.step": "Уровень {n} / {total}",
+"tut.passed": "Пройдено — вы разобрались",
   "phase.left": " · до смены {n}", "mode.label": "Ход: ",
   "mode.normal": "обычный", "mode.slow": "задержать", "mode.fast": "ускорить",
   "aiHint.ultra": "Время обдумывания может заметно увеличиться",
@@ -7168,6 +7239,7 @@ STATIC_TEXT.fr = {
   "firstWhite": "Blancs en premier",
   "dimCube": "Lier les trois axes",
   "startBtn": "Commencer la partie",
+  "tutExit": "Quitter", "tutNext": "Suivant",
   "tutorialBtn": "Didacticiel",
   "ruleNote": "Règles : vous pouvez jouer sur n'importe quelle case vide — il n'y a pas de gravité. Le premier joueur doit aligner <b>exactement cinq</b> pions ; six ou plus est un alignement trop long, ce qui fait perdre. Le second joueur gagne avec cinq ou plus.<br>Il y a 13 directions gagnantes : 3 axes + 6 diagonales de face + 4 grandes diagonales. Utilisez le panneau de droite pour parcourir les couches et poser des pions.",
 };
@@ -7189,6 +7261,14 @@ TEXT.fr = {
   "aiLv.high": "Haut",
   "aiLv.xhigh": "Très haut",
   "phase.dawn": "Aube", "phase.night": "Longue nuit",
+"tut.1.title": "Rotation : tournez la couche jusqu'à ce que ça se rejoigne",
+"tut.1.body": "Vos trois pierres sont sur la ligne y=0, et une autre est isolée en (0,3). Faites tourner la couche z=0 : la trois horizontale passe sur x=0 et rejoint cette pierre — cela fait une quatre. (Une rotation coûte le tour entier : pesez si cela vaut le coup.)",
+"tut.2.title": "Pliage : les bords se rejoignent",
+"tut.2.body": "Les six faces sont cousues : à droite de x=14 vient x=0. Vos quatre pierres chevauchent le bord — comblez le trou et vous avez cinq.",
+"tut.3.title": "Jour et nuit : une ligne ne compte pas toujours",
+"tut.3.body": "Vous avez deux quatre : l'une posée de jour, l'autre de nuit. Il fait jour, donc seule la quatre de jour compte — et dans deux coups la phase bascule, l'occasion sera passée.",
+"tut.step": "Niveau {n} / {total}",
+"tut.passed": "Réussi — vous avez compris",
   "phase.left": " · {n} avant la bascule", "mode.label": "Coup : ",
   "mode.normal": "normal", "mode.slow": "retenir", "mode.fast": "hâter",
   "aiHint.ultra": "Le temps de réflexion peut augmenter nettement",
@@ -8093,6 +8173,10 @@ const Game = {
   setupCool: 5,          // 设置页选的冷却（落子数），范围见 CoolLimits
   /** v3.0.0「晨昏」的相位周期。四维下常开，三维下不生效（见 newGame）。 */
   setupPhase: 12,
+  /** 教学状态。tutActive = 在教学里；tutIndex = 第几关；tutPassed = 这一关过了没有。 */
+  tutActive: false,
+  tutIndex: 0,
+  tutPassed: false,
   /** 下一手要用的宣告（v3.0.0「晨昏」）。见 MoveMode。 */
   placeMode: 0,
   rotAxis: AXIS_Z,
@@ -8164,6 +8248,7 @@ const Game = {
     const ids = ["gl","modeGhost","modeSlice","modeGrid","stoneAll","stoneBlack","stoneWhite",
       "sliceGroup","sliceDown","sliceUp","sliceLabel",
       "coords","hint","hintbox","hintToggle","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
+      "tutBar","tutStep","tutTitle","tutBody","tutDone","tutExit","tutNext",
       "chip","status","rule","info","boardWrap","timelineWrap","timeline","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","tutorialBtn","view","stage","previewTag",
@@ -9515,6 +9600,9 @@ const Game = {
     if (!this.session) return;
     const s = this.session;
 
+    // 教学关：每一步之后看一下过关没有。
+    this.tutorialCheck();
+
     // v3.0.0「晨昏」：相位指示与落子宣告键跟着一起刷。
     // **必须挂在这条总刷新链上** —— 只挂在点击处理里的话，落子之后相位变了、
     // 倒计时变了，显示却停在上一次点键时的样子。
@@ -9722,6 +9810,12 @@ const Game = {
         setter(v);
       });
     }
+    on("tutorialBtn", () => this.startTutorial());
+    on("tutExit", () => this.tutorialExit());
+    on("tutNext", () => {
+      const n = this.tutorialLevels().length;
+      this.tutorialBuild((this.tutIndex + 1) % n);      // 最后一关之后回到第一关
+    });
     on("startBtn", () => {
       this.closeSetup();
       const d = this.fourD ? [this.setupSize, this.setupSize, this.setupSize] : this.setupDims;
@@ -10732,6 +10826,155 @@ const Game = {
    * 写成后者会在桩里直接抛 TypeError —— 而那个报错看起来和"冷却行"毫无关系，很难查。
    * 与 bindUi 里保持同一种写法。
    */
+  /**
+   * v3.0.0 游戏教学的三关。**每关是一个预设局面 + 一个过关判据**，走的是和正式对局
+   * 完全同一套会话与渲染 —— 所以"铺满屏幕"是复用对局视图得到的，不是另搭一层。
+   *
+   * 【关卡怎么设计的 —— 一条结构事实决定了转动关的形状】
+   * **转动是"每一层内的等距变换"，所以它永远造不出本层内的新连线**（旋转把直线映成直线，
+   * 本层里原来有几连，转完还是几连）。它能改变的只有"本层和其他层的对齐关系"。
+   * 所以转动关必须**跨两层摆**，否则无解。
+   *   第一关的做法：本层 z=0 上，把 y=0 那条横三（7,0)(8,0)(9,0) 转 90° 到 x=0 上，
+   *   正好接上原来就孤零零的那颗 (0,3) —— 变成一条四。转之前是活三、转之后是四，
+   *   跨了一档，所以"该不该花一整手去转"在盘面上看得出来。
+   *
+   * 【第二关】贯通：四颗子压在 x=13,14,0,1 —— 跨过边界的一条四，补 (2,7,7) 即成五。
+   * 【第三关】晨昏：黑有两条四，一条黎明一条永夜；现在是黎明、只剩两格就翻转。
+   *   补黎明那条就赢；补永夜那条**不算数**（相位不对），而两格之后机会就过去了。
+   */
+  tutorialLevels() {
+    return [
+      { // ---- 第一关：转动（跨层拼四）
+        build: () => {
+          const r = new RuleSet();
+          r.allowRotation = true;
+          r.rotationCooldownPlacements = 0;      // 教学关里随时可转，别让冷却挡住教学
+          const s = GameSession.create(10, BLACK, r);
+          s.board.set(7, 0, 0, BLACK);
+          s.board.set(8, 0, 0, BLACK);
+          s.board.set(9, 0, 0, BLACK);
+          s.board.set(0, 3, 0, BLACK);
+          return s;
+        },
+        goal: (s) => {
+          if (s.status !== "Playing") return false;
+          const cands = aiCandidates(s.board, AI_CANDIDATE_CAP);
+          return aiThreatBest(s.board, cands, BLACK, s.rules.winLength, false) >= AI_W.FOUR;
+        }
+      },
+      { // ---- 第二关：贯通（隔着边界连五）
+        build: () => {
+          const r = new RuleSet();
+          r.wrapEdges = true;
+          const s = GameSession.create(15, BLACK, r);
+          for (const x of [13, 14, 0, 1]) s.board.set(x, 7, 7, BLACK);
+          return s;
+        },
+        goal: (s) => s.winner === BLACK
+      },
+      { // ---- 第三关：晨昏（连成不算数）
+        build: () => {
+          const r = new RuleSet();
+          r.phasePeriod = 12;
+          const s = GameSession.create(15, BLACK, r);
+          // 黎明那条四（现在是黎明，算数）
+          for (const x of [2, 3, 4, 5]) s.board.set(x, 8, 8, cellOf(BLACK, 0));
+          // 永夜那条四（现在不算数 —— 这正是这一关要教的）
+          for (const x of [2, 3, 4, 5]) s.board.set(x, 11, 11, cellOf(BLACK, 1));
+          s.elapsedInPhase = 10;                 // 只剩 2 格就翻转，拖不得
+          s.phaseTarget = 12;
+          return s;
+        },
+        goal: (s) => s.winner === BLACK
+      },
+    ];
+  },
+
+  /** 第 i 关的标题与说明。**六个 say 各写各的字面量键** —— 源码扫描要求键是字面量。 */
+  tutorialText(i, which) {
+    const t = which === "title";
+    if (i === 0) {
+      return t ? say(() => "转动：把本层转到接得上", "tut.1.title")
+               : say(() => "你的三颗子在 y=0 那条线上，还有一颗孤零零在 (0,3)。" +
+                           "转动 z=0 这一层 —— 横三会转到 x=0 上，正好接上那一颗，变成四连。" +
+                           "（转动占掉整个回合，所以要看值不值。）", "tut.1.body");
+    }
+    if (i === 1) {
+      return t ? say(() => "贯通：隔着边界也能连", "tut.2.title")
+               : say(() => "棋盘六个面是打通的：x=14 的右边就是 x=0。" +
+                           "你的四颗子压在边界两侧，补上缺口就成五。", "tut.2.body");
+    }
+    return t ? say(() => "晨昏：连成了也不算数", "tut.3.title")
+             : say(() => "你有两条四连：一条是黎明下的，一条是永夜下的。" +
+                         "现在正是黎明 —— 只有黎明那条算数。而两格之后就会翻到永夜，" +
+                         "机会就过去了。", "tut.3.body");
+  },
+
+  /** 进入教学（第 0 关）。**关掉设置页、进对局视图** —— 这就是"铺满屏幕"的实现。 */
+  startTutorial() {
+    this.tutIndex = 0;
+    this.tutActive = true;
+    this.closeSetup();
+    this.tutorialBuild(0);
+  },
+
+  tutorialBuild(i) {
+    const levels = this.tutorialLevels();
+    if (i < 0 || i >= levels.length) return this.tutorialExit();
+    this.tutIndex = i;
+    const s = levels[i].build();
+    // 【教学里没有电脑】三关都是"自己走、达成目标"，所以会话直接交给自己；
+    // 手动清掉待走的电脑着，否则定时器会插一手进来把局面搞乱。
+    this.cancelAiTimer();
+    this.aiMode = false;
+    this.session = FourDSession.wrap(s);
+    this.bindSession();
+    this.tutPassed = false;
+    this.syncTutorialUi();
+    this.refreshTexts();
+  },
+
+  /** 落子之后调一次：过关了就把"下一关"亮出来。 */
+  tutorialCheck() {
+    if (!this.tutActive || !this.session) return;
+    if (this.tutPassed) return;
+    const lv = this.tutorialLevels()[this.tutIndex];
+    if (!lv || !lv.goal(this.session)) return;
+    this.tutPassed = true;
+    this.syncTutorialUi();
+  },
+
+  tutorialExit() {
+    this.tutActive = false;
+    this.tutPassed = false;
+    this.aiMode = this.setupAi !== "human";
+    this.syncTutorialUi();
+    this.openSetup();
+  },
+
+  /** 教学条 / 退出 / 下一关 的显隐与文案。 */
+  syncTutorialUi() {
+    const on = !!this.tutActive;
+    if (this.el.tutBar) this.el.tutBar.classList.toggle("off", !on);
+    if (this.el.tutExit) this.el.tutExit.classList.toggle("off", !on);
+    // 「下一关」只在过关后出现；最后一关过后它写"重来"（回到第一关）
+    // 【文案不在这里写】它是 data-i18n 的静态键（STATIC_TEXT），走 applyStatic 那条路。
+    // 这里只切显隐。最后一关按下去会绕回第一关 —— 教学是个环，不用多一个"再来一遍"状态。
+    if (this.el.tutNext) this.el.tutNext.classList.toggle("off", !(on && this.tutPassed));
+    if (!on) return;
+    if (this.el.tutStep) {
+      this.el.tutStep.textContent = say(
+        () => "第 " + (this.tutIndex + 1) + " / " + this.tutorialLevels().length + " 关",
+        "tut.step", { n: this.tutIndex + 1, total: this.tutorialLevels().length });
+    }
+    if (this.el.tutTitle) this.el.tutTitle.textContent = this.tutorialText(this.tutIndex, "title");
+    if (this.el.tutBody) this.el.tutBody.textContent = this.tutorialText(this.tutIndex, "body");
+    if (this.el.tutDone) {
+      this.el.tutDone.textContent = this.tutPassed
+        ? say(() => "过关 —— 你已经会了", "tut.passed") : "";
+    }
+  },
+
   /** 本局有没有开晨昏。 */
   dawnOn() { return !!(this.session && this.session.rules && this.session.rules.phasePeriod > 0); },
 

@@ -334,6 +334,8 @@ let TEXT_EN = null, STATIC_EN = null, t = null;
 let clampPan2d = null, OrbitCameraNS = null, GESTURE = null;
 let CORE_TEXT = null, LANG_INFO = null, pluralFormNS = null, PLURAL_FORMS = null;
 let TEXT_ALL = null, STATIC_ALL = null, LANGS_LIST = null;
+// 教学可解性断言要用的两个核心类（从桩里取，不在测试里另抄一份）
+let RotationMoveNS = null, MoveStatusNS = null;
 let RendererNS = null;
 // 相机拖拽的两个常量。**从源码里抓，不在这里抄一份** —— 抄了就会各自漂移，
 // 而"夹取到底是 85 还是 89.95"正是这几条测试要钉的东西。
@@ -369,6 +371,7 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
       "            TAP_NEAR_PX: TAP_NEAR_PX, PINCH_TAIL_MS: PINCH_TAIL_MS }," +
       " CoreNS: { GameSession: GameSession, FourDSession: FourDSession, RuleSet: RuleSet," +
       "           RotateStatus: RotateStatus, MoveStatus: MoveStatus, fingerprint: fingerprint }," +
+      " RotationMoveNS: RotationMove, MoveStatusNS: MoveStatus," +
       " aiChooseMove: aiChooseMove, AI_PARAMS: AI_PARAMS };"
   );
   // requestAnimationFrame 故意做成空实现：render loop 不能无限递归
@@ -382,6 +385,7 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   clampPan2d = NS.clampPan2d; OrbitCameraNS = NS.OrbitCamera; GESTURE = NS.GESTURE;
   CORE_TEXT = NS.CORE_TEXT; LANG_INFO = NS.LANG_INFO; pluralFormNS = NS.pluralForm;
   TEXT_ALL = NS.TEXT_ALL; STATIC_ALL = NS.STATIC_ALL; LANGS_LIST = NS.LANGS_LIST;
+  RotationMoveNS = NS.RotationMoveNS; MoveStatusNS = NS.MoveStatusNS;
   if (!TEXT_ALL || !STATIC_ALL || !LANGS_LIST) throw new Error('六语言的表没有暴露出来');
   PLURAL_FORMS = NS.PLURAL_FORMS;
   if (!CORE_TEXT || !LANG_INFO || !pluralFormNS || !PLURAL_FORMS)
@@ -3250,6 +3254,68 @@ step("电脑对手：收尾 —— 不留任何待走的定时器", () => {
   Game.cancelAiTimer();
   Game.setSetupAi("human");
   if (Game.aiPending) throw new Error("还有待走的电脑着，它会在汇总打印之后才烧到");
+});
+
+// ---------------------------------------------------------------------------
+// 教学：每一关都必须【真的能过】
+//
+// 【为什么这条最要紧】教学功能最容易出的错是**玩家卡在一个无解的关卡上**，
+// 而且没有任何东西会报警 —— 它会表现成"玩家以为是自己不会玩"。
+// 所以每一关都要穷举所有合法动作（全部空点 + 全部转动），证明**至少有一个**能让
+// 该关的 goal 成立。
+//
+// 【为什么是穷举而不是"跑一遍 AI 看它会不会走对"】AI 走对只证明"存在一条它找得到的路"，
+// 而关卡里的坑恰恰可能是"AI 找得到、人找得到，但那条路其实走不通"。穷举是唯一
+// 能把"无解"这件事证否的办法。棋盘小（10³/15³），代价可以忽略。
+// ---------------------------------------------------------------------------
+step("教学：每一关都至少存在一个合法动作能过关", () => {
+  const levels = Game.tutorialLevels();
+  if (levels.length !== 3) throw new Error("教学关数变了：" + levels.length);
+  for (let i = 0; i < levels.length; i++) {
+    const lv = levels[i];
+    const probe = lv.build();
+    const board = probe.board;
+    let solution = null;
+    // 【每个候选都重建一局】最初写的是"落一手、查 goal、再把 cells 恢复回去" ——
+    // 那只恢复了棋盘，**没有恢复 currentPlayer / status / history**：第一次落子之后
+    // 出子权就翻给对方了，后面穷举的每一手都是白棋在下，黑永远赢不了。
+    // 症状就是"第 3 关无解"这种假红 —— 而它看起来完全像关卡设计错了。
+    // 重建的成本可以忽略（10³/15³ 的棋盘分配 + 几颗子）。
+    outer:
+    for (let z = 0; z < board.nz; z++) {
+      for (let y = 0; y < board.ny; y++) {
+        for (let x = 0; x < board.nx; x++) {
+          if (!board.isEmpty(x, y, z)) continue;
+          const s2 = lv.build();
+          const r = s2.place(x, y, z);
+          if (r.status !== MoveStatusNS.Rejected && lv.goal(s2)) {
+            solution = "落子 (" + x + "," + y + "," + z + ")";
+            break outer;
+          }
+        }
+      }
+    }
+    // 转动（规则允许时）
+    if (!solution && probe.rules.allowRotation && board.isCube) {
+      const n = board.size;
+      outer2:
+      for (let a2 = 0; a2 < 3; a2++) {
+        for (let layer = 0; layer < n; layer++) {
+          for (let turns = 1; turns <= 3; turns++) {
+            const s2 = lv.build();
+            const o = s2.rotate(RotationMoveNS.fromClockwiseTurns(a2, layer, turns));
+            if (o.accepted && lv.goal(s2)) {
+              solution = "转动 axis=" + a2 + " layer=" + layer + " turns=" + turns;
+              break outer2;
+            }
+          }
+        }
+      }
+    }
+    if (!solution) {
+      throw new Error("第 " + (i + 1) + " 关无解 —— 穷举了所有落子与转动，没有一个能达成目标");
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------
