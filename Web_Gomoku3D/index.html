@@ -620,6 +620,29 @@
   #aiRange:disabled { opacity: .45; cursor: default; }
   #aiLevel.dim #aiLevelName { opacity: .45; }
 
+  /* 极限档：拉条上移几像素，下方出小字。
+     【两处都必须脱离文档流】这是唯一能同时满足两件事的写法：
+       · 用户要求「不影响其他按键的位置」
+       · browser-check 钉着 #aiLevelRow 高度 <= 48px、拉条水平居中偏差 <= 1px
+     用 transform 而不是 margin/position —— transform 不参与布局计算，
+     行高和下面所有行的位置一个像素都不动。小字用 position:absolute，同理。 */
+  #aiLevel[data-lv="4"] #aiRange { transform: translateY(-5px); }
+  #aiHint {
+    position: absolute; top: 100%; left: 50%;
+    transform: translateX(-50%);
+    margin-top: -3px;                 /* 拉条上移了 5px，收回来一点，别离太远 */
+    font-size: 11px; line-height: 1.2;
+    color: var(--dim); white-space: nowrap;
+    pointer-events: none;             /* 别挡住下面那一行的点击 */
+    display: none;
+  }
+  #aiLevel[data-lv="4"]:not(.dim) #aiHint { display: block; }
+  /* 语言越长这条越宽（俄语是全场最长的一句）。窄窗口下允许换行，
+     否则会把页面撑出横向滚动条 —— browser-check 有 docOver === 0 的断言。 */
+  @media (max-width: 520px) {
+    #aiHint { font-size: 10px; white-space: normal; width: 120px; text-align: center; }
+  }
+
   /* 固定高度。【这是按钮跳动的第二个根因，比行数变化更隐蔽】：
      这段文案的长度在两种模式下差一倍以上 —— 三维 15³ 是 2 行，四维 8³ 因为有实测数据
      会加到 4 行，15³ 再加"一层里常常只有一两颗子"那条能到 5~6 行。
@@ -2818,6 +2841,10 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
     <div id="aiLevel">
       <input type="range" id="aiRange" min="0" max="4" step="1" value="1">
       <span id="aiLevelName"></span>
+      <!-- 极限档的耗时提示。【为什么是空的、字由 JS 写】和 #aiLevelName 同一条理由：
+           带 data-i18n 的元素会被 applyStatic 覆写，而这一条是条件显示的动态文案，
+           走 say() + TEXT。 -->
+      <span id="aiHint"></span>
     </div>
   </div>
 
@@ -6114,6 +6141,7 @@ const TEXT = { en: {
   "aiLv.high": "High",
   "aiLv.xhigh": "Very high",
   "aiLv.ultra": "Ultra",
+  "aiHint.ultra": "Thinking time may increase noticeably",
   "aiLevel.aria": "Computer strength",
   "layer.label": "Layer {i} / {n}",
   "slice.label": "Drawing up to z ≤ {i}/{n}",
@@ -6274,6 +6302,7 @@ TEXT.ja = {
   "aiLv.high": "強",
   "aiLv.xhigh": "最強",
   "aiLv.ultra": "極",
+  "aiHint.ultra": "思考時間が明らかに長くなることがあります",
   "aiLevel.aria": "コンピュータの強さ",
   "layer.label": "レイヤー {i} / {n}",
   "slice.label": "z ≤ {i}/{n} まで描画",
@@ -6392,6 +6421,7 @@ TEXT.ko = {
   "aiLv.high": "상",
   "aiLv.xhigh": "최상",
   "aiLv.ultra": "극",
+  "aiHint.ultra": "생각 시간이 눈에 띄게 길어질 수 있습니다",
   "aiLevel.aria": "컴퓨터 강도",
   "layer.label": "레이어 {i} / {n}",
   "slice.label": "z ≤ {i}/{n}까지 표시",
@@ -6517,6 +6547,7 @@ TEXT.ru = {
   "aiLv.high": "Сильн",
   "aiLv.xhigh": "Оч. сильн",
   "aiLv.ultra": "Ультра",
+  "aiHint.ultra": "Время обдумывания может заметно увеличиться",
   "aiLevel.aria": "Сила компьютера",
   "layer.label": "Слой {i} / {n}",
   "slice.label": "Рисуем до z ≤ {i}/{n}",
@@ -6644,6 +6675,7 @@ TEXT.fr = {
   "aiLv.medium": "Moyen",
   "aiLv.high": "Haut",
   "aiLv.xhigh": "Très haut",
+  "aiHint.ultra": "Le temps de réflexion peut augmenter nettement",
   "aiLv.ultra": "Ultra",
   "aiLevel.aria": "Force de l'ordinateur",
   "layer.label": "Couche {i} / {n}",
@@ -7616,7 +7648,7 @@ const Game = {
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
-      "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","orderMe","orderCpu",
+      "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","aiHint","orderMe","orderCpu",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
@@ -10202,6 +10234,15 @@ const Game = {
     }
     const name = this.aiLevelNameText();
     if (this.el.aiLevelName) this.el.aiLevelName.textContent = name;
+    if (this.el.aiHint) {
+      // 【只在极限档且选了人机时才有字】没选人机时拉条是 disabled + dim 的，
+      // 那时候提示"会变慢"没有意义；CSS 那边也用 :not(.dim) 把显示挡住了。
+      // 文案走 say() —— 中文在下面这句表达式里，其余五种语言在 TEXT 表里。
+      const on = this.setupLevel === AI_LEVELS.length - 1 && this.setupAi === "cpu";
+      this.el.aiHint.textContent = on
+        ? say(() => "思考时间可能会明显增长", "aiHint.ultra")
+        : "";
+    }
     // 无障碍：滑块本身报出当前档位。它是 attribute 不是文本，不进 data-i18n 表。
     if (this.el.aiRange) {
       this.el.aiRange.setAttribute("aria-valuetext", name);

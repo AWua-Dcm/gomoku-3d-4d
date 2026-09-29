@@ -2163,6 +2163,8 @@ try {
         return Math.round((r.left + r.right) / 2 - (row.left + row.right) / 2);
       })(),
       lv: document.getElementById("aiLevel").dataset.lv,
+      hintText: document.getElementById("aiHint").textContent,
+      hintShown: document.getElementById("aiHint").getClientRects().length > 0,
       lvName: document.getElementById("aiLevelName").textContent,
       rangeVal: document.getElementById("aiRange").value,
       pct: document.getElementById("aiLevel").style.getPropertyValue("--pct"),
@@ -2192,6 +2194,12 @@ try {
   check(AS.pct === "100.0%", "填充比例跟着档位走", AS.pct);
   check(AS.aiRowH <= 48, "人类/人机两个键在同一行（1280 宽的窗口下）", AS.aiRowH + "px 高");
   check(AS.aiLevelRowH <= 48, "强度拉条自己占一行、没有折行", AS.aiLevelRowH + "px 高");
+  // 极限档的耗时小字。**两件事一起验**：字真的出来了，而且它没有把这一行撑高 ——
+  // 撑高就会把下面所有行往下推，而用户明确要求"不影响其他按键的位置"。
+  check(AS.hintShown && AS.hintText.length > 0,
+    "拉到「极限」时拉条下方出现耗时提示", JSON.stringify([AS.hintShown, AS.hintText]));
+  check(AS.aiLevelRowH <= 48,
+    "多了提示之后拉条那一行仍然没有变高（提示是脱离文档流的）", AS.aiLevelRowH + "px 高");
 
   // ---- 真的能拖吗 ----
   // 【这一条是冲着用户反馈"实测没法拉动"去的】上一版是五个按钮拼的假拉条，只能点。
@@ -2234,6 +2242,33 @@ try {
   check(humanLv.disabled && humanLv.dim, "选了人类时拉条淡显且不可点", JSON.stringify(humanLv));
   check(humanLv.vis && humanLv.rowH > 0,
     "选了人类时拉条那一行仍然占位（切回人机时不会整屏跳）", humanLv.rowH + "px");
+  // 切回中间档：提示必须消失、拉条落回原位、行高不变
+  const hintOff = JSON.parse(await ev(`(() => {
+    Game.setSetupLevel(2);
+    const r = document.getElementById("aiRange").getBoundingClientRect();
+    const row = document.getElementById("aiLevelRow").getBoundingClientRect();
+    return JSON.stringify({
+      shown: document.getElementById("aiHint").getClientRects().length > 0,
+      text: document.getElementById("aiHint").textContent,
+      rowH: Math.round(row.height),
+      off: Math.round((r.left + r.right) / 2 - (row.left + row.right) / 2),
+    });
+  })()`));
+  check(!hintOff.shown && hintOff.text === "",
+    "切回中间档时提示消失", JSON.stringify(hintOff));
+  check(Math.abs(hintOff.off) <= 1, "提示消失后拉条仍然居中", hintOff.off + "px");
+  check(hintOff.rowH <= 48, "切回去之后那一行仍然没有变高", hintOff.rowH + "px");
+  // 选了「人类」时提示也不许出现（拉条是 disabled + dim 的）
+  const hintHuman = JSON.parse(await ev(`(() => {
+    Game.setSetupAi("human"); Game.setSetupLevel(4);
+    return JSON.stringify({
+      shown: document.getElementById("aiHint").getClientRects().length > 0,
+      text: document.getElementById("aiHint").textContent,
+    });
+  })()`));
+  check(!hintHuman.shown && hintHuman.text === "",
+    "选了「人类」时（拉条灰着）不出现耗时提示", JSON.stringify(hintHuman));
+
   await ev("Game.setSetupAi(\"cpu\"); Game.setSetupLevel(4); 1");
   check(AS.orderDisabled[0] === false && AS.orderDisabled[1] === false,
     "选了电脑时「谁先下」是可用的", JSON.stringify(AS.orderDisabled));
