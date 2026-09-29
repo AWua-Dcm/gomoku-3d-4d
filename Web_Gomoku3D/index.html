@@ -534,7 +534,7 @@
      只会表现为"填进去了但开不了局"。 */
   .hint { color: var(--dim); font-size: 12.5px; white-space: nowrap; flex: 0 0 auto; }
   /* 【四维那条范围提示是唯一的例外：它必须能折行】
-     它是这一整块里最长的一句（法语 "8 – 50 · doit être cubique（转层要求另两轴等长）"
+     它是这一整块里最长的一句（法语 "8 – 30 · doit être cubique（转层要求另两轴等长）"
      实测 572px），而 .hint 的 nowrap + flex: 0 0 auto 让它连一个字都不肯让 —— 后果见
      上面 #dimsSlot 那条：把整个格子顶宽，三维模式下也跟着溢出。
      `flex-shrink: 1` 是这里的关键：`flex: 0 0 auto` 下基准尺寸就是 max-content，
@@ -543,7 +543,7 @@
      【折行不会破坏"切模式按钮不动"】两条尺寸行叠在同一个格子里、格子高度取两者的
      max，而这两条**永远都在**（隐藏的那条只是 visibility: hidden，照样参与布局）——
      所以"这条提示占几行"和"当前是三维还是四维"无关，格子高度在两种模式下恒等。
-     三维那条（#dimRange，最长是俄语 "Допустимо: 8 – 50"）短得多，保持 nowrap 不动。 */
+     三维那条（#dimRange，最长是俄语 "Допустимо: 8 – 30"）短得多，保持 nowrap 不动。 */
   #dimRange4d { white-space: normal; flex-shrink: 1; min-width: 0; }
   /* 转动冷却行的说明。**宽度写死**：它的文字在两种模式下不一样长（三维 6 字、
      四维 9 字），不写死的话这一行的总宽会变，而 .row 是居中的 ——
@@ -972,7 +972,7 @@
 | 项目 | 规定 |
 |---|---|
 | 形状 | 立方体棋盘，N × N × N 个可落子的位置 |
-| 尺寸 | 可选 8 ≤ N ≤ 50，默认 15 |
+| 尺寸 | 可选 8 ≤ N ≤ 30，默认 15 |
 | 坐标 | `(x, y, z)`，三个轴都从 0 数到 N−1 |
 | 层 | `z` 相同的那些位置叫"一层"，"第 k 层"就是 `z = k` 的那一层 |
 | 位置状态 | 空 / 黑子 / 白子 |
@@ -1165,8 +1165,8 @@
 
 | 模式 | 可选尺寸 | 默认 |
 |---|---|---|
-| 三维 | 8 ≤ N ≤ 50，三个轴可以不等 | 15 |
-| 四维 | 8 ≤ N ≤ 50，**必须立方** | 8 |
+| 三维 | 8 ≤ N ≤ 30，三个轴可以不等 | 15 |
+| 四维 | 8 ≤ N ≤ 30，**必须立方** | 8 |
 
 四维模式必须立方不是偷懒：转动一层要求这一层的两条边长相等，
 三个轴都要能转，就只能三轴等长。
@@ -1234,7 +1234,7 @@ There is no gravity on the board. **Stones can float** with nothing under them, 
 | Item | Rule |
 |---|---|
 | Shape | A cubic board, N × N × N playable cells |
-| Size | 8 ≤ N ≤ 50, default 15 |
+| Size | 8 ≤ N ≤ 30, default 15 |
 | Coordinates | `(x, y, z)`, each axis numbered 0 to N−1 |
 | Layer | All cells with the same `z` form one layer; "layer k" means the layer at `z = k` |
 | Cell state | empty / black stone / white stone |
@@ -1430,8 +1430,8 @@ Undoing also returns the cooldown to what it was before the rotation.
 
 | Mode | Sizes | Default |
 |---|---|---|
-| 3D | 8 ≤ N ≤ 50, the three axes may differ | 15 |
-| 4D | 8 ≤ N ≤ 50, **must be cubic** | 8 |
+| 3D | 8 ≤ N ≤ 30, the three axes may differ | 15 |
+| 4D | 8 ≤ N ≤ 30, **must be cubic** | 8 |
 
 4D having to be cubic is not laziness: rotating a layer requires that layer's two sides to be equal, and all three axes must
 be rotatable, so all three must be the same length.
@@ -1507,7 +1507,7 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 | 項目 | 規定 |
 |---|---|
 | 形状 | 立方体の盤、N × N × N 個の着手できる位置 |
-| サイズ | 8 ≤ N ≤ 50 から選択、既定は 15 |
+| サイズ | 8 ≤ N ≤ 30 から選択、既定は 15 |
 | 座標 | `(x, y, z)`、3 つの軸とも 0 から N−1 まで |
 | レイヤー | `z` が同じ位置をまとめて「1 レイヤー」と呼び、「第 k レイヤー」は `z = k` のレイヤー |
 | 位置の状態 | 空 / 黒石 / 白石 |
@@ -1700,8 +1700,8 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 
 | モード | 選べるサイズ | 既定 |
 |---|---|---|
-| 3D | 8 ≤ N ≤ 50、3 つの軸は等しくなくてよい | 15 |
-| 4D | 8 ≤ N ≤ 50、**立方体であること** | 8 |
+| 3D | 8 ≤ N ≤ 30、3 つの軸は等しくなくてよい | 15 |
+| 4D | 8 ≤ N ≤ 30、**立方体であること** | 8 |
 
 4Dモードで立方体が必須なのは手抜きではない：レイヤーを回すにはそのレイヤーの 2 辺の長さが等しい必要があり、
 3 つの軸すべてを回せるようにするには、3 軸とも同じ長さにするしかない。
@@ -1769,7 +1769,7 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 | 항목 | 규정 |
 |---|---|
 | 모양 | 정육면체 판, N × N × N개의 착수 가능한 위치 |
-| 크기 | 8 ≤ N ≤ 50 중 선택, 기본값 15 |
+| 크기 | 8 ≤ N ≤ 30 중 선택, 기본값 15 |
 | 좌표 | `(x, y, z)`, 세 축 모두 0부터 N−1까지 |
 | 레이어 | `z`가 같은 위치들을 “하나의 레이어”라고 하고, “k번째 레이어”는 `z = k`인 레이어입니다 |
 | 위치 상태 | 빈 칸 / 흑돌 / 백돌 |
@@ -1962,8 +1962,8 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 | 모드 | 선택 가능한 크기 | 기본값 |
 |---|---|---|
-| 3D | 8 ≤ N ≤ 50, 세 축이 달라도 됨 | 15 |
-| 4D | 8 ≤ N ≤ 50, **반드시 정육면체** | 8 |
+| 3D | 8 ≤ N ≤ 30, 세 축이 달라도 됨 | 15 |
+| 4D | 8 ≤ N ≤ 30, **반드시 정육면체** | 8 |
 
 4D가 반드시 정육면체여야 하는 것은 게으름이 아닙니다: 레이어 하나를 회전하려면 그 레이어의 두 변의 길이가 같아야 하고,
 세 축 모두 회전할 수 있어야 하니 세 축의 길이가 같을 수밖에 없습니다.
@@ -2031,7 +2031,7 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 | Пункт | Правило |
 |---|---|
 | Форма | Кубическая доска, N × N × N позиций для хода |
-| Размер | 8 ≤ N ≤ 50, по умолчанию 15 |
+| Размер | 8 ≤ N ≤ 30, по умолчанию 15 |
 | Координаты | `(x, y, z)`, все три оси нумеруются от 0 до N−1 |
 | Слой | все позиции с одинаковым `z` образуют «слой»; «k-й слой» — это слой, где `z = k` |
 | Состояние позиции | пусто / чёрный камень / белый камень |
@@ -2225,8 +2225,8 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 | Режим | Доступные размеры | По умолчанию |
 |---|---|---|
-| 3D | 8 ≤ N ≤ 50, три оси могут различаться | 15 |
-| 4D | 8 ≤ N ≤ 50, **обязательно куб** | 8 |
+| 3D | 8 ≤ N ≤ 30, три оси могут различаться | 15 |
+| 4D | 8 ≤ N ≤ 30, **обязательно куб** | 8 |
 
 Требование куба в режиме 4D — не лень: чтобы повернуть слой, нужно равенство двух сторон этого слоя,
 а поскольку поворачиваться должны все три оси, все три оси обязаны быть одинаковой длины.
@@ -2299,7 +2299,7 @@ Sur le plateau il n'y a pas de gravité : **les pions peuvent flotter**, sans au
 | Élément | Règle |
 |---|---|
 | Forme | Plateau cubique, N × N × N cases jouables |
-| Taille | 8 ≤ N ≤ 50 au choix, 15 par défaut |
+| Taille | 8 ≤ N ≤ 30 au choix, 15 par défaut |
 | Coordonnées | `(x, y, z)`, les trois axes numérotés de 0 à N−1 |
 | Couche | les cases de même `z` forment une « couche » ; la « k-ième couche » est celle où `z = k` |
 | État d'une case | vide / pion noir / pion blanc |
@@ -2493,8 +2493,8 @@ Après une annulation, la recharge revient elle aussi à son état d'avant la ro
 
 | Mode | Tailles possibles | Par défaut |
 |---|---|---|
-| 3D | 8 ≤ N ≤ 50, les trois axes peuvent différer | 15 |
-| 4D | 8 ≤ N ≤ 50, **cubique obligatoire** | 8 |
+| 3D | 8 ≤ N ≤ 30, les trois axes peuvent différer | 15 |
+| 4D | 8 ≤ N ≤ 30, **cubique obligatoire** | 8 |
 
 L'obligation du cube en 4D n'est pas de la paresse : faire tourner une couche exige que les deux côtés de cette couche soient égaux,
 et comme les trois axes doivent pouvoir tourner, les trois doivent avoir la même longueur.
@@ -2840,15 +2840,15 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
        "零空白 + 零位移"的办法：留空槽位会在两种模式各留一条 58px 的空当，
        看起来像没渲染完。 -->
   <div id="dimsSlot">
-  <!-- 三维模式：三个轴各填一个数，8..50。默认三轴联动（cubeOn），想下长方体就点掉它。
+  <!-- 三维模式：三个轴各填一个数，8..30。默认三轴联动（cubeOn），想下长方体就点掉它。
        长方体是【网页版独有】的扩展，没有测试向量覆盖，见 README 的说明。 -->
   <div class="row" id="dimsRow3d">
     <div class="rowLabel" id="rowLabelSize3d" data-i18n="rowLabelSize3d">棋盘尺寸</div>
-    <input id="dimX" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
+    <input id="dimX" class="dimInput" type="number" min="8" max="30" step="1" value="15" inputmode="numeric">
     <span class="dimTimes">×</span>
-    <input id="dimY" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
+    <input id="dimY" class="dimInput" type="number" min="8" max="30" step="1" value="15" inputmode="numeric">
     <span class="dimTimes">×</span>
-    <input id="dimZ" class="dimInput" type="number" min="8" max="50" step="1" value="15" inputmode="numeric">
+    <input id="dimZ" class="dimInput" type="number" min="8" max="30" step="1" value="15" inputmode="numeric">
     <button id="dimCube" class="mini sel" data-i18n="dimCube">三轴联动</button>
     <!-- 可填范围。**内容是空的**：文字由 syncSetupInputs() 从内核的 BoardLimits 现算，
          一个字都不写死在这里 —— 写死的话它会和内核约束各自漂移，而"范围"这种东西
@@ -2860,7 +2860,7 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
        另外两个自由轴等长，三个轴都能转就只能 nx = ny = nz。见 README。 -->
   <div class="row hide" id="dimsRow4d">
     <div class="rowLabel" id="rowLabelSize4d" data-i18n="rowLabelSize4d">棋盘尺寸</div>
-    <input id="dimN" class="dimInput" type="number" min="8" max="50" step="1" value="8" inputmode="numeric">
+    <input id="dimN" class="dimInput" type="number" min="8" max="30" step="1" value="8" inputmode="numeric">
     <span class="dimTimes">³</span>
     <!-- 原来这里还有一条 <span id="dimNote">，文本同下（"必须立方…"），但它是个独立的
          长句子。删掉它的理由：那一行本来就长，而它正是四维/三维尺寸行唯一会换行的地方 ——
@@ -3228,7 +3228,7 @@ MoveRecord.prototype.toString = function (lang = "zh") {
 };
 
 /** 棋盘尺寸上下限。**UI 只有这一处定义**，输入框的 min/max、夹取、提示文案都从它取。 */
-const BoardLimits = { Min: 8, Max: 50 };
+const BoardLimits = { Min: 8, Max: 30 };
 
 /**
  * 把"尺寸"归一成 [nx, ny, nz]。两种写法都收：
@@ -5578,7 +5578,7 @@ const TEXT = { en: {
   "toast.restarted": "Restarted",
   "toast.swapped": "Restarted with {who} first",
 
-  // ---- 起始界面：可填范围与冷却行。{range} 是 "8 – 50"，两种语言共用
+  // ---- 起始界面：可填范围与冷却行。{range} 是 "8 – 30"，两种语言共用
   //      （数字和那个 EN DASH 不翻译，online-http.test.mjs 按它断言）
   "range.allowed": "{range} allowed",
   "range.cubicOnly": "{range} · must be cubic (rotating a layer needs the other two axes equal)",
@@ -9421,7 +9421,7 @@ const Game = {
     // 连"第二份"都不存在，所以它不可能和实际会被夹取的范围不一致。
     //
     // 【数字和那个 – 两种语言共用，只有前缀换】：范围分隔符是 EN DASH（不是连字符），
-    // online-http.test.mjs 的 /8 – 50/ 就是靠这个字符断言的，英文侧也不能换。
+    // online-http.test.mjs 的 /8 – 30/ 就是靠这个字符断言的，英文侧也不能换。
     const range = BoardLimits.Min + " – " + BoardLimits.Max;
     if (this.el.dimRange) this.el.dimRange.textContent =
       say(() => "可填 " + range, "range.allowed", { range: range });

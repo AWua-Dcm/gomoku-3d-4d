@@ -534,9 +534,13 @@ step("三维棋子实例跟着棋盘走 + 切片模式真的不画被切掉的�
 });
 
 step("设置页尺寸联动提示文案", () => {
-  Game.setSetupSize(50);
-  if (Game.el.sizeSummary.textContent.indexOf("125,000") < 0)
-    throw new Error("50³ 应提示 125,000 格：" + Game.el.sizeSummary.textContent);
+  // 【为什么是 30 而不是 50】v2.10.15 把 BoardLimits.Max 从 50 降到 30，
+  // 而 setSetupSize 会夹到 [Min, Max] —— 传 50 会被夹成 30。
+  // 这条测的是"提示文案里的格数跟着尺寸算对"，用上界 30 一样成立；
+  // 夹取本身由下面「尺寸输入框」那一组管，不是这一条的职责。
+  Game.setSetupSize(30);
+  if (Game.el.sizeSummary.textContent.indexOf("27,000") < 0)
+    throw new Error("30³ 应提示 27,000 格：" + Game.el.sizeSummary.textContent);
   Game.setSetupSize(15);
   if (Game.el.sizeSummary.textContent.indexOf("3,375") < 0)
     throw new Error("15³ 应显示 3,375 格：" + Game.el.sizeSummary.textContent);

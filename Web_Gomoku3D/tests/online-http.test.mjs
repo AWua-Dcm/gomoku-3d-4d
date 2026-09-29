@@ -199,7 +199,9 @@ let ROOM, TOKEN_A, TOKEN_B, SEAT_A, SEAT_B;
   const badDims = await post("/action", { t: "create", name: "x", dims: [1, 1, 1], mode: "3d",
                                           first: 1, rules: RULES_3D });
   eq(badDims.status, 400, "尺寸越界 -> 400");
-  check(/8 – 50/.test(badDims.json.reason || ""), "拒绝理由里给的范围是从内核 BoardLimits 取的",
+  // 注意是 EN DASH `–` 不是连字符 —— 这个字符是 index.html 里 syncSetupInputs 拼的，
+  // 换掉它就等于换掉玩家看到的分隔符。见 index.html 那句「online-http.test.mjs 的 /8 – 30/」。
+  check(/8 – 30/.test(badDims.json.reason || ""), "拒绝理由里给的范围是从内核 BoardLimits 取的",
     badDims.json.reason);
 
   const badDims2 = await post("/action", { t: "create", name: "x", dims: "abc", mode: "3d",

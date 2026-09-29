@@ -14,7 +14,7 @@ Sur le plateau il n'y a pas de gravité : **les pions peuvent flotter**, sans au
 | Élément | Règle |
 |---|---|
 | Forme | Plateau cubique, N × N × N cases jouables |
-| Taille | 8 ≤ N ≤ 50 au choix, 15 par défaut |
+| Taille | 8 ≤ N ≤ 30 au choix, 15 par défaut |
 | Coordonnées | `(x, y, z)`, les trois axes numérotés de 0 à N−1 |
 | Couche | les cases de même `z` forment une « couche » ; la « k-ième couche » est celle où `z = k` |
 | État d'une case | vide / pion noir / pion blanc |
@@ -208,8 +208,8 @@ Après une annulation, la recharge revient elle aussi à son état d'avant la ro
 
 | Mode | Tailles possibles | Par défaut |
 |---|---|---|
-| 3D | 8 ≤ N ≤ 50, les trois axes peuvent différer | 15 |
-| 4D | 8 ≤ N ≤ 50, **cubique obligatoire** | 8 |
+| 3D | 8 ≤ N ≤ 30, les trois axes peuvent différer | 15 |
+| 4D | 8 ≤ N ≤ 30, **cubique obligatoire** | 8 |
 
 L'obligation du cube en 4D n'est pas de la paresse : faire tourner une couche exige que les deux côtés de cette couche soient égaux,
 et comme les trois axes doivent pouvoir tourner, les trois doivent avoir la même longueur.

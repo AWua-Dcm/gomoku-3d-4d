@@ -839,11 +839,13 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
 }
 
 {
-  // 50³ 的最坏情况：一条"墙"里塞满子
-  const s = mkSession(50, BLACK, false);
+  // 30³ 的最坏情况：一条"墙"里塞满子。
+  // 【为什么从 50³ 改成 30³】v2.10.15 把 BoardLimits.Max 从 50 降到 30，
+  // 50³ 这个最坏情况整个不存在了。这一块仍然要有 —— 它是"密盘不失控"的唯一证据。
+  const s = mkSession(30, BLACK, false);
   for (let z = 0; z < 4; z++) {
-    for (let y = 0; y < 50; y++) {
-      for (let x = 0; x < 50; x++) {
+    for (let y = 0; y < 30; y++) {
+      for (let x = 0; x < 30; x++) {
         if ((x + y + z) % 2 === 0) s.board.set(x, y, z, ((x + y) % 4 < 2) ? BLACK : WHITE);
       }
     }
@@ -853,25 +855,26 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   const t0 = Date.now();
   aiChooseMove(s, { level: "low", seed: 1, stats: st });
   const ms = Date.now() - t0;
-  check(st.candidates <= 20000, "50³ 密集局面下候选数被截到上限以内",
+  check(st.candidates <= 20000, "30³ 密集局面下候选数被截到上限以内",
         "候选 " + st.candidates);
-  check(ms < 1500, "50³ 密集局面单手在 1500ms 以内", ms + "ms（候选 " + st.candidates + "）");
-  console.log("50³ 密集（" + s.board.stoneCount + " 子）：候选 " + st.candidates + "，用时 " + ms + "ms");
+  check(ms < 1500, "30³ 密集局面单手在 1500ms 以内", ms + "ms（候选 " + st.candidates + "）");
+  console.log("30³ 密集（" + s.board.stoneCount + " 子）：候选 " + st.candidates + "，用时 " + ms + "ms");
 
   // 【顶上两档也必须在这块盘上量一遍】算杀进搜索之后，密盘上的开销全在算杀上 ——
-  // 候选七千五百个，算杀每走一格要扫两遍。不量的话，"极限档在密盘上单手 2.9 秒"
+  // 候选上千个，算杀每走一格要扫两遍。不量的话，"极限档在密盘上单手 2.9 秒"
   // 这种事故没有任何断言拦得住（那个数就是这么发现的，v2.10.14 把预算改成按
   // "扫了多少个点"记账之后压到 0.7 秒）。
   // 【为什么还留一条墙钟】记账只保证"扫的点数有上限"，但一个点要扫多久是机器的
-  // 事 —— 这条兜底的是"有人把预算那几行删了"。
+  // 事 —— 这条兜底的是"有人把预算那几行删了"。v2.10.15 只把【极限档】那条撤掉
+  // （改用计数上界，见下面的 AI_POINT_BUDGET_MAX），极高档这条保留。
   for (const lv of ["xhigh", "ultra"]) {
     const st2 = {};
     const t1 = Date.now();
     aiChooseMove(s, { level: lv, seed: 1, stats: st2 });
     const ms2 = Date.now() - t1;
-    check(ms2 < 2000, "50³ 密集局面下 " + lv + " 档单手在 2000ms 以内",
+    check(ms2 < 2000, "30³ 密集局面下 " + lv + " 档单手在 2000ms 以内",
           ms2 + "ms（候选 " + st2.candidates + "，算杀 " + st2.vcfNodes + " 格）");
-    console.log("50³ 密集 · " + lv + "：用时 " + ms2 + "ms，算杀 " + st2.vcfNodes + " 格");
+    console.log("30³ 密集 · " + lv + "：用时 " + ms2 + "ms，算杀 " + st2.vcfNodes + " 格");
   }
 }
 

@@ -14,7 +14,7 @@ There is no gravity on the board. **Stones can float** with nothing under them, 
 | Item | Rule |
 |---|---|
 | Shape | A cubic board, N × N × N playable cells |
-| Size | 8 ≤ N ≤ 50, default 15 |
+| Size | 8 ≤ N ≤ 30, default 15 |
 | Coordinates | `(x, y, z)`, each axis numbered 0 to N−1 |
 | Layer | All cells with the same `z` form one layer; "layer k" means the layer at `z = k` |
 | Cell state | empty / black stone / white stone |
@@ -210,8 +210,8 @@ Undoing also returns the cooldown to what it was before the rotation.
 
 | Mode | Sizes | Default |
 |---|---|---|
-| 3D | 8 ≤ N ≤ 50, the three axes may differ | 15 |
-| 4D | 8 ≤ N ≤ 50, **must be cubic** | 8 |
+| 3D | 8 ≤ N ≤ 30, the three axes may differ | 15 |
+| 4D | 8 ≤ N ≤ 30, **must be cubic** | 8 |
 
 4D having to be cubic is not laziness: rotating a layer requires that layer's two sides to be equal, and all three axes must
 be rotatable, so all three must be the same length.
