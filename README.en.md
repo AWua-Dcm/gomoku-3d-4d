@@ -95,10 +95,10 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19427 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 213 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 115 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 119 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
-| `node _verify/browser-check.mjs` | 342 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
+| `node _verify/browser-check.mjs` | 345 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
 
 The two networking tests run inside step 8 and **cannot be skipped**.
 
@@ -257,7 +257,13 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.30
 
-- ✨ **v3.1.0** Topology (wrapping) is **now visible**: the ring of cells hugging the outside of the board
+- ✨ **v3.1.2** Wrapping joins the game for real: the 4D mode "4D · Myriad" turns all three on at once
+  (Rubik rotation / space wrapping / day and night); 3D gains two checkboxes — "Rubik rotation" and
+  "Space wrapping" — tick whichever you want (neither is ticked by default; unticked is plain 3D)
+- ✨ **v3.1.1** Day and night now show the phase with a **halo**: a thin ring around every stone,
+  pale red for day and pale blue for night — both phases are drawn equally clearly instead of
+  being told apart by opacity
+- ✨ **v3.1.0** Wrapping is **now visible**: the ring of cells hugging the outside of the board
   draws **shadows** of the stones on the boundary — a line leaving the right edge shows its
   continuation one cell past it, so a five across the seam no longer has to be imagined
 - 🔧 **v3.0.1** Various fixes

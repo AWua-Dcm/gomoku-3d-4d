@@ -614,6 +614,121 @@ step("面板点击坐标换算（cellFromEvent）命中【交织点】", () => {
 Game.wrapShadowOffsets = NS_TOPOLOGY.wrapShadowOffsets;
 Game.wrapImages = NS_TOPOLOGY.wrapImages;
 
+// ---------------------------------------------------------------------------
+// v3.1.2：三维的两个可选机制（魔方旋转 / 空间贯通）与四维的"三样常开"。
+//
+// 【为什么值得单独一组】这一块是"界面上的两个勾"直接决定内核规则 ——
+// 接线接错（勾了没生效、没勾却生效、四维下关得掉）在界面上完全看不出来：
+// 棋照样能下完，只是规则和玩家以为的不是一回事。
+// ---------------------------------------------------------------------------
+step("附加玩法：三维两个勾选框，默认都不开", () => {
+  Game.tutorialExit();
+  Game.setSetupMode(false);           // 三维
+  Game.closeSetup();
+
+  // 默认：都不勾 → 纯三维
+  Game.newGame(15, 1);
+  if (Game.session.rules.allowRotation) throw new Error("没勾「魔方旋转」时不该能转动");
+  if (Game.session.rules.wrapEdges) throw new Error("没勾「空间贯通」时不该贯通");
+  if (Game.session.board.wrap) throw new Error("board.wrap 必须跟着规则走");
+  if (Game.session.rules.phasePeriod) throw new Error("三维里不该有晨昏");
+
+  // 只勾一个
+  Game.setSetupWrap(true);
+  Game.newGame(15, 1);
+  if (Game.session.rules.allowRotation) throw new Error("只勾了贯通，不该能转动");
+  if (!Game.session.rules.wrapEdges || !Game.session.board.wrap)
+    throw new Error("勾了「空间贯通」，三维对局就该贯通");
+
+  // 再点一次 = 取消
+  Game.setSetupWrap(false);
+  Game.newGame(15, 1);
+  if (Game.session.rules.wrapEdges) throw new Error("再点一次应当取消勾选");
+});
+
+step("附加玩法：勾「魔方旋转」自动锁立方，且真的能转", () => {
+  Game.setSetupMode(false);
+  Game.closeSetup();
+  Game.setSetupCube(false);                   // 先允许长方体
+  Game.setupDims = [15, 12, 9];
+  Game.setSetupSpin(true);
+  if (!Game.setupCube) throw new Error("勾了魔方旋转，三轴联动必须自动打开");
+  if (Game.setupDims[0] !== Game.setupDims[1] || Game.setupDims[1] !== Game.setupDims[2])
+    throw new Error("勾了魔方旋转，尺寸必须被锁成立方，实际 " + Game.setupDims.join("×"));
+  if (!Game.el.dimCube.disabled) throw new Error("锁成立方之后「三轴联动」那颗键必须禁用");
+
+  Game.setupCool = 0;
+  Game.newGame(Game.setupDims, 1);
+  if (!Game.session.rules.allowRotation) throw new Error("勾了魔方旋转就该能转动");
+  if (!Game.session.board.isCube) throw new Error("能转动的棋盘必须是立方");
+  if (!Game.session.canRotate) throw new Error("冷却 0 时开局就该能转");
+
+  // 真转一次：找个有子的层转，确认不是"按钮亮了但转不动"
+  Game.session.place(0, 0, 0);
+  Game.onBoardChanged(true);
+  Game.rotAxis = 0; Game.rotLayer = 0; Game.rotClockwise = true; Game.rotTurns = 1;
+  Game.doRotate(); Game.confirmRotation();
+  if (Game.session.rotationCount !== 1) throw new Error("三维 + 魔方旋转下应当真的转得动");
+
+  Game.setSetupSpin(false);
+  Game.setSetupCube(true);
+  Game.setupCool = 5;
+  Game.newGame(15, 1);
+  if (Game.session.rules.allowRotation) throw new Error("取消勾选之后三维不该还能转");
+});
+
+step("附加玩法：四维三样常开，开关改不动它", () => {
+  Game.setSetupMode(true);                    // 四维
+  Game.closeSetup();
+  Game.newGame(8, 1);
+  const r = Game.session.rules;
+  if (!r.allowRotation) throw new Error("四维必须常开魔方旋转");
+  if (!r.wrapEdges) throw new Error("四维必须常开空间贯通");
+  if (!r.phasePeriod) throw new Error("四维必须常开晨昏");
+  if (!Game.session.board.wrap) throw new Error("board.wrap 必须跟着规则走");
+  if (!Game.session.board.isCube) throw new Error("四维必须立方");
+
+  // 四维下那两个 setter 改不动（界面上它们也点不动，但脚本可能直接调）
+  Game.setSetupSpin(false);
+  Game.setSetupWrap(false);
+  Game.newGame(8, 1);
+  if (!Game.session.rules.allowRotation || !Game.session.rules.wrapEdges)
+    throw new Error("四维下这两个开关不该能被关掉");
+
+  // 【四维下整块不显示】用户口径是"只有三维玩法有这东西" —— 四维里这两样本来就常开。
+  // 槽位让给「转动冷却 / 相位周期」那两行（见 syncCoolRow），所以总高不变。
+  if (Game.el.extraRow.classList.contains("on"))
+    throw new Error("四维下附加玩法那两块不该显示");
+  if (Game.el.coolRow.style.display === "none" || Game.el.phaseRow.style.display === "none")
+    throw new Error("四维下「转动冷却」「相位周期」必须显示出来");
+
+  // 切回三维：回到玩家自己的选择（默认都不勾），两块重新出现
+  Game.setSetupMode(false);
+  if (!Game.el.extraRow.classList.contains("on"))
+    throw new Error("切回三维后附加玩法那两块必须重新显示");
+  if (Game.el.optSpinBtn.getAttribute("aria-pressed") !== "false")
+    throw new Error("切回三维后应当回到未勾选");
+  if (Game.el.coolRow.style.display !== "none" || Game.el.phaseRow.style.display !== "none")
+    throw new Error("三维下那两行必须撤掉、把槽位让给附加玩法");
+  Game.newGame(15, 1);
+  if (Game.session.rules.allowRotation || Game.session.rules.wrapEdges)
+    throw new Error("切回三维且没勾时，规则必须回到纯三维");
+});
+
+step("附加玩法：四维下「设置」和「落子宣告」换了位置，三维下没换", () => {
+  // 判据是 CSS 的 order（靠 #buttons 上那个类名切换）—— 桩里量不了渲染，
+  // 所以这里钉的是"类名有没有按规则挂上"，几何由 browser-check 在真浏览器里量。
+  Game.setSetupMode(true);
+  Game.closeSetup();
+  Game.newGame(8, 1);
+  if (!Game.el.buttons.classList.contains("swap4d"))
+    throw new Error("四维下 #buttons 应当挂上 swap4d（设置与落子宣告交换位置）");
+  Game.setSetupMode(false);
+  Game.newGame(15, 1);
+  if (Game.el.buttons.classList.contains("swap4d"))
+    throw new Error("三维下不该挂 swap4d —— 那一行必须和加这一条之前一模一样");
+});
+
 step("拓扑影子：内部子没有像，面上 1 个、棱上 3 个、角上 7 个", () => {
   const d = [10, 10, 10];
   const cnt = (x, y, z) => Game.wrapShadowOffsets(d, x, y, z).length;
@@ -1080,6 +1195,14 @@ step("转动之后，最后一手标记不能挂在一颗无关的子（或空�
   Game.setSetupMode(true);
   Game.setupCool = 0;
   Game.newGame(8, 1);
+  // 【把相位和贯通都关掉】这一步量的是"最后一手的光晕挂在哪儿"，而 gh 缓冲里现在还会装
+  // 两样别的东西：v3.1.1 起每颗子的相位光圈、贯通模式下边界棋子的影子。
+  // 角上的子一勾贯通就是 7 个影子，数进去这一条就没在量它自己要说的事了。
+  // （不能走 setSetupPhase：它夹到最小值 10，关不掉。直接改规则再重画最直白。）
+  Game.session.rules.phasePeriod = 0;
+  Game.session.rules.wrapEdges = false;
+  Game.session.board.wrap = false;
+  Game.onBoardChanged(true);
   Game.setActiveLayer(0);
   Game.setGhostMode(true);          // 幽灵层模式：非当前层的子进 gh
 

@@ -698,12 +698,19 @@ try {
     Game.setLang("en");
     // 行标宽度：不再写死，所以它必须随文字长短变 —— 中英都是"Mode 比 Rotation cooldown 短"，
     // 两个都相等反而说明宽度还在被某个固定值支配。
+    // 【必须切到四维再量】v3.1.2 起「转动冷却」「相位周期」两行**只在四维下显示** ——
+    // 三维下它们的槽位让给了「魔方旋转 / 空间贯通」那两块（见 syncCoolRow）。
+    // 三维里量到的是 display:none 的 0 宽，那不是在验"行标贴合文字"，是在验"它藏起来了"。
+    const keep4d = Game.fourD;
+    Game.setSetupMode(true);
     const wOf = (id) => Math.round(document.getElementById(id).getBoundingClientRect().width);
+    const wMode = wOf("rowLabelMode"), wCool = wOf("rowLabelCool"), wNote = wOf("coolNote");
+    Game.setSetupMode(keep4d);
     return {
       lang: root.lang,
       cls: root.className,
       fontEn: enFam, fontZh: zhFam,
-      labelWMode: wOf("rowLabelMode"), labelWCool: wOf("rowLabelCool"),
+      labelWMode: wMode, labelWCool: wCool,
       // 每个行标占几个行盒。Range.getClientRects() 换行就多一个矩形，比拿高度除行高可靠
       // （line-height 可能是 normal，除出来是 NaN）。英文行标比中文长得多，
       // "Rotation cooldown" 就是会顶不住的典型。
@@ -712,7 +719,7 @@ try {
         rg.selectNodeContents(el);
         return { id: el.id, lines: rg.getClientRects().length, text: el.textContent };
       }),
-      coolNoteW: Math.round(coolNote.getBoundingClientRect().width),
+      coolNoteW: wNote,
       ruleNote: document.getElementById("ruleNote").textContent.replace(/\\s+/g, " ").trim(),
       hintText: document.getElementById("hint").textContent.replace(/\\s+/g, " ").trim(),
       btn: r(btn), status: r(st),
@@ -975,7 +982,9 @@ try {
              label3d: a.textContent, label4d: b.textContent,
              l3: Math.round(lum(a)), l4: Math.round(lum(b)) };
   })()`);
-  check(enMode.label3d === "3D · Classic" && enMode.label4d === "4D · Rotatable",
+  // 【标签内容按用户口径改过名】四维那颗从 "4D · Rotatable" 换成 "4D · Myriad" ——
+  // 这一条要钉的是"两句话没贴错按钮"，所以两个字符串都得跟着 UI 走。
+  check(enMode.label3d === "3D · Classic" && enMode.label4d === "4D · Myriad",
     "英文的模式按钮标签没有左右对调", JSON.stringify(enMode));
   check(enMode.sel4d === enMode.fourD && enMode.sel3d === !enMode.fourD,
     "高亮的模式按钮和当前模式一致", JSON.stringify(enMode));
@@ -1426,6 +1435,13 @@ try {
       const coolInput = document.getElementById("coolInput");
       const phaseInput = document.getElementById("phaseInput");
       const trEn = R("topRight"), title = document.querySelector("#setup .titleRow").getBoundingClientRect();
+      // 【先切到四维】v3.1.2 起「转动冷却」「相位周期」两行只在四维下显示 ——
+      // 三维下它们的槽位让给了「魔方旋转 / 空间贯通」那块（见 syncCoolRow），
+      // 三维里量到的是 display:none。这一条要验的是"手机宽度下那两个输入框仍排得开"，
+      // 那就得在它们真的显示的那种模式下量。
+      // 模式键那一行（modeRowLines）三维四维都在，不受影响。
+      const keep4d = Game.fourD;
+      Game.setSetupMode(true);
       const setupUi = {
         modeRowLines: tops(modeBtns).length,
         coolInputVisible: coolInput.getClientRects().length > 0,
@@ -1438,6 +1454,7 @@ try {
         trTop: Math.round(trEn.top), trRight: Math.round(trEn.right),
         trHitsTitle: hits(trEn, title),
       };
+      Game.setSetupMode(keep4d);
       Game.setLang("zh");
       Game.closeSetup();
       return {
@@ -2785,6 +2802,40 @@ try {
 
     await ev(`(() => { Game.tutorialExit(); Game.closeSetup(); return 1; })()`);
     await sleep(300);
+  }
+
+  // ------------------------------------------------------------------
+  // v3.1.2：「设置」和「落子：正常/缓/催」在四维下交换位置（用户口径）
+  //
+  // 【为什么在真浏览器里量】桩里只能验类名挂没挂上；"换没换成"终究是几何问题 ——
+  // flex 的 order 被别的规则盖掉、或者两个键宽度不同导致顺序看着没变，桩都看不见。
+  // 判据用【左边界】比大小，不依赖它们等宽。
+  // ------------------------------------------------------------------
+  {
+    const order = JSON.parse(await ev(`(() => {
+      const box = (id) => document.getElementById(id).getBoundingClientRect();
+      const shot = () => {
+        const s = box("setupBtn"), m = box("modeBtn");
+        return { setupLeft: Math.round(s.left), modeLeft: Math.round(m.left),
+                 setupW: Math.round(s.width), modeW: Math.round(m.width),
+                 bothVisible: s.width > 0 && m.width > 0 };
+      };
+      Game.cancelAiTimer(); Game.setSetupAi("human");
+      Game.setSetupMode(true);  Game.newGame(8, 1);  const fourD = shot();
+      Game.setSetupMode(false); Game.newGame(15, 1); const threeD = shot();
+      return JSON.stringify({ fourD: fourD, threeD: threeD });
+    })()`));
+    check(order.fourD.bothVisible,
+      "前置：四维下「设置」和「落子宣告」都真的在屏幕上", JSON.stringify(order.fourD));
+    check(order.fourD.modeLeft < order.fourD.setupLeft,
+      "四维下「落子：正常/缓/催」排在「设置」左边（两个键换了位置）",
+      JSON.stringify(order.fourD));
+    // 【三维下那颗键整颗不显示】晨昏是四维常开、三维恒为 0，所以声明键在三维下
+    // display:none（宽高都是 0）—— 三维那一行本来就只有四颗键，没有"换位置"可言。
+    // 这一条钉的正是"三维那一行和加交换规则之前一模一样"。
+    check(order.threeD.setupW > 0 && order.threeD.modeW === 0,
+      "三维下「设置」照旧在最后，「落子宣告」整颗不显示（那一行没被这条规则碰到）",
+      JSON.stringify(order.threeD));
   }
 
   // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态

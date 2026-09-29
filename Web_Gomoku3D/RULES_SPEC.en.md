@@ -116,51 +116,64 @@ The right panel draws **layer k as seen from the front**:
 
 The panel is oriented exactly like the 3D view, so nothing has to be rotated in your head — the two always show the same layer.
 
-## 10. 4D mode: you can rotate a layer
+## 10. 4D mode: three extra mechanics
 
-This is an optional way to play; turn it on before the game with "4D · Rotatable": **rotate one layer 90° like a Rubik's cube**,
-and the stones already on that layer are carried along. "4D" refers to time — the board itself changes, while the coordinates
-are still three axes and the total number of cells is still N×N×N.
+4D is the 3D rules untouched, **plus three mechanics**. Pick "4D · Myriad" before the game and all three are on:
 
-The mode is chosen before the game and **cannot be changed during it**. If you did not pick it, none of this section applies,
-and sections 1 through 9 are unaffected by it.
+- **Rubik rotation**: rotate one layer 90° like a Rubik cube; the stones already on that layer are carried along.
+- **Space wrapping**: the six faces of the board are connected, so a five may cross an edge.
+- **Day and night**: the board alternates between two phases, and only lines of the current phase count.
 
-### 10.1 How to rotate
+"4D" refers to time — the board itself changes, while the coordinates are still three axes and the total number of cells is
+still N×N×N.
+
+**The first two can also be turned on individually in 3D.** In 3D mode, two checkboxes sit under the board-size row —
+"Rubik rotation" and "Space wrapping" — both empty by default. Each one you tick adds that mechanic to the 3D game;
+ticking both is 4D without day and night. **Day and night exists only in 4D.**
+
+Ticking "Rubik rotation" locks the board to a cube (rotating a layer requires that layer's two sides to be equal, and a
+cuboid cannot rotate at all), and the "Link all three axes" key is then disabled — the same reason and the same treatment
+as in 4D.
+
+The mode is chosen before the game and **cannot be changed during it**. In 3D with neither box ticked, none of this section
+applies, and sections 1 through 9 are unaffected by it.
+
+### 10.1 Rubik rotation: how to rotate
 
 | Parameter | Values |
 |---|---|
 | Axis | x / y / z |
 | Layer | which layer (0 to N−1) |
 | Direction | clockwise / counterclockwise |
-| Turns | 1 / 2 / 3, that is 90° / 180° / 270° |
+| Turns | 1 / 2 / 3 quarter-turns, that is 90° / 180° / 270° |
 
-**"Clockwise" is viewed from the negative end of that axis, looking toward the origin.**
+**"Clockwise" is seen from the negative end of that axis, looking towards the origin.**
 For the `z` axis that is the direction you see on screen, with no conversion needed;
-the `x` and `y` axes are viewed from the left of the board and from below it.
+for `x` and `y` the viewpoint is to the left of and below the board respectively.
 
-One counterclockwise turn equals three clockwise turns. Four turns equal no turn, so **that option is not offered**.
+One counterclockwise turn equals three clockwise turns. Four turns are no turn at all, so that option is **not offered**.
 
 **Rotating takes two steps: "Rotate" shows you the result, "Confirm" makes it count.**
-After you press Rotate the board **turns immediately so you can see it**, but the move has not landed:
-it does not use up your turn, does not count as a move, and is not written into the record. **Confirm**
-and **Cancel** are always on the panel, greyed out and inert; at that moment they light up and gain a
-ring, flagging the decision you still owe: Confirm turns it for real, Cancel turns the board straight
-back, as if nothing had happened. You cannot place a stone during the preview — the board is showing the rotated
-position, so clicking it would put your stone somewhere other than where you aimed.
+After you press Rotate the board **turns immediately so you can see it**, but the move has not landed: it does not use up
+the turn, does not count as a move, and is not written into the record. The Confirm and Cancel keys are **always on the
+panel** — normally greyed out and inert; now they light up with a ring around them, reminding you that a decision is
+pending: Confirm really turns it, Cancel turns the board back exactly as it was, as if nothing had happened.
+You cannot place a stone during the preview — the board is showing the rotated position, so clicking on it would land in the
+wrong cell.
 
-### 10.2 What a rotation does
+### 10.2 Rubik rotation: what a rotation does
 
 Only the cells of the rotated layer move; everything outside it stays put.
 Every cell in that layer has exactly one destination, so two stones never collide, and **the total number of stones never changes**.
 
-### 10.3 Which rotations are rejected
+### 10.3 Rubik rotation: which rotations are rejected
 
 The checks run in order; if any one of them fails, the whole thing is dropped: the board does not move, it does not count as a
 move, and no record is kept.
 
 | Check | When it fails |
 |---|---|
-| The game must be in 4D mode | rejected |
+| The game must be in 4D mode, or in 3D with "Rubik rotation" ticked | rejected |
 | The game must still be in progress | rejected |
 | The layer number must exist | rejected |
 | The cooldown must be ready | rejected |
@@ -178,23 +191,67 @@ their stones into place), it is still rolled back: gifting the opponent a five i
 So **a rotation can be an attack**: it breaks up the opponent's lines, rearranges your own stones, or swings the last
 stone you need into place to win.
 
-### 10.4 Rotation cooldown
+### 10.4 Space wrapping: the six faces are joined
+
+**The six faces of the board are connected**: walk off one edge and you come back in on the opposite one.
+This holds for all three axes.
+
+There is a cheaper way to picture it: **think of 3×3×3, that is 27 identical boards stacked together**. You only play on the
+middle one, and every move is stamped onto the other 26 as well. Those 26 are not drawn — so "two stones on the right plus
+three on the left" really is one run of five in the stacked space.
+
+- You place stones the same way: **a stone has exactly one position** — where you put it is where it is.
+- But so that you can **see** it, the ring of cells hugging the outside of the board draws **shadows**: every stone on the
+  boundary has its own image one cell outside the board. A line leaving the right edge shows its continuation one cell past
+  it — a five across the seam no longer has to be imagined. Shadows are smaller and fainter; they are **not stones**: only
+  real stones count, and you cannot play on a shadow.
+- **A full ring of one colour (N stones) is an overline too.** Wrapping makes lines longer, so check the far side before
+  completing a five; the overline rule itself is unchanged — the first player still loses with 6 or more in a row.
+- It does not interfere with Rubik rotation: one is "how a layer permutes its own cells", the other is "what happens past an
+  edge"; both can be on at once and each minds its own business.
+
+### 10.5 Day and night: only the current phase counts
+
+The board alternates between two phases: **day** and **night**. Each stone remembers the phase it was placed in.
+
+- **Only lines of the current phase are settled.** A night five that exists during the day is there, but does not count;
+  the moment the phase turns to night and it is still there, it settles at once.
+- **Stones of the other phase still occupy their cell and break lines** (they are solid, not empty).
+- Every stone on the board wears a thin **halo** whose colour is its phase: **pale red is day, pale blue is night**. Stones
+  of both phases are drawn equally clearly (no more fading by opacity), so you can see at a glance which stones belong to
+  which side. The layer thumbnails on the right use a small square of the same colour (where the cell is too small to fit a
+  halo, none is drawn rather than falling back to a different encoding).
+- The phase turns every 12 moves (changeable on the start screen, 10 to 30).
+
+A move may declare:
+
+| Declaration | Effect |
+|---|---|
+| normal | the clock advances one step |
+| hold | the clock does not advance; one step is borrowed from the next phase |
+| hasten | the clock advances two steps, repaying one borrowed step |
+
+**You can only shift time, never create it**: a full cycle is always 2 × the period, and what you borrow is deducted from the
+next phase. No phase may be shorter than 2 moves, and borrowing and repaying are both capped.
+
+### 10.6 Rotation cooldown
 
 > Between two rotations you must **place** at least 5 stones.
 
 - **Only placements count**; a rotation itself does not — otherwise it becomes "only one turn in five may be a rotation", which is too hard to keep track of.
 - It can be set to 3 / 5 / 8 / 10, default 5.
 - The first rotation is subject to it too: you must place 5 stones after the game starts before you can rotate.
+- **The cooldown only starts once you press Confirm** — the preview has not landed, so it must not consume cooldown.
 - Undo rolls the cooldown back as well, so the counter and the board never disagree.
 
-### 10.5 What a rotation costs
+### 10.7 What a rotation costs
 
 A rotation **uses up the whole turn**: the opponent moves immediately afterward, and you cannot "rotate and then place".
 Every turn is therefore "place or rotate, one or the other".
 
 A rotation does not count as move number N; the Nth move always means the Nth placement (the interface reports rotations separately).
 
-### 10.6 Undoing a rotation
+### 10.8 Undoing a rotation
 
 | Action | Effect |
 |---|---|
@@ -210,7 +267,7 @@ time machine spanning many moves.
 
 Undoing also returns the cooldown to what it was before the rotation.
 
-### 10.7 Sizes
+### 10.9 Sizes
 
 | Mode | Sizes | Default |
 |---|---|---|
@@ -218,53 +275,10 @@ Undoing also returns the cooldown to what it was before the rotation.
 | 4D | 8 ≤ N ≤ 30, **must be cubic** | 8 |
 
 4D having to be cubic is not laziness: rotating a layer requires that layer's two sides to be equal, and all three axes must
-be rotatable, so all three must be the same length.
+be rotatable, so all three must be the same length. The same applies in 3D once "Rubik rotation" is ticked.
 
 4D defaults to 8 rather than 15 because **the bigger the board, the fewer stones a layer holds, and the less a rotation shows** —
 on a 15×15×15 board a layer holds less than one stone on average, and most rotations hit the "nothing changed" case.
-
-### 10.8 Wrapping (the six faces are joined)
-
-In 4D **the six faces of the board are connected**: walk off one edge and you come back in
-on the opposite one. This holds for all three axes.
-
-So a five may cross an edge — two stones on one side and three on the other are one run.
-
-- You place stones the same way: **a stone has exactly one position** — where you put it is
-  where it is.
-- But so that you can **see** this, the ring of cells hugging the outside of the board draws
-  **shadows**: every stone on the boundary has its own image one cell outside the board.
-  A line leaving the right edge shows its continuation one cell past it — a five across the
-  seam no longer has to be imagined. Shadows are smaller and fainter; they are **not stones**,
-  only real stones count, and you cannot play on a shadow.
-- The overline rule is unchanged: the first player still loses with 6 or more in a row.
-  Wrapping makes lines longer, so check the far side before completing a five.
-  **A full ring of one colour (N stones) is an overline too.**
-
-### 10.9 Day and night (the phase)
-
-In 4D the board alternates between two phases: **day** and **night**. Each stone remembers
-the phase it was placed in.
-
-- **Only lines of the current phase are settled.** A night five that exists during the day
-  is there, but does not count; the moment the phase turns to night and it is still there,
-  it settles at once.
-- **Stones of the other phase still occupy their cell and break lines** (they are solid,
-  not empty). They are drawn fainter, so you can tell at a glance which phase a stone
-  belongs to.
-- The phase turns every 12 moves (changeable on the start screen, 10 to 30).
-
-A move may declare:
-
-| Declaration | Effect |
-|---|---|
-| normal | the clock advances one step |
-| hold | the clock does not advance; one step is borrowed from the next phase |
-| hasten | the clock advances two steps, repaying one borrowed step |
-
-**You can only shift time, never create it**: a full cycle is always 2 × the period, and
-what you borrow is deducted from the next phase. No phase may be shorter than 2 moves, and
-borrowing and repaying are both capped.
 
 ### 10.10 Tutorial
 

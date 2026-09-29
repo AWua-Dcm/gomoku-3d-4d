@@ -53,6 +53,14 @@
     --danger:    #9c3428;   /* 朱砂暗：长连犯规 */
     --ok:        #4a6b45;   /* 竹青：待转层绿框 / 占用条 */
     --hover-line:#c8452e;   /* 悬停校准线：必须比 --danger 亮，两者含义不同 */
+    /* v3.1.1「晨昏」的相位光圈。**石头本身的浓淡不再表示相位**（原来是异相位淡显到 0.35，
+       形状都糊了），改成每颗子外面套一圈薄光，颜色 = 它落下时的相位。
+       两色都刻意压住饱和度、并和上面三个暖色拉开：
+         · --danger 朱砂 / --hover-line 亮红 都是【犯规、校准线】的语义，混了就误读；
+         · --gold 赭金是【获胜连线】，更不能撞。
+       淡蓝取黛青的浅调（和 --accent 同族），淡红取偏橙的赭调（离正红最远）。 */
+    --phase-night:#7ea2c0;  /* 永夜：淡黛蓝 */
+    --phase-dawn: #c98b70;  /* 黎明：淡赭红 */
     --line2d:    #3a332a;   /* 二维面板的格线 / 星位 */
     --well:      #ddd3bd;   /* 棋盘/缩略条的凹槽底（比面板暗一档） */
     --overlay:   rgba(247,242,232,.94);   /* 浮层（模式条/提示框/横幅）的底 */
@@ -334,6 +342,13 @@
 
   #buttons { display: flex; gap: 8px; flex: 0 0 auto; }
   #buttons button { flex: 1 1 0; }
+  /* 【四维下「设置」和「落子：正常/缓/催」交换位置】用户口径。
+     只动 flex 的排位，不动 DOM —— 两个键的 id、事件、文案一个字都不变，
+     三维下也就逐像素和原来一样（没有 .swap4d 这个类时这两条规则不生效）。
+     为什么值得换：四维下「落子宣告」是**每手都要用**的（缓/催直接改相位时钟），
+     而「设置」多半只在开局前点一次；常用的那个离手更近。 */
+  #buttons.swap4d #setupBtn { order: 2; }
+  #buttons.swap4d #modeBtn { order: 1; }
 
   button {
     background: var(--panel-hi); color: var(--text); border: 1px solid var(--border);
@@ -592,6 +607,44 @@
 
      gap 和 .row 的 gap 一样是 10px，所以它嵌在行里看不出接缝。 */
   #coolGrid { display: grid; grid-template-columns: repeat(2, auto); gap: 10px; }
+
+  /* v3.1.2 三维的两个附加玩法（魔方旋转 / 空间贯通）。
+     宽度对齐上面那几行的常驻宽度，别让这一块比别的行宽出一截。 */
+  /* 【默认隐藏，靠 .on 显示】—— 因为它占的是「转动冷却」「相位周期」那两行在三维下的槽位。
+     那两行在三维里本来就只是看不见的空槽（占着 76px），正好是这里要的两行。
+     两边换着占，三维和四维的总高就**恒等**，切模式时按钮一个像素都不动
+     （browser-check 钉着这一条）。所以是"互换"而不是各自显隐 —— 各自显隐会让三维比四维多出两行。 */
+  #extraRow { display: none; flex-direction: column;
+              width: 262px; margin: 0 auto 10px; }
+  #extraRow.on { display: flex; }
+  /* 每行 38px，和 #setup .row 的 min-height 同一个数 —— 两行正好顶掉那两行。 */
+  .extraBtn {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    height: 38px; padding: 0 10px; font: inherit; font-size: 14px; color: var(--text);
+    background: transparent; border: 1px solid var(--border); border-radius: 6px;
+    cursor: pointer; text-align: left; box-sizing: border-box;
+  }
+  /* 【整块必须正好 86px = 两行 76 + 一个行距 10】#setup 是 flex + gap:10px 的列：
+     原来那里装着两个 .row（76px + 两条行距），现在换成一块（76px + 一条行距），
+     不加回这 10px 的话三维就比四维矮一行距，切模式时整列会跳 —— browser-check 逐像素比。
+     用 margin 而不是再塞一个空元素：空元素在窄屏下也可能被 flex 重新分配。 */
+  #extraRow .extraBtn + .extraBtn { border-radius: 0 0 6px 6px; }
+  #extraRow .extraBtn:first-child { border-radius: 6px 6px 0 0; }
+  .extraBtn .extraLabel { white-space: nowrap; }
+  .extraBtn:hover:not(:disabled) { background: var(--panel-hi); }
+  /* 小方框：勾选时填成强调色 + 一个白勾。方角、细描边，和这一页其他控件同一套语言。 */
+  .extraBtn .extraBox {
+    flex: 0 0 auto; width: 14px; height: 14px; border: 1.5px solid var(--border);
+    border-radius: 3px; position: relative; background: var(--panel);
+  }
+  .extraBtn[aria-pressed="true"] .extraBox { background: var(--accent); border-color: var(--accent); }
+  .extraBtn[aria-pressed="true"] .extraBox::after {
+    content: ""; position: absolute; left: 4px; top: 0px; width: 4px; height: 8px;
+    border-right: 2px solid var(--white); border-bottom: 2px solid var(--white);
+    transform: rotate(45deg);
+  }
+  /* 四维下这两样是常开的，勾上但点不动 —— 和冷却/相位那两行同一种"看得见但用不了"的画法。 */
+  .extraBtn:disabled { opacity: .55; cursor: default; }
 
   /* v3.0.0「晨昏」的周期键。**一行平铺，不做 2×2 网格** ——
      冷却那行用网格是因为它有四个等宽的长文案（"3 手""10 手"），
@@ -1138,16 +1191,27 @@
 
 面板和立体视图的方位完全一致，不需要在脑子里做旋转，两边永远显示同一层。
 
-## 10. 四维模式：可以转动一层
+## 10. 四维模式：三个额外玩法
 
-这是可选的玩法，开局时选「四维 · 可转层」开启：**像魔方一样把某一层转 90°**，
-那一层里已经落下的棋子会跟着被搬走。"四维"指的是时间 —— 棋盘本身会变，
-坐标仍然是三个轴，位置总数也仍然是 N×N×N。
+四维 = 三维的规则原封不动，**再加三个机制**。开局时选「四维 · 万象」，三个一起开：
 
-模式在开局时选定，**一局之内不能更改**。没有选它的话，这一节全部不适用，
+- **魔方旋转**：像魔方一样把某一层转 90°，那一层里已经落下的棋子跟着被搬走。
+- **空间贯通**：棋盘六个面是连通的，五连可以跨过边界。
+- **黎明永夜**：棋盘在两个相位之间轮转，只有当前相位的连线算数。
+
+"四维"指的是时间 —— 棋盘本身会变，坐标仍然是三个轴，位置总数也仍然是 N×N×N。
+
+**前两个也能单独开在三维里。** 三维模式下，棋盘尺寸那一行下面有两个勾选框 ——
+「魔方旋转」和「空间贯通」，默认都是空的。勾上哪个，三维对局就多出哪个机制；
+两个都勾，就等于四维少了"黎明永夜"。**黎明永夜只在四维里有**，三维不开这一样。
+
+勾「魔方旋转」时棋盘会自动锁成立方（转一层要求那一层的两条边等长，长方体上转不动），
+「三轴联动」那颗键随之禁用 —— 和四维那边同一条理由、同一套做法。
+
+模式在开局时选定，**一局之内不能更改**。三维下一个都不勾的话，这一节全部不适用，
 第 1 到 9 节的规则也不受它影响。
 
-### 10.1 怎么转
+### 10.1 魔方旋转：怎么转
 
 | 参数 | 取值 |
 |---|---|
@@ -1169,18 +1233,18 @@
 「确定操作」才真的转过去，「取消操作」把棋盘原样转回来，等于什么都没发生。
 预览期间不能落子 —— 那时候棋盘是转过的样子，照着它点会落错地方。
 
-### 10.2 转动的效果
+### 10.2 魔方旋转：转动的效果
 
 只有被转的那一层里，位置在变；层外的一切都不动。
 层内每个位置都有唯一去向，不会有两颗棋子撞到一起，所以**棋子总数永远不变**。
 
-### 10.3 什么样的转动会被拒绝
+### 10.3 魔方旋转：什么样的转动会被拒绝
 
 按顺序检查，任何一条不满足，整件事就作废：棋盘不动、不算一步、不留记录。
 
 | 检查 | 不通过时 |
 |---|---|
-| 必须处在四维模式 | 拒绝 |
+| 必须处在四维模式，或者三维里勾了「魔方旋转」 | 拒绝 |
 | 棋局必须还在进行中 | 拒绝 |
 | 层号必须存在 | 拒绝 |
 | 冷却已经好了 | 拒绝 |
@@ -1198,7 +1262,47 @@
 所以 **转动是可以当进攻手段用的**：它既能拆掉对手的线、调整自己的结构，
 也能直接把最后一颗子转到位取胜。
 
-### 10.4 转动冷却
+### 10.4 空间贯通：六个面打通
+
+**棋盘六个面是连通的**：从一边走到头，再往前就回到对面。三个轴都一样。
+
+想这件事有个省力的办法：**把棋盘想成 3×3×3 共 27 副一模一样的盘叠在一起**，
+你只往中间那一副下子，每一手同时印到另外 26 副上。那 26 副不画出来 ——
+于是"右边两颗加上左边三颗"在叠出来的空间里，是实实在在的一行五。
+
+- 落子的方式不变：**一颗子只有一个位置**，你下在哪儿它就在哪儿。
+- 但为了让你**看得见**，棋盘外面紧贴的那一圈会画出**影子**：边界上的每一颗子，
+  在棋盘外面一格都有它自己的像。从右边走出去的线，在棋盘右边外面一格就能看见它的续集 ——
+  跨边界的五连不用全靠脑补。影子更小、更淡，**不是棋子**：只有真子才算数，
+  也不能点在它上面。
+- **一整圈同色（N 颗）也算长连**。环绕会让线变长，先手做五连时要多看一眼对面接不接得上；
+  长连规则本身没变 —— 先手走出 6 连及以上仍然判负。
+- 和魔方旋转互不干扰：一个是"层内怎么置换"，一个是"越界怎么算"，同时开着也各管各的。
+
+### 10.5 黎明永夜：只有当前相位的连线算数
+
+棋盘在两个相位之间轮转：**黎明**和**永夜**。每颗子记下它落下时的相位。
+
+- **只有当前相位的连线会被结算。** 黎明时，永夜那条五连已经存在、但不算数；
+  切到永夜那一刻它还在，才立刻结算。
+- **异相位的子照样占位，而且会打断连线**（它是实体，不是空的）。
+- 盘面上每颗子外面套着一圈**薄光**，颜色就是它的相位：**淡红是黎明，淡蓝是永夜**。
+  两种相位的子一样清楚（不再靠浓淡区分），一眼就看得出哪几颗属于哪一边。
+  右侧的层缩略图上用同色小方框表示（那一格太小、画不下光圈时就不画，不换成另一种画法）。
+- 每 12 手翻一次（可在起始界面改，10 到 30）。
+
+落子时可以宣告：
+
+| 宣告 | 效果 |
+|---|---|
+| 正常 | 时间走一格 |
+| 缓 | 时间不走，向下一相位借一格 |
+| 催 | 时间走两格，把借的还掉 |
+
+**只能挪、不能造**：一个完整周期总长恒为 2 × 周期，借来的从下一个相位扣。
+一个相位不得短于 2 手，借和还都有上限 —— 谁也造不出额外的时间。
+
+### 10.6 转动冷却
 
 > 两次转动之间，至少要**落** 5 个子。
 
@@ -1208,14 +1312,14 @@
 - **只有「确定操作」之后才开始算冷却** —— 预览期间既没落地，也就不该消耗冷却。
 - 悔棋会把冷却一起退回去，不会出现"计数器和棋盘对不上"。
 
-### 10.5 转动的代价
+### 10.7 转动的代价
 
 转动**占掉一整个回合**：转完立刻轮到对手，不能"转完再落子"。
 也就是每一手都是"落子或转动，二选一"。
 
 转动不算"第 N 手"，第 N 手始终指第 N 次落子（界面上会另外报转动次数）。
 
-### 10.6 撤销转动
+### 10.8 撤销转动
 
 | 操作 | 效果 |
 |---|---|
@@ -1230,7 +1334,7 @@
 
 撤销之后，冷却也一起回到转动之前。
 
-### 10.7 尺寸
+### 10.9 尺寸
 
 | 模式 | 可选尺寸 | 默认 |
 |---|---|---|
@@ -1238,45 +1342,10 @@
 | 四维 | 8 ≤ N ≤ 30，**必须立方** | 8 |
 
 四维模式必须立方不是偷懒：转动一层要求这一层的两条边长相等，
-三个轴都要能转，就只能三轴等长。
+三个轴都要能转，就只能三轴等长。三维里勾了「魔方旋转」时同理。
 
 四维的默认尺寸取 8 而不是 15，是因为**棋盘越大，一层里的棋子越少，转动就越看不出来** ——
 15×15×15 的棋盘上，一层里平均还不到一颗子，多数转动都会撞上"没有变化"。
-
-### 10.8 贯通（六个面打通）
-
-四维模式下**棋盘六个面是连通的**：从一边走到头，再往前就回到对面。三个轴都一样。
-
-所以五连可以跨过边界 —— 一边两颗、对面三颗，它们就是连着的一条五。
-
-- 落子的方式不变：**一颗子只有一个位置**，你下在哪儿它就在哪儿。
-- 但为了让你**看得见**这件事，棋盘外面紧贴的那一圈会画出**影子**：
-  边界上的每一颗子，在棋盘外面一格都有它自己的像（棋盘外面的那一圈就干这个用）。
-  从右边走出去的线，在棋盘右边外面一格就能看见它的续集 —— 跨边界的五连不用全靠脑补。
-  影子更小、更淡，**不是棋子**，只有真子才算数，也不能点在它上面。
-- 长连规则照旧：先手走出 6 连及以上仍然判负。环绕会让线变长，先手做五连时要多看一眼
-  对面接不接得上。**一整圈同色（N 颗）也算长连。**
-
-### 10.9 晨昏（昼夜相位）
-
-四维模式下棋盘在两个相位之间轮转：**黎明**和**永夜**。每颗子记下它落下时的相位。
-
-- **只有当前相位的连线会被结算。** 黎明时，永夜那条五连已经存在、但不算数；
-  切到永夜那一刻它还在，才立刻结算。
-- **异相位的子照样占位，而且会打断连线**（它是实体，不是空的）。盘面上异相位的子
-  画得更淡，一眼能分出哪颗属于哪个相位。
-- 每 12 手翻一次（可在起始界面改，10 到 30）。
-
-落子时可以宣告：
-
-| 宣告 | 效果 |
-|---|---|
-| 正常 | 时间走一格 |
-| 缓 | 时间不走，向下一相位借一格 |
-| 催 | 时间走两格，把借的还掉 |
-
-**只能挪、不能造**：一个完整周期总长恒为 2 × 周期，借来的从下一个相位扣。
-一个相位不得短于 2 手，借和还都有上限 —— 谁也造不出额外的时间。
 
 ### 10.10 游戏教学
 
@@ -1451,51 +1520,64 @@ The right panel draws **layer k as seen from the front**:
 
 The panel is oriented exactly like the 3D view, so nothing has to be rotated in your head — the two always show the same layer.
 
-## 10. 4D mode: you can rotate a layer
+## 10. 4D mode: three extra mechanics
 
-This is an optional way to play; turn it on before the game with "4D · Rotatable": **rotate one layer 90° like a Rubik's cube**,
-and the stones already on that layer are carried along. "4D" refers to time — the board itself changes, while the coordinates
-are still three axes and the total number of cells is still N×N×N.
+4D is the 3D rules untouched, **plus three mechanics**. Pick "4D · Myriad" before the game and all three are on:
 
-The mode is chosen before the game and **cannot be changed during it**. If you did not pick it, none of this section applies,
-and sections 1 through 9 are unaffected by it.
+- **Rubik rotation**: rotate one layer 90° like a Rubik cube; the stones already on that layer are carried along.
+- **Space wrapping**: the six faces of the board are connected, so a five may cross an edge.
+- **Day and night**: the board alternates between two phases, and only lines of the current phase count.
 
-### 10.1 How to rotate
+"4D" refers to time — the board itself changes, while the coordinates are still three axes and the total number of cells is
+still N×N×N.
+
+**The first two can also be turned on individually in 3D.** In 3D mode, two checkboxes sit under the board-size row —
+"Rubik rotation" and "Space wrapping" — both empty by default. Each one you tick adds that mechanic to the 3D game;
+ticking both is 4D without day and night. **Day and night exists only in 4D.**
+
+Ticking "Rubik rotation" locks the board to a cube (rotating a layer requires that layer's two sides to be equal, and a
+cuboid cannot rotate at all), and the "Link all three axes" key is then disabled — the same reason and the same treatment
+as in 4D.
+
+The mode is chosen before the game and **cannot be changed during it**. In 3D with neither box ticked, none of this section
+applies, and sections 1 through 9 are unaffected by it.
+
+### 10.1 Rubik rotation: how to rotate
 
 | Parameter | Values |
 |---|---|
 | Axis | x / y / z |
 | Layer | which layer (0 to N−1) |
 | Direction | clockwise / counterclockwise |
-| Turns | 1 / 2 / 3, that is 90° / 180° / 270° |
+| Turns | 1 / 2 / 3 quarter-turns, that is 90° / 180° / 270° |
 
-**"Clockwise" is viewed from the negative end of that axis, looking toward the origin.**
+**"Clockwise" is seen from the negative end of that axis, looking towards the origin.**
 For the `z` axis that is the direction you see on screen, with no conversion needed;
-the `x` and `y` axes are viewed from the left of the board and from below it.
+for `x` and `y` the viewpoint is to the left of and below the board respectively.
 
-One counterclockwise turn equals three clockwise turns. Four turns equal no turn, so **that option is not offered**.
+One counterclockwise turn equals three clockwise turns. Four turns are no turn at all, so that option is **not offered**.
 
 **Rotating takes two steps: "Rotate" shows you the result, "Confirm" makes it count.**
-After you press Rotate the board **turns immediately so you can see it**, but the move has not landed:
-it does not use up your turn, does not count as a move, and is not written into the record. **Confirm**
-and **Cancel** are always on the panel, greyed out and inert; at that moment they light up and gain a
-ring, flagging the decision you still owe: Confirm turns it for real, Cancel turns the board straight
-back, as if nothing had happened. You cannot place a stone during the preview — the board is showing the rotated
-position, so clicking it would put your stone somewhere other than where you aimed.
+After you press Rotate the board **turns immediately so you can see it**, but the move has not landed: it does not use up
+the turn, does not count as a move, and is not written into the record. The Confirm and Cancel keys are **always on the
+panel** — normally greyed out and inert; now they light up with a ring around them, reminding you that a decision is
+pending: Confirm really turns it, Cancel turns the board back exactly as it was, as if nothing had happened.
+You cannot place a stone during the preview — the board is showing the rotated position, so clicking on it would land in the
+wrong cell.
 
-### 10.2 What a rotation does
+### 10.2 Rubik rotation: what a rotation does
 
 Only the cells of the rotated layer move; everything outside it stays put.
 Every cell in that layer has exactly one destination, so two stones never collide, and **the total number of stones never changes**.
 
-### 10.3 Which rotations are rejected
+### 10.3 Rubik rotation: which rotations are rejected
 
 The checks run in order; if any one of them fails, the whole thing is dropped: the board does not move, it does not count as a
 move, and no record is kept.
 
 | Check | When it fails |
 |---|---|
-| The game must be in 4D mode | rejected |
+| The game must be in 4D mode, or in 3D with "Rubik rotation" ticked | rejected |
 | The game must still be in progress | rejected |
 | The layer number must exist | rejected |
 | The cooldown must be ready | rejected |
@@ -1513,23 +1595,67 @@ their stones into place), it is still rolled back: gifting the opponent a five i
 So **a rotation can be an attack**: it breaks up the opponent's lines, rearranges your own stones, or swings the last
 stone you need into place to win.
 
-### 10.4 Rotation cooldown
+### 10.4 Space wrapping: the six faces are joined
+
+**The six faces of the board are connected**: walk off one edge and you come back in on the opposite one.
+This holds for all three axes.
+
+There is a cheaper way to picture it: **think of 3×3×3, that is 27 identical boards stacked together**. You only play on the
+middle one, and every move is stamped onto the other 26 as well. Those 26 are not drawn — so "two stones on the right plus
+three on the left" really is one run of five in the stacked space.
+
+- You place stones the same way: **a stone has exactly one position** — where you put it is where it is.
+- But so that you can **see** it, the ring of cells hugging the outside of the board draws **shadows**: every stone on the
+  boundary has its own image one cell outside the board. A line leaving the right edge shows its continuation one cell past
+  it — a five across the seam no longer has to be imagined. Shadows are smaller and fainter; they are **not stones**: only
+  real stones count, and you cannot play on a shadow.
+- **A full ring of one colour (N stones) is an overline too.** Wrapping makes lines longer, so check the far side before
+  completing a five; the overline rule itself is unchanged — the first player still loses with 6 or more in a row.
+- It does not interfere with Rubik rotation: one is "how a layer permutes its own cells", the other is "what happens past an
+  edge"; both can be on at once and each minds its own business.
+
+### 10.5 Day and night: only the current phase counts
+
+The board alternates between two phases: **day** and **night**. Each stone remembers the phase it was placed in.
+
+- **Only lines of the current phase are settled.** A night five that exists during the day is there, but does not count;
+  the moment the phase turns to night and it is still there, it settles at once.
+- **Stones of the other phase still occupy their cell and break lines** (they are solid, not empty).
+- Every stone on the board wears a thin **halo** whose colour is its phase: **pale red is day, pale blue is night**. Stones
+  of both phases are drawn equally clearly (no more fading by opacity), so you can see at a glance which stones belong to
+  which side. The layer thumbnails on the right use a small square of the same colour (where the cell is too small to fit a
+  halo, none is drawn rather than falling back to a different encoding).
+- The phase turns every 12 moves (changeable on the start screen, 10 to 30).
+
+A move may declare:
+
+| Declaration | Effect |
+|---|---|
+| normal | the clock advances one step |
+| hold | the clock does not advance; one step is borrowed from the next phase |
+| hasten | the clock advances two steps, repaying one borrowed step |
+
+**You can only shift time, never create it**: a full cycle is always 2 × the period, and what you borrow is deducted from the
+next phase. No phase may be shorter than 2 moves, and borrowing and repaying are both capped.
+
+### 10.6 Rotation cooldown
 
 > Between two rotations you must **place** at least 5 stones.
 
 - **Only placements count**; a rotation itself does not — otherwise it becomes "only one turn in five may be a rotation", which is too hard to keep track of.
 - It can be set to 3 / 5 / 8 / 10, default 5.
 - The first rotation is subject to it too: you must place 5 stones after the game starts before you can rotate.
+- **The cooldown only starts once you press Confirm** — the preview has not landed, so it must not consume cooldown.
 - Undo rolls the cooldown back as well, so the counter and the board never disagree.
 
-### 10.5 What a rotation costs
+### 10.7 What a rotation costs
 
 A rotation **uses up the whole turn**: the opponent moves immediately afterward, and you cannot "rotate and then place".
 Every turn is therefore "place or rotate, one or the other".
 
 A rotation does not count as move number N; the Nth move always means the Nth placement (the interface reports rotations separately).
 
-### 10.6 Undoing a rotation
+### 10.8 Undoing a rotation
 
 | Action | Effect |
 |---|---|
@@ -1545,7 +1671,7 @@ time machine spanning many moves.
 
 Undoing also returns the cooldown to what it was before the rotation.
 
-### 10.7 Sizes
+### 10.9 Sizes
 
 | Mode | Sizes | Default |
 |---|---|---|
@@ -1553,53 +1679,10 @@ Undoing also returns the cooldown to what it was before the rotation.
 | 4D | 8 ≤ N ≤ 30, **must be cubic** | 8 |
 
 4D having to be cubic is not laziness: rotating a layer requires that layer's two sides to be equal, and all three axes must
-be rotatable, so all three must be the same length.
+be rotatable, so all three must be the same length. The same applies in 3D once "Rubik rotation" is ticked.
 
 4D defaults to 8 rather than 15 because **the bigger the board, the fewer stones a layer holds, and the less a rotation shows** —
 on a 15×15×15 board a layer holds less than one stone on average, and most rotations hit the "nothing changed" case.
-
-### 10.8 Wrapping (the six faces are joined)
-
-In 4D **the six faces of the board are connected**: walk off one edge and you come back in
-on the opposite one. This holds for all three axes.
-
-So a five may cross an edge — two stones on one side and three on the other are one run.
-
-- You place stones the same way: **a stone has exactly one position** — where you put it is
-  where it is.
-- But so that you can **see** this, the ring of cells hugging the outside of the board draws
-  **shadows**: every stone on the boundary has its own image one cell outside the board.
-  A line leaving the right edge shows its continuation one cell past it — a five across the
-  seam no longer has to be imagined. Shadows are smaller and fainter; they are **not stones**,
-  only real stones count, and you cannot play on a shadow.
-- The overline rule is unchanged: the first player still loses with 6 or more in a row.
-  Wrapping makes lines longer, so check the far side before completing a five.
-  **A full ring of one colour (N stones) is an overline too.**
-
-### 10.9 Day and night (the phase)
-
-In 4D the board alternates between two phases: **day** and **night**. Each stone remembers
-the phase it was placed in.
-
-- **Only lines of the current phase are settled.** A night five that exists during the day
-  is there, but does not count; the moment the phase turns to night and it is still there,
-  it settles at once.
-- **Stones of the other phase still occupy their cell and break lines** (they are solid,
-  not empty). They are drawn fainter, so you can tell at a glance which phase a stone
-  belongs to.
-- The phase turns every 12 moves (changeable on the start screen, 10 to 30).
-
-A move may declare:
-
-| Declaration | Effect |
-|---|---|
-| normal | the clock advances one step |
-| hold | the clock does not advance; one step is borrowed from the next phase |
-| hasten | the clock advances two steps, repaying one borrowed step |
-
-**You can only shift time, never create it**: a full cycle is always 2 × the period, and
-what you borrow is deducted from the next phase. No phase may be shorter than 2 moves, and
-borrowing and repaying are both capped.
 
 ### 10.10 Tutorial
 
@@ -1786,153 +1869,174 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 
 パネルと立体ビューの向きは完全に一致しているので、頭の中で回転させる必要はない。両者は常に同じレイヤーを表示する。
 
-## 10. 4Dモード：1 つのレイヤーを回転できる
+## 10. 4Dモード：三つの追加ルール
 
-これは任意で選べる遊び方で、対局開始時に「4D · 回転可能」を選ぶと有効になる：**ルービックキューブのようにあるレイヤーを 90° 回す**と、
-そのレイヤーにすでに打たれている石も一緒に運ばれる。「4D」が指すのは時間 —— 盤そのものが変わり、
-座標は依然として 3 つの軸で、位置の総数も依然として N×N×N のまま。
+4D は三次元のルールをそのままに、**三つの仕組みを足したもの**です。開始前に「4D・万象」を選ぶと三つとも有効になります：
 
-モードは対局開始時に決まり、**1 局の途中では変更できない**。選んでいなければ、この節はすべて当てはまらず、
-第 1 節から第 9 節までの規則もその影響を受けない。
+- **ルービック回転**：ルービックキューブのように 1 つのレイヤーを 90° 回すと、そのレイヤー上の石も一緒に動きます。
+- **空間貫通**：盤の六面がつながっていて、五連が境界をまたげます。
+- **昼夜**：盤が二つの位相の間で巡り、現在の位相の線だけが数えられます。
 
-### 10.1 回し方
+「四維」が指すのは時間です —— 盤そのものが変わり、座標は依然として三軸、マスの総数も N×N×N のままです。
+
+**はじめの二つは三次元でも単独で有効にできます。** 三次元モードでは盤のサイズの行の下に
+「ルービック回転」「空間貫通」の二つのチェック欄があり、既定ではどちらも空です。チェックしたぶんだけ
+三次元の対局にその仕組みが加わります。両方チェックすれば「昼夜」のない 4D と同じです。
+**昼夜は 4D にしかありません。**
+
+「ルービック回転」にチェックを入れると盤は自動的に立方に固定されます（レイヤーを回すにはそのレイヤーの
+二辺が等しい必要があり、直方体ではそもそも回せません）。「三軸連動」のキーもそれに伴って無効になります ——
+4D 側と同じ理由、同じ扱いです。
+
+モードは開始前に決め、**対局中は変更できません**。三次元でどちらもチェックしていなければ、この節はすべて
+当てはまらず、第 1 節から第 9 節も影響を受けません。
+
+### 10.1 ルービック回転：回し方
 
 | パラメータ | 値 |
 |---|---|
 | 軸 | x / y / z |
-| レイヤー | 何番目のレイヤーか（0 から N−1） |
+| レイヤー | 何層目か（0 から N−1） |
 | 方向 | 時計回り / 反時計回り |
-| 回数 | 1 / 2 / 3 回転、つまり 90° / 180° / 270° |
+| 回数 | 1 / 2 / 3 回、つまり 90° / 180° / 270° |
 
-**「時計回り」を見る向きは、その軸の負の側から原点に向かって見た向き。**
-`z` 軸ではこれが画面上で見えている向きそのもので、換算は要らない。
-`x` 軸と `y` 軸の視点は、それぞれ盤の左側と下側にある。
+**「時計回り」は、その軸の負方向から原点を見た向きです。**
+`z` 軸では画面で見えている向きがそのままなので、換算は要りません。
+`x` 軸と `y` 軸の視点はそれぞれ盤の左側と下側です。
 
-反時計回り 1 回転は時計回り 3 回転と同じ。4 回転は回さないのと同じなので、この選択肢は**用意していない**。
+反時計回り 1 回は時計回り 3 回と同じです。4 回は回さないのと同じなので、その選択肢は**用意していません**。
 
-**回転は二段階です：「回転」で結果を見て、「確定」で初めて成立します。**
-「回転」を押すと盤面は**その場で回って見えます**が、この手はまだ成立していません ——
-手番を消費せず、一手とも数えず、記録にも残りません。「確定」と「キャンセル」は
-**常にパネルにあり**、普段は灰色で押せません。その瞬間にこの 2 つが光り、周りに
-光る輪が付いて、決めていないことがあると分かります。「確定」で本当に回り、「キャンセル」で盤面をそのまま元に戻します。
-プレビュー中は着手できません —— 盤面は回した後の見た目なので、そこを押すと狙った場所と
-違うところに石が置かれてしまいます。
+**回転は二段階です：「回転を実行」で結果を見て、「確定」で初めて一手になります。**
+「回転を実行」を押すと盤は**その場で回って見えます**が、まだ一手としては成立していません ——
+手番を消費せず、一手とも数えず、棋譜にも残りません。「確定」「取消」の二つのキーは
+**常にパネルにあり**、普段は灰色で押せません。このときだけ周りに輪が付いて光り、
+まだ決めていないことがあると知らせます。「確定」で本当に回り、「取消」は盤を元のままに戻します。
+プレビュー中は着手できません —— 盤は回った姿なので、それを見て打つと違うマスに置いてしまいます。
 
-### 10.2 回転の効果
+### 10.2 ルービック回転：回転の効果
 
-変わるのは回したレイヤーの中の位置だけで、レイヤーの外は一切動かない。
-レイヤー内の各位置の行き先は 1 つに定まり、2 つの石がぶつかることはない。したがって**石の総数は決して変わらない**。
+動くのは回したレイヤーの中のマスだけです。レイヤーの外は何も動きません。
+レイヤー内の各マスには行き先が一つだけあり、二つの石がぶつかることはありません。
+したがって**石の総数は決して変わりません**。
 
-### 10.3 どのような回転が拒否されるか
+### 10.3 ルービック回転：どんな回転が拒否されるか
 
-順番に検査し、1 つでも満たさなければその回転は丸ごと無効になる：盤は動かず、1 手とも数えられず、記録も残らない。
+順に判定し、どれか一つでも満たさなければその回転はまるごと無効です：盤は動かず、一手とも数えず、記録も残りません。
 
-| 検査 | 通らないとき |
+| 判定 | 満たさないとき |
 |---|---|
-| 4Dモードであること | 拒否 |
+| 4D モードであること、または三次元で「ルービック回転」にチェックしていること | 拒否 |
 | 対局がまだ進行中であること | 拒否 |
 | レイヤー番号が存在すること | 拒否 |
 | クールダウンが明けていること | 拒否 |
-| 回した盤が回す前と**違う**こと | 「変化なし」と表示し、1 手とも数えない |
-| 回した盤面に**相手の** 5 連が現れないこと | 回転を丸ごと巻き戻す |
+| 回した盤が回す前と**違う**こと | 「変化なし」と表示し、一手とも数えない |
+| 回した盤に**相手の** 5 連が現れないこと | 回転を丸ごと巻き戻す |
 
-「回した結果が違うこと」という条件が見るのは**盤の見た目**であり、「何回転したか」ではない：
-もともとそのレイヤーが空だった場合も、模様がたまたま元の姿に戻る場合も、どちらも「変化なし」と判定される。
-この 2 つの場合は画面がそれぞれ理由を伝える。そうしないと、ボタンが壊れているように見えてしまうから。
+「回した結果が違うこと」という条件が見るのは**盤の見た目**であり、「何回転したか」ではありません：
+もともとそのレイヤーが空だった場合も、模様がたまたま元の姿に戻る場合も、どちらも「変化なし」です。
+この 2 つは画面がそれぞれ理由を伝えます。そうしないと、ボタンが壊れているように見えてしまいます。
 
-最後の条件が止めるのは**相手の**線だけ。回転で**自分の 5 連ができれば、それは勝ち** ——
-着手で 5 連を作るのとまったく同じで、そこで対局は終わる。回した結果**相手**の 5 連ができた場合は
-これまでどおり丸ごと巻き戻す（相手に 5 連を差し出すのは、その一手の意味ではない）。
+最後の条件が止めるのは**相手の**線だけです。回転で**自分の 5 連ができれば、それは勝ち** ——
+着手で 5 連を作るのとまったく同じで、そこで対局は終わります。回した結果**相手**の 5 連ができた場合は
+これまでどおりまるごと巻き戻します（相手に 5 連を差し出すのは、その一手の意味ではありません）。
 
-つまり **回転は攻めの手段になる**：相手の線を崩す、自分の形を整える、そして最後の一石を
-定位置に送り込んで勝つ。
+つまり **回転は攻めの手段になります**：相手の線を崩し、自分の形を整え、
+最後の一石を定位置に送り込んで勝つこともできます。
 
-### 10.4 回転のクールダウン
+### 10.4 空間貫通：六面がつながっている
 
-> 2 回の回転の間には、少なくとも石を 5 つ**着手**しなければならない。
+**盤の六面はつながっています**：端まで行ってさらに進むと、反対側に戻ります。三軸とも同じです。
 
-- **数えられるのは着手だけ**で、回転そのものは数えない —— さもないと「5 手のうち 1 手しか回転できない」ことになり、数えるのが面倒すぎる。
-- 3 / 5 / 8 / 10 に変更でき、既定は 5。
-- 最初の回転も同じ制約を受ける：対局開始後に石を 5 つ着手するまで回せない。
-- 待ったをするとクールダウンも一緒に戻るので、「カウンターと盤が食い違う」ことは起きない。
-
-### 10.5 回転の代償
-
-回転は**1 ターンまるごとを使う**：回したらすぐ相手の番になり、「回してから着手する」ことはできない。
-つまり毎手は「着手か回転か、どちらか一方」。
-
-回転は「第 N 手」には数えない。第 N 手は常に N 回目の着手を指す（画面では回転回数を別に表示する）。
-
-### 10.6 回転の取り消し
-
-| 操作 | 効果 |
-|---|---|
-| 待った `Z` | 最後の 1 手が回転なら回転を、着手なら着手を取り消す。対局開始前まで何手でも戻せる |
-| 回転を復元 `Y` | 「最後の 1 手がちょうど回転」のときだけ使える。**キーボードのみ —— パネルにこのボタンはありません**（その場所は「確定」「キャンセル」）；マウスやタッチでは「取り消し」を使ってください。最後の 1 手が回転なら、それがその回転を取り消します |
-
-いったん誰かが石を着手すると、その回転は確定してしまい、単独ではもう取り消せない —— さもないと多くの手にまたがるタイムマシンになってしまう。
-
-> **確定した回転を戻すには「取り消し」を使います**（`Z` か、そのボタン）。パネルには
-> 「回転を戻す」専用のボタンがありましたが、その場所は「確定」「キャンセル」に譲りました。
-> 機能自体は無くなっていません —— 最後の 1 手がちょうど回転なら、取り消しがそれを戻します。
-
-取り消したあとは、クールダウンも回転の前に戻る。
-
-### 10.7 サイズ
-
-| モード | 選べるサイズ | 既定 |
-|---|---|---|
-| 3D | 8 ≤ N ≤ 30、3 つの軸は等しくなくてよい | 15 |
-| 4D | 8 ≤ N ≤ 30、**立方体であること** | 8 |
-
-4Dモードで立方体が必須なのは手抜きではない：レイヤーを回すにはそのレイヤーの 2 辺の長さが等しい必要があり、
-3 つの軸すべてを回せるようにするには、3 軸とも同じ長さにするしかない。
-
-4D の既定サイズが 15 ではなく 8 なのは、**盤が大きいほど 1 レイヤーに入る石が減り、回転が目に見えなくなる**から ——
-15×15×15 の盤では 1 レイヤーに平均して 1 つも石がなく、ほとんどの回転が「変化なし」に当たる。
-
-### 10.8 貫通（六面がつながっている）
-
-四維モードでは**盤の六面がつながっています**：端まで行ってさらに進むと反対側に戻ります。
-三軸とも同じです。
-
-したがって五連は境界をまたげます —— 片側に二石、反対側に三石なら、それは一続きの五です。
+これを考える楽な方法があります：**3×3×3、つまり 27 枚の同じ盤が重なっている**と考えてください。
+打つのは真ん中の 1 枚だけで、一手ごとに残りの 26 枚にも同じ位置へ刻まれます。その 26 枚は描かれません ——
+だからこそ「右に二石、左に三石」は、重なった空間では紛れもなく一続きの五なのです。
 
 - 着手の仕方は変わりません：**石の位置は一つだけ**で、打った場所がそのままその石の場所です。
-- ただしそれが**見える**ように、盤のすぐ外側を一圈するマスに**影**を描きます：
-  境界にある石は、盤の外へ一格のところに自分の像を持ちます。右へ出ていく線は、
-  盤の右のすぐ外にその続きが見えます —— 境界をまたぐ五連を頭の中だけで補う必要はもうありません。
-  影はより小さく淡く、**石ではありません**：数えられるのは本物の石だけで、影の上には打てません。
-- 長連の規則はそのまま：先手が 6 連以上で負けです。貫通で線が長くなるので、五連を
-  作る前に反対側がつながっていないか確かめてください。**一周すべて同色（N 石）も長連です。**
+- ただしそれが**見える**ように、盤のすぐ外側を一圈するマスに**影**を描きます：境界にある石は、
+  盤の外へ一格のところに自分の像を持ちます。右へ出ていく線は、盤の右のすぐ外にその続きが見えます ——
+  境界をまたぐ五連を頭の中だけで補う必要はもうありません。影はより小さく淡く、**石ではありません**：
+  数えられるのは本物の石だけで、影の上には打てません。
+- **一色でぐるり一周（N 石）も長連として扱います。** 貫通で線は長くなるので、五連を作る前に
+  反対側がつながっていないか確かめてください。長連の規則そのものは変わっていません ——
+  先手が 6 連以上で負けです。
+- ルービック回転とは干渉しません：片方は「レイヤー内の置換」、もう片方は「境界の外をどう数えるか」で、
+  同時に有効にしてもそれぞれ独立です。
 
-### 10.9 昼夜（位相）
+### 10.5 昼夜：現在の位相の線だけが数えられる
 
-四維モードでは盤が二つの位相の間で巡ります：**昼**と**夜**。石は置かれたときの位相を覚えます。
+盤は二つの位相の間で巡ります：**昼**と**夜**。各石は打たれたときの位相を覚えています。
 
-- **現在の位相の線だけが数えられます。** 昼のあいだに存在する夜の五連は、そこにありますが
-  数えられません。位相が夜に変わった瞬間にまだあれば、その場で決着します。
+- **現在の位相の線だけが精算されます。** 昼のあいだ、夜の五連は存在していますが数えられません。
+  夜に切り替わった瞬間にそれがまだそこにあれば、その場で精算されます。
 - **異なる位相の石もマスを占め、線を分断します**（実体であって、空ではありません）。
-  盤上では薄く描かれるので、どちらの位相か一目で分かります。
-- 位相は 12 手ごとに変わります（開始画面で 10〜30 に変更可）。
+- 盤上の石にはそれぞれ薄い**輪**が付き、その色が位相です：**淡い赤が昼、淡い青が夜**。
+  どちらの位相の石も同じ濃さで描かれる（濃淡で区別しません）ので、どちら側の石かが一目で分かります。
+  右側のレイヤー一覧では同じ色の小さな枠で示します（マスが小さすぎて輪が描けないときは描きません ——
+  別の表現に切り替えることはしません）。
+- 位相は 12 手ごとに巡ります（開始画面で変更可、10 から 30）。
 
-着手時に宣言できます：
+着手のときに宣言できます：
 
 | 宣言 | 効果 |
 |---|---|
-| 通常 | 時間が一目盛り進む |
-| 遅らせる | 時間が進まず、次の位相から一目盛り借りる |
-| 早める | 時間が二目盛り進み、借りた一目盛りを返す |
+| 通常 | 時計が 1 マス進む |
+| 緩 | 時計は進まず、次の位相から 1 マス借りる |
+| 催 | 時計が 2 マス進み、借りたぶんを返す |
 
-**時間は動かせるだけで、作れません**：一周期の長さは常に 2 × 周期で、借りた分は
-次の位相から引かれます。一つの位相は 2 手より短くならず、貸し借りにも上限があります。
+**動かせるだけで、作ることはできません**：一周期の長さは常に 2 × 周期で、借りたぶんは次の位相から引かれます。
+一つの位相は 2 手より短くできず、借り入れにも返済にも上限があります。
+
+### 10.6 回転のクールダウン
+
+> 二回の回転のあいだに、少なくとも **5 子**を打つ必要があります。
+
+- **数えるのは着手だけ**で、回転そのものは数えません —— そうしないと「5 手のうち 1 手だけが回転」となり、数えるのが大変すぎます。
+- 3 / 5 / 8 / 10 に設定でき、既定は 5 です。
+- 最初の回転も同じ制約を受けます：対局開始後に 5 子打つまで回せません。
+- **クールダウンが始まるのは「確定」を押してから**です —— プレビューはまだ成立していないので、消費してはいけません。
+- 待ったはクールダウンも一緒に戻すので、「カウンターと盤が食い違う」ことはありません。
+
+### 10.7 回転の代償
+
+回転は**手番をまるごと使います**：回した直後に相手の番になり、「回してから打つ」はできません。
+つまり毎手は「打つか回すか、どちらか一方」です。
+
+回転は「N 手目」には数えません。N 手目は常に N 回目の着手を指します（回転の回数は画面に別途表示されます）。
+
+### 10.8 回転の取り消し
+
+| 操作 | 効果 |
+|---|---|
+| 待った `Z` | 最後の一手が回転なら回転を、着手なら着手を取り消します。対局開始前まで何手でも戻せます |
+| 回転を復元 `Y` | 「最後の一手がちょうど回転」のときだけ使えます。**キーボードのみ —— パネルにこのボタンはありません**（その場所は「確定」「取消」）；マウスやタッチでは「待った」を使ってください。最後の一手が回転なら、それがその回転を取り消します |
+
+誰かが石を打った時点で、その回転は確定しており、単独では取り消せません —— そうでなければ多くの手にまたがるタイムマシンになってしまいます。
+
+> **確定した回転を戻したいときは「待った」**（`Z` かそのボタン）を使ってください。
+> パネルにはかつて「回転を復元」という専用キーがありましたが、その場所は「確定」「取消」に譲りました。
+> 機能自体は失われていません —— 最後の一手がちょうど回転なら、待ったがそれを取り消します。
+
+取り消すとクールダウンも回転前の状態に戻ります。
+
+### 10.9 サイズ
+
+| モード | 選べるサイズ | 既定 |
+|---|---|---|
+| 三次元 | 8 ≤ N ≤ 30、三軸が異なってもよい | 15 |
+| 4D | 8 ≤ N ≤ 30、**立方であること** | 8 |
+
+4D が立方でなければならないのは手抜きではありません：レイヤーを回すにはそのレイヤーの二辺が等しい必要があり、
+三軸すべてを回せるようにするには三辺が同じ長さでなければならないからです。三次元で「ルービック回転」に
+チェックした場合も同じです。
+
+4D の既定が 15 ではなく 8 なのは、**盤が大きいほど 1 つのレイヤーに入る石が減り、回転が見えなくなる**からです ——
+15×15×15 では 1 レイヤーに平均 1 石も入らず、ほとんどの回転が「変化なし」に当たります。
 
 ### 10.10 ゲームの説明
 
-四維を選ぶと「開始」の隣に**ゲームの説明**が現れます。三つの関で回転・貫通・昼夜を
-それぞれ教えます。各関は用意された局面と目標です。説明の中にコンピュータはいません。
-クリアすると次の関へ進めます。この行の元の「設定」キー（説明の中では**終了**と
-表示されます）で開始画面に戻ります。
+4D を選ぶと、「開始」の隣に「ゲームの説明」が現れます。三つの関が回転・貫通・昼夜をそれぞれ扱い、
+各関は用意された局面と目標からなります。説明にはコンピュータの相手はおらず、クリアすると次へ進めます。
+その行の元の「設定」キー（説明の中では「終了」と表示されます）で開始画面に戻ります。
 
 ## 11. コンピュータとの対戦
 
@@ -2101,155 +2205,173 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 패널과 입체 뷰의 방위는 완전히 같아서 머릿속으로 돌릴 필요가 없고, 양쪽은 항상 같은 레이어를 보여 줍니다.
 
-## 10. 4D 모드: 레이어를 회전할 수 있습니다
+## 10. 4D 모드: 세 가지 추가 규칙
 
-이것은 선택형 방식으로, 대국 전에 “4D · 회전 가능”을 고르면 켜집니다: **루빅스 큐브처럼 어떤 레이어를 90° 회전**시키면,
-그 레이어에 이미 놓인 돌도 함께 옮겨집니다. “4D”가 뜻하는 것은 시간입니다 — 판 자체가 변하지만,
-좌표는 여전히 세 축이고 위치의 총개수도 여전히 N×N×N입니다.
+4D는 3차원 규칙을 그대로 두고 **세 가지 장치를 더한 것**입니다. 시작 전에 「4D · 만상」을 고르면 셋 다 켜집니다:
 
-모드는 대국 시작 시에 정하고, **한 판 안에서는 바꿀 수 없습니다**. 고르지 않았다면 이 절은 전부 적용되지 않고,
-1절부터 9절까지의 규칙도 그것의 영향을 받지 않습니다.
+- **루빅 회전**: 루빅 큐브처럼 한 층을 90° 돌리면 그 층에 있던 돌도 함께 옮겨집니다.
+- **공간 관통**: 판의 여섯 면이 이어져 있어 오목이 경계를 넘을 수 있습니다.
+- **낮과 밤**: 판이 두 위상 사이를 돌고, 현재 위상의 줄만 셉니다.
 
-### 10.1 회전하는 방법
+"4차원"이 가리키는 것은 시간입니다 —— 판 자체가 변하고, 좌표는 여전히 세 축이며, 칸의 총수도 N×N×N 그대로입니다.
 
-| 매개변수 | 값 |
+**앞의 두 가지는 3차원에서도 따로 켤 수 있습니다.** 3차원 모드에서는 판 크기 줄 아래에
+「루빅 회전」과 「공간 관통」 두 개의 체크칸이 있고, 기본값은 둘 다 비어 있습니다. 체크한 만큼
+3차원 대국에 그 장치가 더해집니다. 둘 다 체크하면 「낮과 밤」이 없는 4D와 같습니다.
+**낮과 밤은 4D에만 있습니다.**
+
+「루빅 회전」을 체크하면 판이 자동으로 정육면체로 고정됩니다(층을 돌리려면 그 층의 두 변이 같아야 하고,
+직육면체에서는 아예 돌릴 수 없습니다). 「세 축 연동」 키도 함께 비활성화됩니다 —— 4D 쪽과 같은 이유,
+같은 처리입니다.
+
+모드는 시작 전에 정하고 **대국 중에는 바꿀 수 없습니다**. 3차원에서 둘 다 체크하지 않았다면 이 절은
+전부 해당하지 않고, 제1절부터 제9절도 영향을 받지 않습니다.
+
+### 10.1 루빅 회전: 돌리는 방법
+
+| 항목 | 값 |
 |---|---|
 | 축 | x / y / z |
-| 레이어 | 몇 번째 레이어인지(0부터 N−1까지) |
+| 층 | 몇 층인지 (0 부터 N−1) |
 | 방향 | 시계 방향 / 반시계 방향 |
-| 횟수 | 1 / 2 / 3바퀴, 즉 90° / 180° / 270° |
+| 횟수 | 1 / 2 / 3 회, 즉 90° / 180° / 270° |
 
-**“시계 방향”을 보는 관찰 방향은 해당 축의 음의 방향에서 원점을 향해 보는 것입니다.**
-`z`축이라면 이것은 화면에서 보이는 방향이라 따로 환산할 필요가 없고,
-`x`축과 `y`축은 관찰 지점이 각각 판의 왼쪽과 아래쪽입니다.
+**"시계 방향"은 그 축의 음의 방향에서 원점을 바라본 방향입니다.**
+`z` 축에서는 화면에서 보이는 방향이 그대로이므로 환산이 필요 없습니다.
+`x` 축과 `y` 축의 시점은 각각 판의 왼쪽과 아래쪽입니다.
 
-반시계 방향 1바퀴는 시계 방향 3바퀴와 같습니다. 4바퀴는 돌지 않은 것과 같으므로 **이 선택지는 제공하지 않습니다**.
+반시계 1회는 시계 3회와 같습니다. 4회는 돌리지 않은 것과 같으므로 그 선택지는 **제공하지 않습니다**.
 
-**회전은 두 단계입니다: 「회전」으로 결과를 보고, 「확인」을 눌러야 성립합니다.**
-「회전」을 누르면 판이 **그 자리에서 돌아 보입니다**, 하지만 이 수는 아직 성립하지 않았습니다 ——
-차례를 쓰지 않고, 한 수로 세지도 않고, 기록에도 남지 않습니다. 「확인」과 「취소」는
-**항상 패널에 있고**, 평소에는 회색이라 눌리지 않습니다. 그 순간 이 둘이 밝아지고
-주위에 빛나는 테두리가 붙어, 아직 결정하지 않은 것이 있다는 것을 알립니다. 「확인」을 눌러야 실제로 돌아가고,
-「취소」는 판을 그대로 되돌립니다. 미리보기 중에는 착수할 수 없습니다 ——
-판이 돌아간 모습이므로 그걸 보고 누르면 노린 자리와 다른 곳에 돌이 놓입니다.
+**회전은 두 단계입니다: 「회전 실행」으로 결과를 보고, 「확인」이라야 한 수가 됩니다.**
+「회전 실행」을 누르면 판이 **그 자리에서 돌아 보입니다**. 하지만 아직 한 수로 성립하지 않았습니다 ——
+차례를 쓰지 않고, 한 수도로 세지 않으며, 기보에도 남지 않습니다. 「확인」과 「취소」 두 키는
+**항상 패널에 있고** 평소에는 회색으로 눌리지 않습니다. 이때만 주위에 고리가 생겨 빛나며
+아직 결정하지 않은 것이 있음을 알려 줍니다. 「확인」이라야 실제로 돌아가고, 「취소」는 판을 원래대로
+되돌려 아무 일도 없었던 것처럼 만듭니다. 미리보기 중에는 착수할 수 없습니다 ——
+판이 돌아간 모습이므로 그것을 보고 두면 엉뚱한 칸에 놓게 됩니다.
 
-### 10.2 회전의 효과
+### 10.2 루빅 회전: 회전의 효과
 
-회전한 그 레이어 안에서만 위치가 바뀌고, 레이어 밖의 모든 것은 움직이지 않습니다.
-레이어 안의 각 위치에는 가는 곳이 하나씩뿐이라 돌 두 개가 부딪히는 일이 없고, 따라서 **돌의 총개수는 절대 변하지 않습니다**.
+움직이는 것은 돌린 층 안의 칸뿐입니다. 층 밖은 아무것도 움직이지 않습니다.
+층 안의 각 칸에는 갈 곳이 하나뿐이라 두 돌이 부딪히지 않습니다.
+따라서 **돌의 총수는 결코 변하지 않습니다**.
 
-### 10.3 어떤 회전이 거부되는가
+### 10.3 루빅 회전: 어떤 회전이 거부되는가
 
-순서대로 검사하고, 어느 하나라도 만족하지 못하면 일 전체가 무효가 됩니다: 판은 움직이지 않고, 한 수로도 세지 않으며, 기록도 남지 않습니다.
+순서대로 판정하며, 하나라도 만족하지 못하면 그 회전은 통째로 무효입니다: 판은 움직이지 않고, 한 수도로 세지 않으며, 기록도 남지 않습니다.
 
-| 검사 | 통과하지 못할 때 |
+| 판정 | 만족하지 못할 때 |
 |---|---|
-| 4D 모드여야 합니다 | 거부 |
-| 대국이 아직 진행 중이어야 합니다 | 거부 |
-| 레이어 번호가 존재해야 합니다 | 거부 |
-| 쿨다운이 이미 끝나 있어야 합니다 | 거부 |
-| 회전한 판이 회전 전과 **달라야 합니다** | “변화 없음” 안내, 한 수로 세지 않음 |
-| 회전한 뒤 판 위에 **상대의** 5개 연속이 나타나면 안 됩니다 | 일 전체를 되돌림 |
+| 4D 모드이거나, 3차원에서 「루빅 회전」을 체크했을 것 | 거부 |
+| 대국이 아직 진행 중일 것 | 거부 |
+| 층 번호가 존재할 것 | 거부 |
+| 쿨다운이 끝나 있을 것 | 거부 |
+| 돌린 판이 돌리기 전과 **다를 것** | "변화 없음" 안내, 한 수로 세지 않음 |
+| 돌린 판에 **상대의** 5개 연속이 나타나지 않을 것 | 일 전체를 되돌림 |
 
-“회전한 뒤 달라야 한다”는 조건이 보는 것은 **판의 모양**이지 “몇 바퀴를 돌렸는지”가 아닙니다:
-이 레이어가 원래 비어 있었거나, 위의 무늬가 마침 원래대로 돌아온 경우는 모두 “변화 없음”으로 판정됩니다.
-이 두 경우에는 인터페이스가 각각 이유를 알려 줍니다. 그러지 않으면 버튼이 고장 난 것처럼 보이기 때문입니다.
+"돌린 결과가 달라야 한다"는 조건이 보는 것은 **판의 모양**이지 "몇 바퀴를 돌렸는지"가 아닙니다:
+이 층이 원래 비어 있었거나, 무늬가 마침 원래대로 돌아온 경우는 모두 "변화 없음"입니다.
+이 두 가지는 화면이 각각 이유를 알려 줍니다. 그러지 않으면 버튼이 고장 난 것처럼 보입니다.
 
-마지막 조건이 막는 것은 **상대의** 직선뿐입니다. 회전으로 **내 5개 연속이 만들어지면 그것은 승리** ——
-착수로 5개를 잇는 것과 똑같고, 거기서 대국이 끝납니다. 회전 결과 **상대**의 5개 연속이 만들어졌다면
-예전처럼 일 전체를 되돌립니다 (상대에게 5개를 바쳐 주는 것은 그 한 수의 뜻이 아닙니다).
+마지막 조건이 막는 것은 **상대의** 줄뿐입니다. 회전으로 **내 오목이 만들어지면 그것은 승리** ——
+착수로 오목을 잇는 것과 똑같고, 거기서 대국이 끝납니다. 회전 결과 **상대**의 오목이 만들어졌다면
+예전처럼 일 전체를 되돌립니다(상대에게 오목을 바쳐 주는 것은 그 한 수의 뜻이 아닙니다).
 
-즉 **회전도 공격 수단이 됩니다**: 상대의 직선을 부수고, 자기 구조를 조정하고,
+즉 **회전은 공격 수단이 됩니다**: 상대의 줄을 부수고, 자기 구조를 조정하고,
 마지막 한 알을 제자리로 보내 이길 수도 있습니다.
 
-### 10.4 회전 쿨다운
+### 10.4 공간 관통: 여섯 면이 이어져 있음
 
-> 두 번의 회전 사이에는 적어도 **착수** 5개가 있어야 합니다.
+**판의 여섯 면은 이어져 있습니다**: 한쪽 끝을 넘어가면 반대쪽으로 돌아옵니다. 세 축 모두 같습니다.
 
-- **착수만 셉니다**, 회전 자체는 세지 않습니다 — 그렇지 않으면 “다섯 수 중 한 수만 회전일 수 있다”가 되어 셈하기가 너무 어렵습니다.
-- 3 / 5 / 8 / 10으로 조정할 수 있고, 기본값은 5입니다.
-- 첫 회전도 이 제약을 똑같이 받습니다: 대국이 시작된 뒤 5개를 채워야 회전할 수 있습니다.
-- 무르기를 하면 쿨다운도 함께 되돌아가서 “카운터와 판이 어긋나는” 일이 생기지 않습니다.
-
-### 10.5 회전의 대가
-
-회전은 **한 턴을 통째로 차지합니다**: 돌리면 곧바로 상대 차례가 되고, “돌린 뒤에 이어서 착수”할 수는 없습니다.
-즉 모든 턴은 “착수 아니면 회전, 둘 중 하나”입니다.
-
-회전은 “N번째 수”로 세지 않습니다. N번째 수는 언제나 N번째 착수를 뜻합니다(인터페이스에서 회전 횟수를 따로 알려 줍니다).
-
-### 10.6 회전 취소
-
-| 조작 | 효과 |
-|---|---|
-| 무르기 `Z` | 마지막 단계가 회전이면 회전을, 착수면 착수를 취소하며, 대국 시작 전까지 계속 무를 수 있습니다 |
-| 이번 회전 복구 `Y` | “마지막 단계가 정확히 회전일 때”만 쓸 수 있습니다. **키보드 전용 — 패널에 이 버튼이 없습니다** (그 자리는 「확인」「취소」); 마우스나 터치에서는 「되돌리기」를 쓰세요. 마지막 수가 회전이면 그것이 그 회전을 되돌립니다 |
-
-누군가 착수를 해 버리면 그 회전은 이미 자리를 잡은 것이 되어 따로 취소할 수 없습니다 — 그러지 않으면 여러 수에 걸친 타임머신이 되어 버립니다.
-
-> **확정된 회전을 되돌리려면 「되돌리기」를 쓰세요** (`Z` 또는 그 버튼). 패널에 있던
-> 「회전 복원」 전용 버튼은 그 자리를 「확인」「취소」에 내주었습니다. 기능 자체는
-> 사라지지 않았습니다 —— 마지막 수가 정확히 회전이면 되돌리기가 그 회전을 되돌립니다.
-
-취소한 뒤에는 쿨다운도 회전 전으로 함께 돌아갑니다.
-
-### 10.7 크기
-
-| 모드 | 선택 가능한 크기 | 기본값 |
-|---|---|---|
-| 3D | 8 ≤ N ≤ 30, 세 축이 달라도 됨 | 15 |
-| 4D | 8 ≤ N ≤ 30, **반드시 정육면체** | 8 |
-
-4D가 반드시 정육면체여야 하는 것은 게으름이 아닙니다: 레이어 하나를 회전하려면 그 레이어의 두 변의 길이가 같아야 하고,
-세 축 모두 회전할 수 있어야 하니 세 축의 길이가 같을 수밖에 없습니다.
-
-4D의 기본 크기를 15가 아니라 8로 잡은 이유는 **판이 클수록 한 레이어에 담기는 돌이 적어서 회전이 잘 보이지 않기 때문**입니다 —
-15×15×15 판에서는 한 레이어에 평균적으로 돌이 한 개도 되지 않아, 대부분의 회전이 “변화 없음”에 걸립니다.
-
-### 10.8 관통 (여섯 면이 이어져 있음)
-
-4D 모드에서는 **판의 여섯 면이 이어져 있습니다**: 한쪽 끝을 넘어가면 반대쪽으로 돌아옵니다.
-세 축 모두 같습니다.
-
-그래서 오목은 경계를 넘을 수 있습니다 — 한쪽에 둘, 반대쪽에 셋이면 그것은 이어진 하나입니다.
+이것을 생각하는 쉬운 방법이 있습니다: **3×3×3, 즉 27장의 똑같은 판이 겹쳐 있다**고 여기세요.
+두는 것은 가운데 한 장뿐이지만, 한 수마다 나머지 26장에도 같은 자리에 찍힙니다. 그 26장은 그려지지 않습니다 ——
+그래서 "오른쪽에 둘, 왼쪽에 셋"은 겹쳐진 공간에서 틀림없이 이어진 하나의 오입니다.
 
 - 착수 방식은 그대로입니다: **돌의 위치는 하나뿐**이고, 둔 자리가 곧 그 돌의 자리입니다.
-- 다만 그것이 **보이도록**, 판 바깥을 한 겹 두른 칸에 **그림자**를 그립니다:
-  경계에 있는 돌은 판 밖으로 한 칸 떨어진 곳에 자기 모습을 둡니다. 오른쪽으로 나가는 줄은
-  판의 오른쪽 바로 밖에서 그 이어짐을 볼 수 있습니다 —— 경계를 넘는 오목을 머릿속으로만
-  메울 필요가 없습니다. 그림자는 더 작고 흐리며 **돌이 아닙니다**: 세는 것은 진짜 돌뿐이고,
-  그림자 위에는 둘 수 없습니다.
-- 장련 규칙은 그대로: 선수는 6목 이상이면 집니다. 관통은 줄을 길게 만들므로 오목을
-  완성하기 전에 반대편이 이어지는지 확인하세요. **한 바퀴가 모두 같은 색(N개)이어도 장련입니다.**
+- 다만 그것이 **보이도록**, 판 바깥을 한 겹 두른 칸에 **그림자**를 그립니다: 경계에 있는 돌은
+  판 밖으로 한 칸 떨어진 곳에 자기 모습을 둡니다. 오른쪽으로 나가는 줄은 판의 오른쪽 바로 밖에서
+  그 이어짐을 볼 수 있습니다 —— 경계를 넘는 오목을 머릿속으로만 메울 필요가 없습니다.
+  그림자는 더 작고 흐리며 **돌이 아닙니다**: 세는 것은 진짜 돌뿐이고, 그림자 위에는 둘 수 없습니다.
+- **한 색으로 한 바퀴(N개)도 장련으로 봅니다.** 관통은 줄을 길게 만들므로 오목을 만들기 전에
+  반대쪽이 이어지는지 확인하세요. 장련 규칙 자체는 그대로입니다 —— 선수는 6개 이상이면 집니다.
+- 루빅 회전과 간섭하지 않습니다: 하나는 "층 안의 치환", 다른 하나는 "경계 밖을 어떻게 세는가"이며,
+  동시에 켜 두어도 각자 자기 일만 합니다.
 
-### 10.9 낮과 밤 (위상)
+### 10.5 낮과 밤: 현재 위상의 줄만 셉니다
 
-4D 모드에서는 판이 두 위상 사이를 돕니다: **낮**과 **밤**. 돌은 놓인 때의 위상을 기억합니다.
+판은 두 위상 사이를 돕니다: **낮**과 **밤**. 각 돌은 놓일 때의 위상을 기억합니다.
 
-- **현재 위상의 줄만 셉니다.** 낮에 존재하는 밤의 오목은 거기 있지만 세지 않습니다.
-  위상이 밤으로 바뀌는 순간에도 남아 있으면 그때 바로 결착됩니다.
-- **다른 위상의 돌도 자리를 차지하고 줄을 끊습니다** (실체이며 빈칸이 아닙니다).
-  판에서는 더 흐리게 그려져 어느 위상인지 한눈에 구분됩니다.
-- 위상은 12수마다 바뀝니다 (시작 화면에서 10~30으로 변경 가능).
+- **현재 위상의 줄만 정산됩니다.** 낮 동안 밤의 오목은 존재하지만 세지 않습니다.
+  밤으로 바뀌는 순간 그것이 아직 거기 있으면 곧바로 정산됩니다.
+- **다른 위상의 돌도 칸을 차지하고 줄을 끊습니다**(실체이며 빈칸이 아닙니다).
+- 판 위의 돌마다 얇은 **고리**가 붙고, 그 색이 위상입니다: **옅은 빨강이 낮, 옅은 파랑이 밤**.
+  두 위상의 돌은 같은 진하기로 그려지므로(더 이상 농담으로 구분하지 않습니다) 어느 쪽 돌인지 한눈에 압니다.
+  오른쪽 층 목록에서는 같은 색의 작은 사각형으로 표시합니다(칸이 너무 작아 고리를 그릴 수 없으면
+  그리지 않습니다 —— 다른 표현으로 바꾸지는 않습니다).
+- 위상은 12수마다 돕니다(시작 화면에서 변경 가능, 10 에서 30).
 
 착수할 때 선언할 수 있습니다:
 
 | 선언 | 효과 |
 |---|---|
-| 보통 | 시간이 한 칸 흐릅니다 |
-| 늦추기 | 시간이 흐르지 않고 다음 위상에서 한 칸 빌립니다 |
-| 앞당기기 | 시간이 두 칸 흐르고 빌린 한 칸을 갚습니다 |
+| 보통 | 시계가 한 칸 감 |
+| 늦춤 | 시계가 가지 않고, 다음 위상에서 한 칸을 빌림 |
+| 재촉 | 시계가 두 칸 가고, 빌린 것을 갚음 |
 
-**시간은 옮길 수만 있고 만들 수는 없습니다**: 한 주기의 길이는 항상 2 × 주기이고,
-빌린 만큼은 다음 위상에서 빠집니다. 한 위상은 2수보다 짧아지지 않고 빌리고 갚는 데도
-상한이 있습니다.
+**옮길 수만 있고 만들 수는 없습니다**: 한 주기의 길이는 항상 2 × 주기이고, 빌린 것은 다음 위상에서 빠집니다.
+한 위상은 2수보다 짧을 수 없고, 빌림과 갚음 모두 상한이 있습니다.
+
+### 10.6 회전 쿨다운
+
+> 두 번의 회전 사이에 적어도 **5개**를 두어야 합니다.
+
+- **세는 것은 착수뿐**이고 회전 자체는 세지 않습니다 —— 그러지 않으면 "5수 중 1수만 회전"이 되어 세기가 너무 어렵습니다.
+- 3 / 5 / 8 / 10 으로 설정할 수 있고, 기본은 5입니다.
+- 첫 회전도 같은 제약을 받습니다: 대국 시작 후 5개를 두어야 돌릴 수 있습니다.
+- **쿨다운은 「확인」을 누른 뒤에야 시작됩니다** —— 미리보기는 성립하지 않았으므로 소모해서는 안 됩니다.
+- 무르기는 쿨다운도 함께 되돌리므로 "카운터와 판이 어긋나는" 일은 없습니다.
+
+### 10.7 회전의 대가
+
+회전은 **차례를 통째로 씁니다**: 돌린 직후 상대 차례가 되고, "돌리고 나서 두기"는 할 수 없습니다.
+즉 매 수는 "두거나 돌리거나, 둘 중 하나"입니다.
+
+회전은 "N수째"로 세지 않습니다. N수째는 항상 N번째 착수를 뜻합니다(회전 횟수는 화면에 따로 표시됩니다).
+
+### 10.8 회전의 취소
+
+| 조작 | 효과 |
+|---|---|
+| 무르기 `Z` | 마지막 수가 회전이면 회전을, 착수면 착수를 취소합니다. 대국 시작 전까지 몇 수든 되돌릴 수 있습니다 |
+| 이번 회전 복구 `Y` | "마지막 수가 정확히 회전일 때"만 쓸 수 있습니다. **키보드 전용 — 패널에 이 버튼이 없습니다** (그 자리는 「확인」「취소」); 마우스나 터치에서는 「무르기」를 쓰세요. 마지막 수가 회전이면 그것이 그 회전을 되돌립니다 |
+
+누군가 돌을 두면 그 회전은 확정되어 단독으로 되돌릴 수 없습니다 —— 그러지 않으면 여러 수에 걸친 타임머신이 되어 버립니다.
+
+> **확정된 회전을 되돌리려면 「무르기」** (`Z` 또는 그 버튼)를 쓰세요. 패널에는 한때
+> 「이번 회전 복구」라는 전용 키가 있었지만 그 자리는 「확인」「취소」에 넘겼습니다. 기능 자체는
+> 사라지지 않았습니다 —— 마지막 수가 정확히 회전이면 무르기가 그것을 되돌립니다.
+
+취소하면 쿨다운도 회전 전 상태로 돌아갑니다.
+
+### 10.9 크기
+
+| 모드 | 고를 수 있는 크기 | 기본 |
+|---|---|---|
+| 3차원 | 8 ≤ N ≤ 30, 세 축이 달라도 됨 | 15 |
+| 4D | 8 ≤ N ≤ 30, **정육면체여야 함** | 8 |
+
+4D가 정육면체여야 하는 것은 게으름이 아닙니다: 층을 돌리려면 그 층의 두 변이 같아야 하고,
+세 축 모두를 돌릴 수 있으려면 세 변이 같은 길이여야 합니다. 3차원에서 「루빅 회전」을 체크한 경우도 같습니다.
+
+4D의 기본이 15가 아니라 8인 것은 **판이 클수록 한 층에 들어가는 돌이 줄어 회전이 보이지 않기** 때문입니다 ——
+15×15×15에서는 한 층에 평균 한 개도 들어가지 않고, 대부분의 회전이 "변화 없음"에 걸립니다.
 
 ### 10.10 게임 안내
 
-4D를 고르면 「시작」 옆에 **게임 안내**가 나타납니다. 세 단계에서 회전·관통·낮과 밤을
-각각 가르칩니다. 각 단계는 준비된 국면과 목표입니다. 안내에는 컴퓨터가 없습니다.
-통과하면 다음 단계로 갑니다. 이 줄의 원래 「설정」 키(안내 안에서는 **나가기**로
-표시됩니다)를 누르면 시작 화면으로 돌아갑니다.
+4D를 고르면 「시작」 옆에 「게임 안내」가 나타납니다. 세 관문이 회전·관통·낮과 밤을 각각 다루고,
+각 관문은 준비된 국면과 목표로 이루어집니다. 안내에는 컴퓨터 상대가 없고, 통과하면 다음으로 갈 수 있습니다.
+그 줄의 원래 「설정」 키(안내 안에서는 「종료」로 표시됩니다)로 시작 화면으로 돌아갑니다.
 
 ## 11. 컴퓨터와의 대국
 
@@ -2419,59 +2541,76 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 Панель ориентирована точно так же, как объёмный вид, ничего не нужно вращать в голове — обе стороны всегда показывают один и тот же слой.
 
-## 10. Режим 4D: можно повернуть слой
+## 10. Режим 4D: три дополнительных правила
 
-Это необязательный режим; включите его при начале партии, выбрав «4D · Вращаемый слой»: **повернуть один слой на 90°, как в кубике Рубика**,
-и уже поставленные в этом слое камни переместятся вместе с ним. «Четвёртое измерение» — это время: сама доска меняется,
-координаты по-прежнему три оси, и общее число позиций по-прежнему N×N×N.
+4D — это правила 3D без изменений **плюс три механизма**. Выберите перед партией «4D · Многообразие», и все три включаются:
 
-Режим выбирается перед началом партии и **не может быть изменён в течение партии**. Если он не выбран, весь этот раздел не применяется,
-а правила разделов с 1 по 9 от него не зависят.
+- **Вращение слоя**: поворот одного слоя на 90°, как в кубике Рубика; камни, стоящие на этом слое, едут вместе с ним.
+- **Склейка граней**: шесть граней доски соединены, поэтому пятёрка может пересекать край.
+- **День и ночь**: доска чередует две фазы, и считаются только линии текущей фазы.
 
-### 10.1 Как поворачивать
+«Четвёртое измерение» — это время: меняется сама доска, а координаты по-прежнему три оси, и общее число клеток
+по-прежнему N×N×N.
 
-| Параметр | Значение |
+**Первые два можно включить и по отдельности в 3D.** В режиме 3D под строкой размера доски есть два флажка —
+«Вращение слоя» и «Склейка граней»; по умолчанию оба пусты. Каждый отмеченный добавляет соответствующий механизм в
+партию 3D; оба сразу — это 4D без «дня и ночи». **«День и ночь» существует только в 4D.**
+
+Отметка «Вращение слоя» автоматически фиксирует доску как куб (для поворота слоя нужны равные стороны этого слоя,
+а на прямоугольном параллелепипеде поворот вообще невозможен), и клавиша «Связать все три оси» при этом
+отключается — по той же причине и с той же обработкой, что и в 4D.
+
+Режим выбирается до партии и **не может быть изменён во время неё**. Если в 3D не отмечено ни одного флажка, весь
+этот раздел не применяется, и разделы с 1 по 9 им не затронуты.
+
+### 10.1 Вращение слоя: как поворачивать
+
+| Параметр | Значения |
 |---|---|
 | Ось | x / y / z |
-| Слой | номер слоя (от 0 до N−1) |
-| Направление | по часовой стрелке / против часовой стрелки |
-| Число оборотов | 1 / 2 / 3 оборота, то есть 90° / 180° / 270° |
+| Слой | который по счёту (от 0 до N−1) |
+| Направление | по часовой / против часовой |
+| Число поворотов | 1 / 2 / 3, то есть 90° / 180° / 270° |
 
-**«По часовой стрелке» — это взгляд с отрицательного конца оси в сторону начала координат.**
-Для оси `z` это то направление, которое вы видите на экране, без всяких пересчётов;
-для осей `x` и `y` точка обзора находится слева от доски и снизу от неё.
+**«По часовой» — это вид с отрицательного конца этой оси в сторону начала координат.**
+Для оси `z` это ровно то направление, которое видно на экране, без пересчёта;
+для `x` и `y` точка обзора находится соответственно слева от доски и снизу от неё.
 
-Поворот на 1 оборот против часовой стрелки равен 3 оборотам по часовой. 4 оборота — это отсутствие поворота, поэтому такой вариант **не предлагается**.
+Один поворот против часовой равен трём по часовой. Четыре поворота — это отсутствие поворота, поэтому такой
+вариант **не предлагается**.
 
-**Поворот делается в два шага: «Повернуть» показывает результат, «Подтвердить» — засчитывает.**
-После нажатия «Повернуть» доска **тут же поворачивается, чтобы вы увидели результат**, но ход ещё
-не сделан: он не расходует ваш ход, не считается ходом и не записывается в летопись.
-**«Оставить»** и **«Отмена»** — кнопки, которые **всегда есть на панели** и обычно серые
-и неактивные; в этот момент они загораются и получают подсветку, чтобы решение не потерялось:
-«Оставить» поворачивает по-настоящему, «Отмена» возвращает доску как было. Во время предпросмотра ставить камень нельзя —
-доска показывается уже повёрнутой, и камень лёг бы не туда, куда вы целились.
+**Поворот делается в два шага: «Повернуть» показывает результат, «Подтвердить» делает его ходом.**
+После нажатия «Повернуть» доска **сразу поворачивается, чтобы вы это увидели**, но ход ещё не сделан: он не
+расходует очередь, не считается ходом и не записывается в историю. Клавиши «Подтвердить» и «Отмена»
+**всегда есть на панели** — обычно серые и неактивные; теперь вокруг них появляется свечение, напоминая, что
+решение не принято: «Подтвердить» действительно поворачивает, «Отмена» возвращает доску ровно как было, будто
+ничего не произошло. Во время предпросмотра ставить камень нельзя — доска показывает повёрнутое положение,
+и клик по ней попадёт не в ту клетку.
 
-### 10.2 Что делает поворот
+### 10.2 Вращение слоя: что делает поворот
 
-Меняются только позиции внутри повёрнутого слоя; всё, что вне его, остаётся на месте.
-У каждой позиции в слое есть ровно одно место назначения, два камня никогда не сталкиваются, поэтому **общее число камней никогда не меняется**.
+Двигаются только клетки поворачиваемого слоя; всё вне него остаётся на месте.
+У каждой клетки слоя ровно одно назначение, поэтому два камня никогда не столкнутся,
+и **общее число камней не меняется никогда**.
 
-### 10.3 Какие повороты отклоняются
+### 10.3 Вращение слоя: какие повороты отклоняются
 
-Проверки идут по порядку; если не выполнена хотя бы одна, всё действие отменяется: доска не двигается, ход не засчитывается, запись не сохраняется.
+Проверки идут по порядку; если не выполнена любая из них, всё действие отменяется: доска не двигается,
+ход не засчитывается, запись не сохраняется.
 
-| Проверка | Если не пройдена |
+| Проверка | Когда не выполнена |
 |---|---|
-| Партия должна идти в режиме 4D | отказ |
+| Партия идёт в режиме 4D либо в 3D с отметкой «Вращение слоя» | отказ |
 | Партия должна быть ещё в процессе | отказ |
 | Номер слоя должен существовать | отказ |
 | Перезарядка должна быть готова | отказ |
 | Доска после поворота должна **отличаться** от прежней | сообщение «изменений нет», ход не засчитывается |
 | После поворота на доске **не должно быть 5 в ряд у соперника** | всё действие откатывается |
 
-Пункт «после поворота доска должна отличаться» смотрит на **то, как выглядит доска**, а не на «сколько оборотов сделано»:
-если слой изначально пуст или узор на нём при повороте случайно возвращается к прежнему виду, это тоже будет признано «изменений нет».
-Интерфейс сообщает причину в каждом из этих случаев отдельно — иначе кнопка выглядела бы просто сломанной.
+Пункт «доска должна отличаться» смотрит на **то, как выглядит доска**, а не на «сколько оборотов сделано»:
+если слой изначально пуст или узор на нём при повороте случайно возвращается к прежнему виду, это тоже будет
+признано «изменений нет». Интерфейс сообщает причину в каждом из этих случаев — иначе кнопка выглядела бы
+просто сломанной.
 
 Последний пункт останавливает только линии **соперника**. Поворот **может собрать пять для вас** — это победа,
 ровно такая же, как пять, поставленные ходом, и партия на этом заканчивается. Если же в результате поворота пять
@@ -2481,99 +2620,101 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 Значит, **поворот может быть атакой**: он рвёт линии соперника, перестраивает ваши камни и может подвести
 последний нужный камень на место — к победе.
 
-### 10.4 Перезарядка поворота
+### 10.4 Склейка граней: шесть граней соединены
 
-> Между двумя поворотами нужно **поставить** не меньше 5 камней.
+**Шесть граней доски соединены**: уходишь за один край — возвращаешься с противоположного. Так по всем трём осям.
 
-- **Считаются только ходы с камнем**, сам поворот не считается — иначе получилось бы «на каждые 5 ходов допускается лишь один поворот», а это слишком сложно отслеживать.
-- Можно настроить на 3 / 5 / 8 / 10, по умолчанию 5.
-- Первый поворот подчиняется тому же правилу: повернуть можно, только поставив 5 камней после начала партии.
-- Отмена хода откатывает и перезарядку, так что «счётчик и доска не расходятся».
-
-### 10.5 Чего стоит поворот
-
-Поворот **занимает весь ход целиком**: сразу после него ход переходит к сопернику, и «повернуть, а потом поставить камень» нельзя.
-То есть каждый ход — это «камень или поворот, одно из двух».
-
-Поворот не считается «N-м ходом»: N-й ход всегда означает N-ю постановку камня (число поворотов интерфейс показывает отдельно).
-
-### 10.6 Отмена поворота
-
-| Действие | Эффект |
-|---|---|
-| Отмена хода `Z` | если последним был поворот — отменяется поворот, если камень — отменяется камень; можно отменять вплоть до начала партии |
-| Вернуть этот поворот `Y` | доступно только когда «последний ход — ровно поворот». **Только с клавиатуры — на панели такой кнопки нет** (это место занимают «Оставить» и «Отмена»); мышью или на сенсорном экране пользуйтесь «Отменой» — когда последний ход был поворотом, она возвращает именно его |
-
-Как только кто-то поставил камень, тот поворот считается закреплённым и больше не отменяется отдельно — иначе он превратился бы в машину времени, растянутую на много ходов.
-
-> **Чтобы вернуть уже состоявшийся поворот, пользуйтесь «Отменой»** (`Z` или кнопкой).
-> На панели была отдельная кнопка «Вернуть этот поворот»; теперь это место занимают
-> «Оставить» и «Отмена», но сама возможность никуда не делась — если последний ход был
-> ровно поворотом, «Отмена» возвращает именно его.
-
-После отмены перезарядка тоже возвращается к состоянию до поворота.
-
-### 10.7 Размеры
-
-| Режим | Доступные размеры | По умолчанию |
-|---|---|---|
-| 3D | 8 ≤ N ≤ 30, три оси могут различаться | 15 |
-| 4D | 8 ≤ N ≤ 30, **обязательно куб** | 8 |
-
-Требование куба в режиме 4D — не лень: чтобы повернуть слой, нужно равенство двух сторон этого слоя,
-а поскольку поворачиваться должны все три оси, все три оси обязаны быть одинаковой длины.
-
-В 4D по умолчанию берётся 8, а не 15, потому что **чем больше доска, тем меньше камней в одном слое и тем незаметнее поворот** —
-на доске 15×15×15 в слое в среднем меньше одного камня, и большинство поворотов упирается в «изменений нет».
-
-### 10.8 Склейка (шесть граней соединены)
-
-В 4D **шесть граней доски соединены**: уходишь за один край — возвращаешься с
-противоположного. Так по всем трём осям.
-
-Поэтому пятёрка может пересекать край: два камня с одной стороны и три с другой — это
-один непрерывный ряд.
+Есть более простой способ это представить: **вообразите 3×3×3, то есть 27 одинаковых досок, сложенных вместе**.
+Вы играете только на средней, но каждый ход отпечатывается и на остальных 26. Их не рисуют — поэтому «два камня
+справа плюс три слева» в сложенном пространстве действительно один ряд из пяти.
 
 - Камни ставятся так же: **у камня ровно одно положение** — где поставили, там он и есть.
-- Но чтобы это было **видно**, по внешнему кольцу клеток вокруг доски рисуются **тени**:
-  у каждого камня на границе есть свой образ на клетку наружу. Линия, уходящая за правый
-  край, показывает своё продолжение сразу за ним — пятёрку через шов больше не нужно
-  достраивать в голове. Тени меньше и бледнее; это **не камни**: считаются только настоящие
-  камни, и поставить на тень нельзя.
-- Правило перебора сохраняется: первый игрок по-прежнему проигрывает при 6 и более в ряд.
-  Склейка удлиняет линии, поэтому перед завершением пятёрки проверьте дальнюю сторону.
-  **Полное кольцо одного цвета (N камней) — тоже перебор.**
+- Но чтобы это было **видно**, по внешнему кольцу клеток вокруг доски рисуются **тени**: у каждого камня на границе
+  есть свой образ на клетку наружу. Линия, уходящая за правый край, показывает своё продолжение сразу за ним —
+  пятёрку через шов больше не нужно достраивать в голове. Тени меньше и бледнее; это **не камни**: считаются
+  только настоящие камни, и поставить на тень нельзя.
+- **Полное кольцо одного цвета (N камней) — тоже перебор.** Склейка удлиняет линии, поэтому перед сборкой пятёрки
+  проверьте, не соединяется ли она с противоположной стороной; сам запрет перебора не изменился — первый игрок
+  по-прежнему проигрывает при 6 и более в ряд.
+- С вращением слоя это не конфликтует: одно — «как слой переставляет свои клетки», другое — «что происходит за
+  краем»; оба могут быть включены сразу, и каждое занимается своим делом.
 
-### 10.9 День и ночь (фаза)
+### 10.5 День и ночь: считается только текущая фаза
 
-В 4D доска чередует две фазы: **день** и **ночь**. Каждый камень помнит фазу, в которой
-он был поставлен.
+Доска чередует две фазы: **день** и **ночь**. Каждый камень помнит фазу, в которую он поставлен.
 
-- **Считаются только линии текущей фазы.** Ночная пятёрка, существующая днём, стоит на
-  доске, но не считается; в момент перехода в ночь, если она ещё там, она засчитывается
-  сразу.
-- **Камни другой фазы всё равно занимают клетку и разрывают линии** (они вещественные,
-  а не пустые). На доске они нарисованы бледнее, так что фазу видно сразу.
-- Фаза меняется каждые 12 ходов (на стартовом экране можно задать от 10 до 30).
+- **Считаются только линии текущей фазы.** Ночная пятёрка днём существует, но не считается; в момент перехода в
+  ночь, если она всё ещё на месте, она рассчитывается сразу.
+- **Камни другой фазы всё равно занимают клетку и разрывают линии** (это тела, а не пустота).
+- Каждый камень на доске носит тонкое **гало**, цвет которого и есть его фаза: **бледно-красный — день,
+  бледно-синий — ночь**. Камни обеих фаз рисуются одинаково ясно (больше не различаются по прозрачности), так что
+  сразу видно, кто к какой стороне относится. В списке слоёв справа то же самое показано маленьким квадратом того
+  же цвета (где клетка слишком мала для гало, оно не рисуется — на другую кодировку не подменяется).
+- Фаза меняется каждые 12 ходов (меняется на стартовом экране, от 10 до 30).
 
 При ходе можно объявить:
 
-| Объявление | Действие |
+| Объявление | Эффект |
 |---|---|
-| обычный | время идёт на один шаг |
-| задержать | время не идёт; один шаг берётся взаймы у следующей фазы |
-| ускорить | время идёт на два шага, один взятый взаймы возвращается |
+| обычно | часы идут на одну клетку |
+| задержать | часы не идут; одна клетка берётся взаймы у следующей фазы |
+| ускорить | часы идут на две клетки, возвращая одну взятую |
 
-**Время можно только сдвигать, но не создавать**: полный цикл всегда равен 2 × периоду,
-а взятое взаймы вычитается из следующей фазы. Ни одна фаза не короче 2 ходов, и у займа,
-и у возврата есть предел.
+**Время можно только сдвигать, но не создавать**: полный цикл всегда равен 2 × периоду, а взятое вычитается из
+следующей фазы. Ни одна фаза не может быть короче 2 ходов, и у займа, и у возврата есть предел.
+
+### 10.6 Перезарядка поворота
+
+> Между двумя поворотами нужно **поставить** не менее 5 камней.
+
+- **Считаются только ходы камнем**; сам поворот — нет: иначе получилось бы «только один ход из пяти может быть поворотом», а это слишком трудно отслеживать.
+- Можно задать 3 / 5 / 8 / 10, по умолчанию 5.
+- Первый поворот подчиняется тому же правилу: после начала партии нужно поставить 5 камней.
+- **Перезарядка начинается только после нажатия «Подтвердить»** — предпросмотр не состоялся, значит и не должен её расходовать.
+- Отмена хода возвращает и перезарядку, так что «счётчик и доска не расходятся».
+
+### 10.7 Чего стоит поворот
+
+Поворот **занимает всю очередь**: сразу после него ходит соперник, «повернуть, а потом поставить» нельзя.
+То есть каждый ход — «поставить или повернуть, одно из двух».
+
+Поворот не считается «ходом номер N»; ход номер N всегда означает N-ю постановку камня (оборотни интерфейс
+сообщает отдельно).
+
+### 10.8 Отмена поворота
+
+| Действие | Эффект |
+|---|---|
+| Отмена хода `Z` | Отменяет последний шаг — поворот или постановку — и может откатить до начала партии |
+| Вернуть поворот `Y` | Доступно только когда последний ход — ровно поворот. **Только клавиатура — на панели такой кнопки нет** (её место занято «Подтвердить» / «Отмена»); с мышью или на сенсорном экране пользуйтесь «Отменой хода», которая убирает и этот поворот |
+
+Как только кто-то поставил камень, поворот уже состоялся и больше не может быть отменён отдельно — иначе он стал бы
+машиной времени на много ходов.
+
+> **Чтобы вернуть состоявшийся поворот, пользуйтесь «Отменой хода»** (`Z` или кнопкой). На панели когда-то была
+> отдельная клавиша «Вернуть поворот»; теперь это место занято «Подтвердить» и «Отмена», а сама возможность не
+> пропала — когда последний ход ровно поворот, отмена убирает именно его.
+
+После отмены перезарядка тоже возвращается к состоянию до поворота.
+
+### 10.9 Размеры
+
+| Режим | Размеры | По умолчанию |
+|---|---|---|
+| 3D | 8 ≤ N ≤ 30, три оси могут быть разными | 15 |
+| 4D | 8 ≤ N ≤ 30, **обязательно куб** | 8 |
+
+Требование куба в 4D — не лень: для поворота слоя нужны равные стороны этого слоя, а чтобы все три оси были
+поворачиваемыми, все три должны быть одной длины. То же самое в 3D, если отмечено «Вращение слоя».
+
+В 4D по умолчанию 8, а не 15, потому что **чем больше доска, тем меньше камней в слое и тем незаметнее поворот** —
+на доске 15×15×15 в слое в среднем меньше одного камня, и большинство поворотов попадает в «изменений нет».
 
 ### 10.10 Обучение
 
-После выбора 4D рядом с кнопкой «Начать игру» появляется **Обучение**. Три уровня учат
-повороту, склейке и смене дня и ночи; каждый — подготовленная позиция с целью.
-Компьютера в обучении нет; пройдя уровень, можно перейти к следующему. Кнопка «Настройки»
-в этом ряду (в обучении она подписана **Выйти**) возвращает на стартовый экран.
+После выбора 4D рядом с «Начать» появляется «Обучение». Три уровня посвящены повороту, склейке и дню с ночью;
+каждый — подготовленная позиция с целью. В обучении нет компьютерного соперника; пройдя уровень, можно перейти
+к следующему, а клавиша «Настройка» из той же строки (в обучении она подписана «Выход») возвращает на стартовый экран.
 
 ## 11. Игра с компьютером
 
@@ -2749,164 +2890,183 @@ Le panneau de droite dessine **la couche k vue de face** :
 
 Le panneau est orienté exactement comme la vue 3D : rien à faire tourner dans sa tête, les deux affichent toujours la même couche.
 
-## 10. Mode 4D : faire tourner une couche
+## 10. Mode 4D : trois mécaniques supplémentaires
 
-C'est une variante optionnelle ; on l'active en début de partie avec « 4D · Couche rotative » : **faire tourner une couche de 90° comme dans un Rubik's Cube**,
-et les pions déjà posés sur cette couche partent avec elle. « 4D » désigne le temps — le plateau lui-même change,
-alors que les coordonnées restent trois axes et que le nombre total de cases reste N×N×N.
+La 4D, ce sont les règles 3D inchangées, **plus trois mécaniques**. Choisissez « 4D · Mille facettes » avant la partie et les trois sont actives :
 
-Le mode se choisit au début de la partie et **ne peut plus être changé dans la même partie**. Si vous ne l'avez pas choisi, toute cette section ne s'applique pas,
-et les règles des sections 1 à 9 n'en sont pas affectées.
+- **Rotation type Rubik** : faire tourner une couche de 90°, comme un cube Rubik ; les pierres déjà posées sur cette couche partent avec elle.
+- **Pliage de l'espace** : les six faces du plateau sont reliées, donc un cinq peut traverser un bord.
+- **Jour et nuit** : le plateau alterne entre deux phases, et seules les lignes de la phase courante comptent.
 
-### 10.1 Comment tourner
+« 4D » désigne le temps : le plateau lui-même change, alors que les coordonnées restent trois axes et le nombre total de
+cases reste N×N×N.
+
+**Les deux premières peuvent aussi être activées séparément en 3D.** En mode 3D, deux cases à cocher se trouvent sous la
+ligne de la taille du plateau — « Rotation type Rubik » et « Pliage de l'espace » — vides par défaut. Chacune cochée ajoute
+cette mécanique à la partie 3D ; les deux à la fois, c'est la 4D sans le jour et la nuit. **Le jour et la nuit n'existent
+qu'en 4D.**
+
+Cocher « Rotation type Rubik » verrouille le plateau en cube (faire tourner une couche exige que ses deux côtés soient
+égaux, et un pavé droit ne peut pas tourner du tout), et la touche « Lier les trois axes » est alors désactivée — même
+raison et même traitement qu'en 4D.
+
+Le mode se choisit avant la partie et **ne peut pas être changé pendant**. En 3D sans aucune case cochée, toute cette
+section ne s'applique pas, et les sections 1 à 9 n'en sont pas affectées.
+
+### 10.1 Rotation type Rubik : comment tourner
 
 | Paramètre | Valeurs |
 |---|---|
 | Axe | x / y / z |
-| Couche | laquelle (0 à N−1) |
+| Couche | laquelle (de 0 à N−1) |
 | Sens | horaire / antihoraire |
-| Tours | 1 / 2 / 3, soit 90° / 180° / 270° |
+| Nombre de tours | 1 / 2 / 3 quarts de tour, soit 90° / 180° / 270° |
 
-**Le sens « horaire » s'observe depuis le côté négatif de l'axe, en regardant vers l'origine.**
-Pour l'axe `z`, c'est le sens que vous voyez à l'écran, sans conversion à faire ;
-les axes `x` et `y` s'observent respectivement depuis la gauche et depuis le bas du plateau.
+**Le sens « horaire » se regarde depuis l'extrémité négative de cet axe, vers l'origine.**
+Pour l'axe `z`, c'est exactement le sens que vous voyez à l'écran, sans conversion ;
+pour `x` et `y`, le point de vue est respectivement à gauche du plateau et en dessous.
 
-Un tour en sens antihoraire équivaut à trois tours en sens horaire. Quatre tours équivalent à rien, donc **cette option n'est pas proposée**.
+Un tour antihoraire vaut trois tours horaires. Quatre tours ne sont pas un tour du tout, donc cette option **n'est pas
+proposée**.
 
-**Une rotation se fait en deux temps : « Tourner » montre le résultat, « Confirmer » le valide.**
-Après « Tourner », le plateau **pivote aussitôt pour que vous le voyiez**, mais le coup n'est pas joué :
-il ne consomme pas votre tour, ne compte pas comme un coup et n'entre pas dans l'historique.
-**« Confirmer »** et **« Annuler »** sont **toujours sur le panneau**, grisés et inertes ; à ce
-moment-là ils s'allument et s'entourent d'un cerne, pour signaler la décision en attente :
-« Confirmer » tourne pour de bon, « Annuler » remet le plateau exactement comme avant. On ne peut pas poser de pierre pendant
-l'aperçu : le plateau est déjà montré tourné, et la pierre tomberait ailleurs qu'où vous visiez.
+**La rotation se fait en deux temps : « Exécuter la rotation » montre le résultat, « Confirmer » la fait compter.**
+Après avoir appuyé sur « Exécuter la rotation », le plateau **tourne immédiatement pour que vous le voyiez**, mais le coup
+n'est pas encore joué : il ne consomme pas le tour, ne compte pas comme un coup et n'entre pas dans l'historique.
+Les touches « Confirmer » et « Annuler » sont **toujours sur le panneau** — normalement grisées et inertes ; maintenant
+elles s'éclairent avec un anneau, vous rappelant qu'une décision est en attente : « Confirmer » tourne vraiment,
+« Annuler » remet le plateau exactement comme avant, comme si rien ne s'était passé. On ne peut pas poser de pierre
+pendant l'aperçu — le plateau montre la position tournée, donc cliquer dessus poserait au mauvais endroit.
 
-### 10.2 L'effet d'une rotation
+### 10.2 Rotation type Rubik : ce que fait une rotation
 
-Seules les cases de la couche tournée bougent ; tout ce qui est hors de la couche reste immobile.
-Chaque case de la couche a une destination unique, deux pions ne peuvent donc pas se percuter, et **le nombre total de pions ne change jamais**.
+Seules les cases de la couche tournée bougent ; tout ce qui est en dehors reste en place.
+Chaque case de cette couche a exactement une destination, donc deux pierres ne se heurtent jamais, et
+**le nombre total de pierres ne change jamais**.
 
-### 10.3 Quelles rotations sont refusées
+### 10.3 Rotation type Rubik : quelles rotations sont refusées
 
-Les contrôles s'enchaînent dans l'ordre ; si l'un d'eux échoue, toute l'opération est abandonnée : le plateau ne bouge pas, cela ne compte pas comme un coup, et rien n'est enregistré.
+Les contrôles s'enchaînent dans l'ordre ; si l'un échoue, tout est abandonné : le plateau ne bouge pas, cela ne compte pas
+comme un coup, et aucune trace n'est gardée.
 
 | Contrôle | En cas d'échec |
 |---|---|
-| La partie doit être en mode 4D | refus |
+| La partie doit être en 4D, ou en 3D avec « Rotation type Rubik » cochée | refus |
 | La partie doit être encore en cours | refus |
 | Le numéro de couche doit exister | refus |
 | La recharge doit être prête | refus |
 | Le plateau tourné doit être **différent** d'avant | « aucun changement », ne compte pas comme un coup |
 | Après la rotation, le plateau **ne doit pas donner 5 en ligne à l'adversaire** | tout est remis en arrière |
 
-« Doit être différent » regarde **l'aspect du plateau**, et non « combien de tours » :
-une couche déjà vide, ou un motif qui retombe exactement sur lui-même, sont tous deux jugés « aucun changement ».
-L'interface vous dit laquelle des deux causes, sinon le bouton semblerait cassé.
+« Doit être différent » regarde **l'aspect du plateau**, et non « combien de tours » : une couche déjà vide, ou un motif qui
+retombe exactement sur lui-même, sont tous deux jugés « aucun changement ». L'interface vous dit laquelle des deux causes,
+sinon le bouton semblerait cassé.
 
-Le dernier contrôle n'arrête que les lignes de **l'adversaire**. Une rotation **peut faire cinq pour vous** : c'est
-une victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. Si la rotation donne cinq en ligne
-à **l'adversaire** (vous avez poussé ses pierres en place), tout est toujours remis en arrière : offrir un cinq à
+Le dernier contrôle n'arrête que les lignes de **l'adversaire**. Une rotation **peut faire cinq pour vous** : c'est une
+victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. Si la rotation donne cinq en ligne à
+**l'adversaire** (vous avez poussé ses pierres en place), tout est toujours remis en arrière : offrir un cinq à
 l'adversaire n'est pas ce que ce coup voulait dire.
 
-Donc **une rotation peut être une arme offensive** : elle casse les lignes adverses, réajuste vos pierres, et peut
-amener la dernière pierre manquante à sa place pour gagner.
+Donc **une rotation peut être une arme offensive** : elle casse les lignes adverses, réajuste vos pierres, et peut amener
+la dernière pierre manquante à sa place pour gagner.
 
-### 10.4 Recharge de rotation
+### 10.4 Pliage de l'espace : les six faces sont cousues
 
-> Entre deux rotations, il faut **poser** au moins 5 pions.
+**Les six faces du plateau sont reliées** : on sort d'un bord et on revient par le bord opposé. Idem pour les trois axes.
 
-- **Seules les poses comptent**, pas la rotation elle-même — sinon cela reviendrait à « un seul coup sur cinq peut être une rotation », trop difficile à suivre.
-- Elle se règle sur 3 / 5 / 8 / 10, 5 par défaut.
-- La première rotation y est soumise aussi : après le début de la partie, il faut poser 5 pions avant de pouvoir tourner.
-- Annuler un coup remet la recharge en arrière elle aussi : le compteur et le plateau ne peuvent pas se désaccorder.
+Il y a plus simple pour se le représenter : **pensez à 3×3×3, soit 27 plateaux identiques empilés**. Vous ne jouez que sur
+celui du milieu, et chaque coup s'imprime aussi sur les 26 autres. Ces 26 ne sont pas dessinés — donc « deux pierres à
+droite plus trois à gauche » forment bel et bien une suite de cinq dans cet espace empilé.
 
-### 10.5 Le coût d'une rotation
+- On pose les pierres de la même façon : **une pierre n'a qu'une seule position** — elle est là où vous la posez.
+- Mais pour que ce soit **visible**, l'anneau de cases qui borde l'extérieur du plateau porte des **ombres** : chaque pierre
+  sur le bord a son image une case plus loin. Une ligne qui sort par le bord droit montre sa suite juste au-delà — un cinq
+  à travers la couture n'est plus à deviner. Les ombres sont plus petites et plus pâles ; ce ne sont **pas des pierres** :
+  seules les vraies pierres comptent, et on ne peut pas jouer sur une ombre.
+- **Un anneau complet d'une seule couleur (N pierres) compte aussi comme alignement trop long.** Le pliage allonge les
+  lignes, donc vérifiez le côté opposé avant de compléter un cinq ; la règle elle-même n'a pas changé — le premier joueur
+  perd encore à 6 en ligne ou plus.
+- Cela n'interfère pas avec la rotation : l'une dit « comment une couche permute ses propres cases », l'autre « ce qui se
+  passe au-delà d'un bord » ; les deux peuvent être actives en même temps et chacune s'occupe de son côté.
 
-Une rotation **consomme tout le tour** : l'adversaire joue aussitôt après, impossible de « tourner puis poser ».
-Autrement dit, chaque coup est « poser un pion ou tourner, au choix ».
+### 10.5 Jour et nuit : seules les lignes de la phase courante comptent
 
-Une rotation ne compte pas comme « le N-ième coup » ; le N-ième coup désigne toujours la N-ième pose de pion (l'interface indique séparément le nombre de rotations).
+Le plateau alterne entre deux phases : **le jour** et **la nuit**. Chaque pierre retient la phase où elle a été posée.
 
-### 10.6 Annuler une rotation
-
-| Action | Effet |
-|---|---|
-| Annuler `Z` | Si le dernier coup est une rotation, la rotation est retirée, si c'est une pose, la pose est retirée ; on peut annuler jusqu'avant le début de la partie |
-| Rétablir la rotation `Y` | Disponible seulement quand « le dernier coup est exactement une rotation ». **Clavier uniquement — ce bouton n'est plus sur le panneau** (cette place revient à Confirmer / Annuler) ; à la souris ou au doigt, utilisez « Annuler », qui retire cette rotation quand c'est le dernier coup |
-
-Dès que quelqu'un pose un pion, cette rotation est acquise et ne peut plus être retirée à part — sinon elle deviendrait une machine à remonter le temps qui traverse plusieurs coups.
-
-> **Pour retirer une rotation déjà acquise, utilisez « Annuler »** (`Z`, ou le bouton). Le panneau
-> avait un bouton dédié « Rétablir la rotation » ; cette place revient maintenant à Confirmer et
-> Annuler, mais la possibilité n'a pas disparu — quand le dernier coup est exactement une rotation,
-> c'est « Annuler » qui la retire.
-
-Après une annulation, la recharge revient elle aussi à son état d'avant la rotation.
-
-### 10.7 Tailles
-
-| Mode | Tailles possibles | Par défaut |
-|---|---|---|
-| 3D | 8 ≤ N ≤ 30, les trois axes peuvent différer | 15 |
-| 4D | 8 ≤ N ≤ 30, **cubique obligatoire** | 8 |
-
-L'obligation du cube en 4D n'est pas de la paresse : faire tourner une couche exige que les deux côtés de cette couche soient égaux,
-et comme les trois axes doivent pouvoir tourner, les trois doivent avoir la même longueur.
-
-Si la taille par défaut en 4D est 8 et non 15, c'est que **plus le plateau est grand, moins une couche contient de pions et moins la rotation se voit** —
-sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la plupart des rotations tombent sur « aucun changement ».
-
-### 10.8 Pliage (les six faces sont cousues)
-
-En 4D **les six faces du plateau sont reliées** : on sort d'un bord et on revient par le
-bord opposé. Idem pour les trois axes.
-
-Une cinq peut donc traverser un bord : deux pierres d'un côté et trois de l'autre forment
-une seule suite.
-
-- On pose les pierres de la même façon : **une pierre n'a qu'une seule position** — elle est
-  là où vous la posez.
-- Mais pour que ce soit **visible**, l'anneau de cases qui borde l'extérieur du plateau porte des
-  **ombres** : chaque pierre sur le bord a son image une case plus loin. Une ligne qui sort par le
-  bord droit montre sa suite juste au-delà — un cinq à travers la couture n'est plus à deviner.
-  Les ombres sont plus petites et plus pâles ; ce ne sont **pas des pierres** : seules les vraies
-  pierres comptent, et on ne peut pas jouer sur une ombre.
-- La règle du six est inchangée : le premier joueur perd toujours à 6 alignées ou plus.
-  Le pliage allonge les lignes : vérifiez le bord opposé avant de conclure une cinq.
-  **Un anneau complet d'une couleur (N pierres) compte aussi comme un six.**
-- Les pierres de l'autre phase occupent quand même leur case et coupent les lignes.
-
-### 10.9 Jour et nuit (la phase)
-
-En 4D, le plateau alterne entre deux phases : **jour** et **nuit**. Chaque pierre retient la
-phase où elle a été posée.
-
-- **Seules les lignes de la phase en cours sont comptées.** Une cinq de nuit présente de jour
-  existe, mais ne compte pas ; à l'instant où la phase passe à la nuit, si elle est encore
-  là, elle est comptée aussitôt.
-- **Les pierres de l'autre phase occupent leur case et coupent les lignes** (elles sont
-  pleines, pas vides). Elles sont dessinées plus pâles, la phase se lit d'un coup d'œil.
-- La phase change tous les 12 coups (réglable sur l'écran de départ, de 10 à 30).
+- **Seules les lignes de la phase courante sont réglées.** Un cinq de nuit qui existe le jour est bien là, mais ne compte
+  pas ; à l'instant où la phase bascule vers la nuit et qu'il est toujours là, il est réglé aussitôt.
+- **Les pierres de l'autre phase occupent quand même leur case et coupent les lignes** (ce sont des corps, pas du vide).
+- Chaque pierre du plateau porte un mince **halo** dont la couleur est sa phase : **rouge pâle pour le jour, bleu pâle pour
+  la nuit**. Les pierres des deux phases sont dessinées avec la même netteté (plus de distinction par l'opacité), donc on
+  voit d'un coup d'œil à quel camp elles appartiennent. Les vignettes de couches à droite utilisent un petit carré de la
+  même couleur (là où la case est trop petite pour un halo, rien n'est dessiné plutôt que de passer à une autre notation).
+- La phase bascule tous les 12 coups (modifiable à l'écran de départ, de 10 à 30).
 
 Un coup peut être déclaré :
 
 | Déclaration | Effet |
 |---|---|
-| normal | l'horloge avance d'un cran |
-| retenir | l'horloge n'avance pas ; un cran est emprunté à la phase suivante |
-| hâter | l'horloge avance de deux crans, un emprunt est remboursé |
+| normal | l'horloge avance d'une case |
+| retenir | l'horloge n'avance pas ; une case est empruntée à la phase suivante |
+| hâter | l'horloge avance de deux cases, remboursant une case empruntée |
 
-**On ne peut que déplacer le temps, pas en créer** : un cycle complet vaut toujours
-2 × la période, et l'emprunt est déduit de la phase suivante. Aucune phase ne descend
-sous 2 coups, et l'emprunt comme le remboursement sont plafonnés.
+**On peut seulement décaler le temps, jamais le créer** : un cycle complet vaut toujours 2 × la période, et ce qui est
+emprunté est déduit de la phase suivante. Aucune phase ne peut durer moins de 2 coups, et l'emprunt comme le remboursement
+sont plafonnés.
+
+### 10.6 Recharge de rotation
+
+> Entre deux rotations, il faut **poser** au moins 5 pierres.
+
+- **Seules les poses comptent** ; la rotation elle-même non — sinon cela deviendrait « un seul coup sur cinq peut être une rotation », trop difficile à suivre.
+- Réglable sur 3 / 5 / 8 / 10, par défaut 5.
+- La première rotation y est soumise aussi : il faut poser 5 pierres après le début de la partie.
+- **La recharge ne commence qu'après avoir appuyé sur « Confirmer »** — l'aperçu n'a pas eu lieu, il ne doit donc pas la consommer.
+- L'annulation remet aussi la recharge en arrière, si bien que le compteur et le plateau ne se contredisent jamais.
+
+### 10.7 Ce que coûte une rotation
+
+Une rotation **consomme tout le tour** : l'adversaire joue juste après, et on ne peut pas « tourner puis poser ».
+Chaque tour est donc « poser ou tourner, l'un ou l'autre ».
+
+Une rotation ne compte pas comme le coup numéro N ; le Nième coup désigne toujours la Nième pose (l'interface signale les rotations à part).
+
+### 10.8 Annuler une rotation
+
+| Action | Effet |
+|---|---|
+| Annuler `Z` | Retire le dernier pas — une rotation ou une pose — et peut revenir avant le début de la partie |
+| Restaurer la rotation `Y` | Disponible seulement quand le dernier coup est exactement une rotation. **Clavier uniquement — il n'y a pas ce bouton sur le panneau** (cette place revient à « Confirmer » / « Annuler ») ; à la souris ou au tactile, utilisez « Annuler », qui retire cette rotation quand c'est le dernier coup |
+
+Dès que quelqu'un pose une pierre, la rotation a eu lieu et ne peut plus être retirée seule — sinon elle deviendrait une
+machine à remonter le temps sur plusieurs coups.
+
+> **Pour retirer une rotation déjà jouée, utilisez « Annuler »** (`Z` ou le bouton). Le panneau avait autrefois une touche
+> dédiée « Restaurer la rotation » ; cette place revient maintenant à « Confirmer » et « Annuler », et la capacité
+> elle-même n'est pas perdue — quand le dernier coup est exactement une rotation, c'est elle que « Annuler » retire.
+
+L'annulation remet aussi la recharge dans l'état d'avant la rotation.
+
+### 10.9 Tailles
+
+| Mode | Tailles | Par défaut |
+|---|---|---|
+| 3D | 8 ≤ N ≤ 30, les trois axes peuvent différer | 15 |
+| 4D | 8 ≤ N ≤ 30, **obligatoirement cubique** | 8 |
+
+L'obligation de cube en 4D n'est pas de la paresse : faire tourner une couche exige que ses deux côtés soient égaux, et
+pour que les trois axes soient rotatifs, les trois doivent avoir la même longueur. Idem en 3D dès que
+« Rotation type Rubik » est cochée.
+
+La 4D part sur 8 plutôt que 15 parce que **plus le plateau est grand, moins une couche contient de pierres, et moins une
+rotation se voit** — sur un plateau 15×15×15 une couche contient en moyenne moins d'une pierre, et la plupart des rotations
+tombent dans le cas « aucun changement ».
 
 ### 10.10 Didacticiel
 
-Une fois le 4D choisi, un bouton **Didacticiel** apparaît à côté de Commencer. Trois
-niveaux couvrent la rotation, le pliage et le jour / la nuit ; chacun est une position
-préparée avec un objectif. Il n'y a pas d'ordinateur dans le didacticiel ; un niveau
-réussi ouvre le suivant, et le bouton Réglages de cette ligne (il affiche **Quitter**
-dans le didacticiel) ramène à l'écran de départ.
+Une fois la 4D sélectionnée, un bouton **Didacticiel** apparaît à côté de Démarrer. Trois niveaux couvrent la rotation,
+le pliage et le jour / nuit ; chacun est une position préparée avec un objectif. Il n'y a pas d'adversaire dans le
+didacticiel ; un niveau réussi, on passe au suivant, et la touche Réglages de cette ligne (elle affiche **Quitter** dans
+le didacticiel) ramène à l'écran de départ.
 
 ## 11. Jouer contre l'ordinateur
 
@@ -3029,7 +3189,7 @@ dans le didacticiel) ramène à l'écran de départ.
         <div id="coords">把鼠标移到棋盘上以选择落点</div>
         <button id="hintToggle" class="mini">收起</button>
       </div>
-      <div id="hint" data-i18n-html="hint">左键拖拽旋转 · 右键拖拽平移 · 滚轮缩放 · 单击当前层落子<br>
+      <div id="hint" data-i18n-html="hint">左键拖拽旋转 · 右键（或 Shift + 左键）拖拽平移 · 滚轮缩放 · 单击当前层落子<br>
         触屏：两指缩放 / 平移 · 双击棋盘复位（立体和单层都可以）<br>
         Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · H 格线 · B 只看黑/白 · T 转动 · Y 恢复本次转动<br>
         绿框 = 待转的那一层 · 蓝框 = 当前层（四维模式下才有绿框）</div>
@@ -3227,7 +3387,7 @@ dans le didacticiel) ramène à l'écran de départ.
   <div class="row">
     <div class="rowLabel" id="rowLabelMode" data-i18n="rowLabelMode">对局模式</div>
     <button id="mode3d" class="sel" data-i18n="mode3d">三维 · 经典</button>
-    <button id="mode4d" data-i18n="mode4d">四维 · 可转层</button>
+    <button id="mode4d" data-i18n="mode4d">四维 · 万象</button>
   </div>
 
   <div class="row">
@@ -3307,6 +3467,18 @@ dans le didacticiel) ramène à l'écran de départ.
     <span id="dimRange" class="hint"></span>
   </div>
 
+  <!-- v3.1.2：三维玩法的两个**可选**补充机制。
+       「魔方旋转」「空间贯通」本来只活在四维里，现在三维也能单独挑：0 个 / 任意 1 个 / 两个都行。
+       默认都不勾 —— 不勾就是纯三维，和加这一块之前逐像素相同。
+
+       【为什么四维下这两行还在，只是勾上且不可点】和上面「转动冷却」「相位周期」两行
+       一模一样的一套规矩：用同一套元素、只切状态，两个模式的整列高度就**必然相等**，
+       切模式时按钮不会跳（browser-check 钉着"三维↔四维来回切，开始游戏的位置和尺寸不变"）。
+       四维里这两样本来就是常开的，勾上摆在那儿正好是在说这件事，
+       比留一片空白或者让按钮跳一下都强。
+
+       【整行可点，框只是指示器】"小方框"在触摸上只有 14px，只让它可点就得戳得很准。
+       整行都是按钮之后，点哪儿都行；框仍然在右边，一眼看得出这是"勾选框"不是普通按键。 -->
   <!-- 四维模式：只能立方。不是"没做"，是数学上不成立 —— 绕某轴转一层要求
        另外两个自由轴等长，三个轴都能转就只能 nx = ny = nz。见 README。 -->
   <div class="row hide" id="dimsRow4d">
@@ -3320,6 +3492,31 @@ dans le didacticiel) ramène à l'écran de départ.
          那一行有富余的宽度，不需要再单开一个元素。 -->
     <span id="dimRange4d" class="hint"></span>
   </div>
+  </div>
+
+  <!-- v3.1.2：三维玩法的两个**可选**补充机制。
+       「魔方旋转」「空间贯通」本来只活在四维里，现在三维也能单独挑：0 个 / 任意 1 个 / 两个都行。
+       默认都不勾 —— 不勾就是纯三维，和加这一块之前逐像素相同。
+
+       【必须放在 #dimsSlot 外面】那个槽是个 grid，两条尺寸行都用 grid-area:1/1 叠在同一格里
+       （格子高度取两者的 max）。放进去的话它会自己占掉第二行，槽高从 38 变成 114 ——
+       实测过，整个起始界面就此长高 76px。
+
+       【三维下它顶掉的是「转动冷却」「相位周期」那两行】那两行在三维里本来就只是看不见的空槽
+       （各 38px），正好是这里要的两行 —— 所以是 display 互换（见 syncCoolRow），
+       三维和四维的总高**恒等**，切模式时按钮一个像素都不动。
+
+       【整行可点，框只是指示器】"小方框"在触摸上只有 14px，只让它可点就得戳得很准。
+       整行都是按钮之后，点哪儿都行；框仍然在右边，一眼看得出这是"勾选框"不是普通按键。 -->
+  <div id="extraRow">
+    <button type="button" class="extraBtn" id="optSpinBtn" aria-pressed="false">
+      <span class="extraLabel" id="optSpin" data-i18n="optSpin">魔方旋转</span>
+      <span class="extraBox" aria-hidden="true"></span>
+    </button>
+    <button type="button" class="extraBtn" id="optWrapBtn" aria-pressed="false">
+      <span class="extraLabel" id="optWrap" data-i18n="optWrap">空间贯通</span>
+      <span class="extraBox" aria-hidden="true"></span>
+    </button>
   </div>
 
   <!-- 转动冷却。**这一行在三维模式下也占着槽位**（只是按钮禁用），不是藏起来 ——
@@ -6297,12 +6494,9 @@ function aiVcf(session, attacker, depth, stats) {
    【预算】和 aiVcf 共用 aiVcfLeft（单位是"扫过多少个候选点"），理由见 aiVcf 那段。
    -------------------------------------------------------------------------- */
 
-/**
- * v3.0.0「晨昏」：异相位的子画多透明。**和幽灵层那一档要能区分开** ——
- * 幽灵层是"不在当前层"（GHOST_ALPHA），这一档是"不在当前相位"，
- * 两者可能同时成立（一层里既有幽灵又有异相位子），所以它比幽灵更淡一档。
- */
-const PHASE_DIM_ALPHA = 0.35;
+/* 【v3.1.1 删掉了 PHASE_DIM_ALPHA】原来异相位的子淡显到 0.35。
+   改成"每颗子外面套一圈相位色薄光"之后这一档就没有用处了 ——
+   留着它只会让下一个人以为"相位还有浓淡这一路"，而实际上一处都没用它。 */
 
 /** 每个 VCT 节点最多试几个活三着法。超过就判未知。 */
 const AI_VCT_M = 6;
@@ -6922,6 +7116,7 @@ const FALLBACK_COLORS = {
   "--accent": "#2f5d7c", "--gold": "#9c6b1f", "--danger": "#9c3428", "--ok": "#4a6b45",
   "--hover-line": "#c8452e", "--line2d": "#3a332a", "--well": "#ddd3bd",
   "--stone-edge": "#4a4034",
+  "--phase-night": "#7ea2c0", "--phase-dawn": "#c98b70",
 };
 
 const Palette = {
@@ -7074,7 +7269,7 @@ const STATIC_TEXT = { en: {
   // ---- 左侧舞台
   "previewTagRight": "Demo board · 10 × 10 × 10<br>Independent of the settings on the right — not part of the game",
   "previewTagBelow": "Demo board · 10 × 10 × 10<br>Independent of the settings below — not part of the game",
-  "hint": "Drag to rotate · Right-drag to pan · Scroll to zoom · Click to place on the current layer<br>" +
+  "hint": "Drag to rotate · Right-drag (or Shift+left-drag) to pan · Scroll to zoom · Click to place on the current layer<br>" +
     "Touch: pinch to zoom / pan · double-tap a board to reset (works on both boards)<br>" +
     "Z undo · R restart · Q/E change layer · G view mode · H grid lines · B black/white only · T rotate · Y restore rotation<br>" +
     "Green box = the layer about to rotate · Blue box = current layer (green only in 4D)",
@@ -7128,10 +7323,12 @@ const STATIC_TEXT = { en: {
   "rowLabelCool": "Rotation cooldown",
   "rowLabelPhase": "Phase length",
   "mode3d": "3D · Classic",
-  "mode4d": "4D · Rotatable",
+  "mode4d": "4D · Myriad",
   "firstBlack": "Black first",
   "firstWhite": "White first",
   "dimCube": "Link all three axes",
+  "optSpin": "Rubik rotation",
+  "optWrap": "Space wrapping",
   "startBtn": "Start game",
   "tutNext": "Next",
   "tutorialBtn": "Tutorial",
@@ -7277,7 +7474,7 @@ const TEXT = { en: {
 STATIC_TEXT.ja = {
   "previewTagRight": "デモ盤 · 10 × 10 × 10<br>右の設定とは無関係、対局には含まれません",
   "previewTagBelow": "デモ盤 · 10 × 10 × 10<br>下の設定とは無関係、対局には含まれません",
-  "hint": "ドラッグで回転 · 右ドラッグで平行移動 · スクロールでズーム · クリックで現在のレイヤーに着手<br>タッチ：ピンチでズーム/パン · 盤をダブルタップでリセット（どちらの盤でも有効）<br>Z 元に戻す · R 最初から · Q/E レイヤー切替 · G 表示モード · H グリッド線 · B 黒/白のみ · T 回転 · Y 回転を戻す<br>緑の枠 = 回転するレイヤー · 青の枠 = 現在のレイヤー（緑は 4D のみ）",
+  "hint": "ドラッグで回転 · 右ドラッグ（または Shift+左ドラッグ）で平行移動 · スクロールでズーム · クリックで現在のレイヤーに着手<br>タッチ：ピンチでズーム/パン · 盤をダブルタップでリセット（どちらの盤でも有効）<br>Z 元に戻す · R 最初から · Q/E レイヤー切替 · G 表示モード · H グリッド線 · B 黒/白のみ · T 回転 · Y 回転を戻す<br>緑の枠 = 回転するレイヤー · 青の枠 = 現在のレイヤー（緑は 4D のみ）",
   "modeGhost": "ゴースト表示",
   "modeSlice": "スライス",
   "modeGrid": "グリッド線",
@@ -7320,10 +7517,12 @@ STATIC_TEXT.ja = {
   "rowLabelCool": "回転のクールダウン",
   "rowLabelPhase": "相位の長さ",
   "mode3d": "3D · クラシック",
-  "mode4d": "4D · 回転可能",
+  "mode4d": "4D・万象",
   "firstBlack": "黒が先手",
   "firstWhite": "白が先手",
   "dimCube": "3軸を連動",
+  "optSpin": "ルービック回転",
+  "optWrap": "空間貫通",
   "startBtn": "対局開始",
   "tutNext": "次の関",
   "tutorialBtn": "ゲームの説明",
@@ -7406,7 +7605,7 @@ TEXT.ja = {
 STATIC_TEXT.ko = {
   "previewTagRight": "데모 판 · 10 × 10 × 10<br>오른쪽 설정과 무관 — 게임에 포함되지 않습니다",
   "previewTagBelow": "데모 판 · 10 × 10 × 10<br>아래쪽 설정과 무관 — 게임에 포함되지 않습니다",
-  "hint": "드래그로 회전 · 오른쪽 드래그로 이동 · 스크롤로 확대/축소 · 클릭하면 현재 레이어에 착수<br>터치: 두 손가락으로 확대/이동 · 판을 더블탭하면 초기화 (두 판 모두 가능)<br>Z 되돌리기 · R 다시 시작 · Q/E 레이어 변경 · G 보기 모드 · H 격자선 · B 흑/백만 보기 · T 회전 · Y 회전 복원<br>초록 상자 = 곧 회전할 레이어 · 파란 상자 = 현재 레이어 (초록 상자는 4D 전용)",
+  "hint": "드래그로 회전 · 오른쪽 드래그(또는 Shift+왼쪽 드래그)로 이동 · 스크롤로 확대/축소 · 클릭하면 현재 레이어에 착수<br>터치: 두 손가락으로 확대/이동 · 판을 더블탭하면 초기화 (두 판 모두 가능)<br>Z 되돌리기 · R 다시 시작 · Q/E 레이어 변경 · G 보기 모드 · H 격자선 · B 흑/백만 보기 · T 회전 · Y 회전 복원<br>초록 상자 = 곧 회전할 레이어 · 파란 상자 = 현재 레이어 (초록 상자는 4D 전용)",
   "modeGhost": "고스트 레이어",
   "modeSlice": "슬라이스",
   "modeGrid": "격자선",
@@ -7449,10 +7648,12 @@ STATIC_TEXT.ko = {
   "rowLabelCool": "회전 쿨다운",
   "rowLabelPhase": "위상 주기",
   "mode3d": "3D · 클래식",
-  "mode4d": "4D · 회전 가능",
+  "mode4d": "4D · 만상",
   "firstBlack": "흑 선수",
   "firstWhite": "백 선수",
   "dimCube": "세 축 연동",
+  "optSpin": "루빅 회전",
+  "optWrap": "공간 관통",
   "startBtn": "게임 시작",
   "tutNext": "다음 단계",
   "tutorialBtn": "게임 안내",
@@ -7535,7 +7736,7 @@ TEXT.ko = {
 STATIC_TEXT.ru = {
   "previewTagRight": "Демо-доска · 10 × 10 × 10<br>Не зависит от настроек справа — не часть игры",
   "previewTagBelow": "Демо-доска · 10 × 10 × 10<br>Не зависит от настроек снизу — не часть игры",
-  "hint": "Перетаскивание — вращение вида · Правая кнопка — сдвиг · Прокрутка — масштаб · Клик — ход на текущем слое<br>Сенсор: двумя пальцами — масштаб и сдвиг · двойной тап по доске — сброс (работает на обеих досках)<br>Z — отменить · R — заново · Q/E — сменить слой · G — режим вида · H — линии сетки · B — только чёрные/белые · T — поворот слоя · Y — вернуть поворот<br>Зелёная рамка — слой, который повернётся · Синяя рамка — текущий слой (зелёная — только в 4D)",
+  "hint": "Перетаскивание — вращение вида · Правая кнопка (или Shift+левая) — сдвиг · Прокрутка — масштаб · Клик — ход на текущем слое<br>Сенсор: двумя пальцами — масштаб и сдвиг · двойной тап по доске — сброс (работает на обеих досках)<br>Z — отменить · R — заново · Q/E — сменить слой · G — режим вида · H — линии сетки · B — только чёрные/белые · T — поворот слоя · Y — вернуть поворот<br>Зелёная рамка — слой, который повернётся · Синяя рамка — текущий слой (зелёная — только в 4D)",
   "modeGhost": "Призрачные слои",
   "modeSlice": "Срез",
   "modeGrid": "Линии сетки",
@@ -7581,10 +7782,12 @@ STATIC_TEXT.ru = {
   "rowLabelCool": "Перезарядка поворота",
   "rowLabelPhase": "Длина фазы",
   "mode3d": "3D · Классика",
-  "mode4d": "4D · С поворотом",
+  "mode4d": "4D · Многообразие",
   "firstBlack": "Первыми ходят чёрные",
   "firstWhite": "Первыми ходят белые",
   "dimCube": "Связать все три оси",
+  "optSpin": "Вращение слоя",
+  "optWrap": "Склейка граней",
   "startBtn": "Начать игру",
   "tutNext": "Дальше",
   "tutorialBtn": "Обучение",
@@ -7679,7 +7882,7 @@ TEXT.ru = {
 STATIC_TEXT.fr = {
   "previewTagRight": "Plateau de démo · 10 × 10 × 10<br>Indépendant des réglages à droite — hors partie",
   "previewTagBelow": "Plateau de démo · 10 × 10 × 10<br>Indépendant des réglages en dessous — hors partie",
-  "hint": "Glisser pour tourner · Clic droit pour déplacer · Molette pour zoomer · Clic pour poser sur la couche courante<br>Tactile : pincer pour zoomer / faire glisser · double appui sur un plateau pour réinitialiser (valable sur les deux plateaux)<br>Z annuler · R recommencer · Q/E changer de couche · G mode d'affichage · H lignes de grille · B noir/blanc seulement · T tourner · Y restaurer la rotation<br>Cadre vert = couche sur le point de tourner · Cadre bleu = couche courante (vert seulement en 4D)",
+  "hint": "Glisser pour tourner · Clic droit (ou Maj+clic gauche) pour déplacer · Molette pour zoomer · Clic pour poser sur la couche courante<br>Tactile : pincer pour zoomer / faire glisser · double appui sur un plateau pour réinitialiser (valable sur les deux plateaux)<br>Z annuler · R recommencer · Q/E changer de couche · G mode d'affichage · H lignes de grille · B noir/blanc seulement · T tourner · Y restaurer la rotation<br>Cadre vert = couche sur le point de tourner · Cadre bleu = couche courante (vert seulement en 4D)",
   "modeGhost": "Couches fantômes",
   "modeSlice": "Tranche",
   "modeGrid": "Lignes de grille",
@@ -7722,10 +7925,12 @@ STATIC_TEXT.fr = {
   "rowLabelCool": "Recharge de rotation",
   "rowLabelPhase": "Durée de phase",
   "mode3d": "3D · Classique",
-  "mode4d": "4D · Avec rotation",
+  "mode4d": "4D · Mille facettes",
   "firstBlack": "Noirs en premier",
   "firstWhite": "Blancs en premier",
   "dimCube": "Lier les trois axes",
+  "optSpin": "Rotation type Rubik",
+  "optWrap": "Pliage de l'espace",
   "startBtn": "Commencer la partie",
   "tutNext": "Suivant",
   "tutorialBtn": "Didacticiel",
@@ -8681,6 +8886,10 @@ const Game = {
   // "输入框写着 20×20×8、实际开的局是 8×8×8"这种对不上的状态。
   setupDims: [15, 15, 15],
   setupCube: true,       // 三维模式下三轴是否联动
+  // v3.1.2：三维玩法可选的两个补充机制。四维下它们常开（这两个字段不参与，见 syncExtraRow）。
+  // **默认都不勾** —— 不勾就是纯三维，和加这一块之前完全一样。
+  setupSpin: false,      // 魔方旋转（转层）
+  setupWrap: false,      // 空间贯通（六个面连通）
   setupFirst: BLACK,
   // ---- 电脑对手（起始界面的选择）。**两个字段，因为界面上是两个控件**：
   // setupAi 是"跟谁下"的开关（人类 / 人机），setupLevel 是"电脑有多强"的刻度（0..4）。
@@ -8795,6 +9004,7 @@ const Game = {
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
+      "extraRow","optSpinBtn","optWrapBtn","buttons",
       "coolInput","phaseRow","phaseInput","phaseNote",
       "dimRange","dimRange4d","coolNote",
       "rotPanel","rotStatus","rotLayerDown","rotLayerUp","rotLayerLabel",
@@ -9056,11 +9266,16 @@ const Game = {
   newGame(dims, first) {
     const d = normalizeDims(dims);
     const rules = new RuleSet();
-    rules.allowRotation = this.fourD;
+    // 【三维的两个附加玩法在这一行汇合】四维里两样都常开（v3.1.2 起，见 §10.8——
+    // 在那之前 4D 其实并没有贯通，只有教学第二关写死打开过）；三维里由玩家自己勾。
+    rules.allowRotation = this.fourD || this.setupSpin;
+    rules.wrapEdges = this.fourD || this.setupWrap;
     // 四维只可能是立方。UI 在四维模式下只给一个 N，这里再兜一次底：
     // 万一有人（脚本、测试、控制台）拿长方体去开四维局，转动会全部被拒 —— 
     // 那种"按钮点了没反应"的状态比直接报错更难查，所以在这里就说清楚。
-    if (this.fourD && (d[0] !== d[1] || d[1] !== d[2])) {
+    // 四维必须立方（三个轴都要能转）；三维里勾了魔方旋转也必须立方 ——
+    // 转一层要求那一层的两条边等长，长方体上转动在数学上不成立。
+    if ((this.fourD || this.setupSpin) && (d[0] !== d[1] || d[1] !== d[2])) {
       d[1] = d[2] = d[0];
     }
     rules.rotationCooldownPlacements = this.setupCool;
@@ -9243,6 +9458,8 @@ const Game = {
     // 写在里面等于把同一个解析重复几千遍 —— 输出一个像素都不差，纯粹是白算。
     const cBlack = Palette.rgb("--black"), cWhite = Palette.rgb("--white");
     const cWin = Palette.rgb(foul ? "--danger" : "--gold");
+    // 两个相位光圈色。和上面那三个同一个理由：逐颗子去解析只会白算几千遍。
+    const cDawn = Palette.rgb("--phase-dawn"), cNight = Palette.rgb("--phase-night");
     // 幽灵子的不透明度（非当前层的子）。原来 0.42，一屏淡子铺开之后整体发白、
     // 和"真正的子"分不太开；提到 0.52 让它沉下去一点，又还没到会被误看成实子的地步。
     // 【为什么改这里而不是改幽灵子的颜色】颜色走调色板（--black / --white），
@@ -9253,6 +9470,12 @@ const Game = {
     // 影子是**提示**，不是棋子；和真子分不开的话，玩家会以为那里真有一颗子。
     const SHADOW_ALPHA = 0.22;
     const SHADOW_SIZE = 0.52;      // 真子 0.68、非当前层 0.60
+    // 【v3.1.1 相位光圈】每颗子外面套一个略大的半透明球，颜色 = 它落下时的相位。
+    // 走的是幽灵缓冲的同一套机制（"最后一手"那个光晕就是这么画的）：
+    // 球比真子大一圈，正面会淡淡罩在子上、多出来的那一圈落在背景上 —— 读起来就是
+    // 贴着棋子轮廓的一圈薄光。直径比值只取 1.18，再大就不叫"薄"了。
+    const PHASE_HALO_SIZE = 0.80;
+    const PHASE_HALO_ALPHA = 0.38;
     // 球体网格是【直径】为 1 的，所以下面 push 进去的 w 就是世界空间里的直径，
     // 数值和右侧面板的圆（半径 cs*0.34 → 直径 0.68）对齐，两个视图里子看起来一样大
     // 晨昏开着吗、现在是哪个相位 —— 三档透明度要用。关掉时 phOn 为 false，行为逐位不变。
@@ -9276,20 +9499,18 @@ const Game = {
       // 肉眼几乎发现不了，但换主题时就会放大成两个色调。
       const rgb = winSet.has(board.index(x, y, z)) ? cWin : (colourOf(s) === BLACK ? cBlack : cWhite);
 
-      // 【v3.0.0「晨昏」的第三档】异相位的子淡显。
-      // 棋盘本身看不出相位（一盘子实心子，哪颗是黎明哪颗是永夜只能看深浅），
-      // 而相位决定那条线算不算数 —— 不画出来，第三关那种"两条四连一条算一条不算"
-      // 的局面在盘面上完全无法区分，那一关就没法玩。
-      const offPhase = phOn && phaseOf(s) !== curPhase;
+      // 【v3.1.1：相位不再靠"浓淡"表示，改成每颗子外面那一圈薄光（见下面那一遍）】
+      // 原来异相位的子淡显到 0.35 —— 盘面上确实分得出来，但那些子淡到形状都糊了，
+      // 而它们照样占位、照样打断连线，玩家得看清它们。现在是"子都画清楚，圈分颜色"。
 
       const p = this.worldOf(x, y, z, dims, cs);
       const ghost = this.ghostMode && z !== this.activeLayer;
       if (ghost) {
         ghPos.push(p[0], p[1], p[2], cs * 0.60);
-        ghCol.push(rgb[0], rgb[1], rgb[2], GHOST_ALPHA * (offPhase ? 0.6 : 1));
+        ghCol.push(rgb[0], rgb[1], rgb[2], GHOST_ALPHA);
       } else {
         opqPos.push(p[0], p[1], p[2], cs * 0.68);
-        opqCol.push(rgb[0], rgb[1], rgb[2], offPhase ? PHASE_DIM_ALPHA : 1.0);
+        opqCol.push(rgb[0], rgb[1], rgb[2], 1.0);
       }
     });
 
@@ -9311,14 +9532,32 @@ const Game = {
         // 影子是那颗子的像，源子不画的时候它也不该画。
         if (this.stoneFilter && colourOf(s) !== this.stoneFilter) return;
         const rgb = winSet.has(board.index(x, y, z)) ? cWin : (colourOf(s) === BLACK ? cBlack : cWhite);
-        const offPhase = phOn && phaseOf(s) !== curPhase;
         for (const d of offs) {
           // 切片模式：z 大于当前层的影子也不画（和上面主循环同一条规矩）
           if (!this.ghostMode && z + d[2] > this.activeLayer) continue;
           const p = this.worldOf(x + d[0], y + d[1], z + d[2], dims, cs);
           ghPos.push(p[0], p[1], p[2], cs * SHADOW_SIZE);
-          ghCol.push(rgb[0], rgb[1], rgb[2], SHADOW_ALPHA * (offPhase ? 0.6 : 1));
+          ghCol.push(rgb[0], rgb[1], rgb[2], SHADOW_ALPHA);
         }
+      });
+    }
+
+    // 【v3.1.1 相位光圈】每颗子外面那一圈薄光，颜色 = 它落下时的相位。
+    //
+    // 【为什么单独再遍历一遍，而且必须排在石头之后】幽灵缓冲是**一次 draw call**：
+    // 里面的实例按 push 的先后互相叠（都不写深度，后画的盖在先画的上面）。
+    // 光圈必须盖在子上，所以只能排在所有棋子、影子之后。
+    //
+    // 【为什么要判 slice / 过滤】光圈和它那颗子是同一个东西的两种画法：
+    // 子不画的时候光圈也不该画（只判相位的话，切片模式下会给"看不见的子"套一圈光）。
+    if (phOn) {
+      board.forEachStone((x, y, z, s) => {
+        if (!this.ghostMode && z > this.activeLayer) return;
+        if (this.stoneFilter && colourOf(s) !== this.stoneFilter) return;
+        const c = phaseOf(s) === 0 ? cDawn : cNight;
+        const p = this.worldOf(x, y, z, dims, cs);
+        ghPos.push(p[0], p[1], p[2], cs * PHASE_HALO_SIZE);
+        ghCol.push(c[0], c[1], c[2], PHASE_HALO_ALPHA);
       });
     }
 
@@ -10081,8 +10320,18 @@ const Game = {
       for (let i = 0; i < nx; i++) {
         const s = board.get(i, j, this.activeLayer);
         if (s === EMPTY) continue;
-        // 异相位的子淡显（和三维那三档对齐）
-        ctx.globalAlpha = (cPhaseOn && phaseOf(s) !== cPhase) ? PHASE_DIM_ALPHA : 1;
+        ctx.globalAlpha = 1;
+        // 【v3.1.1 相位光圈】先画圈、再画子 —— 圈在棋子**外面**（半径 0.46 对棋子的 0.34），
+        // 所以先画后画都不会被盖住；先画是为了让描边压住圈的内沿，接缝干净。
+        if (cPhaseOn) {
+          ctx.beginPath();
+          ctx.arc(px(i), py(j), cs * 0.46, 0, Math.PI * 2);
+          ctx.strokeStyle = Palette.hex(phaseOf(s) === 0 ? "--phase-dawn" : "--phase-night");
+          ctx.lineWidth = Math.max(1, cs * 0.10);
+          ctx.globalAlpha = 0.55;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
         ctx.beginPath();
         ctx.arc(px(i), py(j), cs * 0.34, 0, Math.PI * 2);
         ctx.fillStyle = Palette.hex(colourOf(s) === BLACK ? "--black" : "--white");
@@ -10108,14 +10357,13 @@ const Game = {
           if (this.stoneFilter && colourOf(s) !== this.stoneFilter) continue;
           const offX = wrapImages(nx, i), offY = wrapImages(ny, j);
           if (offX.length === 0 && offY.length === 0) continue;
-          const offPhase = cPhaseOn && phaseOf(s) !== cPhase;
           ctx.fillStyle = Palette.hex(colourOf(s) === BLACK ? "--black" : "--white");
           ctx.strokeStyle = Palette.hex("--stone-edge");
           ctx.lineWidth = Math.max(1, cs * 0.05);
           for (const dx of (offX.length ? offX : [0])) {
             for (const dy of (offY.length ? offY : [0])) {
               if (dx === 0 && dy === 0) continue;
-              ctx.globalAlpha = 0.22 * (offPhase ? 0.6 : 1);
+              ctx.globalAlpha = 0.22;
               ctx.beginPath();
               ctx.arc(px(i + dx), py(j + dy), cs * 0.26, 0, Math.PI * 2);
               ctx.fill();
@@ -10327,9 +10575,19 @@ const Game = {
           for (let x = 0; x < nx; x++) {
             const s = board.get(x, y, z);
             if (s === EMPTY) continue;
-            ctx.globalAlpha = (cPhaseOn && phaseOf(s) !== cPhase) ? PHASE_DIM_ALPHA : 1;
+            ctx.globalAlpha = 1;
             // canvas 的 y 向下，而三维世界里 y 向上，这里翻一下，缩略图才和 3D 视图同向
             const sx = x0 + x * cs, sy = y0 + (ny - 1 - y) * cs;
+            // 【v3.1.1 相位光圈，缩略图版】这一格只有 3 像素见方，画不下真正的"薄光"，
+            // 就用同一套语义的最小写法：子外面套一个 1px 的相位色方框。
+            // 挤不下（px 太小）时**宁可不画**，也不退回"淡显"—— 同一种信息在一个页面里
+            // 有两种编码，读的人得先判断"这块用的是哪套"，那比少一个提示更糟。
+            if (cPhaseOn && px >= 4) {
+              ctx.strokeStyle = Palette.hex(phaseOf(s) === 0 ? "--phase-dawn" : "--phase-night");
+              ctx.lineWidth = 1;
+              const o = px * 0.5 + 1.5;
+              ctx.strokeRect(sx - o, sy - o, o * 2, o * 2);
+            }
             ctx.fillStyle = Palette.hex(colourOf(s) === BLACK ? "--black" : "--white");
             ctx.fillRect(sx - px * 0.5, sy - px * 0.5, px, px);
             if (px >= 2.5) {
@@ -10565,6 +10823,9 @@ const Game = {
       el.addEventListener("change", () => this.commitDimInput(id, idx));
     }
     on("dimCube", () => this.setSetupCube(!this.setupCube));
+    // v3.1.2 三维的两个附加玩法：点一下切一次（再点取消）。
+    on("optSpinBtn", () => this.setSetupSpin(!this.setupSpin));
+    on("optWrapBtn", () => this.setSetupWrap(!this.setupWrap));
     // 冷却 / 相位周期：和尺寸输入框同一套（input 只刷说明、change 才提交夹取后的值）。
     // 【不能用 on()】那个简写只绑 click（签名 (id, fn)）—— 绑 change 要自己来。
     // 和上面尺寸输入框保持同一种写法：input 只刷说明，change 才提交夹取后的值。
@@ -11360,6 +11621,10 @@ const Game = {
   refreshRotPanel() {
     if (!this.session || !this.el.rotPanel) return;
     const on = this.session.rotationEnabled;
+    // v3.1.2：四维下把「落子宣告」和「设置」换个位置（见 #buttons 那条 CSS）。
+    // 判据用 rotationEnabled 而不是 this.fourD：教学关是四维但转动关掉了，
+    // 那时候声明键也是禁用的，没必要换。 */
+    if (this.el.buttons) this.el.buttons.classList.toggle("swap4d", !!on);
     this.el.rotPanel.classList.toggle("off", !on);
     this.el.stripWrap.classList.toggle("compact", on);
     if (!on) return;
@@ -11503,7 +11768,12 @@ const Game = {
     for (const id of ["dimX", "dimY", "dimZ", "dimN"]) {
       if (this.el[id]) this.el[id].classList.remove("bad");
     }
-    if (this.el.dimCube) this.el.dimCube.classList.toggle("sel", this.setupCube);
+    if (this.el.dimCube) {
+      this.el.dimCube.classList.toggle("sel", this.setupCube);
+      // 四维 / 勾了魔方旋转时三轴必须联动，那颗键就没有意义了 —— 禁用，
+      // 让"为什么点不动"这件事在界面上自答。
+      this.el.dimCube.disabled = !!(this.fourD || this.setupSpin);
+    }
     if (this.el.coolInput) this.el.coolInput.value = String(this.setupCool);
     if (this.el.phaseInput) this.el.phaseInput.value = String(this.setupPhase);
     // 可填范围。**从 BoardLimits 现算，不写死在 HTML 里** ——
@@ -11557,10 +11827,53 @@ const Game = {
   /** 「三轴联动」开关。关掉之后才能填出长方体。 */
   setSetupCube(on) {
     if (this.fourD) on = true;      // 四维必须立方，开关对它没有意义
+    if (this.setupSpin) on = true;  // 勾了魔方旋转也必须立方，理由见 setSetupSpin
     this.setupCube = on;
     if (on) this.setupDims = [this.setupDims[0], this.setupDims[0], this.setupDims[0]];
     this.syncSetupInputs();
     this.refreshSetupSummary();
+  },
+
+  /**
+   * v3.1.2：三维的两个附加玩法。**四维里它们常开**，所以这两个 setter 在四维下直接返回 ——
+   * 顺手挡一道，免得脚本/控制台调出"四维下没勾、开局却有"的错位。
+   */
+  setSetupSpin(on) {
+    if (this.fourD) return;
+    this.setupSpin = !!on;
+    // 【勾上就锁立方】转一层要求那一层的两条边等长，长方体上所有转动都会被引擎拒掉 ——
+    // 表现是"按钮点了没反应"。与其让玩家撞上去再回来找原因，不如现在就把三轴锁死、
+    // 并把「三轴联动」那颗键禁用掉（和四维那边同一条理由、同一套做法）。
+    if (this.setupSpin) {
+      this.setupCube = true;
+      this.setupDims = [this.setupDims[0], this.setupDims[0], this.setupDims[0]];
+    }
+    this.syncExtraRow();
+    this.syncSetupInputs();
+    this.refreshSetupSummary();
+  },
+
+  setSetupWrap(on) {
+    if (this.fourD) return;
+    this.setupWrap = !!on;
+    this.syncExtraRow();
+    this.refreshSetupSummary();
+  },
+
+  /**
+   * 两行附加玩法的显隐与勾选态。**四维下整块不显示** —— 用户口径是"只有三维玩法有这东西"，
+   * 而四维里这两样本来就常开，摆一行勾不动的框只是在重复说一遍。
+   * 槽位由 syncCoolRow 那边换给「转动冷却 / 相位周期」，总高不变。
+   */
+  syncExtraRow(fourD) {
+    if (fourD === undefined) fourD = !!this.fourD;
+    if (this.el.extraRow) this.el.extraRow.classList.toggle("on", !fourD);
+    if (this.el.optSpinBtn) {
+      this.el.optSpinBtn.setAttribute("aria-pressed", this.setupSpin ? "true" : "false");
+    }
+    if (this.el.optWrapBtn) {
+      this.el.optWrapBtn.setAttribute("aria-pressed", this.setupWrap ? "true" : "false");
+    }
   },
 
   setSetupMode(fourD) {
@@ -11579,7 +11892,13 @@ const Game = {
       this.setupDims = [8, 8, 8];
     } else {
       this.setupDims = [15, 15, 15];
+      // 【切回三维要把勾选还原】四维下这两行是"勾上且不可点"的展示态，那是 syncExtraRow
+      // 算出来的、没有写进 setupSpin/setupWrap。它们的值一直是玩家上次在三维里选的，
+      // 所以这里不用动它们 —— 但必须重刷一次状态，否则那两行会停在四维的展示态上。
+      this.setupSpin = false;
+      this.setupWrap = false;
     }
+    this.syncExtraRow();
     this.syncSetupInputs();
     this.refreshSetupSummary();
   },
@@ -11995,8 +12314,12 @@ const Game = {
     // 「切到四维再切回来，开始游戏的位置和尺寸完全不变」。
     // visibility:hidden 两头都满足：看不见、点不到，但槽位还在，所以一个像素都不动。
     // （和 .row.hide 在三维/四维尺寸行上用的是同一套做法。）
-    if (this.el.coolRow) this.el.coolRow.style.visibility = on ? "" : "hidden";
-    if (this.el.phaseRow) this.el.phaseRow.style.visibility = on ? "" : "hidden";
+    // 【三维下这两行整块撤掉，而把槽位让给「魔方旋转 / 空间贯通」那两行】——
+    // 两边的行高相同（各 38px，两行共 76px），所以总高不变。
+    // 原来是 visibility:hidden 留空槽，现在那个空槽有主了。
+    if (this.el.coolRow) this.el.coolRow.style.display = on ? "" : "none";
+    if (this.el.phaseRow) this.el.phaseRow.style.display = on ? "" : "none";
+    this.syncExtraRow(on);
     if (this.el.coolInput) this.el.coolInput.disabled = !on;
     if (this.el.phaseInput) this.el.phaseInput.disabled = !on;
     // 范围提示走和数据尺寸同一条路：从常量现算，不写死第二份。

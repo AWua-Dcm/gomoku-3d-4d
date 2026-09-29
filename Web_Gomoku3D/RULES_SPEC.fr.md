@@ -115,164 +115,183 @@ Le panneau de droite dessine **la couche k vue de face** :
 
 Le panneau est orienté exactement comme la vue 3D : rien à faire tourner dans sa tête, les deux affichent toujours la même couche.
 
-## 10. Mode 4D : faire tourner une couche
+## 10. Mode 4D : trois mécaniques supplémentaires
 
-C'est une variante optionnelle ; on l'active en début de partie avec « 4D · Couche rotative » : **faire tourner une couche de 90° comme dans un Rubik's Cube**,
-et les pions déjà posés sur cette couche partent avec elle. « 4D » désigne le temps — le plateau lui-même change,
-alors que les coordonnées restent trois axes et que le nombre total de cases reste N×N×N.
+La 4D, ce sont les règles 3D inchangées, **plus trois mécaniques**. Choisissez « 4D · Mille facettes » avant la partie et les trois sont actives :
 
-Le mode se choisit au début de la partie et **ne peut plus être changé dans la même partie**. Si vous ne l'avez pas choisi, toute cette section ne s'applique pas,
-et les règles des sections 1 à 9 n'en sont pas affectées.
+- **Rotation type Rubik** : faire tourner une couche de 90°, comme un cube Rubik ; les pierres déjà posées sur cette couche partent avec elle.
+- **Pliage de l'espace** : les six faces du plateau sont reliées, donc un cinq peut traverser un bord.
+- **Jour et nuit** : le plateau alterne entre deux phases, et seules les lignes de la phase courante comptent.
 
-### 10.1 Comment tourner
+« 4D » désigne le temps : le plateau lui-même change, alors que les coordonnées restent trois axes et le nombre total de
+cases reste N×N×N.
+
+**Les deux premières peuvent aussi être activées séparément en 3D.** En mode 3D, deux cases à cocher se trouvent sous la
+ligne de la taille du plateau — « Rotation type Rubik » et « Pliage de l'espace » — vides par défaut. Chacune cochée ajoute
+cette mécanique à la partie 3D ; les deux à la fois, c'est la 4D sans le jour et la nuit. **Le jour et la nuit n'existent
+qu'en 4D.**
+
+Cocher « Rotation type Rubik » verrouille le plateau en cube (faire tourner une couche exige que ses deux côtés soient
+égaux, et un pavé droit ne peut pas tourner du tout), et la touche « Lier les trois axes » est alors désactivée — même
+raison et même traitement qu'en 4D.
+
+Le mode se choisit avant la partie et **ne peut pas être changé pendant**. En 3D sans aucune case cochée, toute cette
+section ne s'applique pas, et les sections 1 à 9 n'en sont pas affectées.
+
+### 10.1 Rotation type Rubik : comment tourner
 
 | Paramètre | Valeurs |
 |---|---|
 | Axe | x / y / z |
-| Couche | laquelle (0 à N−1) |
+| Couche | laquelle (de 0 à N−1) |
 | Sens | horaire / antihoraire |
-| Tours | 1 / 2 / 3, soit 90° / 180° / 270° |
+| Nombre de tours | 1 / 2 / 3 quarts de tour, soit 90° / 180° / 270° |
 
-**Le sens « horaire » s'observe depuis le côté négatif de l'axe, en regardant vers l'origine.**
-Pour l'axe `z`, c'est le sens que vous voyez à l'écran, sans conversion à faire ;
-les axes `x` et `y` s'observent respectivement depuis la gauche et depuis le bas du plateau.
+**Le sens « horaire » se regarde depuis l'extrémité négative de cet axe, vers l'origine.**
+Pour l'axe `z`, c'est exactement le sens que vous voyez à l'écran, sans conversion ;
+pour `x` et `y`, le point de vue est respectivement à gauche du plateau et en dessous.
 
-Un tour en sens antihoraire équivaut à trois tours en sens horaire. Quatre tours équivalent à rien, donc **cette option n'est pas proposée**.
+Un tour antihoraire vaut trois tours horaires. Quatre tours ne sont pas un tour du tout, donc cette option **n'est pas
+proposée**.
 
-**Une rotation se fait en deux temps : « Tourner » montre le résultat, « Confirmer » le valide.**
-Après « Tourner », le plateau **pivote aussitôt pour que vous le voyiez**, mais le coup n'est pas joué :
-il ne consomme pas votre tour, ne compte pas comme un coup et n'entre pas dans l'historique.
-**« Confirmer »** et **« Annuler »** sont **toujours sur le panneau**, grisés et inertes ; à ce
-moment-là ils s'allument et s'entourent d'un cerne, pour signaler la décision en attente :
-« Confirmer » tourne pour de bon, « Annuler » remet le plateau exactement comme avant. On ne peut pas poser de pierre pendant
-l'aperçu : le plateau est déjà montré tourné, et la pierre tomberait ailleurs qu'où vous visiez.
+**La rotation se fait en deux temps : « Exécuter la rotation » montre le résultat, « Confirmer » la fait compter.**
+Après avoir appuyé sur « Exécuter la rotation », le plateau **tourne immédiatement pour que vous le voyiez**, mais le coup
+n'est pas encore joué : il ne consomme pas le tour, ne compte pas comme un coup et n'entre pas dans l'historique.
+Les touches « Confirmer » et « Annuler » sont **toujours sur le panneau** — normalement grisées et inertes ; maintenant
+elles s'éclairent avec un anneau, vous rappelant qu'une décision est en attente : « Confirmer » tourne vraiment,
+« Annuler » remet le plateau exactement comme avant, comme si rien ne s'était passé. On ne peut pas poser de pierre
+pendant l'aperçu — le plateau montre la position tournée, donc cliquer dessus poserait au mauvais endroit.
 
-### 10.2 L'effet d'une rotation
+### 10.2 Rotation type Rubik : ce que fait une rotation
 
-Seules les cases de la couche tournée bougent ; tout ce qui est hors de la couche reste immobile.
-Chaque case de la couche a une destination unique, deux pions ne peuvent donc pas se percuter, et **le nombre total de pions ne change jamais**.
+Seules les cases de la couche tournée bougent ; tout ce qui est en dehors reste en place.
+Chaque case de cette couche a exactement une destination, donc deux pierres ne se heurtent jamais, et
+**le nombre total de pierres ne change jamais**.
 
-### 10.3 Quelles rotations sont refusées
+### 10.3 Rotation type Rubik : quelles rotations sont refusées
 
-Les contrôles s'enchaînent dans l'ordre ; si l'un d'eux échoue, toute l'opération est abandonnée : le plateau ne bouge pas, cela ne compte pas comme un coup, et rien n'est enregistré.
+Les contrôles s'enchaînent dans l'ordre ; si l'un échoue, tout est abandonné : le plateau ne bouge pas, cela ne compte pas
+comme un coup, et aucune trace n'est gardée.
 
 | Contrôle | En cas d'échec |
 |---|---|
-| La partie doit être en mode 4D | refus |
+| La partie doit être en 4D, ou en 3D avec « Rotation type Rubik » cochée | refus |
 | La partie doit être encore en cours | refus |
 | Le numéro de couche doit exister | refus |
 | La recharge doit être prête | refus |
 | Le plateau tourné doit être **différent** d'avant | « aucun changement », ne compte pas comme un coup |
 | Après la rotation, le plateau **ne doit pas donner 5 en ligne à l'adversaire** | tout est remis en arrière |
 
-« Doit être différent » regarde **l'aspect du plateau**, et non « combien de tours » :
-une couche déjà vide, ou un motif qui retombe exactement sur lui-même, sont tous deux jugés « aucun changement ».
-L'interface vous dit laquelle des deux causes, sinon le bouton semblerait cassé.
+« Doit être différent » regarde **l'aspect du plateau**, et non « combien de tours » : une couche déjà vide, ou un motif qui
+retombe exactement sur lui-même, sont tous deux jugés « aucun changement ». L'interface vous dit laquelle des deux causes,
+sinon le bouton semblerait cassé.
 
-Le dernier contrôle n'arrête que les lignes de **l'adversaire**. Une rotation **peut faire cinq pour vous** : c'est
-une victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. Si la rotation donne cinq en ligne
-à **l'adversaire** (vous avez poussé ses pierres en place), tout est toujours remis en arrière : offrir un cinq à
+Le dernier contrôle n'arrête que les lignes de **l'adversaire**. Une rotation **peut faire cinq pour vous** : c'est une
+victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. Si la rotation donne cinq en ligne à
+**l'adversaire** (vous avez poussé ses pierres en place), tout est toujours remis en arrière : offrir un cinq à
 l'adversaire n'est pas ce que ce coup voulait dire.
 
-Donc **une rotation peut être une arme offensive** : elle casse les lignes adverses, réajuste vos pierres, et peut
-amener la dernière pierre manquante à sa place pour gagner.
+Donc **une rotation peut être une arme offensive** : elle casse les lignes adverses, réajuste vos pierres, et peut amener
+la dernière pierre manquante à sa place pour gagner.
 
-### 10.4 Recharge de rotation
+### 10.4 Pliage de l'espace : les six faces sont cousues
 
-> Entre deux rotations, il faut **poser** au moins 5 pions.
+**Les six faces du plateau sont reliées** : on sort d'un bord et on revient par le bord opposé. Idem pour les trois axes.
 
-- **Seules les poses comptent**, pas la rotation elle-même — sinon cela reviendrait à « un seul coup sur cinq peut être une rotation », trop difficile à suivre.
-- Elle se règle sur 3 / 5 / 8 / 10, 5 par défaut.
-- La première rotation y est soumise aussi : après le début de la partie, il faut poser 5 pions avant de pouvoir tourner.
-- Annuler un coup remet la recharge en arrière elle aussi : le compteur et le plateau ne peuvent pas se désaccorder.
+Il y a plus simple pour se le représenter : **pensez à 3×3×3, soit 27 plateaux identiques empilés**. Vous ne jouez que sur
+celui du milieu, et chaque coup s'imprime aussi sur les 26 autres. Ces 26 ne sont pas dessinés — donc « deux pierres à
+droite plus trois à gauche » forment bel et bien une suite de cinq dans cet espace empilé.
 
-### 10.5 Le coût d'une rotation
+- On pose les pierres de la même façon : **une pierre n'a qu'une seule position** — elle est là où vous la posez.
+- Mais pour que ce soit **visible**, l'anneau de cases qui borde l'extérieur du plateau porte des **ombres** : chaque pierre
+  sur le bord a son image une case plus loin. Une ligne qui sort par le bord droit montre sa suite juste au-delà — un cinq
+  à travers la couture n'est plus à deviner. Les ombres sont plus petites et plus pâles ; ce ne sont **pas des pierres** :
+  seules les vraies pierres comptent, et on ne peut pas jouer sur une ombre.
+- **Un anneau complet d'une seule couleur (N pierres) compte aussi comme alignement trop long.** Le pliage allonge les
+  lignes, donc vérifiez le côté opposé avant de compléter un cinq ; la règle elle-même n'a pas changé — le premier joueur
+  perd encore à 6 en ligne ou plus.
+- Cela n'interfère pas avec la rotation : l'une dit « comment une couche permute ses propres cases », l'autre « ce qui se
+  passe au-delà d'un bord » ; les deux peuvent être actives en même temps et chacune s'occupe de son côté.
 
-Une rotation **consomme tout le tour** : l'adversaire joue aussitôt après, impossible de « tourner puis poser ».
-Autrement dit, chaque coup est « poser un pion ou tourner, au choix ».
+### 10.5 Jour et nuit : seules les lignes de la phase courante comptent
 
-Une rotation ne compte pas comme « le N-ième coup » ; le N-ième coup désigne toujours la N-ième pose de pion (l'interface indique séparément le nombre de rotations).
+Le plateau alterne entre deux phases : **le jour** et **la nuit**. Chaque pierre retient la phase où elle a été posée.
 
-### 10.6 Annuler une rotation
-
-| Action | Effet |
-|---|---|
-| Annuler `Z` | Si le dernier coup est une rotation, la rotation est retirée, si c'est une pose, la pose est retirée ; on peut annuler jusqu'avant le début de la partie |
-| Rétablir la rotation `Y` | Disponible seulement quand « le dernier coup est exactement une rotation ». **Clavier uniquement — ce bouton n'est plus sur le panneau** (cette place revient à Confirmer / Annuler) ; à la souris ou au doigt, utilisez « Annuler », qui retire cette rotation quand c'est le dernier coup |
-
-Dès que quelqu'un pose un pion, cette rotation est acquise et ne peut plus être retirée à part — sinon elle deviendrait une machine à remonter le temps qui traverse plusieurs coups.
-
-> **Pour retirer une rotation déjà acquise, utilisez « Annuler »** (`Z`, ou le bouton). Le panneau
-> avait un bouton dédié « Rétablir la rotation » ; cette place revient maintenant à Confirmer et
-> Annuler, mais la possibilité n'a pas disparu — quand le dernier coup est exactement une rotation,
-> c'est « Annuler » qui la retire.
-
-Après une annulation, la recharge revient elle aussi à son état d'avant la rotation.
-
-### 10.7 Tailles
-
-| Mode | Tailles possibles | Par défaut |
-|---|---|---|
-| 3D | 8 ≤ N ≤ 30, les trois axes peuvent différer | 15 |
-| 4D | 8 ≤ N ≤ 30, **cubique obligatoire** | 8 |
-
-L'obligation du cube en 4D n'est pas de la paresse : faire tourner une couche exige que les deux côtés de cette couche soient égaux,
-et comme les trois axes doivent pouvoir tourner, les trois doivent avoir la même longueur.
-
-Si la taille par défaut en 4D est 8 et non 15, c'est que **plus le plateau est grand, moins une couche contient de pions et moins la rotation se voit** —
-sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la plupart des rotations tombent sur « aucun changement ».
-
-### 10.8 Pliage (les six faces sont cousues)
-
-En 4D **les six faces du plateau sont reliées** : on sort d'un bord et on revient par le
-bord opposé. Idem pour les trois axes.
-
-Une cinq peut donc traverser un bord : deux pierres d'un côté et trois de l'autre forment
-une seule suite.
-
-- On pose les pierres de la même façon : **une pierre n'a qu'une seule position** — elle est
-  là où vous la posez.
-- Mais pour que ce soit **visible**, l'anneau de cases qui borde l'extérieur du plateau porte des
-  **ombres** : chaque pierre sur le bord a son image une case plus loin. Une ligne qui sort par le
-  bord droit montre sa suite juste au-delà — un cinq à travers la couture n'est plus à deviner.
-  Les ombres sont plus petites et plus pâles ; ce ne sont **pas des pierres** : seules les vraies
-  pierres comptent, et on ne peut pas jouer sur une ombre.
-- La règle du six est inchangée : le premier joueur perd toujours à 6 alignées ou plus.
-  Le pliage allonge les lignes : vérifiez le bord opposé avant de conclure une cinq.
-  **Un anneau complet d'une couleur (N pierres) compte aussi comme un six.**
-- Les pierres de l'autre phase occupent quand même leur case et coupent les lignes.
-
-### 10.9 Jour et nuit (la phase)
-
-En 4D, le plateau alterne entre deux phases : **jour** et **nuit**. Chaque pierre retient la
-phase où elle a été posée.
-
-- **Seules les lignes de la phase en cours sont comptées.** Une cinq de nuit présente de jour
-  existe, mais ne compte pas ; à l'instant où la phase passe à la nuit, si elle est encore
-  là, elle est comptée aussitôt.
-- **Les pierres de l'autre phase occupent leur case et coupent les lignes** (elles sont
-  pleines, pas vides). Elles sont dessinées plus pâles, la phase se lit d'un coup d'œil.
-- La phase change tous les 12 coups (réglable sur l'écran de départ, de 10 à 30).
+- **Seules les lignes de la phase courante sont réglées.** Un cinq de nuit qui existe le jour est bien là, mais ne compte
+  pas ; à l'instant où la phase bascule vers la nuit et qu'il est toujours là, il est réglé aussitôt.
+- **Les pierres de l'autre phase occupent quand même leur case et coupent les lignes** (ce sont des corps, pas du vide).
+- Chaque pierre du plateau porte un mince **halo** dont la couleur est sa phase : **rouge pâle pour le jour, bleu pâle pour
+  la nuit**. Les pierres des deux phases sont dessinées avec la même netteté (plus de distinction par l'opacité), donc on
+  voit d'un coup d'œil à quel camp elles appartiennent. Les vignettes de couches à droite utilisent un petit carré de la
+  même couleur (là où la case est trop petite pour un halo, rien n'est dessiné plutôt que de passer à une autre notation).
+- La phase bascule tous les 12 coups (modifiable à l'écran de départ, de 10 à 30).
 
 Un coup peut être déclaré :
 
 | Déclaration | Effet |
 |---|---|
-| normal | l'horloge avance d'un cran |
-| retenir | l'horloge n'avance pas ; un cran est emprunté à la phase suivante |
-| hâter | l'horloge avance de deux crans, un emprunt est remboursé |
+| normal | l'horloge avance d'une case |
+| retenir | l'horloge n'avance pas ; une case est empruntée à la phase suivante |
+| hâter | l'horloge avance de deux cases, remboursant une case empruntée |
 
-**On ne peut que déplacer le temps, pas en créer** : un cycle complet vaut toujours
-2 × la période, et l'emprunt est déduit de la phase suivante. Aucune phase ne descend
-sous 2 coups, et l'emprunt comme le remboursement sont plafonnés.
+**On peut seulement décaler le temps, jamais le créer** : un cycle complet vaut toujours 2 × la période, et ce qui est
+emprunté est déduit de la phase suivante. Aucune phase ne peut durer moins de 2 coups, et l'emprunt comme le remboursement
+sont plafonnés.
+
+### 10.6 Recharge de rotation
+
+> Entre deux rotations, il faut **poser** au moins 5 pierres.
+
+- **Seules les poses comptent** ; la rotation elle-même non — sinon cela deviendrait « un seul coup sur cinq peut être une rotation », trop difficile à suivre.
+- Réglable sur 3 / 5 / 8 / 10, par défaut 5.
+- La première rotation y est soumise aussi : il faut poser 5 pierres après le début de la partie.
+- **La recharge ne commence qu'après avoir appuyé sur « Confirmer »** — l'aperçu n'a pas eu lieu, il ne doit donc pas la consommer.
+- L'annulation remet aussi la recharge en arrière, si bien que le compteur et le plateau ne se contredisent jamais.
+
+### 10.7 Ce que coûte une rotation
+
+Une rotation **consomme tout le tour** : l'adversaire joue juste après, et on ne peut pas « tourner puis poser ».
+Chaque tour est donc « poser ou tourner, l'un ou l'autre ».
+
+Une rotation ne compte pas comme le coup numéro N ; le Nième coup désigne toujours la Nième pose (l'interface signale les rotations à part).
+
+### 10.8 Annuler une rotation
+
+| Action | Effet |
+|---|---|
+| Annuler `Z` | Retire le dernier pas — une rotation ou une pose — et peut revenir avant le début de la partie |
+| Restaurer la rotation `Y` | Disponible seulement quand le dernier coup est exactement une rotation. **Clavier uniquement — il n'y a pas ce bouton sur le panneau** (cette place revient à « Confirmer » / « Annuler ») ; à la souris ou au tactile, utilisez « Annuler », qui retire cette rotation quand c'est le dernier coup |
+
+Dès que quelqu'un pose une pierre, la rotation a eu lieu et ne peut plus être retirée seule — sinon elle deviendrait une
+machine à remonter le temps sur plusieurs coups.
+
+> **Pour retirer une rotation déjà jouée, utilisez « Annuler »** (`Z` ou le bouton). Le panneau avait autrefois une touche
+> dédiée « Restaurer la rotation » ; cette place revient maintenant à « Confirmer » et « Annuler », et la capacité
+> elle-même n'est pas perdue — quand le dernier coup est exactement une rotation, c'est elle que « Annuler » retire.
+
+L'annulation remet aussi la recharge dans l'état d'avant la rotation.
+
+### 10.9 Tailles
+
+| Mode | Tailles | Par défaut |
+|---|---|---|
+| 3D | 8 ≤ N ≤ 30, les trois axes peuvent différer | 15 |
+| 4D | 8 ≤ N ≤ 30, **obligatoirement cubique** | 8 |
+
+L'obligation de cube en 4D n'est pas de la paresse : faire tourner une couche exige que ses deux côtés soient égaux, et
+pour que les trois axes soient rotatifs, les trois doivent avoir la même longueur. Idem en 3D dès que
+« Rotation type Rubik » est cochée.
+
+La 4D part sur 8 plutôt que 15 parce que **plus le plateau est grand, moins une couche contient de pierres, et moins une
+rotation se voit** — sur un plateau 15×15×15 une couche contient en moyenne moins d'une pierre, et la plupart des rotations
+tombent dans le cas « aucun changement ».
 
 ### 10.10 Didacticiel
 
-Une fois le 4D choisi, un bouton **Didacticiel** apparaît à côté de Commencer. Trois
-niveaux couvrent la rotation, le pliage et le jour / la nuit ; chacun est une position
-préparée avec un objectif. Il n'y a pas d'ordinateur dans le didacticiel ; un niveau
-réussi ouvre le suivant, et le bouton Réglages de cette ligne (il affiche **Quitter**
-dans le didacticiel) ramène à l'écran de départ.
+Une fois la 4D sélectionnée, un bouton **Didacticiel** apparaît à côté de Démarrer. Trois niveaux couvrent la rotation,
+le pliage et le jour / nuit ; chacun est une position préparée avec un objectif. Il n'y a pas d'adversaire dans le
+didacticiel ; un niveau réussi, on passe au suivant, et la touche Réglages de cette ligne (elle affiche **Quitter** dans
+le didacticiel) ramène à l'écran de départ.
 
 ## 11. Jouer contre l'ordinateur
 
