@@ -90,7 +90,8 @@ try {
              aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
              TT_EXACT, TT_LOWER, TT_UPPER,
              aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
-             aiOutcomeAt, aiRotationCandidates, AI_POINT_BUDGET_MAX };`)();
+             aiOutcomeAt, aiRotationCandidates, aiRotationValue, aiSearchMove, aiEvalLeaf,
+             AI_POINT_BUDGET_MAX };`)();
   passed++;
 } catch (e) {
   console.error("内核求值失败：" + e.message + "\n" + (e.stack || ""));
@@ -103,7 +104,8 @@ const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK
         aiZobristBoard, aiZobristMove, aiTtReset, aiTtStore, aiTtProbe,
         TT_EXACT, TT_LOWER, TT_UPPER,
         aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
-        aiOutcomeAt, aiRotationCandidates, AI_POINT_BUDGET_MAX } = Core;
+        aiOutcomeAt, aiRotationCandidates, aiRotationValue, aiSearchMove, aiEvalLeaf,
+        AI_POINT_BUDGET_MAX } = Core;
 
 console.log("五档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
@@ -443,6 +445,77 @@ function foeCanRefute(s, attacker, mv, depth) {
     console.log("冷却 " + cd + " · 8³ · ultra：扫过 " + st.points + " 点，转动探针 " +
                 st.rotProbes + " 次");
   }
+}
+
+// ---------------------------------------------------------------------------
+// 1f. 转动估值的【视角约定】—— 它必须和落子的估值在同一个视角上
+//
+// 【为什么必须单钉这一条】aiSearchMove 的返回值是"它自己那个 mover 视角"下的值。
+// aiRotationValue 是拿它给"转完之后"的局面估值的，而转完轮到对方走 —— 所以它内部
+// 传的 mover 是对方。**于是它算出来的是【对方视角】的值。**
+// 调用方却拿它去和 move.v（【我方视角】）比大小，两个方向相反的数目比大小，
+// 结果就是"他那个数比我大就转" —— 转出对自己最不利的那一手。
+// 这个错没有症状：不崩、不抛、不违反任何安全绳（那两条安全绳和正负号无关），
+// 只是棋变差。**所以断言必须钉死视角，而不是钉"它有没有做事"。**
+// 判据：手动在同一旋转后的局面上、以【我方】视角跑一遍 aiSearchMove，
+// 两者必须一致。
+// ---------------------------------------------------------------------------
+{
+  let checked = 0, mismatched = 0;
+  const rng = rngOf(515151);
+  for (let t = 0; t < 30 && checked < 10; t++) {
+    const s = mkSession(8, BLACK, true, 3);
+    const open = 3 + ((rng() * 10) | 0);
+    for (let j = 0; j < open && s.status === "Playing"; j++) {
+      const em = [];
+      for (let z = 2; z < 7; z++) for (let y = 2; y < 7; y++) for (let x = 2; x < 7; x++) {
+        if (s.board.isEmpty(x, y, z)) em.push([x, y, z]);
+      }
+      if (em.length === 0) break;
+      const m = em[(rng() * em.length) | 0];
+      s.place(m[0], m[1], m[2]);
+    }
+    if (s.status !== "Playing" || !s.canRotate) continue;
+    const mover = s.currentPlayer;
+    const params = AI_PARAMS.ultra;
+    const cands = aiRotationCandidates(s, 4);
+    if (cands.length === 0) continue;
+    const rot = cands[0];
+    checked++;
+
+    const got = aiRotationValue(s, params, rot, mover, null);
+
+    // 【参考值必须用一条独立于实现的路径算】原来这里手写了一遍"我自己跑一遍 aiSearchMove"
+    // —— 那是错的：转完之后**轮到对方走**，拿"假设轮到我走"去估值是另一个局面。
+    // 改成静态评估：从对方视角估一次，取负就是我的。它很粗，所以只在"明显不是平局"的
+    // 局面上比符号（下面 |want| >= 1000 那道闸）。
+    let want = -Infinity;
+    s.probeRotate(RotationMove.fromClockwiseTurns(rot.axis, rot.layer, rot.turns), () => {
+      const cs = aiCandidates(s.board, 20000);
+      const foe = opponentOf(mover);
+      want = -aiEvalLeaf(s.board, cs, foe, mover, s.rules.winLength,
+                         s.rules.isRestricted(foe, s.firstPlayer),
+                         s.rules.isRestricted(mover, s.firstPlayer));
+    });
+
+    if (got === -Infinity || want === -Infinity) continue;
+    // 【为什么比符号而不是比相等】两种视角走的是两棵不同的搜索树（mover 不同 →
+    // 剪枝不同、置换表命中不同），数值不会逐位相同。**方向一致才是这里要钉的东西**：
+    // 同一个局面的"我方视角值"和"对方视角值的相反数"必须同号。
+    // 拿接近 0 的值比符号没有意义（噪声能翻转它），所以只比量级明确的那些。
+    if (Math.abs(want) < 1000) continue;
+    if (Math.sign(got) !== Math.sign(want)) {
+      mismatched++;
+      if (mismatched <= 3) {
+        console.log("  视角不一致 @" + open + " 手：aiRotationValue=" + got + " 我方视角=" + want);
+      }
+    }
+  }
+  check(checked >= 6, "视角约定的样本量够", "只有 " + checked + " 个局面");
+  check(mismatched === 0,
+        "aiRotationValue 返回的是【我方视角】的值（和落子的 move.v 同一把尺子）",
+        mismatched + " / " + checked + " 个局面视角相反");
+  console.log("转动估值视角：" + checked + " 个局面，" + mismatched + " 个方向相反");
 }
 
 // ---------------------------------------------------------------------------
@@ -1171,9 +1244,16 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
         "候选 " + st.candidates + " / 子 " + stones);
   check(st.judgeCalls <= 3 * st.candidates, "judge 的调用次数受候选数约束",
         "judgeCalls=" + st.judgeCalls + " 候选=" + st.candidates);
-  check(ms < 500, "15³ 中盘单手在 500ms 以内", ms + "ms");
+  // 【极限档改用计数上界，不用墙钟】用户口径是"极限档不为省时间牺牲棋力"，
+  // 而墙钟在慢机器上会随机变红、在快机器上又拦不住真问题。
+  // 【这条上界现在是有牙齿的】AI_POINT_BUDGET_MAX 以前只被累加、从来没被比较过
+  // （等于块表不是道闸），那条断言于是什么都没证明；v2.10.15 在
+  // aiRotationValue / aiVct / aiVcf 三个入口上都设了闸，超了就不再新开活。
+  check(st.points <= AI_POINT_BUDGET_MAX, "极限档单手扫过的候选点有硬上界",
+        st.points + " 点，上界 " + AI_POINT_BUDGET_MAX);
   console.log("15³ 中盘（" + stones + " 子）：候选 " + st.candidates +
-              "，judge " + st.judgeCalls + "，用时 " + ms + "ms，动作 " + act.kind);
+              "，judge " + st.judgeCalls + "，扫过 " + st.points + " 点，用时 " + ms +
+              "ms，动作 " + act.kind);
 }
 
 {
@@ -1210,9 +1290,16 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
     const t1 = Date.now();
     aiChooseMove(s, { level: lv, seed: 1, stats: st2 });
     const ms2 = Date.now() - t1;
-    check(ms2 < 2000, "30³ 密集局面下 " + lv + " 档单手在 2000ms 以内",
-          ms2 + "ms（候选 " + st2.candidates + "，算杀 " + st2.vcfNodes + " 格）");
-    console.log("30³ 密集 · " + lv + "：用时 " + ms2 + "ms，算杀 " + st2.vcfNodes + " 格");
+    if (lv === "ultra") {
+      // 极限档：计数上界（见上面那段说明），不设墙钟
+      check(st2.points <= AI_POINT_BUDGET_MAX, "30³ 密集局面下极限档扫过的点数有硬上界",
+            st2.points + " 点，上界 " + AI_POINT_BUDGET_MAX);
+      console.log("30³ 密集 · ultra：用时 " + ms2 + "ms，扫过 " + st2.points + " 点");
+    } else {
+      check(ms2 < 2000, "30³ 密集局面下 " + lv + " 档单手在 2000ms 以内",
+            ms2 + "ms（候选 " + st2.candidates + "，算杀 " + st2.vcfNodes + " 格）");
+      console.log("30³ 密集 · " + lv + "：用时 " + ms2 + "ms，算杀 " + st2.vcfNodes + " 格");
+    }
   }
 }
 

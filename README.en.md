@@ -261,8 +261,8 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 - ✨ **v2.10.15** Computer opponent: **4D rotation now competes with placing a stone** — Very high and
   Ultra value "rotate" and "place" with the same search and take whichever scores higher (Low / Mid /
   High keep the cheaper tier heuristics, but no tier skips rotation by chance any more). Ultra also
-  gains a **kill search over open threes** (VCT), and any win it claims must survive a check that tries
-  *every* defence. Added a Zobrist transposition table.
+  gains a **kill search over open threes** (VCT), and any win it claims must survive a check that works through
+  every relevant defence (a strong filter, not a mathematical proof — see RULES_SPEC §11). Added a Zobrist transposition table.
 - 🎨 **v2.10.15** Setup screen: at Ultra the slider shifts up a few pixels and a small line appears
   below it — "Thinking time may increase noticeably" — without moving any other control
 

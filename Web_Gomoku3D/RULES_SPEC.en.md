@@ -228,8 +228,9 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
   can afford to (iterative deepening).
   Ultra also runs a **kill search** — forced-win sequences: runs of fours (where each of your replies
   is forced to a single square), and runs of open threes. The latter is far harder, because an open
-  three leaves you more than one defence: it has to **try every one of your replies** before it counts,
-  and if it cannot try them all it says "unknown" rather than claim a win that does not hold.
+  three leaves you more than one defence: it works through **every reply that either blocks it or
+  makes a four of your own**, and if it cannot get through them all it says "unknown" rather than
+  claim a win that does not hold.
   In 4D, Very high and Ultra also **value a rotation with the same search they use for a move** —
   whether a rotation is worth a whole turn is decided on the same scale as placing a stone; Low, Mid
   and High keep the cheaper tier heuristics.

@@ -52,7 +52,15 @@ function parseArgs(argv) {
   return o;
 }
 
-/** 取一份 index.html 的正文。参数是 git revision 或文件路径。 */
+/**
+ * 取一份 index.html 的正文。参数是 git revision 或文件路径。
+ *
+ * ★【--new HEAD 读的是【已提交】的那一版，不是工作区】这一条踩过三次：
+ * 改完代码直接跑 --new HEAD，其实一直在量上一次提交的旧代码 —— 而症状是
+ * **三次不同的改动给出逐字节相同的结果**（31.3% / 31.3% / 31.3%），
+ * 因为那三次量的都是同一份提交。所以下面加了脏工作区告警。
+ * 想量还没提交的改动，**直接给文件路径**：--new Web_Gomoku3D/index.html
+ */
 function readHtml(revOrPath) {
   if (fs.existsSync(revOrPath)) return fs.readFileSync(revOrPath, "utf8");
   try {
@@ -197,6 +205,18 @@ if (control) {
   console.log("【对照组】新旧是同一份内核 —— 得分率必须是恰好 50.0%，否则测量台坏了。");
 }
 
+// 【脏工作区告警】工作区改了但还没提交时，--new HEAD 量的是旧代码。
+// 不告警的话，症状是"改了半天数字纹丝不动"，而那看起来很像"改动没用"。
+if (!fs.existsSync(o.new)) {
+  let dirty = false;
+  try {
+    if (fs.readFileSync(path.join(PROJ, HTML_REL), "utf8") !== readHtml(o.new)) dirty = true;
+  } catch (e) { /* 读不到就算了 */ }
+  if (dirty) {
+    console.log("⚠ 工作区的 " + HTML_REL + " 和 " + o.new + " 不一致 —— 这次量的是【已提交】的那一版，" +
+                "不是你刚改的。要量未提交的改动，把 --new 直接写成文件路径。");
+  }
+}
 const HTML_NEW = readHtml(o.new);
 const HTML_OLD = o.old === o.new ? HTML_NEW : readHtml(o.old);
 // 【守卫】新旧给了不同 revision，取回来的正文却一模一样 → 这次对拍毫无意义，

@@ -227,8 +227,9 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
   (approfondissement itératif).
   Ultra ajoute par-dessus une **recherche de gain forcé** : les suites ininterrompues de quatre
   (chacune de vos réponses est forcée) et les **suites de trois ouvertes**. Ces dernières sont bien plus
-  difficiles, car une trois ouverte vous laisse plusieurs réponses : il doit **essayer chacune de vos
-  réponses** pour que cela compte, et s'il ne peut pas toutes les essayer il répond « inconnu » plutôt
+  difficiles, car une trois ouverte vous laisse plusieurs réponses : il **essaie chacune de vos réponses,
+  celles qui bloquent comme celles qui font une quatre pour vous**, et s'il ne peut pas toutes les
+  essayer il répond « inconnu » plutôt
   que d'annoncer un gain qui ne tient pas.
   En 4D, Très haut et Ultra **évaluent aussi une rotation avec la même recherche qu'un coup** :
   savoir si une rotation vaut un tour complet se décide sur la même échelle que poser une pierre. Haut et au-dessus

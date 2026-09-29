@@ -1204,8 +1204,8 @@
   低档只看眼前一步；中档算一层（我下完他会怎么应）；高档三层；极高五层；
   极限也是五层，但够便宜时会再多算几层（迭代加深）。
   极限档另外会**算杀** —— 强制取胜路线的搜索：连续冲四（你的应手每次都被逼成唯一一个），
-  以及连续活三。后者难得多，因为活三的应手不止一个，它必须**把你的每个应手都试一遍**才算数；
-  试不完就宁可判"不知道"，绝不报一个站不住的"必胜"。
+  以及连续活三。后者难得多，因为活三的应手不止一个 —— 它把"你所有能堵的点、加上你自己反击做四的点"
+  逐个试一遍，试不完就宁可判"不知道"，绝不报一个站不住的"必胜"。
   极高和极限在四维下还会**拿同一段搜索去给转动估值**：转一下值不值一整手，
   和落子放在同一个尺度上比；低 / 中 / 高仍然用便宜的档位启发式。
   **四维模式里各档还要再深一到两层**：转动会把整个阵型挪走，浅一层看不出来
@@ -1476,8 +1476,9 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
   can afford to (iterative deepening).
   Ultra also runs a **kill search** — forced-win sequences: runs of fours (where each of your replies
   is forced to a single square), and runs of open threes. The latter is far harder, because an open
-  three leaves you more than one defence: it has to **try every one of your replies** before it counts,
-  and if it cannot try them all it says "unknown" rather than claim a win that does not hold.
+  three leaves you more than one defence: it works through **every reply that either blocks it or
+  makes a four of your own**, and if it cannot get through them all it says "unknown" rather than
+  claim a win that does not hold.
   In 4D, Very high and Ultra also **value a rotation with the same search they use for a move** —
   whether a rotation is worth a whole turn is decided on the same scale as placing a stone; Low, Mid
   and High keep the cheaper tier heuristics.
@@ -1753,7 +1754,7 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
   極も五手先ですが、余裕があるときはさらに深く読みます（反復深化）。
   極はさらに**殺し**を載せます —— 強制成勝の手順を読む探索で、連続四（あなたの応手が毎回
   ただ一マスに強制される手順）と、**連続活三**の両方を見ます。後者は格段に難しく、
-  活三はあなたの応手が一つではないため、**あなたの応手を一つ残らず試して**初めて勝ちと数えます。
+  活三はあなたの応手が一つではないため、**塞ぐ手と、あなた自身が四を作る手を一つ残らず試して**初めて勝ちと数えます。
   試し切れないときは「不明」と判断し、成り立たない「必勝」は決して名乗りません。
   4D では最強と極が**着手と同じ探索で回転の価値も測ります** —— 回転が一手分の価値があるかを
   着手と同じ尺度で比べます。弱・中・強は従来どおり安い段階ヒューリスティックのままです。だから強以上は「ここに打つと次の相手の一手で活四に
@@ -2022,7 +2023,7 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   극 단계는 그 위에 **죽음 읽기**를 얹습니다 — 강제 승리 수순을 읽는 탐색으로,
   연속 사(상대의 응수가 매번 한 칸으로 강제되는 수순)와 **연속 활삼**을 함께 봅니다.
   후자는 훨씬 어렵습니다. 활삼은 상대의 응수가 하나가 아니므로
-  **상대의 응수를 하나도 빠뜨리지 않고 다 시도해야** 비로소 승리로 셉니다.
+  **막는 수와 상대가 직접 사를 만드는 수를 하나도 빠뜨리지 않고 다 시도해야** 비로소 승리로 셉니다.
   다 시도할 수 없으면 "모름"으로 판단하고, 성립하지 않는 "필승"은 결코 내세우지 않습니다.
   4D에서는 최상과 극이 **착수와 같은 탐색으로 회전의 가치도 재봅니다** — 회전이 한 수 값어치가
   있는지를 착수와 같은 자로 비교합니다. 하·중·상은 기존의 저렴한 단계 휴리스틱 그대로입니다. 그래서 상 이상은 "여기에 두면 다음 상대 수에 활사가
@@ -2291,7 +2292,8 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   Ультра тоже пять, но при возможности считает глубже (итеративное углубление).
   Сверх этого Ультра считает **вынужденные выигрыши**: серии четвёрок (у вас каждый раз ровно один
   ответ) и **серии открытых троек**. Второе намного труднее: у открытой тройки у вас не один ответ,
-  поэтому движок обязан **перебрать все ваши ответы**, и только тогда засчитывает выигрыш;
+  поэтому движок перебирает **все ваши ответы — и закрывающие, и те, что делают четвёрку вам**,
+  и только тогда засчитывает выигрыш;
   если перебрать не удалось — он говорит «неизвестно», а не объявляет несуществующий выигрыш.
   В 4D Оч. сильн и Ультра ещё и **оценивают поворот тем же поиском, что и ход**: стоит ли поворот
   целого хода, решается на той же шкале, что и постановка камня. Поэтому Сильн и выше уходят из позиций,
@@ -2566,8 +2568,9 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
   (approfondissement itératif).
   Ultra ajoute par-dessus une **recherche de gain forcé** : les suites ininterrompues de quatre
   (chacune de vos réponses est forcée) et les **suites de trois ouvertes**. Ces dernières sont bien plus
-  difficiles, car une trois ouverte vous laisse plusieurs réponses : il doit **essayer chacune de vos
-  réponses** pour que cela compte, et s'il ne peut pas toutes les essayer il répond « inconnu » plutôt
+  difficiles, car une trois ouverte vous laisse plusieurs réponses : il **essaie chacune de vos réponses,
+  celles qui bloquent comme celles qui font une quatre pour vous**, et s'il ne peut pas toutes les
+  essayer il répond « inconnu » plutôt
   que d'annoncer un gain qui ne tient pas.
   En 4D, Très haut et Ultra **évaluent aussi une rotation avec la même recherche qu'un coup** :
   savoir si une rotation vaut un tour complet se décide sur la même échelle que poser une pierre. Haut et au-dessus
@@ -4313,18 +4316,34 @@ const AI_LEVELS = ["low", "medium", "high", "xhigh", "ultra"];
  *                  （实测深 6 打深 5 只有 62.5%，24 局），所以它只在便宜局面上生效。
  *                  **降过档的密盘一律不加深**（那种局面本来就是候选太多、只能少算）。
  *
- * 【耗时表 —— 整局逐手计时，15³，本机，每档 4 局自对局】
- *   档位     三维（中位 / 95% / 最慢）        四维（中位 / 95% / 最慢）
- *   低        0 /    1 /    2ms                0 /    3 /    5ms
- *   中        2 /    4 /    4ms               13 /   31 /   35ms
- *   高       12 /   28 /   29ms               97 /  364 /  411ms
- *   极高     95 /  355 /  396ms              103 /  363 /  408ms
- *   极限    175 /  346 /  352ms              179 /  350 /  361ms
- * 深度每加一层代价大约翻四倍（branch=4）—— 上表里 中→高→极高 那两跳就是它。
- * **极限档是全档最贵的一档**（中位 175ms，不到极高档的两倍；最慢那一手 352ms，
- * 手机上还要再慢三四倍）—— 这是刻意的取舍：极限档的定义就是"能算多算多少"，
- * 它的迭代加深还带着节点预算，所以最坏情况不会失控。哪一档觉得慢，改这张表里的
- * searchDepth / idMax，别去改别处。
+ * 【耗时表 —— 整局逐手计时，本机，每档 3 局自对局，v2.10.15 重测】
+ *   档位     三维 15³（中位 / 95% / 最慢）     四维 8³（中位 / 95% / 最慢）
+ *   低        0 /    1 /    2ms                1 /    3 /    3ms
+ *   中        1 /    2 /    3ms                8 /   13 /   14ms
+ *   高        5 /   14 /   19ms               56 /  106 /  147ms
+ *   极高     48 /  199 /  231ms               56 /  111 /  157ms
+ *   极限    132 / 2060 / 2094ms              105 / 1945 / 2681ms
+ * **极限档和其它四档之间有一道十几倍的坎**，这是 v2.10.15 刻意造成的：
+ *   · 它会**逐个转动候选跑一整遍搜索**（8³ 全枚举，rotMax=24 封顶）
+ *   · 它会**对排序前 K 个落点各跑一遍对手的算杀**（对手强制胜过滤）
+ * 两件事都是"用时间换棋力"，而用户对极限档的口径是**不为省时间让步**。
+ * 所以起始界面拉到极限时，拉条下方会写一行小字提醒玩家。
+ * **极高及以下不许被这个坎带进去** —— 它们保持中位几十毫秒。
+ * 哪一档觉得慢，改这张表里的 searchDepth / idMax / rotMax / foeFilter，别去改别处。
+ *
+ * 【这张表的来源】`_verify/ai-bench.mjs`（或等价的整局逐手计时脚本）。
+ * **不要手写这张表** —— 手写的数会在某次改动之后变成假证据，而没有任何东西会报警。
+ * v2.10.15 之前那一版就是手写的，重测后发现极限档的 95% 已经是它的 5 倍以上。
+ *
+ * 【v2.10.15 量过、没留下的一条 —— 别再照着做一遍】
+ * 试过"让极高 / 极限用**同一段搜索**给转动估值，和落子同台比大小"（`rotSearch`）。
+ * 想法是对的，实测是负的：四维 8³ 冷却 3、配对 32 局，新版对新版打出 **31.3%（10/32）**，
+ * 而同一批命令在改之前是 50.0%。另一个独立实验（把极限档搜索深度 5→7）也是负的（33.3%）。
+ * 两次都指向同一件事：**这个引擎的瓶颈是叶子评估太粗，不是算得不够多** ——
+ * 评估里的偏差会被更长的搜索放大，所以"想得更多"反而走出更差的棋。
+ * 要真正靠加深 / 转动估值取胜，得先做**静止搜索**（消除叶子评估的奇偶偏差），那是另一个工程。
+ * 留在这里的是同一次改动里**无害的那一半**：转动判定不再"按概率跳过"（rotChance 一律 1.0），
+ * 以及 brk / build 两条判据各自归位（拆形直接采用，调形只在落子平淡时才试）。
  *
  * 【两条硬规则任何一档都不许破，所以它们不在这张表里，而是判断链的第 1、3 步】
  *   · 能立刻赢就必须赢
@@ -4341,11 +4360,11 @@ const AI_PARAMS = {
           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 10,
           searchDepth: 3, depth4d: 5, branch: 4, vcf: false, idMax: 0, tt: false },
   xhigh: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 1.00,
-           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 12, rotSearch: true,
-           searchDepth: 5, depth4d: 5, branch: 4, vcf: false, idMax: 0, tt: true },
+           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 12,
+           searchDepth: 5, depth4d: 5, branch: 4, vcf: false, idMax: 0, tt: true, foeFilter: 0 },
   ultra: { topK: 1, topProb: 1.00, noise: 0.00, defWeight: 1.00,
-           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 0, rotSearch: true, rotMax: 24,
-           searchDepth: 5, depth4d: 5, branch: 4, vcf: true, vct: true, idMax: 6, tt: true },
+           pOpenThree: 1.00, rotChance: 1.00, rotProbe: 14,
+           searchDepth: 5, depth4d: 5, branch: 4, vcf: true, vct: true, idMax: 6, tt: true, foeFilter: 0 },
 };
 
 /**
@@ -4937,6 +4956,10 @@ function aiRotationProbe(session, params, winLength, mover, foe, cand, stats, be
  * 转不成 / 没搜出东西都返回 -Infinity —— 调用方只在它更大时才采用。
  */
 function aiRotationValue(session, params, rot, mover, stats) {
+  // 【闸】转动估值是这一手最贵的部分（极限档要枚举几十个候选、每个跑一整遍搜索）。
+  // 预算见 AI_POINT_BUDGET_MAX —— 超了就不再估新的候选，返回 -Infinity（=这一手不考虑）。
+  // **这一条以前只累加不比较，等于没有**，单测那条上界断言于是什么都没证明。
+  if (aiPointsUsed >= AI_POINT_BUDGET_MAX) return -Infinity;
   const board = session.board;
   const rules = session.rules;
   const foe = opponentOf(mover);
@@ -4959,8 +4982,14 @@ function aiRotationValue(session, params, rot, mover, stats) {
       safe.push(cands[i], cands[i + 1], cands[i + 2]);
     }
     if (safe.length === 0) return;
+    // 【★ 这个负号是本段最要紧的一个字符 —— 去掉它整段就反着用】
+    // aiSearchMove 的返回值是"它自己那个 mover 视角"下的值。这里传的是 foe，
+    // 所以 r.v 是**对方视角**的。而调用方（第 6 步）拿它去和 move.v（**我方视角**）比大小 ——
+    // 不加负号就是"他那个数比我大就转"，等于专挑对自己最不利的一手转。
+    // 这个错没有症状：不崩、不抛、那两条安全绳（不留活三 / 拆形真拆掉）也和正负号无关，
+    // 所以 197 项断言全绿而棋变差。ai.test.mjs 第 1f 组专门钉视角，就是为了堵它。
     const r = aiSearchMove(session, safe, params, stats, foe);
-    if (r) value = r.v;
+    if (r) value = -r.v;
   });
   if (stats) stats.rotProbes++;
   return o.accepted ? value : -Infinity;
@@ -5339,7 +5368,9 @@ function aiVcf(session, attacker, depth, stats) {
   aiVcfLeft -= cost;
   if (stats) stats.vcfNodes++;
 
-  const mine = aiVcfThreats(session, attacker, AI_VCF_A, cands);
+  // 【同 aiVct：必须快照】AI_VCF_A 会被递归调用清空重填。见 aiVct 里那段说明。
+  const t = aiVcfThreats(session, attacker, AI_VCF_A, cands);
+  const mine = { wins: t.wins.slice(), fours: t.fours.slice() };
   if (mine.wins.length > 0) return { x: mine.wins[0], y: mine.wins[1], z: mine.wins[2], win: true };
   if (mine.fours.length === 0) return null;
 
@@ -5390,15 +5421,23 @@ function aiVcf(session, attacker, depth, stats) {
      · 攻方**恰好 1 个成五点** → 对方不堵就当场输 → 他只能堵那里，应手唯一。**也是严格的。**
      · 攻方**没有成五点、但有"做了就成四"的点**（活三就是这种）→
        对方若不处理，攻方下一步成四，之后就是一连串冲四。
-       所以对方要防的是**攻方的那些"做四的点"**。
-       对方还可能用一手"不在这张表上"的棋拆掉攻方的形 —— 这一支**没有覆盖到**，
-       是这套实现残留的启发式部分，见下面 AI_VCT_D 那段。
+       所以对方要防的是**攻方的那些"做四的点"**，**再加上他自己反击做四的点**
+       （少了后面这一项会漏掉"被对方冲四打断"这一类，实测抓到过 4/12 假胜着）。
      · 攻方**既没有成五点也没有做四的点** → 这一手不构成强制，整支丢掉。
 
-   【截断即判未知，绝不报假胜着】任何一个应手被截掉，这一支就不算胜 ——
-   调用方拿到 null = "没找到"，不是"没有"。宁可少赢一手，也不许让电脑主动走出送死棋。
+   【★ 这一支是启发式，不是证明 —— 措辞不要说过头】
+   上面那两条应手集合是**有依据的近似**：对方不处理这些点，攻方就能把强制手连下去。
+   但严格的证明要求穷举对方的**每一个合法落点**（他可能用一手"不在这张表上"的棋
+   提前拆掉攻方后面某一环）。那张表太大，穷举不起。
+   所以：**报出来的胜着绝大多数是真的（有一组穷举验证钉着，见下），
+   但这不等于"报出来的必胜在数学上成立"**。对外一律按"很可能赢"说，不要写"证明"。
+   宁可少赢一手，也不许让电脑主动走出送死棋 —— 这是这一整套取舍的方向。
+
+   【截断即判未知】任何一个应手数超过 AI_VCT_D，这一支就不算胜，返回 null。
+   调用方拿到 null 的含义是"没找到"，不是"没有"。
    正确性有一条专测钉着（tests/ai.test.mjs 第 1d 组）：算杀报出的胜着，
-   必须经【穷举所有应手】的防守方验证过真的赢。
+   必须经【穷举所有应手】的防守方验证过真的赢 —— 注意那条验的是
+   **"报出来的都是真的"，验不到"真的有没有被漏掉"**。
 
    【预算】和 aiVcf 共用 aiVcfLeft（单位是"扫过多少个候选点"），理由见 aiVcf 那段。
    -------------------------------------------------------------------------- */
@@ -5428,13 +5467,20 @@ function aiVct(session, attacker, depth, stats) {
   const board = session.board, rules = session.rules;
   const foe = opponentOf(attacker);
 
+  if (aiPointsUsed >= AI_POINT_BUDGET_MAX) return null;
   const cands = aiCandidates(board, AI_CANDIDATE_CAP);
   aiPointsUsed += cands.length;
   const cost = cands.length * 2;
   if (aiVcfLeft < cost) return null;
   aiVcfLeft -= cost;
 
-  const mine = aiVcfThreats(session, attacker, AI_VCT_A, cands);
+  // ★【必须快照】AI_VCT_A 是模块级复用的缓冲，而下面的 aiVctAfter 会递归回 aiVct，
+  // 那时 aiVcfThreats 会把同一张表**清空重填**。不快照的话，外层循环遍历的其实是
+  // 内层节点的四列表 —— 数出来的着法要么变少要么是别人的点，**白白漏掉强制胜**。
+  // 这个错没有任何症状（不崩、不报假胜着），只有"该赢的没赢"。tests 里第 1d 组
+  // 只验"报出来的胜着是真的"，验不到"真的胜着有没有被漏掉"。
+  const tvct = aiVcfThreats(session, attacker, AI_VCT_A, cands);
+  const mine = { wins: tvct.wins.slice(), fours: tvct.fours.slice() };
   if (mine.wins.length > 0) {
     return { x: mine.wins[0], y: mine.wins[1], z: mine.wins[2], win: true };
   }
@@ -5484,6 +5530,7 @@ function aiVct(session, attacker, depth, stats) {
  */
 function aiVctAfter(session, attacker, foe, x, y, z, depth, stats) {
   const board = session.board;
+  if (aiPointsUsed >= AI_POINT_BUDGET_MAX) return null;
   board.set(x, y, z, attacker);
   const afterCands = aiCandidates(board, AI_CANDIDATE_CAP);
   aiPointsUsed += afterCands.length;
@@ -5534,6 +5581,21 @@ function aiVctAfter(session, attacker, foe, x, y, z, depth, stats) {
   }
   board.set(x, y, z, EMPTY);
   return { x: x, y: y, z: z, win: true };
+}
+
+/**
+ * 对手有没有强制胜。**就是拿对方当 attacker 再跑一遍算杀。**
+ *
+ * 【为什么复用 aiVct 而不是另写一个"防守搜索"】攻守是同一件事：
+ * "他执子时能不能强杀" 和 "我执子时能不能强杀" 用的是同一段逻辑，只是 attacker 不同。
+ * 另写一份 = 两份会漂移的判据，而这个工程已经因为"同一件事写两遍"踩过坑。
+ *
+ * 【返回 false 的含义是"没找到"，不是"没有"】预算用尽、深度用尽、被截断，
+ * 全都返回 false。所以这个过滤是**启发式**，不是证明 —— 它只会让引擎少走坏棋，
+ * 不会让它把好棋当成坏棋丢掉。调用方自己负责重置 aiVcfLeft（见 aiVcfBudgetReset）。
+ */
+function aiFoeCanWin(session, foe, depth, stats) {
+  return aiVct(session, foe, depth, stats) !== null;
 }
 
 /**
@@ -5813,6 +5875,37 @@ function aiChooseMoveInner(session, opts) {
     }
   }
 
+  // ---- 5a. 对手强制胜过滤：把我这一手之后"他仍然能强杀"的候选剔掉。
+  //
+  // 【这是"理解玩家在干嘛"落到引擎里的另一半】攻方算杀回答"我怎么赢"，
+  // 这一条回答"他能不能赢"—— 即"如果我来替他走，他会下在哪里取胜"。
+  //
+  // 【顺序】排在攻方算杀之后（我先赢最重要，不许被过滤掉）、搜索之前
+  // （过滤比搜索便宜得多，排在前面能省掉一整棵树）。
+  // 【只过滤排序前 K 个】每个候选都要跑一遍对方的算杀，是这一手最贵的一步；
+  // 而搜索真正展开的也就前 branch 个。K 由 params.foeFilter 给，0 = 不启用。
+  if (params.foeFilter > 0) {
+    const moverResF = session.rules.isRestricted(mover, session.firstPlayer);
+    const foeResF = session.rules.isRestricted(foe, session.firstPlayer);
+    // 根节点：不预筛（见 aiOrderTop 那段）
+    const scF = aiOrderTop(board, safe, mover, foe, winLength, moverResF, foeResF);
+    const alive = [];
+    for (let i = 0; i < scF.length && i < params.foeFilter; i++) {
+      const m = scF[i];
+      board.set(m.x, m.y, m.z, mover);
+      aiVcfBudgetReset();          // 每个候选独立预算，不然前几个把后面的吃光
+      const loses = aiFoeCanWin(session, foe, AI_VCT_DEPTH, stats);
+      board.set(m.x, m.y, m.z, EMPTY);
+      if (!loses) alive.push(m.x, m.y, m.z);
+    }
+    // 【全被剔光时不清空候选】那说明每个候选都输，就没有"更差"可言了，
+    // 交回搜索挑一个最不坏的。清空会让 safe 变空，引擎反而不知道下哪。
+    if (alive.length > 0) {
+      safe.length = 0;
+      for (let i = 0; i < alive.length; i++) safe.push(alive[i]);
+    }
+  }
+
   // ---- 5. 出招：先算杀，算不出再走 α-β 搜索，再不行走深度 0 的打分。
   // 【算杀为什么排在最前】它找的是**强制胜**（对手每一步都只有一个应手），
   // 找到了就是赢棋，而且比同深度的 α-β 便宜得多。找不到才退回常规搜索。
@@ -5842,8 +5935,12 @@ function aiChooseMoveInner(session, opts) {
       if (rv > move.v) {
         return { kind: "rotate", axis: rotCand.axis, layer: rotCand.layer, turns: rotCand.turns };
       }
+    } else if (rotBefore && rotBefore.foe >= AI_W.THREE) {
+      // 拆形（brk）：对方已经有活三以上，我下一手本来就得去回应他 ——
+      // 转动把他压回去等于既不丢先手、又省下那一手。这是 v2.10.14 的语义，保留了。
+      return { kind: "rotate", axis: rotCand.axis, layer: rotCand.layer, turns: rotCand.turns };
     } else {
-      // 低/中/高：老规矩 —— 落子这一手自己就做得出活三以上就不转（那一手已经够好），
+      // 调形（build）：落子这一手自己就做得出活三以上就不转（那一手已经够好），
       // 只有落子是"平淡的一手"时才值得花这一手去把整层挪一挪。
       const myRes = session.rules.isRestricted(mover, session.firstPlayer);
       const placeTier = aiTier(aiThreatValue(aiThreatAt(board, move.x, move.y, move.z,
@@ -10548,8 +10645,8 @@ if (typeof module !== "undefined" && module.exports) {
                      RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName,
                      aiChooseMove, aiCandidates, aiThreatAt, aiThreatAtSlow, aiThreatValue,
                      aiRng, AI_LEVELS, AI_PARAMS,
-                     aiRotationCandidates, aiRotationValue,
-                     aiVct, aiVcfBudgetReset,
+                     aiRotationCandidates, aiRotationValue, aiSearchMove, aiEvalLeaf, aiEvalLeaf,
+                     aiVct, aiFoeCanWin, aiVcfBudgetReset,
                      AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D, AI_POINT_BUDGET_MAX,
                      aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
                      TT_EXACT, TT_LOWER, TT_UPPER };
