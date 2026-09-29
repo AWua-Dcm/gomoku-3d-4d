@@ -4974,6 +4974,37 @@ function aiSearchCompare(a, b) {
 }
 
 /**
+ * 候选排序。根节点和每个内层节点都走这里，**全量算 aiOrderKey 再整体排序**。
+ *
+ * 【这里量过一条、没留下的路 —— 别再照着"两段式预筛"试一遍】
+ * 原计划是"先用廉价键（26 邻域里的子数 + 中心加权）取前 max(3×branch, 24) 个，
+ * 再对这批算完整排序键"，指望省掉九成开销（15³ 中盘 235 个候选，搜索只用前 4 个）。
+ * **实测直接垮掉**：在"白棋活三、黑棋必须堵"这种最简单的局面里，
+ *   开预筛  → 极限档 20 局 0 次去堵（它转头去延长自己那颗散子）
+ *   关预筛  → 极限档 20 局 20 次去堵
+ * 原因是邻域子数根本区分不出"活三的堵点"和"一个没用的贴子点"：
+ *   · 堵点 (8,5,5) 旁边有 1 颗白子 → 计数 1
+ *   · 黑棋自己的 (7,9,9) 旁边有 1 颗黑子 → 计数 1
+ * 两者同分，排序退化成坐标序。**正确的排序键需要的信息，就是威胁计算本身** ——
+ * 想要比它更便宜的近似，就得放弃"哪些候选真的强"这件事。
+ * 想省这一步只有一条正路：把 aiThreatAt 本身做快（已经做了，见条带那段），
+ * 而不是拿一个更粗的尺子去挑。
+ *
+ * 中心加权也一并没进这里：它原来只在一个 tie-break 位置上起作用，
+ * 而 aiCenterDist 那条"只当 tie-break、绝不进分数"的约定没变（见 aiCompare / aiSearchCompare）。
+ */
+function aiOrderTop(board, cands, mover, foe, winLength, moverRes, foeRes) {
+  const sc = [];
+  for (let i = 0; i < cands.length; i += 3) {
+    const x = cands[i], y = cands[i + 1], z = cands[i + 2];
+    const v = aiOrderKey(board, x, y, z, mover, foe, winLength, moverRes, foeRes);
+    sc.push({ x: x, y: y, z: z, v: v, mine: AI_ORDER.mine, d: aiCenterDist(board, x, y, z) });
+  }
+  sc.sort(aiSearchCompare);
+  return sc;
+}
+
+/**
  * 负极大值。返回「轮到 mover 时这个局面的值」。
  * 上一手 last 已经落在盘上，由调用方负责摆上和撤销 —— judge 需要子真的在盘上。
  */
@@ -5017,14 +5048,7 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats, hash) 
   if (depth <= 0 || cands.length === 0) {
     return aiEvalLeaf(board, cands, mover, foe, tune.winLength, tune.moverRes, tune.foeRes);
   }
-  const sc = [];
-  for (let i = 0; i < cands.length; i += 3) {
-    const x = cands[i], y = cands[i + 1], z = cands[i + 2];
-    const v = aiOrderKey(board, x, y, z, mover, foe, tune.winLength, tune.moverRes, tune.foeRes);
-    sc.push({ x: x, y: y, z: z, v: v, mine: AI_ORDER.mine,
-              d: aiCenterDist(board, x, y, z) });
-  }
-  sc.sort(aiSearchCompare);
+  const sc = aiOrderTop(board, cands, mover, foe, tune.winLength, tune.moverRes, tune.foeRes);
   if (ttMove) {
     // 置换表里的着法排到队首：α-β 的剪枝全指望"先搜最好的那一手"
     for (let i = 1; i < sc.length; i++) {
@@ -5261,14 +5285,7 @@ function aiSearchMove(session, safe, params, stats) {
 
   const moverRes = rules.isRestricted(mover, session.firstPlayer);
   const foeRes = rules.isRestricted(foe, session.firstPlayer);
-  const sc = [];
-  for (let i = 0; i < safe.length; i += 3) {
-    const x = safe[i], y = safe[i + 1], z = safe[i + 2];
-    const v = aiOrderKey(board, x, y, z, mover, foe, winLength, moverRes, foeRes);
-    sc.push({ x: x, y: y, z: z, v: v, mine: AI_ORDER.mine,
-              d: aiCenterDist(board, x, y, z) });
-  }
-  sc.sort(aiSearchCompare);
+  const sc = aiOrderTop(board, safe, mover, foe, winLength, moverRes, foeRes);
 
   const tune = { winLength: winLength, branch: params.branch, moverRes: moverRes, foeRes: foeRes,
                  tt: !!params.tt };
