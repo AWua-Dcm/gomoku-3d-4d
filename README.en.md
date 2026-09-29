@@ -257,16 +257,24 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.29
 
+- ✨ **v3.0.0** New 4D mechanics: **wrapping** (the six faces are joined, so a five may cross an edge)
+  and **day / night** (the board alternates phase, and only lines of the current phase count). A move
+  may declare "hold" to stall the clock or "hasten" to push it — borrowed time is repaid out of the
+  next phase, so you can only shift it, never create it
+- ✨ **v3.0.0** New **tutorial**: in 4D a second button appears next to Start; three levels cover
+  rotation, wrapping and day / night
+- 🎨 **v3.0.0** New **phase timeline** below the flat board (the board yields the space): one column
+  per move, the background shows the phase
+- 🎨 **v2.10.17** Setup screen: the mode bar is now two rows (how to look / whom to show); rotation
+  cooldown becomes a typed number like the board size (3 – 10), and the freed row goes to the new
+  "phase length" (10 – 30); at Ultra the slider shifts up a few pixels with a small note below it
+- ✨ **v2.10.16** Computer opponent: 4D rotation now competes with placing a stone (same search,
+  higher score wins); Ultra gains a kill search over open threes (VCT); added a Zobrist table
 - 🔧 **v2.10.15** Board size upper limit lowered from 50 to 30 (`8 – 30`)
-- ✨ **v2.10.16** Computer opponent: **4D rotation now competes with placing a stone** — Very high and
-  Ultra value "rotate" and "place" with the same search and take whichever scores higher (Low / Mid /
-  High keep the cheaper tier heuristics, but no tier skips rotation by chance any more). Ultra also
-  gains a **kill search over open threes** (VCT), and any win it claims must survive a check that works through
-  every relevant defence (a strong filter, not a mathematical proof — see RULES_SPEC §11). Added a Zobrist transposition table.
-- 🎨 **v2.10.17** Setup screen: at Ultra the slider shifts up a few pixels and a small line appears
-  below it — "Thinking time may increase noticeably" — without moving any other control
 
-- ✨ **v2.10.14** The computer opponent is much stronger: fixed "its second stone wanders off to the player's layer" (a searching tier only expands the top 4 of its ordering, and extending its own stone tied exactly with blocking the player's, so the tie went to the lowest coordinates — the top 4 always landed in one corner); the leaf evaluation now adds up the two best threats instead of only the best one; Very high goes from 4 plies to 5 and Ultra now deepens iteratively (6 plies when it can afford them); the kill search no longer misses the case where the opponent has a five of its own
+- ✨ **v2.10.14** Stronger computer opponent: fixed "its second stone wanders off to the player's
+  layer"; the leaf evaluation adds the two best threats; Very high goes to 5 plies and Ultra deepens
+  iteratively; the kill search stops missing one case
 
 ### 2026.09.28
 
