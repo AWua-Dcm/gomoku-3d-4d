@@ -3678,7 +3678,7 @@ function sideName(s, lang = "zh") {
 }
 
 /** 走子记录 */
-function MoveRecord(x, y, z, player, moveNumber, phase) {
+function MoveRecord(x, y, z, player, moveNumber, phase, clock) {
   // 【这里必须把原型接上，不能直接 return 一个字面量】函数体 return 对象时，
   // `new` 得到的是那个字面量、不是 this —— 而字面量的原型是 Object.prototype，
   // 下面挂的那个 toString 就永远够不着：rec.toString() 走的是
@@ -3691,7 +3691,11 @@ function MoveRecord(x, y, z, player, moveNumber, phase) {
                          // v3.0.0「晨昏」：这一手落下时的相位。**必须记在走子记录上** ——
                          // 相位现在是状态（催/缓会改它），不能事后按手数反推。
                          // 时间轴要按它画底色带；关掉晨昏时恒为 0，与以前逐位相同。
-                         phase: phase | 0 });
+                         phase: phase | 0,
+                         // 【落子之前的整个时钟】悔棋要把它原样还原。
+                         // 只记 phase 是不够的：倒计时、相位长度、债都是状态，
+                         // 少还原一个，悔棋之后的局面就和"从没下过那几手"对不上。
+                         clock: clock || null });
 }
 MoveRecord.prototype.toString = function (lang = "zh") {
   return ct("move.record", lang, { n: this.moveNumber, who: sideName(this.player, lang),
@@ -4248,7 +4252,10 @@ class GameSession {
       return outcome;
     }
 
-    const record = new MoveRecord(x, y, z, player, this.history.length + 1, this.phase);
+    // 【先拍快照，再推进】记的是"这一手落下之前"的时钟 —— 悔棋要靠它还原。
+    const clock0 = { phase: this.phase, elapsed: this.elapsedInPhase,
+                     target: this.phaseTarget, debt: this.phaseDebt };
+    const record = new MoveRecord(x, y, z, player, this.history.length + 1, this.phase, clock0);
     this.history.push(record);
     this.lastOutcome = outcome;
 
@@ -4330,6 +4337,18 @@ class GameSession {
     this.isDraw = false;
     this.lastOutcome = { status: MoveStatus.Placed, winner: EMPTY, longestRun: 0, line: null, isOverlineFoul: false };
     this.currentPlayer = last.player;
+    // 【把相位时钟一起还原】v3.0.0「晨昏」引进的三个状态（相位 / 本相位走了几格 /
+    // 相位长度 / 债）原来**一个都不回滚**。后果实测过：悔棋越过一次相位翻转之后，
+    // 盘上每一颗子都是旧相位的，而当前相位已经翻过去了 ——
+    // **整盘棋全部落在"不算数"的那一边**，画面上还全部淡显。
+    // 玩家只是按了一下悔棋，棋盘就变得谁都赢不了。
+    // 快照是落子前拍的，所以直接覆盖回去就是精确的还原（不重放、不用重算）。
+    if (last.clock) {
+      this.phase = last.clock.phase;
+      this.elapsedInPhase = last.clock.elapsed;
+      this.phaseTarget = last.clock.target;
+      this.phaseDebt = last.clock.debt;
+    }
     for (const fn of this.onMoveUndone) fn(this, last);
     return true;
   }
@@ -4618,6 +4637,9 @@ class FourDSession {
   get phaseTarget() { return this.inner.phaseTarget | 0; }
   get elapsedInPhase() { return this.inner.elapsedInPhase | 0; }
   get handsUntilFlip() { return this.inner.handsUntilFlip; }
+  /** 本相位借出去（正）或还没用掉（负）的时间。**和上面三个一起转发** ——
+   *  少转发一个的症状是 undefined，而它混进算术里会静默变成 NaN。 */
+  get phaseDebt() { return this.inner.phaseDebt | 0; }
 
   canPlace(x, y, z) { return this.inner.canPlace(x, y, z); }
   place(x, y, z, lang = "zh", mode) { return this.inner.place(x, y, z, lang, mode); }
@@ -11207,21 +11229,47 @@ const Game = {
       return st / 4294967296;
     };
     const n = board.size;
-    const lo = Math.max(0, ((n / 2) | 0) - 5), hi = Math.min(n, ((n / 2) | 0) + 5);
+    const c0 = (n / 2) | 0;
+    // 【基线：铺之前盘上"有多热"】第 2、3 关的教学结构本身就是四连 ——
+    // 拿"整盘有没有四连"当筛子的话，一颗背景子都放不进去（实测第 2 关只剩 4 颗、
+    // 第 3 关只剩 8 颗，画面反而比原来还空）。所以要的是**相对**判据：
+    // 这一颗有没有把局面弄得比原来更热。
+    const wl0 = s.rules.winLength;
+    const hot0 = (() => {
+      const live0 = aiCandidates(board, AI_CANDIDATE_CAP);
+      return Math.max(aiThreatBest(board, live0, BLACK, wl0, false),
+                      aiThreatBest(board, live0, WHITE, wl0, false));
+    })();
+    // 【抱团，不要均匀撒】原来撒在一个 10×10×10 的大盒子里，看着像随便倒上去的。
+    // 真下起来的子会挤在一两个战场附近 —— 这里就绕着一个"战场中心"做三角分布
+    // （越靠中心越密），读起来才像一盘棋。
+    const spread = Math.max(3, Math.round(n * 0.28));
     let placed = 0, guard = 0;
     while (placed < count && guard++ < count * 60) {
-      const x = lo + ((rnd() * (hi - lo)) | 0);
-      const y = lo + ((rnd() * (hi - lo)) | 0);
-      const z = lo + ((rnd() * (hi - lo)) | 0);
-      if (x >= n || y >= n || z >= n) continue;
+      // 三角分布 = 两个均匀数取平均，天然中间密、边上疏
+      const tri = () => (((rnd() + rnd()) / 2) * 2 - 1);
+      const x = Math.max(0, Math.min(n - 1, c0 + Math.round(tri() * spread)));
+      const y = Math.max(0, Math.min(n - 1, c0 + Math.round(tri() * spread)));
+      const z = Math.max(0, Math.min(n - 1, c0 + Math.round(tri() * spread)));
       if (!board.isEmpty(x, y, z)) continue;
       if (avoid && x >= avoid[0] && x <= avoid[1] && y >= avoid[2] && y <= avoid[3] &&
           z >= avoid[4] && z <= avoid[5]) continue;
       // 黑白交替着放，读起来像真的在对下
       const v = cellOf(placed % 2 === 0 ? BLACK : WHITE, 0);
       board.set(x, y, z, v);
-      if (RuleEngine.fullScan(board, s.rules.winLength).length > 0) {
-        board.set(x, y, z, EMPTY);       // 凑出线了，这颗不要
+      // 【两层筛查，缺一不可】
+      //   ① 不许凑出任何连线 —— 凑成了这一局开局就是终局，关卡直接废掉；
+      //   ② 不许凑出**四连威胁**（两边都算）—— 只查连线是不够的：三关的目标
+      //      "最强威胁 ≥ 四" 和 "取胜" 都会被一个现成的四提前满足，玩家一进去
+      //      就看到"过关"，或者随手一补就赢，教学要教的东西根本没出场。
+      //      第一关摆到棋盘中间之后就是这么红的（背景子抱团，自然凑出了四）。
+      const wl = s.rules.winLength;
+      const live = aiCandidates(board, AI_CANDIDATE_CAP);
+      const hotNow = Math.max(aiThreatBest(board, live, BLACK, wl, false),
+                              aiThreatBest(board, live, WHITE, wl, false));
+      const hot = hotNow > hot0 || RuleEngine.fullScan(board, wl).length > 0;
+      if (hot) {
+        board.set(x, y, z, EMPTY);       // 这颗会把局面弄"热"，不要
         continue;
       }
       placed++;
@@ -11242,16 +11290,20 @@ const Game = {
           // 补一颗就是四连 —— 于是"最強威胁 ≥ 四"开局就成立，一进去就显示"过关"。
           // 而把两端都堵死又不行：那样转完也成不了四（线还是死的）。
           // 两颗、只堵一头，才是"现在够不着、转一下才够得着"。
-          s.board.set(0, 0, 1, BLACK);
-          s.board.set(0, 0, 2, BLACK);
-          s.board.set(0, 0, 0, WHITE);
-          // 第 0 层上我还有一颗在 (9,0)：顺时针转一次（(u,v)→(v, 9−u)），
-          // 它正好落到 (0,0) —— 挡子被转到 (0,9) 去，我的子补进那个空位，
+          // 【为什么摆在正中间】原来摆在左下角，和背景子离得老远 ——
+          // 玩家一眼看到的是"一盘散子 + 角落里三颗孤子"，读不出这是一个局。
+          // 挪到中心之后，要教的形就在战场里面。
+          const C = 5;                       // 10³ 的中心
+          s.board.set(C, C, 1, BLACK);
+          s.board.set(C, C, 2, BLACK);
+          s.board.set(C, C, 0, WHITE);
+          // 第 0 层上我还有一颗在 (4,5)：顺时针转一次（(u,v)→(v, 9−u)），
+          // (4,5) 正好落到 (5,5) —— 挡子被转到 (5,4) 去，我的子补进那个空位，
           // 这条线就从两连变成三连（补第 3 层就是四连）。
-          s.board.set(9, 0, 0, BLACK);
+          s.board.set(C - 1, C, 0, BLACK);
           // 铺一层背景子，让它读起来像一盘真棋。**避开左上角那一带和 (9,0) 那颗**
           // （教学的结构不能被背景子搅了），而且不许凑出任何连线。
-          this.tutFill(s, 34, 0x51a1, [0, 2, 0, 2, 0, 4]);
+          this.tutFill(s, 30, 0x51a1, [3, 7, 3, 7, 0, 3]);
           return s;
         },
         goal: (s) => {
@@ -11278,13 +11330,15 @@ const Game = {
           r.phasePeriod = 12;
           const s = GameSession.create(15, BLACK, r);
           // 黎明那条四（现在是黎明，算数）
-          for (const x of [2, 3, 4, 5]) s.board.set(x, 8, 8, cellOf(BLACK, 0));
-          // 永夜那条四（现在不算数 —— 这正是这一关要教的）
-          for (const x of [2, 3, 4, 5]) s.board.set(x, 11, 11, cellOf(BLACK, 1));
+          // 【为什么两条都放在 z=7 这一层】原来一条在 y=8,z=8、一条在 y=11,z=11，
+          // 分在两个平面上 —— 而二维面板一次只画一层，玩家永远没法同时看到它们，
+          // "一条算数一条不算数"这件事就落不到眼里。放到同一层才教得动。
+          for (const x of [2, 3, 4, 5]) s.board.set(x, 7, 7, cellOf(BLACK, 0));
+          for (const x of [2, 3, 4, 5]) s.board.set(x, 11, 7, cellOf(BLACK, 1));
           s.elapsedInPhase = 10;                 // 只剩 2 格就翻转，拖不得
           s.phaseTarget = 12;
           // 避开两条四连所在的 y 带
-          this.tutFill(s, 48, 0x2b7f, [0, 14, 6, 13, 6, 13]);
+          this.tutFill(s, 40, 0x2b7f, [1, 6, 5, 12, 6, 8]);
           return s;
         },
         goal: (s) => s.winner === BLACK
@@ -11297,20 +11351,28 @@ const Game = {
     const t = which === "title";
     if (i === 0) {
       return t ? say(() => "转动：把挡路的转走，把自己的转进来", "tut.1.title")
-               : say(() => "竖着那条线（棋盘左上角那个位置）下面是你的两颗，最底下那颗是白子 —— " +
-                           "它把这条线堵死了。你在最底层还有一颗在右边角落。" +
-                           "顺时针转一下最底层：白子被转到别处，你的那颗正好补进空位，" +
+               : say(() => "棋盘正中那条竖线：你的两颗子在中间两层，最底下那层被一颗白子堵着。" +
+                           "另外，最底层紧挨着它还有你的一颗子。" +
+                           "\n\n怎么走：右边面板「轴」选 z、「层」调到 0、「次数」选 1 · 90°，" +
+                           "点「执行转动」——棋盘会先转给你看（不占回合）；" +
+                           "看明白了再点「确定操作」。白子会被转走，你那颗子正好补进空位，" +
                            "这条线就活了。", "tut.1.body");
     }
     if (i === 1) {
       return t ? say(() => "贯通：隔着边界也能连", "tut.2.title")
-               : say(() => "棋盘六个面是打通的：x=14 的右边就是 x=0。" +
-                           "你的四颗子压在边界两侧，补上缺口就成五。", "tut.2.body");
+               : say(() => "棋盘六个面是打通的：一头的右边就是另一头 —— 从这边走出去，" +
+                           "会从对面回来。你的四颗子正好压在边界两侧。" +
+                           "\n\n怎么走：在缺口那一格上点一下，就成五了。" +
+                           "（缺口在 y=7、z=7 那一层上；提示栏里写着当前看的是哪一层。）",
+                     "tut.2.body");
     }
     return t ? say(() => "晨昏：连成了也不算数", "tut.3.title")
-             : say(() => "你有两条四连：一条是黎明下的，一条是永夜下的。" +
-                         "现在正是黎明 —— 只有黎明那条算数。而两格之后就会翻到永夜，" +
-                         "机会就过去了。", "tut.3.body");
+             : say(() => "棋盘在两个相位之间轮转：黎明和永夜。每颗子属于它落下时的那个相位，" +
+                         "而只有「当前相位」的连线才算数。" +
+                         "\n\n这一层里有两条四连：浅色那条是永夜下的，深色那条是黎明下的。" +
+                         "现在是黎明，所以深色那条才算数。右边写着「还有 2 格」——" +
+                         "两格之后相位就会翻过去，那时候亮的是另一条。" +
+                         "\n\n怎么走：点深色那条的两端任意一格，补成五。", "tut.3.body");
   },
 
   /** 进入教学（第 0 关）。**关掉设置页、进对局视图** —— 这就是"铺满屏幕"的实现。 */
@@ -11896,6 +11958,7 @@ if (typeof module !== "undefined" && module.exports) {
                      aiRotationCandidates, aiRotationValue, aiSearchMove, aiEvalLeaf, aiEvalLeaf,
                      aiVct, aiFoeCanWin, aiVcfBudgetReset,
                      AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D, AI_POINT_BUDGET_MAX,
+                     cellOf, colourOf, phaseOf,
                      aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
                      TT_EXACT, TT_LOWER, TT_UPPER };
 }

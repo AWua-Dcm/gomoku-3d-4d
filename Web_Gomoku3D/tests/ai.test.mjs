@@ -91,7 +91,7 @@ try {
              TT_EXACT, TT_LOWER, TT_UPPER,
              aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
              aiOutcomeAt, aiRotationCandidates, aiRotationValue, aiSearchMove, aiEvalLeaf,
-             AI_POINT_BUDGET_MAX };`)();
+             AI_POINT_BUDGET_MAX, cellOf, colourOf, phaseOf };`)();
   passed++;
 } catch (e) {
   console.error("内核求值失败：" + e.message + "\n" + (e.stack || ""));
@@ -105,7 +105,7 @@ const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK
         TT_EXACT, TT_LOWER, TT_UPPER,
         aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
         aiOutcomeAt, aiRotationCandidates, aiRotationValue, aiSearchMove, aiEvalLeaf,
-        AI_POINT_BUDGET_MAX } = Core;
+        AI_POINT_BUDGET_MAX, phaseOf } = Core;
 
 console.log("五档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
@@ -1485,6 +1485,39 @@ function aiThreatAtRef(board, x, y, z, player, winLength, restricted) {
   console.log("威胁计数（15³ 中盘 " + b.stoneCount + " 子、" + (cands.length / 3) +
               " 候选 × 2 方 × " + REPEATS + " 轮）：新 " + msNew + "ms / 旧 " + msOld +
               "ms（快 " + (msOld / Math.max(1, msNew)).toFixed(2) + "×）");
+}
+
+// ---------------------------------------------------------------------------
+// 13c. 悔棋必须把「相位时钟」一起回滚
+//
+// 【为什么单钉这一条】v3.0.0「晨昏」把相位做成了**状态**（催/缓会改它），
+// 而 undo() 原来只回滚盘面和走子记录 —— 相位 / 本相位走了几格 / 相位长度 / 债
+// 四个数一个都不动。后果实测过：**悔棋越过一次相位翻转之后，盘上每一颗子都是旧相位的，
+// 而当前相位已经翻过去了 —— 整盘棋全部落在"不算数"的那一边**，画面上还全部淡显。
+// 玩家只是按了一下悔棋，棋盘就变得谁都赢不了。这一条钉住它。
+// ---------------------------------------------------------------------------
+{
+  const r = new RuleSet();
+  r.phasePeriod = 10;
+  const s1 = FourDSession.create(15, BLACK, r);
+  let guard = 0;
+  while (s1.phase === 0 && s1.status === "Playing" && guard++ < 30) {
+    let done = false;
+    for (let y = 0; y < 15 && !done; y++) for (let x = 0; x < 15 && !done; x++) {
+      if (s1.board.isEmpty(x, y, 3)) { s1.place(x, y, 3); done = true; }
+    }
+    if (!done) break;
+  }
+  check(s1.phase === 1, "前置：连续落子确实把相位推到了永夜", "phase=" + s1.phase);
+  const flipped = { mc: s1.moveCount };
+  for (let k = 0; k < 3; k++) s1.undo();
+  // 悔回到翻转之前 → 相位必须跟着回到黎明
+  let off = 0;
+  s1.board.forEachStone((x, y, z, v) => { if (phaseOf(v) !== s1.phase) off++; });
+  check(s1.phase === 0, "悔棋越过相位翻转之后，相位回到黎明", "phase=" + s1.phase +
+        "（悔之前那一刻手数 " + flipped.mc + "）");
+  check(off === 0, "悔棋之后盘上没有一颗子处于异相位",
+        off + " 颗对不上（当前相位 " + s1.phase + "）");
 }
 
 // ---------------------------------------------------------------------------
