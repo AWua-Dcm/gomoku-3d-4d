@@ -2986,6 +2986,28 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 
 const EMPTY = 0, BLACK = 1, WHITE = 2;
 
+/* --------------------------------------------------------------------------
+   v3.0.0「晨昏」的格子值编码。**这是整套相位机制能便宜实现的唯一原因。**
+
+       v = 颜色 | (相位 << 2)      颜色：0 空 / 1 黑 / 2 白 / 3 残响
+                                  相位：0 黎明 / 1 永夜
+
+   于是具体值是：0 空、1 黑·昼、2 白·昼、3 残响、5 黑·夜、6 白·夜。
+
+   【为什么编进格子值，而不是另开一张相位数组】
+     · rotateLayer 是逐格置换 —— **它一行都不用改**，相位跟着子一起转，正是想要的
+     · countRun 只要把"颜色相同"换成"**值**相同"，"异相位的子打断连线"这条规则
+       就自动成立 —— 规则原句直接落成代码，不用额外分支
+     · 关掉相位时值只可能是 0/1/2，现有行为逐位不变
+     · fingerprint 混的就是 cells，相位自动进联机分叉检测
+
+   另开一张数组的话，"转动时两张数组必须同步置换"会成为最容易写错的地方，
+   而且它是**静默**的：转一次错开一格，只有残局才看得出来。
+   -------------------------------------------------------------------------- */
+function cellOf(colour, phase) { return colour | (phase << 2); }
+function colourOf(v) { return v & 3; }
+function phaseOf(v) { return v >> 2; }
+
 /** 转动轴。取值就是坐标分量下标，索引棋盘坐标时可以直接用。 */
 const AXIS_X = 0, AXIS_Y = 1, AXIS_Z = 2;
 
@@ -3343,6 +3365,12 @@ class Board3D {
     this.nx = nx; this.ny = ny; this.nz = nz;
     this.cells = new Uint8Array(nx * ny * nz);
     this.stoneCount = 0;
+    /**
+     * 环绕模式（v3.0.0 拓扑）。**棋盘自己不知道规则** —— 它是会话在 reset 时
+     * 从 RuleSet.wrapEdges 同步过来的一个几何事实：「走出边界算绕回，还是算越界」。
+     * 默认 false，此时下面所有环绕分支都不走，行为与 v2.10.15 逐位相同。
+     */
+    this.wrap = false;
   }
   /** 三维尺寸 [x,y,z]。**长方体下这是唯一的尺寸来源** —— size 会抛。 */
   get dims() { return [this.nx, this.ny, this.nz]; }
@@ -3363,6 +3391,28 @@ class Board3D {
     return x >= 0 && y >= 0 && z >= 0 && x < this.nx && y < this.ny && z < this.nz;
   }
   index(x, y, z) { return x + this.nx * (y + this.ny * z); }
+  /**
+   * 从 (x,y,z) 沿方向 d 走一步，返回扁平下标；**不环绕且越界时返回 -1**。
+   *
+   * 【这是「越界」判断的唯一事实源 —— 别在别处再写一遍】
+   * 环绕模式下"走出边界"不是非法，而是"从对面回来"。这个判断要是散在渲染、
+   * 规则、AI 三处各写一份，迟早会出现"渲染觉得没越界、规则觉得越界"这种
+   * 只在某个角落暴露的 bug —— 而它没有任何症状，只是棋盘左右两端的棋算不到一起。
+   *
+   * d 的分量只会是 −1 / 0 / 1（DIRS13 的全部取值），所以加减一次就够，不用取模运算。
+   */
+  stepIn(x, y, z, d) {
+    const nx = this.nx, ny = this.ny, nz = this.nz;
+    let ax = x + d[0], ay = y + d[1], az = z + d[2];
+    if (this.wrap) {
+      if (ax < 0) ax += nx; else if (ax >= nx) ax -= nx;
+      if (ay < 0) ay += ny; else if (ay >= ny) ay -= ny;
+      if (az < 0) az += nz; else if (az >= nz) az -= nz;
+    } else if (ax < 0 || ay < 0 || az < 0 || ax >= nx || ay >= ny || az >= nz) {
+      return -1;
+    }
+    return ax + nx * (ay + ny * az);
+  }
   /** 越界返回 EMPTY 而不是抛异常 —— 这是"沿方向数连续子"能自然终止的关键。 */
   getOrDefault(x, y, z) {
     if (!this.inBounds(x, y, z)) return EMPTY;
@@ -3512,6 +3562,21 @@ class RuleSet {
     // 三维模式的任何行为都不受它们影响。
     this.allowRotation = false;
     this.rotationCooldownPlacements = 5;
+
+    /* v3.0.0 拓扑（贯通）。**只在四维启用**，三维被 UI 挡住。
+       【为什么放在 RuleSet 而不是 Board3D 上】它是规则，不是几何 —— 同一块盘
+       在两种规则下行为不同，而"这块盘是什么"和"按什么规则算"是两件事。
+       Board3D.wrap 由会话在 reset 时从它同步过去（棋盘自己不知道规则）。
+       【默认关】关掉时下面所有环绕分支都不走，现有行为逐位不变。 */
+    this.wrapEdges = false;
+
+    /* v3.0.0「晨昏」的相位周期。0 = 关闭（默认）。
+       一个相位持续 P 次落子，之后自动翻转。转动/回溯都不推进它 —— 只有落子算时间。
+       【为什么下限是 10 而不是随便定】一个窗口里先手落 ⌈P/2⌉ 子、后手 ⌊P/2⌋ 子；
+       要凑出"连续 5 颗同色同相位"，先手至少得在同一个窗口内落满 5 子 → P ≥ 9，
+       后手要 P ≥ 10。P ≤ 8 时凑不出五连，唯一的路是让一条线熬过整个对相位窗口，
+       而对手落一子就能永久打断它 → 那种档位会变成和棋机器。 */
+    this.phasePeriod = 0;
   }
   clone() {
     const r = new RuleSet();
@@ -3521,6 +3586,8 @@ class RuleSet {
     r.overlineTakesPrecedence = this.overlineTakesPrecedence;
     r.allowRotation = this.allowRotation;
     r.rotationCooldownPlacements = this.rotationCooldownPlacements;
+    r.wrapEdges = this.wrapEdges;
+    r.phasePeriod = this.phasePeriod;
     return r;
   }
   /** 四维模式的棋盘尺寸下限。棋盘至少要装得下一条 winLength 连，否则永远分不出胜负。 */
@@ -3560,20 +3627,54 @@ class RuleSet {
 
 const RuleEngine = {
   /** 从 c 出发沿 d 方向，连续同色子的个数（不含 c 本身）。 */
-  countRun(board, c, d, player) {
+  /**
+   * 从 c 出发沿 d 方向，连续与 `match` 相等的格子个数（不含 c 本身）。
+   *
+   * 【参数叫 match 而不是 player】比的是**完整的格子值**，不是颜色。
+   * 晨昏模式下值里编了相位，所以"颜色相同但相位不同"的两颗子天然不相等 ——
+   * "异相位的子打断连线"这条规则就是这么落成代码的，不需要额外分支。
+   */
+  countRun(board, c, d, match) {
+    const nx = board.nx, ny = board.ny, nz = board.nz;
     let n = 0;
     let x = c.x + d[0], y = c.y + d[1], z = c.z + d[2];
-    while (board.getOrDefault(x, y, z) === player) {
+    if (board.wrap) {
+      // 【环绕：必须封顶，否则整圈同色会让这个循环永远走不完】
+      // 不环绕时它靠 getOrDefault 越界返回 EMPTY 自然终止；环面上每一步都还在盘上、
+      // 都还是同色，没有天然的终点。上限取 nx−1：从 c 的下一格出发，最多走到 c 的前一格
+      // 就必须停 —— 再走一步就回到 c 自己，那颗子会被数两次。
+      // （wrap 只在立方盘上启用，所以 nx−1 对三个轴都成立。）
+      const lim = nx - 1;
+      for (let i = 0; i < lim; i++) {
+        if (x < 0) x += nx; else if (x >= nx) x -= nx;
+        if (y < 0) y += ny; else if (y >= ny) y -= ny;
+        if (z < 0) z += nz; else if (z >= nz) z -= nz;
+        if (board.cells[x + nx * (y + ny * z)] !== match) break;
+        n++;
+        x += d[0]; y += d[1]; z += d[2];
+      }
+      return n;
+    }
+    while (board.getOrDefault(x, y, z) === match) {
       n++; x += d[0]; y += d[1]; z += d[2];
     }
     return n;
   },
 
-  buildLine(c, d, neg, pos) {
+  buildLine(c, d, neg, pos, board) {
     const line = [];
+    const w = !!(board && board.wrap);
+    const nx = board ? board.nx : 0, ny = board ? board.ny : 0, nz = board ? board.nz : 0;
     for (let i = 0; i < neg + pos + 1; i++) {
       const k = i - neg;
-      line.push([c.x + k * d[0], c.y + k * d[1], c.z + k * d[2]]);
+      let x = c.x + k * d[0], y = c.y + k * d[1], z = c.z + k * d[2];
+      if (w) {
+        // 环面上这条线可能绕回原点，坐标要取模 —— 否则高亮会画到盘外去
+        x = ((x % nx) + nx) % nx;
+        y = ((y % ny) + ny) % ny;
+        z = ((z % nz) + nz) % nz;
+      }
+      line.push([x, y, z]);
     }
     return line;
   },
@@ -3582,7 +3683,11 @@ const RuleEngine = {
    * 判定一手棋。调用前该格必须已经放好 player 的子。
    * 正反两个方向都要数 —— 只数一个方向是经典 bug：落子把两段接起来时会漏算。
    */
-  judge(board, c, player, firstPlayer, rules) {
+  judge(board, c, player, firstPlayer, rules, matchValue) {
+    // 【player 和 matchValue 必须分开】player 是**颜色身份**（isRestricted 要用它），
+    // matchValue 是**要匹配的格子值**（晨昏模式下它带着相位）。两者只在关掉相位时相等。
+    // 拿带相位的值去问 isRestricted，受限身份会判错 —— 而那个错只在"先手 + 相位 1"时出现。
+    const mv = matchValue === undefined ? player : matchValue;
     const restricted = rules.isRestricted(player, firstPlayer);
     let longest = 0, longestLine = null;
     let hasExactWin = false;
@@ -3590,15 +3695,22 @@ const RuleEngine = {
 
     for (let i = 0; i < DIRS13.length; i++) {
       const d = DIRS13[i];
-      const neg = RuleEngine.countRun(board, c, [-d[0], -d[1], -d[2]], player);
-      const pos = RuleEngine.countRun(board, c, d, player);
-      const run = 1 + neg + pos;
+      const neg = RuleEngine.countRun(board, c, [-d[0], -d[1], -d[2]], mv);
+      const pos = RuleEngine.countRun(board, c, d, mv);
+      let run = 1 + neg + pos;
+      let bn = neg, bp = pos;
+      // 【环面上要把 run 封顶到 n】整圈同色时 neg 和 pos 各自都能到 n−1（它们分别
+      // 从两个方向绕了大半圈），直接相加会算出 2n−1 —— 而环上一条线最多 n 格。
+      // 不封顶的后果很隐蔽：8³ 上一整圈同色会被算成 15 连，长连判负的档位判定全乱。
+      // neg/pos 归一成"从 c 出发正向绕一圈"，buildLine 才会正好生成 n 格（否则会生成
+      // 2n−1 格、坐标重复一堆 —— 高亮画出来是一团鬼画符）。
+      if (board.wrap && run > board.nx) { run = board.nx; bn = board.nx - 1; bp = 0; }
 
-      if (run > longest) { longest = run; longestLine = RuleEngine.buildLine(c, d, neg, pos); }
+      if (run > longest) { longest = run; longestLine = RuleEngine.buildLine(c, d, bn, bp, board); }
       if (run === rules.winLength) hasExactWin = true;
       if (run > rules.winLength) {
         hasOverline = true;
-        if (run > longestOverline) { longestOverline = run; overlineLine = RuleEngine.buildLine(c, d, neg, pos); }
+        if (run > longestOverline) { longestOverline = run; overlineLine = RuleEngine.buildLine(c, d, bn, bp, board); }
       }
     }
 
@@ -3654,6 +3766,13 @@ class GameSession {
     if (firstPlayer !== BLACK && firstPlayer !== WHITE) throw new Error("先手方不能是 EMPTY");
     this.board = new Board3D(...normalizeDims(dims));
     this.rules = rules.clone();
+    /** v3.0.0「晨昏」：当前相位（0 黎明 / 1 永夜）与本相位已落的子数。 */
+    this.phase = 0;
+    this.placementsInPhase = 0;
+    // 【和 reset 里那一行必须成对】棋盘自己不知道规则，wrap 是会话同步过去的几何事实。
+    // 只在 reset 里同步的话，"构造出来直接下"这条路（create / 测试里的 mkSession）
+    // board.wrap 一直是 false —— 表现是"环绕根本没生效"，而探针一跑就现形。
+    this.board.wrap = !!this.rules.wrapEdges;
     this.firstPlayer = firstPlayer;
     this.currentPlayer = firstPlayer;
     this.status = "Playing";
@@ -3691,8 +3810,11 @@ class GameSession {
     }
 
     const player = this.currentPlayer;
-    this.board.set(x, y, z, player);
-    let outcome = RuleEngine.judge(this.board, { x: x, y: y, z: z }, player, this.firstPlayer, this.rules);
+    // 【落子的值是带相位的】关掉相位时 cellOf(player,0) === player，逐位不变。
+    const v = cellOf(player, this.phase);
+    this.board.set(x, y, z, v);
+    let outcome = RuleEngine.judge(this.board, { x: x, y: y, z: z }, player, this.firstPlayer,
+                                   this.rules, v);
 
     if (outcome.status === MoveStatus.Rejected) {
       this.board.set(x, y, z, EMPTY); // 理论上不会发生；真发生了就回滚以保证状态一致
@@ -3714,10 +3836,44 @@ class GameSession {
       this.isDraw = true;
     } else {
       this.currentPlayer = opponentOf(player);
+      this._advancePhase();
     }
 
     for (const fn of this.onMoveApplied) fn(this, record, outcome);
     return outcome;
+  }
+
+  /**
+   * 推进相位。**这是「连成不算数、对上相位才算」的落点。**
+   *
+   * 计数只由落子驱动 —— 转动、回溯都不推进它（和"冷却只数落子"同一条理由：
+   * 只有落子才算时间）。
+   *
+   * 翻转之后要**立刻整盘清算一次**：新相位下已经存在的线要当场结算。
+   * 注意这**不是**某一手的 judge —— 是"时间自己走出来的终局"，所以要单独一条路径。
+   * 没有它的话，"我连成了、就等相位对上"这件事永远不会发生，晨昏就只剩个名字。
+   */
+  _advancePhase() {
+    const P = this.rules.phasePeriod | 0;
+    if (P <= 0) return;
+    if (++this.placementsInPhase < P) return;
+    this.placementsInPhase = 0;
+    this.phase = 1 - this.phase;
+
+    const runs = RuleEngine.fullScan(this.board, this.rules.winLength);
+    for (let i = 0; i < runs.length; i++) {
+      const r = runs[i];
+      if (phaseOf(r.player) !== this.phase) continue;      // 不是当前相位 → 不结算
+      const colour = colourOf(r.player);
+      const fouled = this.rules.isRestricted(colour, this.firstPlayer) &&
+                     r.length > this.rules.winLength;
+      this.winner = fouled ? opponentOf(colour) : colour;
+      this.status = "Decided";
+      this.lastOutcome = { status: fouled ? MoveStatus.LoseByOverline : MoveStatus.Win,
+                           winner: this.winner, longestRun: r.length,
+                           line: RuleEngine.lineCoords(r), isOverlineFoul: fouled };
+      return;
+    }
   }
 
   /**
@@ -3751,6 +3907,12 @@ class GameSession {
 
     this.board = new Board3D(d[0], d[1], d[2]);
     this.rules = rules.clone();
+    this.phase = 0;
+    this.placementsInPhase = 0;
+    // 【棋盘自己不知道规则，由会话同步这一格几何事实】wrapEdges 是规则（同一块盘
+    // 在两种规则下行为不同），board.wrap 是几何（走出边界算绕回还是算越界）。
+    // 每次 reset 都同步一次，改规则不需要重建棋盘。
+    this.board.wrap = !!this.rules.wrapEdges;
     this.firstPlayer = firstPlayer;
     this.currentPlayer = firstPlayer;
     this.status = "Playing";
@@ -4006,6 +4168,8 @@ class FourDSession {
   /** 历史总长度 = 落子数 + 转动数。UI 显示"共 N 手"用它。 */
   get actionCount() { return this.inner.moveCount + this.rotations.length; }
   get rotationEnabled() { return this.inner.rules.allowRotation; }
+  /** v3.0.0「晨昏」的相位。三维模式下恒为 0。 */
+  get phase() { return this.inner.phase | 0; }
 
   canPlace(x, y, z) { return this.inner.canPlace(x, y, z); }
   place(x, y, z, lang = "zh") { return this.inner.place(x, y, z, lang); }
@@ -4563,17 +4727,23 @@ function aiCandidates(board, cap) {
   if (aiSeenBits.length < board.cellCount) aiSeenBits = new Int32Array(board.cellCount);
   aiSeenStamp++;
   const seen = aiSeenBits, stamp = aiSeenStamp;
+  // 【环绕模式下邻域会绕到对面去】逐轴夹取改成逐轴取模。环绕下不同起点可能
+  // 指向同一格 —— 去重靠上面的 seen 位图，不需要额外处理。
+  const wrap = board.wrap;
   board.forEachStone((x, y, z) => {
     for (let dz = -1; dz <= 1; dz++) {
-      const nz = z + dz;
-      if (nz < 0 || nz >= board.nz) continue;
+      let nz = z + dz;
+      if (wrap) { if (nz < 0) nz += board.nz; else if (nz >= board.nz) nz -= board.nz; }
+      else if (nz < 0 || nz >= board.nz) continue;
       for (let dy = -1; dy <= 1; dy++) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= board.ny) continue;
+        let ny = y + dy;
+        if (wrap) { if (ny < 0) ny += board.ny; else if (ny >= board.ny) ny -= board.ny; }
+        else if (ny < 0 || ny >= board.ny) continue;
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0 && dz === 0) continue;
-          const nx = x + dx;
-          if (nx < 0 || nx >= board.nx) continue;
+          let nx = x + dx;
+          if (wrap) { if (nx < 0) nx += board.nx; else if (nx >= board.nx) nx -= board.nx; }
+          else if (nx < 0 || nx >= board.nx) continue;
           const i = nx + board.nx * (ny + board.ny * nz);
           if (seen[i] === stamp || board.cells[i] !== EMPTY) continue;
           seen[i] = stamp;
@@ -4666,6 +4836,7 @@ function aiThreatAt(board, x, y, z, player, winLength, restricted) {
   const sy = nx, sz = nx * ny;          // 扁平步长：index = x + sy*y + sz*z
   const half = AI_STRIP_HALF;           // 5 = winLength，见 AI_STRIP_HALF 上面那段推导
   const strip = AI_STRIP;
+  const wrap = board.wrap;              // v3.0.0 拓扑：越界即绕回
 
   for (let i = 0; i < DIRS13.length; i++) {
     const d = DIRS13[i];
@@ -4679,11 +4850,22 @@ function aiThreatAt(board, x, y, z, player, winLength, restricted) {
     //      openA/openB 的判据要重写；
     //   ③ Board3D.getOrDefault / inBounds 的语义会分叉（越界变成合法），
     //      那个判断必须有唯一一处定义，否则渲染和规则会各绕各的。
-    // 读 9 格：偏移 -half..+half，第 half 位是本点自己
+    // 读 9 格（环绕下是 11 格：偏移 -half..+half），第 half 位是本点自己。
+    // 【环绕会改变这一段的语义】不环绕时"越界"= S_OUT（这一格不属于任何线）；
+    // 环绕时没有越界，走远了就绕回来 —— 于是 S_OUT 只在非环绕模式下出现。
+    // 【注意环绕的另一个后果】n 小的时候条带两端会读到同一格（n=8、半宽 5 时
+    // 偏移 +5 和 −3 是同一格）。读两遍同一个值是安全的，但它意味着"端点是否为空"
+    // 那个判据在环面上不再有"棋盘边缘"这个天然终止条件 —— 见 openA/openB 那段。
     let px = x - half * dx, py = y - half * dy, pz = z - half * dz;
     for (let k = 0; k < AI_STRIP_LEN; k++) {
       let v;
-      if (px < 0 || py < 0 || pz < 0 || px >= nx || py >= ny || pz >= nz) {
+      if (wrap) {
+        if (px < 0) px += nx; else if (px >= nx) px -= nx;
+        if (py < 0) py += ny; else if (py >= ny) py -= ny;
+        if (pz < 0) pz += nz; else if (pz >= nz) pz -= nz;
+        const c = cells[px + sy * py + sz * pz];
+        v = c === 0 ? S_EMPTY : (c === player ? S_MINE : S_OTHER);
+      } else if (px < 0 || py < 0 || pz < 0 || px >= nx || py >= ny || pz >= nz) {
         v = S_OUT;
       } else {
         const c = cells[px + sy * py + sz * pz];
@@ -4821,9 +5003,10 @@ function aiThreatValue(t, restricted) {
 function aiOutcomeAt(session, x, y, z, player, stats) {
   const b = session.board;
   if (!b.inBounds(x, y, z) || b.get(x, y, z) !== EMPTY) return null;
-  b.set(x, y, z, player);
+  const v = cellOf(player, session.phase | 0);
+  b.set(x, y, z, v);
   AI_PT.x = x; AI_PT.y = y; AI_PT.z = z;
-  const o = RuleEngine.judge(b, AI_PT, player, session.firstPlayer, session.rules);
+  const o = RuleEngine.judge(b, AI_PT, player, session.firstPlayer, session.rules, v);
   b.set(x, y, z, EMPTY);            // set 会维护 stoneCount，所以这一来一回不留痕
   if (stats) stats.judgeCalls++;
   return o;
@@ -5068,7 +5251,7 @@ const AI_EVAL_TOP2 = 0.25;
 function aiThreatBest(board, cands, player, winLength, restricted) {
   let best = 0, second = 0;
   for (let i = 0; i < cands.length; i += 3) {
-    const v = aiThreatValue(aiThreatAt(board, cands[i], cands[i + 1], cands[i + 2], player, winLength, restricted), restricted);
+    const v = aiThreatValue(aiThreatAt(board, cands[i], cands[i + 1], cands[i + 2], aiTag(player), winLength, restricted), restricted);
     if (v > best) { second = best; best = v; }
     else if (v > second) second = v;
   }
@@ -5100,9 +5283,9 @@ function aiEvalLeaf(board, cands, mover, foe, winLength, moverRes, foeRes) {
  * 现有那套深度 0 的打分用的是加号，所以它反而会堵。
  */
 function aiOrderKey(board, x, y, z, mover, foe, winLength, moverRes, foeRes) {
-  const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes), moverRes);
+  const mine = aiThreatValue(aiThreatAt(board, x, y, z, aiTag(mover), winLength, moverRes), moverRes);
   AI_ORDER.mine = mine;              // 平手时要用它，见 aiSearchCompare
-  return mine + AI_ORDER_W * aiThreatValue(aiThreatAt(board, x, y, z, foe, winLength, foeRes), foeRes);
+  return mine + AI_ORDER_W * aiThreatValue(aiThreatAt(board, x, y, z, aiTag(foe), winLength, foeRes), foeRes);
 }
 
 /**
@@ -5305,6 +5488,27 @@ const AI_POINT_BUDGET_MAX = 6000000;
 let aiPointsUsed = 0;
 
 /**
+ * v3.0.0「晨昏」：本次出招时盘上的相位。**由 aiChooseMove 在开头设好。**
+ *
+ * 【为什么是模块级变量而不是参数一路传】相位要穿透 aiOrderKey / aiThreatBest /
+ * aiEvalLeaf / aiVcfThreats / aiVct 五层调用，每一层都加一个参数会让签名全线变长，
+ * 而它们本来就已经有 6~8 个参数了。这和 AI_PT / aiSeenBits / aiPointsUsed 是同一类
+ * "热循环里的隐式上下文"，且它**不参与决策时序**（一次 aiChooseMove 内恒定）。
+ * 默认 0 = 相位关闭，此时 aiTag 是恒等函数，行为逐位不变。
+ */
+let aiPhase = 0;
+
+/**
+ * 某颜色在当前相位下的"落子值"。**aiThreatAt 的 player 参数要换成它。**
+ *
+ * 【为什么这样就够了】aiThreatAt 对 player 只做**相等比较**（"这一格是不是我的"），
+ * 不做任何颜色语义。把带相位的值传进去，"颜色相同但相位不同"的两颗子自然不等 ——
+ * "异相位的子打断连线"这条规则自动成立，函数体一个字都不用改。
+ * 这也正是把相位编进格子值（而不是另开一张数组）换来的好处。
+ */
+function aiTag(colour) { return cellOf(colour, aiPhase); }
+
+/**
  * 迭代加深的**节点预算**（按"一手"计，aiChooseMove 开头重置）。
  *
  * 【先记一笔量过的、没留下的一条路】曾经试过"算杀进叶子"（每个叶子问一遍
@@ -5336,7 +5540,7 @@ function aiVcfThreats(session, attacker, out, cands) {
   out.wins.length = 0; out.fours.length = 0;
   for (let i = 0; i < cands.length; i += 3) {
     const x = cands[i], y = cands[i + 1], z = cands[i + 2];
-    const t = aiThreatAt(board, x, y, z, attacker, wl, res);
+    const t = aiThreatAt(board, x, y, z, aiTag(attacker), wl, res);
     // 【长连也要看身份】受限方走出长连是自尽，算杀里绝不能走；
     // 非受限方走出长连是**赢** —— 原来一刀切 continue，等于把胜着当自尽丢掉。
     if (t.over > 0) { if (res) continue; out.wins.push(x, y, z); continue; }
@@ -5532,7 +5736,7 @@ function aiVct(session, attacker, depth, stats) {
       }
     }
     if (isFour) continue;                         // 上面已经试过了
-    const t = aiThreatAt(board, x, y, z, attacker, rules.winLength, attRes);
+    const t = aiThreatAt(board, x, y, z, aiTag(attacker), rules.winLength, attRes);
     if (t.over > 0 || t.threes === 0) continue;   // 自尽点 / 不是活三
     threes.push({ x: x, y: y, z: z, v: aiThreatValue(t, attRes) });
   }
@@ -5722,8 +5926,8 @@ function aiGreedyMove(session, safe, params, rng, winLength, mover) {
   const scored = [];
   for (let i = 0; i < safe.length; i += 3) {
     const x = safe[i], y = safe[i + 1], z = safe[i + 2];
-    const mine = aiThreatValue(aiThreatAt(board, x, y, z, mover, winLength, moverRes), moverRes);
-    const theirsT = aiThreatAt(board, x, y, z, foe, winLength, foeRes);
+    const mine = aiThreatValue(aiThreatAt(board, x, y, z, aiTag(mover), winLength, moverRes), moverRes);
+    const theirsT = aiThreatAt(board, x, y, z, aiTag(foe), winLength, foeRes);
     const theirs = aiThreatValue(theirsT, foeRes);
     // 每个候选恰好消耗一次随机数 —— 消耗顺序是"同种子必然同结果"那条契约的一部分
     const jitter = 1 + params.noise * (rng() * 2 - 1);
@@ -5797,6 +6001,7 @@ function aiChooseMove(session, opts) {
   aiVcfBudgetReset();                 // 算杀的预算，见 AI_VCF_BUDGET
   aiNodesLeft = AI_ID_NODES;          // 迭代加深的预算同上
   aiPointsUsed = 0;                   // 单手扫过多少候选点，见 AI_POINT_BUDGET_MAX
+  aiPhase = session.phase | 0;        // v3.0.0「晨昏」：本次出招的相位，见 aiPhase
   aiTtReset();                        // 置换表作废，见 AI_TT_GEN 那一段
 
   const r = aiChooseMoveInner(session, opts);
@@ -5968,7 +6173,7 @@ function aiChooseMoveInner(session, opts) {
       // 只有落子是"平淡的一手"时才值得花这一手去把整层挪一挪。
       const myRes = session.rules.isRestricted(mover, session.firstPlayer);
       const placeTier = aiTier(aiThreatValue(aiThreatAt(board, move.x, move.y, move.z,
-                                                        mover, winLength, myRes), myRes));
+                                                        aiTag(mover), winLength, myRes), myRes));
       if (placeTier < 1) {
         const b = aiRotationProbe(session, params, winLength, mover, foe, cand, stats, rotBefore, "build");
         if (b) return b;
