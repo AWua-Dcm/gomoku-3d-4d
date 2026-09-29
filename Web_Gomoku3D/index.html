@@ -4267,19 +4267,19 @@ const AI_LEVELS = ["low", "medium", "high", "xhigh", "ultra"];
 const AI_PARAMS = {
   low: { topK: 4, topProb: 0.40, noise: 0.55, defWeight: 0.50,
          pOpenThree: 0.30, rotChance: 0.15, rotProbe: 6,
-         searchDepth: 0, depth4d: 0, branch: 4, vcf: false, idMax: 0 },
+         searchDepth: 0, depth4d: 0, branch: 4, vcf: false, idMax: 0, tt: false },
   medium: { topK: 2, topProb: 0.72, noise: 0.28, defWeight: 0.80,
             pOpenThree: 0.70, rotChance: 0.50, rotProbe: 8,
-            searchDepth: 1, depth4d: 3, branch: 4, vcf: false, idMax: 0 },
+            searchDepth: 1, depth4d: 3, branch: 4, vcf: false, idMax: 0, tt: false },
   high: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 0.90,
           pOpenThree: 1.00, rotChance: 0.75, rotProbe: 10,
-          searchDepth: 3, depth4d: 5, branch: 4, vcf: false, idMax: 0 },
+          searchDepth: 3, depth4d: 5, branch: 4, vcf: false, idMax: 0, tt: false },
   xhigh: { topK: 1, topProb: 1.00, noise: 0.08, defWeight: 1.00,
            pOpenThree: 1.00, rotChance: 1.00, rotProbe: 12,
-           searchDepth: 5, depth4d: 5, branch: 4, vcf: false, idMax: 0 },
+           searchDepth: 5, depth4d: 5, branch: 4, vcf: false, idMax: 0, tt: true },
   ultra: { topK: 1, topProb: 1.00, noise: 0.00, defWeight: 1.00,
            pOpenThree: 1.00, rotChance: 1.00, rotProbe: 14,
-           searchDepth: 5, depth4d: 5, branch: 4, vcf: true, idMax: 6 },
+           searchDepth: 5, depth4d: 5, branch: 4, vcf: true, idMax: 6, tt: true },
 };
 
 /**
@@ -4316,6 +4316,113 @@ const AI_W = {
 const AI_CANDIDATE_CAP = 20000;
 
 const AI_AXES = [AXIS_X, AXIS_Y, AXIS_Z];
+
+/* --------------------------------------------------------------------------
+   Zobrist 置换表。
+
+   【为什么是 32 位整数而不是字符串/大整数】同局面同种子必须在任何机器上给出同一动作，
+   所以键必须是确定的整数运算；字符串拼接慢得没法放进热循环，BigInt 更慢。
+
+   【键里必须有的东西 —— 少一样都会读到脏表项】
+     · 整盘每一格（Zobrist 主体）
+     · 出子权 mover —— 同一个盘面轮到谁走，值完全不同
+     · 双方受限身份 moverRes / foeRes —— 先手方长连判负、后手方 ≥winLength 即胜
+     · tune 参数（winLength / branch）—— 本表【每手重置】，而一次 aiChooseMove 里
+       tune 是固定的，所以不必进键；将来若要跨手复用，这里必须先补上。
+   【冷却是怎么处理的】四维下 canRotate 由 placementsSinceLastRotation 决定，
+   它【不在盘面上】。但转动不进搜索（转动只在根节点比价），搜索里棋盘只经 board.set
+   变化，所以搜索内部不需要冷却进键。根节点每个转动候选都重新算一次整盘哈希。
+
+   【生命周期：代数戳，每手重置】和 aiSeenBits 同一套写法。这样确定性契约零风险 ——
+   整个计算仍然是纯确定性的，也不会出现"跨手复用了不同参数下的表项"这种偶发脏读。
+   -------------------------------------------------------------------------- */
+
+const AI_TT_SIZE = 1 << 16;                      // 65536 槽
+const AI_TT_MASK = AI_TT_SIZE - 1;
+const AI_TT_KEY = new Int32Array(AI_TT_SIZE);
+const AI_TT_DEPTH = new Int8Array(AI_TT_SIZE);
+const AI_TT_FLAG = new Uint8Array(AI_TT_SIZE);   // 0 空 / 1 精确 / 2 下界 / 3 上界
+const AI_TT_VAL = new Float64Array(AI_TT_SIZE);
+const AI_TT_MX = new Int16Array(AI_TT_SIZE);
+const AI_TT_MY = new Int16Array(AI_TT_SIZE);
+const AI_TT_MZ = new Int16Array(AI_TT_SIZE);
+const AI_TT_GEN = new Int32Array(AI_TT_SIZE);
+let aiTtGen = 0;
+const TT_EXACT = 1, TT_LOWER = 2, TT_UPPER = 3;
+
+/**
+ * Zobrist 随机表。按棋盘尺寸惰性分配：cellCount × 2 色 × 32 位。
+ * EMPTY 不占一项 —— 空就是 0，放子撤子用同一个值异或。
+ */
+let aiZobColor = null;
+let aiZobCells = -1;
+const AI_ZOB_SEED = 0x5eed1234;
+
+/** 出子权与受限身份的混合常量。取值是质数，和格子项独立。 */
+const AI_ZOB_TURN = [0, 0x9e3779b1];             // 下标 = 颜色下标（0=BLACK, 1=WHITE）
+/** 下标 = moverRes*1 + foeRes*2，所以要有 4 项。 */
+const AI_ZOB_RES = [0, 0x85ebca6b, 0xc2b2ae35, 0x27d4eb2f];
+
+function aiZobristEnsure(board) {
+  const n = board.cellCount;
+  if (aiZobColor && aiZobCells === n) return;
+  // 用内核自己的 PRNG，不许 Math.random —— 否则同局面在不同次运行里算出不同的表
+  const rng = aiRng(AI_ZOB_SEED + n);
+  const arr = new Int32Array(n * 2);
+  for (let i = 0; i < arr.length; i++) arr[i] = (rng() * 4294967296) | 0;
+  aiZobColor = arr;
+  aiZobCells = n;
+}
+
+/** 整盘哈希。O(cellCount)，只在根节点调用（每手一次 + 每个转动候选一次）。 */
+function aiZobristBoard(board) {
+  aiZobristEnsure(board);
+  const cells = board.cells;
+  let h = 0;
+  for (let i = 0; i < cells.length; i++) {
+    const v = cells[i];
+    if (v !== 0) h ^= aiZobColor[i * 2 + (v === BLACK ? 0 : 1)];
+  }
+  return h | 0;
+}
+
+/**
+ * 放子 / 撤子都用这一个：Zobrist 的异或是自己的逆运算，而 EMPTY 的项是 0。
+ * idx 是扁平下标，color 是 BLACK / WHITE。**调用前必须先 aiZobristEnsure（走 aiZobristBoard）**。
+ */
+function aiZobristMove(hash, color, idx) {
+  return (hash ^ aiZobColor[idx * 2 + (color === BLACK ? 0 : 1)]) | 0;
+}
+
+/** 每手开头调一次。代数戳 +1 = 整表作废，不做逐项清零（65536 项的 fill 也是白花钱）。 */
+function aiTtReset() {
+  aiTtGen = (aiTtGen + 1) | 0;
+  if (aiTtGen === 0) { AI_TT_GEN.fill(0); aiTtGen = 1; }   // 绕回时清一次，别让旧代变成 0
+}
+
+/** 槽位。**必须是按位与，不能用取模** —— hash 是 32 位有符号，负数的 % 会给出负下标。 */
+function aiTtSlot(key) { return key & AI_TT_MASK; }
+
+function aiTtProbe(key, depth) {
+  const i = aiTtSlot(key);
+  if (AI_TT_GEN[i] !== aiTtGen) return null;
+  if (AI_TT_KEY[i] !== key) return null;      // 碰撞：键不逐位相同就当作没有
+  if (AI_TT_DEPTH[i] < depth) return null;    // 存的那层比要的浅，不能用
+  return { flag: AI_TT_FLAG[i], value: AI_TT_VAL[i],
+           x: AI_TT_MX[i], y: AI_TT_MY[i], z: AI_TT_MZ[i] };
+}
+
+function aiTtStore(key, depth, flag, value, x, y, z) {
+  const i = aiTtSlot(key);
+  // 同槽已有本代同键且更深的一项时让位 —— 浅的覆盖深的会让剪枝失效
+  if (AI_TT_GEN[i] === aiTtGen && AI_TT_KEY[i] === key && AI_TT_DEPTH[i] > depth) return;
+  AI_TT_GEN[i] = aiTtGen;
+  AI_TT_KEY[i] = key;
+  AI_TT_DEPTH[i] = depth;
+  AI_TT_FLAG[i] = flag;
+  AI_TT_VAL[i] = value;
+  AI_TT_MX[i] = x; AI_TT_MY[i] = y; AI_TT_MZ[i] = z;
+}
 
 /** 负方向的预计算。省掉每个候选点 13 次数组分配。 */
 const DIRS13_NEG = DIRS13.map((d) => [-d[0], -d[1], -d[2]]);
@@ -4870,7 +4977,7 @@ function aiSearchCompare(a, b) {
  * 负极大值。返回「轮到 mover 时这个局面的值」。
  * 上一手 last 已经落在盘上，由调用方负责摆上和撤销 —— judge 需要子真的在盘上。
  */
-function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
+function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats, hash) {
   if (stats) stats.searchNodes++;
   // 迭代加深的预算（见 AI_ID_NODES）。**只对"加深的那一层"设防**：基准层必须搜完，
   // 它是"搜不完就退回"的那个退路 —— 连它都被砍，这一手就没有搜索结果可用了。
@@ -4880,6 +4987,24 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
   }
   const board = session.board, rules = session.rules, fp = session.firstPlayer;
   const foe = opponentOf(mover);
+
+  // ---- 置换表探测。键 = 整盘 ⊕ 出子权 ⊕ 双方受限身份，见 Zobrist 那段注释。
+  // 【为什么 last 非空时不探】上一手已经分出胜负了（下面马上要判），探表没意义，
+  // 而且那种节点根本不进表 —— 值来自 judge，不是搜索。
+  const ttKey = (hash ^ AI_ZOB_TURN[mover === BLACK ? 1 : 0] ^
+                 AI_ZOB_RES[(tune.moverRes ? 1 : 0) + (tune.foeRes ? 2 : 0)]) | 0;
+  let ttMove = null;
+  if (tune.tt && !last) {
+    const hit = aiTtProbe(ttKey, depth);
+    if (hit) {
+      // 表里的着法照样要拿出来当排序首选 —— 它往往比精确剪枝更值钱
+      ttMove = { x: hit.x, y: hit.y, z: hit.z };
+      if (hit.flag === TT_EXACT) return hit.value;
+      if (hit.flag === TT_LOWER && hit.value >= beta) return hit.value;
+      if (hit.flag === TT_UPPER && hit.value <= alpha) return hit.value;
+    }
+  }
+
   // 上一手分出了胜负就到此为止。**这是唯一可靠的终局判据**：恰好 5 连赢、长连判负，
   // 全在 judge 里；自己数连子的写法在这里必然数错。
   if (last) {
@@ -4888,6 +5013,7 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
     if (o.status === MoveStatus.LoseByOverline) return AI_SEARCH_WIN - depth;
   }
   const cands = aiCandidates(board, AI_CANDIDATE_CAP);
+  aiPointsUsed += cands.length;          // 单手扫过多少候选点，见 AI_POINT_BUDGET_MAX
   if (depth <= 0 || cands.length === 0) {
     return aiEvalLeaf(board, cands, mover, foe, tune.winLength, tune.moverRes, tune.foeRes);
   }
@@ -4899,20 +5025,43 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats) {
               d: aiCenterDist(board, x, y, z) });
   }
   sc.sort(aiSearchCompare);
+  if (ttMove) {
+    // 置换表里的着法排到队首：α-β 的剪枝全指望"先搜最好的那一手"
+    for (let i = 1; i < sc.length; i++) {
+      if (sc[i].x === ttMove.x && sc[i].y === ttMove.y && sc[i].z === ttMove.z) {
+        const mv = sc[i];
+        for (let j = i; j > 0; j--) sc[j] = sc[j - 1];
+        sc[0] = mv;
+        break;
+      }
+    }
+  }
 
-  let best = -Infinity;
+  const alpha0 = alpha, beta0 = beta;
+  let best = -Infinity, bestX = 0, bestY = 0, bestZ = 0;
   const k = tune.branch < sc.length ? tune.branch : sc.length;
   for (let i = 0; i < k; i++) {
     const m = sc[i];
     board.set(m.x, m.y, m.z, mover);
+    const nh = aiZobristMove(hash, mover, board.index(m.x, m.y, m.z));
     const v = -aiNegamax(session, depth - 1, -beta, -alpha, foe,
-                         { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats);
+                         { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats, nh);
     board.set(m.x, m.y, m.z, EMPTY);
-    if (v > best) best = v;
+    if (v > best) { best = v; bestX = m.x; bestY = m.y; bestZ = m.z; }
     if (best > alpha) alpha = best;
     if (alpha >= beta) break;                    // 剪枝
   }
-  return best === -Infinity ? 0 : best;
+  if (best === -Infinity) best = 0;
+  if (tune.tt) {
+    // 【三种标志】搜完之后按这一步有没有改变窗口来定：
+    //   全窗口都没动过 → 精确值；被 beta 截断 → 下界；连 alpha 都没超过 → 上界。
+    // 记错了标志会让剪枝用错方向，症状是"偶尔走出一步莫名其妙的棋"。
+    let flag = TT_EXACT;
+    if (best <= alpha0) flag = TT_UPPER;
+    else if (best >= beta0) flag = TT_LOWER;
+    aiTtStore(ttKey, depth, flag, best, bestX, bestY, bestZ);
+  }
+  return best;
 }
 
 /* --------------------------------------------------------------------------
@@ -4951,6 +5100,22 @@ const AI_VCF_DEPTH = 12;
  */
 const AI_VCF_BUDGET = 2000000;
 let aiVcfLeft = AI_VCF_BUDGET;
+
+/**
+ * 单手扫过的候选点总数。**它是极限档唯一的耗时上界，而且是计数不是墙钟。**
+ *
+ * 【为什么需要第三个累加器】AI_VCF_BUDGET（按点记账）和 AI_ID_NODES（按节点记账）
+ * 单位不同，加不到一起；而根节点后面还会加上"对手强制胜过滤"——
+ * 那一步会跑好几次算杀。只盯其中任何一个都看不到全貌。
+ * 单位统一成"点"之后，几个计数器才在同一把尺子上。
+ *
+ * 【上界怎么定的】实测 30³ 密集局面单手扫过的点数峰值 × 1.5 向上取整。
+ * 实测值：30³ 密集（1800 子）单手的量级在 1e5 上下，而根节点最多跑
+ * 1 + 对手过滤 K 次算杀 + 搜索，取 6e6 是留了两个数量级的余量。
+ * **换成别的数之前先重量一遍** —— 它的作用只有一个：极限档不许无限膨胀。
+ */
+const AI_POINT_BUDGET_MAX = 6000000;
+let aiPointsUsed = 0;
 
 /**
  * 迭代加深的**节点预算**（按"一手"计，aiChooseMove 开头重置）。
@@ -5022,6 +5187,7 @@ function aiVcf(session, attacker, depth, stats) {
   // 极限档单手 2.9 秒）。按点记账，密盘自动只放行很少几格，稀盘照旧。
   // **是计数不是墙钟** —— 同一局面同一种子必须在任何机器上给出同一动作。
   const cands = aiCandidates(board, AI_CANDIDATE_CAP);
+  aiPointsUsed += cands.length;       // 单手的总开销，见 AI_POINT_BUDGET_MAX
   const cost = cands.length * 2;      // 一个节点要扫两遍：找我的冲四、查他的成五点
   if (aiVcfLeft < cost) return null;
   aiVcfLeft -= cost;
@@ -5104,7 +5270,11 @@ function aiSearchMove(session, safe, params, stats) {
   }
   sc.sort(aiSearchCompare);
 
-  const tune = { winLength: winLength, branch: params.branch, moverRes: moverRes, foeRes: foeRes };
+  const tune = { winLength: winLength, branch: params.branch, moverRes: moverRes, foeRes: foeRes,
+                 tt: !!params.tt };
+  // 根节点的整盘哈希。**一手只算一次** —— 往下走靠 aiZobristMove 增量维护。
+  // 这里必须调 aiZobristBoard（它顺带按尺寸把表建好），不能直接调 aiZobristMove。
+  const rootHash = aiZobristBoard(board);
   const k = params.branch < sc.length ? params.branch : sc.length;
   let best = null;
 
@@ -5121,7 +5291,8 @@ function aiSearchMove(session, safe, params, stats) {
       const m = order[i];
       board.set(m.x, m.y, m.z, mover);
       const v = -aiNegamax(session, d - 1, -Infinity, -alpha, foe,
-                           { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats);
+                           { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats,
+                           aiZobristMove(rootHash, mover, board.index(m.x, m.y, m.z)));
       board.set(m.x, m.y, m.z, EMPTY);
       if (!iterBest || v > iterBest.v) iterBest = { x: m.x, y: m.y, z: m.z, v: v };
       if (v > alpha) alpha = v;
@@ -5223,20 +5394,37 @@ function aiChooseMove(session, opts) {
   const board = session.board;
   if (board.isFull) return { kind: "none" };
 
+  // 【预算与置换表都按"一手"重置】**每手都重置**这件事同时把一条隐蔽的错法堵死了：
+  // 悔棋 / 重开之后复用同一个 session 时，上一局的表项不可能残留成"残影"。
+  const stats = o.stats || null;
+  aiVcfLeft = AI_VCF_BUDGET;          // 算杀的预算，见 AI_VCF_BUDGET
+  aiNodesLeft = AI_ID_NODES;          // 迭代加深的预算同上
+  aiPointsUsed = 0;                   // 单手扫过多少候选点，见 AI_POINT_BUDGET_MAX
+  aiTtReset();                        // 置换表作废，见 AI_TT_GEN 那一段
+
+  const r = aiChooseMoveInner(session, opts);
+  // 计数器统一在这里落进 stats —— 函数体里返回点有十几处，逐个写迟早漏掉一处
+  if (stats) stats.points = aiPointsUsed;
+  return r;
+}
+
+/** 真正干活的那一段。**只由 aiChooseMove 调**，别从别处直接调 —— 跳过重置会读到上一手的表。 */
+function aiChooseMoveInner(session, opts) {
+  const o = opts || {};
+  const board = session.board;
   const winLength = session.rules.winLength;
   const mover = session.currentPlayer;
   const foe = opponentOf(mover);
   const params = AI_PARAMS[o.level] || AI_PARAMS.medium;
   const rng = aiRng(o.seed === undefined ? 1 : o.seed);
   const stats = o.stats || null;
-  aiVcfLeft = AI_VCF_BUDGET;      // 算杀的预算按"一手"重置，见 AI_VCF_BUDGET
-  aiNodesLeft = AI_ID_NODES;      // 迭代加深的预算同上
 
   // stats 只给测试量计算量用：它是"耗时上界"这类断言的抓手，用计数器而不是墙钟，
   // 免得测试在慢机器上随机变红。
   if (stats) { stats.candidates = 0; stats.judgeCalls = 0; stats.rotProbes = 0; stats.searchNodes = 0; stats.vcfNodes = 0; }
 
   const cand = aiCandidates(board, AI_CANDIDATE_CAP);
+  aiPointsUsed += cand.length;
   if (stats) stats.candidates = cand.length / 3;
   if (cand.length === 0) return { kind: "none" };
 
@@ -10005,7 +10193,9 @@ if (typeof module !== "undefined" && module.exports) {
                      AXIS_X, AXIS_Y, AXIS_Z, RotationDirection, RotateStatus,
                      RotationOps, RotationMove, RotateOutcome, RotationRecord, FourDSession, axisName,
                      aiChooseMove, aiCandidates, aiThreatAt, aiThreatAtSlow, aiThreatValue,
-                     aiRng, AI_LEVELS, AI_PARAMS };
+                     aiRng, AI_LEVELS, AI_PARAMS,
+                     aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
+                     TT_EXACT, TT_LOWER, TT_UPPER };
 }
 </script>
 </body>

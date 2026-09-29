@@ -22,9 +22,25 @@ const HTML_PATH = path.join(HERE, "..", "index.html");
 let passed = 0;
 const failures = [];
 
+/**
+ * 【开发时用】AI_TEST_FAIL_FAST=1 → 第一条断言失败就立刻退出，不跑完剩下的。
+ *
+ * 为什么要有它：这个文件后面有几十局自对局，跑完要八分多钟。写测试的时候
+ * "写完立刻看它红"要等八分钟，人就会开始偷懒跳过这一步 —— 而跳过才是真的贵。
+ * 跑完整套件（CI / 提交前）时不要设它，那时需要看到全部失败项。
+ */
+const FAIL_FAST = process.env.AI_TEST_FAIL_FAST === "1";
+
 function check(ok, name, detail) {
   if (ok) { passed++; return; }
-  failures.push(name + (detail ? "\n      " + detail : ""));
+  const line = name + (detail ? "\n      " + detail : "");
+  failures.push(line);
+  if (FAIL_FAST) {
+    console.log("");
+    console.log("FAIL（fail-fast）：" + line);
+    console.log("已过 " + passed + " 项；剩下的没跑（AI_TEST_FAIL_FAST=1）。");
+    process.exit(1);
+  }
 }
 function eq(actual, expected, name, ctx) {
   check(actual === expected, name,
@@ -68,8 +84,11 @@ try {
     return { Board3D, RuleSet, RuleEngine, GameSession, FourDSession, DIRS13, MoveStatus,
              EMPTY, BLACK, WHITE, opponentOf, fingerprint,
              RotationMove, RotateStatus, AXIS_X, AXIS_Y, AXIS_Z,
-             aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS,
-             aiThreatBest, aiTier, AI_W };`)();
+             aiChooseMove, aiCandidates, aiThreatAt, aiThreatAtSlow, aiThreatValue,
+             aiRng, AI_LEVELS, AI_PARAMS,
+             aiThreatBest, aiTier, AI_W, Board3D,
+             aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
+             TT_EXACT, TT_LOWER, TT_UPPER };`)();
   passed++;
 } catch (e) {
   console.error("内核求值失败：" + e.message + "\n" + (e.stack || ""));
@@ -78,7 +97,9 @@ try {
 const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK, WHITE,
         opponentOf, fingerprint, RotationMove, RotateStatus, AXIS_X, AXIS_Y, AXIS_Z,
         aiChooseMove, aiCandidates, aiThreatAt, aiThreatValue, aiRng, AI_LEVELS, AI_PARAMS,
-        aiThreatBest, aiTier, AI_W, Board3D, aiThreatAtSlow } = Core;
+        aiThreatBest, aiTier, AI_W, Board3D, aiThreatAtSlow,
+        aiZobristBoard, aiZobristMove, aiTtReset, aiTtStore, aiTtProbe,
+        TT_EXACT, TT_LOWER, TT_UPPER } = Core;
 
 console.log("五档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
@@ -118,6 +139,117 @@ function judgeAt(s, act, player) {
                              s.firstPlayer, s.rules);
   b.set(act.x, act.y, act.z, EMPTY);
   return o;
+}
+
+// ---------------------------------------------------------------------------
+// 1b. Zobrist 置换表
+//
+// 【为什么不测"开关置换表选出同一动作"】那一条是错的，做不到也不该要求：
+// 置换表会改变 α-β 的剪枝顺序，同分着法的 tie-break 本来就会跟着变。
+// 要它逐字段相同，等于要求置换表什么都不做。真正要钉住的是三件事：
+// 键算得对、代数戳真的清了表、碰撞不至于翻车。
+// ---------------------------------------------------------------------------
+{
+  const mk = (dims) => new Board3D(dims[0], dims[1], dims[2]);
+
+  // --- 键算得对：同样的盘面 → 同样的键；动一格 → 键一定变
+  const b = mk([10, 10, 10]);
+  b.set(3, 4, 5, BLACK); b.set(7, 2, 1, WHITE);
+  const h0 = aiZobristBoard(b);
+  check(h0 === aiZobristBoard(b), "同一盘面两次算出的键相同");
+  const h1 = aiZobristMove(h0, BLACK, b.index(1, 1, 1));
+  check(h1 !== h0, "放一颗子键会变");
+  check(aiZobristMove(h1, BLACK, b.index(1, 1, 1)) === h0, "放完再撤键回到原值");
+
+  // --- 黑白互换必须是不同的键（否则两方会互认）
+  const b2 = mk([10, 10, 10]);
+  b2.set(3, 4, 5, WHITE); b2.set(7, 2, 1, BLACK);
+  check(aiZobristBoard(b2) !== h0, "黑白对调后键不同");
+
+  // --- 按尺寸惰性分配：尺寸变了要重建，不能沿用旧表
+  const b3 = mk([30, 30, 30]);
+  b3.set(29, 29, 29, BLACK);
+  check(aiZobristBoard(b3) !== 0, "30³ 上也能算出键（表按尺寸重建）");
+  check(aiZobristBoard(mk([8, 8, 8])) === 0, "空盘的键是 0（EMPTY 不占表项）");
+
+  // --- 转动后转回来，键必须回到原值（四维的转动是整层置换）
+  const s4 = mkSession(8, BLACK, true, 3);
+  s4.board.set(2, 3, 4, BLACK); s4.board.set(5, 5, 5, WHITE); s4.board.set(1, 1, 1, BLACK);
+  const hb = aiZobristBoard(s4.board);
+  for (let axis = 0; axis < 3; axis++) {
+    for (const layer of [1, 4]) {
+      s4.board.rotateLayer(axis, layer, 1);
+      s4.board.rotateLayer(axis, layer, 3);
+      check(aiZobristBoard(s4.board) === hb,
+            "转动一手再转回来，整盘键回到原值（axis=" + axis + " layer=" + layer + "）");
+    }
+  }
+
+  // --- 代数戳真的清了表：重置之后同键必须探不到
+  aiTtReset(1);
+  aiTtStore(0x12345678, 5, TT_EXACT, 999, 1, 2, 3);
+  check(aiTtProbe(0x12345678, 5) !== null, "同一代里存进去探得到");
+  aiTtReset(2);
+  check(aiTtProbe(0x12345678, 5) === null, "代数戳 +1 之后整表作废");
+  // --- 浅的结果不许覆盖深的
+  aiTtReset(3);
+  aiTtStore(0x0badf00d, 7, TT_EXACT, 111, 1, 1, 1);
+  aiTtStore(0x0badf00d, 3, TT_EXACT, 222, 2, 2, 2);
+  const deep = aiTtProbe(0x0badf00d, 3);
+  check(deep && deep.value === 111 && deep.x === 1, "浅结果不覆盖同槽的深结果",
+        JSON.stringify(deep));
+  // --- 要的层比存的深时不许用。上面存的是 depth 7，所以问 7 探得到、问 8 探不到。
+  check(aiTtProbe(0x0badf00d, 7) !== null, "要的层和存的一样深时探得到");
+  check(aiTtProbe(0x0badf00d, 8) === null, "要的层比存的深时探不到（不能用浅的冒充深的）");
+
+  // --- 碰撞压力：反复往同一个槽位灌不同的键，探到的必须还是本次那一条
+  aiTtReset(99);
+  let collisions = 0;
+  for (let i = 0; i < 200; i++) {
+    const k = i * 65536;               // 低位全 0 → 全部落在槽 0 上
+    aiTtStore(k, 5, TT_EXACT, i, 1, 1, 1);
+    const got = aiTtProbe(k, 5);
+    if (got && got.value !== i) collisions++;
+  }
+  check(collisions === 0, "同槽反复覆写之后探到的仍是本次存进去的那一项",
+        collisions + " 次探到了别的项");
+
+  // --- 硬规则在开了置换表之后照旧成立
+  const s1 = mkSession(15, BLACK, false);
+  buildSixOrFive(s1, 5);
+  const a1 = aiChooseMove(s1, { level: "ultra", seed: 11 });
+  const j1 = a1.kind === "place" ? judgeAt(s1, a1, WHITE) : null;
+  check(j1 && j1.status === MoveStatus.Win, "开了置换表，「能赢必赢」照旧", JSON.stringify(a1));
+}
+
+{
+  // --- 悔棋 / 换尺寸重开之后复用同一个 session：置换表与哈希基准必须跟着重置
+  const s = mkSession(15, BLACK, false);
+  const rng = rngOf(1212);
+  for (let j = 0; j < 10 && s.status === "Playing"; j++) {
+    const em = [];
+    for (let z = 5; z < 10; z++) for (let y = 5; y < 10; y++) for (let x = 5; x < 10; x++) {
+      if (s.board.isEmpty(x, y, z)) em.push([x, y, z]);
+    }
+    const m = em[(rng() * em.length) | 0];
+    s.place(m[0], m[1], m[2]);
+  }
+  // 同一个局面、同一个种子，出招两次必须一样。
+  // 【别写成"悔 3 手再问"】那问的是另一个局面，动作当然会变 —— 这一条要模拟的是
+  // "电脑出了这一手 → 玩家悔棋 → 电脑重新算"，所以必须把那一手真的走出去再悔回来。
+  const before = aiChooseMove(s, { level: "ultra", seed: 77 });
+  if (before.kind === "place") { s.place(before.x, before.y, before.z); s.undo(); }
+  const after = aiChooseMove(s, { level: "ultra", seed: 77 });
+  check(before.kind === after.kind && before.x === after.x &&
+        before.y === after.y && before.z === after.z,
+        "悔棋之后同局面同种子给出同一动作（置换表没有残影）",
+        JSON.stringify([before, after]));
+
+  // 换一个尺寸重开：Zobrist 表必须跟着重建
+  s.reset([8, 8, 8], BLACK, s.rules);
+  const a8 = aiChooseMove(s, { level: "ultra", seed: 5 });
+  check(a8.kind === "place" && s.board.inBounds(a8.x, a8.y, a8.z),
+        "换尺寸重开之后出招仍落在盘内", JSON.stringify(a8));
 }
 
 // ---------------------------------------------------------------------------
