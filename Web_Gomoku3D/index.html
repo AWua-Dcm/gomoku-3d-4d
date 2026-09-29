@@ -564,6 +564,12 @@
      gap 和 .row 的 gap 一样是 10px，所以它嵌在行里看不出接缝。 */
   #coolGrid { display: grid; grid-template-columns: repeat(2, auto); gap: 10px; }
 
+  /* v3.0.0「晨昏」的周期键。**一行平铺，不做 2×2 网格** ——
+     冷却那行用网格是因为它有四个等宽的长文案（"3 手""10 手"），
+     而这五个是"关/10/12/16/20"，短且等宽，平铺更省地方也更好读。
+     选中态复用 .sel，和这一页其它键一致。 */
+  .dawnBtn { min-width: 38px; }
+
   /* 电脑强度拉条。**真的能拖**：原生 input[type=range]，系统外观整个去掉、自己画。
      方角 + 描边，和这一页其他按钮是同一套语言（不做圆头胶囊 —— 那是另一种控件的样子）。
 
@@ -2758,7 +2764,7 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
 </div>
 
 <aside id="panel">
-    <div id="statusRow"><div id="chip"></div><div id="status">黑棋落子</div></div>
+    <div id="statusRow"><div id="chip"></div><div id="status">黑棋落子</div><div id="phaseChip"></div></div>
     <div id="rule"></div>
     <div id="info"></div>
 
@@ -2829,6 +2835,11 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
       <button id="restartBtn" data-i18n="restartBtn">重开 R</button>
       <button id="swapBtn" data-i18n="swapBtn">换先手</button>
       <button id="setupBtn" data-i18n="setupBtn">设置</button>
+      <!-- v3.0.0「晨昏」的落子宣告。**一个键循环三态**，不做三个键：
+           这一行已经有四个键，再加三个会把它在窄窗口下挤折；
+           而"下一手要正常/缓/催"本来就是三选一，循环比并排更省地方。
+           晨昏关掉时它 disabled + 淡显（和冷却行在三维下同一套做法）。 -->
+      <button id="modeBtn" disabled></button>
     </div>
   </aside>
 </div>
@@ -3004,6 +3015,24 @@ const EMPTY = 0, BLACK = 1, WHITE = 2;
    另开一张数组的话，"转动时两张数组必须同步置换"会成为最容易写错的地方，
    而且它是**静默**的：转一次错开一格，只有残局才看得出来。
    -------------------------------------------------------------------------- */
+/**
+ * v3.0.0「晨昏」的落子宣告。**它是这一整套机制里唯一一处"玩家能动时间"的地方** ——
+ * 相位本身是自动轮转的，但落子时可以把它拖住或者推快一点。
+ *
+ *   正常 —— 时间走一格
+ *   缓  —— 时间不走，向下一相位借一格（债 +1）
+ *   催  —— 时间走两格，把借的还掉（债 −1）
+ *
+ * 【为什么做成落子的修饰，而不是一个独立动作】独立动作要花一整回合 ——
+ * 等于用一子换时间，净收益是零，没人会用。做成修饰才有意义。
+ */
+const MoveMode = { Normal: 0, Slow: 1, Fast: 2 };
+
+/** 「晨昏」周期键的 id 与可选值。**放进内核区间之外**（它是界面的事）。 */
+
+/** 一个相位最短几手。缓把时间借走之后，下一相位不能短于它。 */
+const MIN_PHASE_HANDS = 2;
+
 function cellOf(colour, phase) { return colour | (phase << 2); }
 function colourOf(v) { return v & 3; }
 function phaseOf(v) { return v >> 2; }
@@ -3172,6 +3201,14 @@ const CORE_TEXT = {
       ja: "座標が範囲外：{x},{y},{z}", ko: "좌표 범위 초과: {x},{y},{z}", ru: "Вне границ: {x},{y},{z}", fr: "Hors limites : {x},{y},{z}" },
   "reject.taken": { zh: "该位置已有棋子 {x},{y},{z}", en: "That cell is taken: {x},{y},{z}",
       ja: "既に石がある：{x},{y},{z}", ko: "이미 돌이 있는 자리: {x},{y},{z}", ru: "Клетка занята: {x},{y},{z}", fr: "Case occupée : {x},{y},{z}" },
+  // v3.0.0「晨昏」：借不动 / 还不动。**必须是"拒绝"而不是"悄悄降级成普通落子"** ——
+  // 静默降级的话玩家会以为自己缓住了，而时间照走。
+  "reject.slow": { zh: "缓不动了：能借的时间已经借满", en: "Cannot slow down: you have already borrowed all the time you can",
+      ja: "これ以上は遅らせません：借りられる時間は使い切りました", ko: "더 늦출 수 없습니다: 빌릴 수 있는 시간을 모두 썼습니다",
+      ru: "Замедлить нельзя: всё доступное время уже занято", fr: "Impossible de ralentir : tout le temps empruntable est déjà utilisé" },
+  "reject.fast": { zh: "催不动了：能还的时间已经还满", en: "Cannot speed up: you have already repaid all the time you can",
+      ja: "これ以上は早められません：返せる時間は返し切りました", ko: "더 앞당길 수 없습니다: 되돌려줄 수 있는 시간을 모두 갚았습니다",
+      ru: "Ускорить нельзя: всё доступное время уже возвращено", fr: "Impossible d'accélérer : tout le temps remboursable est déjà rendu" },
 
   // ---- 转动
   "rot.move": { zh: "{axis}={layer} 顺时针{n}次",
@@ -3578,6 +3615,28 @@ class RuleSet {
        而对手落一子就能永久打断它 → 那种档位会变成和棋机器。 */
     this.phasePeriod = 0;
   }
+
+  /**
+   * 还能借多少格时间（= 缓还能用几次）。
+   *
+   * 【★ 这个上限是必须的，不是调参】按最初的设计，"缓"只是让倒计时不推进 ——
+   * 那双方一直缓就永远不会翻转，**相位机制整个消失**（所有子都是相位 0），
+   * 而且债会无限累积，翻转时下一相位长度变成 P − debt 的负数。
+   * 草案里那句"任何相位不得短于 2 手"如果加在**当前相位剩余**上，永远触发不了它 ——
+   * 因为缓恰恰是不让它减少。所以约束必须加在**债**上。
+   */
+  get maxDebt() { return Math.max(0, (this.phasePeriod | 0) - MIN_PHASE_HANDS); }
+
+  /**
+   * 现在能不能缓 / 催。UI 用它决定两个键亮不亮。
+   *
+   * 【催也必须封顶，和缓对称】不封的话双方一直催，债会往负方向无限累积，
+   * 相位一轮比一轮长 —— 和"一直缓"是同一个洞的另一半。
+   * 所以债是有界的：−maxDebt ≤ debt ≤ +maxDebt，两边各借各的，谁都挪不出预算。
+   */
+  canSlow(debt) { return (debt | 0) < this.maxDebt; }
+  canFast(debt) { return (debt | 0) > -this.maxDebt; }
+
   clone() {
     const r = new RuleSet();
     r.winLength = this.winLength;
@@ -3766,9 +3825,17 @@ class GameSession {
     if (firstPlayer !== BLACK && firstPlayer !== WHITE) throw new Error("先手方不能是 EMPTY");
     this.board = new Board3D(...normalizeDims(dims));
     this.rules = rules.clone();
-    /** v3.0.0「晨昏」：当前相位（0 黎明 / 1 永夜）与本相位已落的子数。 */
+    /**
+     * v3.0.0「晨昏」的相位状态。三个数各有分工：
+     *   phase        当前相位（0 黎明 / 1 永夜）
+     *   elapsedInPhase / phaseTarget   本相位"已经走了几格时间"和"一共几格"
+     *   phaseDebt    本相位借出去（正）或还没用掉（负）的时间，翻转时结算给下一相位
+     * 【为什么用"格"而不是"手数"】缓的一手不推进时间，所以手数和时间不是一回事。
+     */
     this.phase = 0;
-    this.placementsInPhase = 0;
+    this.elapsedInPhase = 0;
+    this.phaseTarget = this.rules.phasePeriod | 0;
+    this.phaseDebt = 0;
     // 【和 reset 里那一行必须成对】棋盘自己不知道规则，wrap 是会话同步过去的几何事实。
     // 只在 reset 里同步的话，"构造出来直接下"这条路（create / 测试里的 mkSession）
     // board.wrap 一直是 false —— 表现是"环绕根本没生效"，而探针一跑就现形。
@@ -3795,13 +3862,22 @@ class GameSession {
 
   canPlace(x, y, z) { return this.status === "Playing" && this.board.isEmpty(x, y, z); }
 
-  place(x, y, z, lang = "zh") {
+  place(x, y, z, lang = "zh", mode = MoveMode.Normal) {
     // lang 只影响【被拒时那句原因】。默认("zh")下每个字都和以前一样 ——
     // server.js 调 place 时不传 lang，线上协议因此仍然是中文，联机测试里的
     // 中文子串断言一条都不动。
     if (this.status !== "Playing") {
       return this._reject(ct("reject.over", lang));
     }
+    // 【宣告必须比落子先判】它不消耗回合、也不改棋盘 —— 和"冷却未到"那类拒绝同一套。
+    // 借不动的缓 / 催要在这里挡掉，否则它会静默地变成一个普通落子。
+    if (mode === MoveMode.Slow && !this.rules.canSlow(this.phaseDebt)) {
+      return this._reject(ct("reject.slow", lang));
+    }
+    if (mode === MoveMode.Fast && !this.rules.canFast(this.phaseDebt)) {
+      return this._reject(ct("reject.fast", lang));
+    }
+    if (mode !== MoveMode.Slow && mode !== MoveMode.Fast) mode = MoveMode.Normal;
     if (!this.board.inBounds(x, y, z)) {
       return this._reject(ct("reject.bounds", lang, { x: x, y: y, z: z }));
     }
@@ -3836,12 +3912,15 @@ class GameSession {
       this.isDraw = true;
     } else {
       this.currentPlayer = opponentOf(player);
-      this._advancePhase();
+      this._advancePhase(mode);
     }
 
     for (const fn of this.onMoveApplied) fn(this, record, outcome);
     return outcome;
   }
+
+  /** 距离相位翻转还有几格时间。UI 的倒计时用它。 */
+  get handsUntilFlip() { return Math.max(0, this.phaseTarget - this.elapsedInPhase); }
 
   /**
    * 推进相位。**这是「连成不算数、对上相位才算」的落点。**
@@ -3853,11 +3932,21 @@ class GameSession {
    * 注意这**不是**某一手的 judge —— 是"时间自己走出来的终局"，所以要单独一条路径。
    * 没有它的话，"我连成了、就等相位对上"这件事永远不会发生，晨昏就只剩个名字。
    */
-  _advancePhase() {
+  _advancePhase(mode) {
     const P = this.rules.phasePeriod | 0;
     if (P <= 0) return;
-    if (++this.placementsInPhase < P) return;
-    this.placementsInPhase = 0;
+    // 三种宣告对时间的作用：
+    //   正常 —— 走一格
+    //   缓   —— 不走，向下一相位借一格（债 +1）
+    //   催   —— 走两格，把借的还掉（债 −1）
+    // 债在翻转时结算：下一相位的长度 = P − 债。
+    if (mode === MoveMode.Slow) { this.phaseDebt++; }
+    else if (mode === MoveMode.Fast) { this.elapsedInPhase += 2; this.phaseDebt--; }
+    else { this.elapsedInPhase += 1; }
+    if (this.elapsedInPhase < this.phaseTarget) return;
+    this.elapsedInPhase = 0;
+    this.phaseTarget = P - this.phaseDebt;
+    this.phaseDebt = 0;
     this.phase = 1 - this.phase;
 
     const runs = RuleEngine.fullScan(this.board, this.rules.winLength);
@@ -3908,7 +3997,9 @@ class GameSession {
     this.board = new Board3D(d[0], d[1], d[2]);
     this.rules = rules.clone();
     this.phase = 0;
-    this.placementsInPhase = 0;
+    this.elapsedInPhase = 0;
+    this.phaseTarget = this.rules.phasePeriod | 0;
+    this.phaseDebt = 0;
     // 【棋盘自己不知道规则，由会话同步这一格几何事实】wrapEdges 是规则（同一块盘
     // 在两种规则下行为不同），board.wrap 是几何（走出边界算绕回还是算越界）。
     // 每次 reset 都同步一次，改规则不需要重建棋盘。
@@ -4172,7 +4263,7 @@ class FourDSession {
   get phase() { return this.inner.phase | 0; }
 
   canPlace(x, y, z) { return this.inner.canPlace(x, y, z); }
-  place(x, y, z, lang = "zh") { return this.inner.place(x, y, z, lang); }
+  place(x, y, z, lang = "zh", mode) { return this.inner.place(x, y, z, lang, mode); }
   describeStatus(lang = "zh") { return this.inner.describeStatus(lang); }
 
   reset(dims, firstPlayer, rules) {
@@ -6506,6 +6597,9 @@ const TEXT = { en: {
   "aiLv.high": "High",
   "aiLv.xhigh": "Very high",
   "aiLv.ultra": "Ultra",
+  "phase.dawn": "Dawn", "phase.night": "Long night",
+  "phase.left": " · {n} to go", "mode.label": "Play: ",
+  "mode.normal": "normal", "mode.slow": "hold", "mode.fast": "hasten",
   "aiHint.ultra": "Thinking time may increase noticeably",
   "aiLevel.aria": "Computer strength",
   "layer.label": "Layer {i} / {n}",
@@ -6667,6 +6761,9 @@ TEXT.ja = {
   "aiLv.high": "強",
   "aiLv.xhigh": "最強",
   "aiLv.ultra": "極",
+  "phase.dawn": "黎明", "phase.night": "長い夜",
+  "phase.left": " · 切り替わりまで {n}", "mode.label": "着手：",
+  "mode.normal": "通常", "mode.slow": "遅らせる", "mode.fast": "早める",
   "aiHint.ultra": "思考時間が明らかに長くなることがあります",
   "aiLevel.aria": "コンピュータの強さ",
   "layer.label": "レイヤー {i} / {n}",
@@ -6786,6 +6883,9 @@ TEXT.ko = {
   "aiLv.high": "상",
   "aiLv.xhigh": "최상",
   "aiLv.ultra": "극",
+  "phase.dawn": "여명", "phase.night": "긴 밤",
+  "phase.left": " · 전환까지 {n}", "mode.label": "착수: ",
+  "mode.normal": "보통", "mode.slow": "늦추기", "mode.fast": "앞당기기",
   "aiHint.ultra": "생각 시간이 눈에 띄게 길어질 수 있습니다",
   "aiLevel.aria": "컴퓨터 강도",
   "layer.label": "레이어 {i} / {n}",
@@ -6912,6 +7012,9 @@ TEXT.ru = {
   "aiLv.high": "Сильн",
   "aiLv.xhigh": "Оч. сильн",
   "aiLv.ultra": "Ультра",
+  "phase.dawn": "Рассвет", "phase.night": "Долгая ночь",
+  "phase.left": " · до смены {n}", "mode.label": "Ход: ",
+  "mode.normal": "обычный", "mode.slow": "задержать", "mode.fast": "ускорить",
   "aiHint.ultra": "Время обдумывания может заметно увеличиться",
   "aiLevel.aria": "Сила компьютера",
   "layer.label": "Слой {i} / {n}",
@@ -7040,6 +7143,9 @@ TEXT.fr = {
   "aiLv.medium": "Moyen",
   "aiLv.high": "Haut",
   "aiLv.xhigh": "Très haut",
+  "phase.dawn": "Aube", "phase.night": "Longue nuit",
+  "phase.left": " · {n} avant la bascule", "mode.label": "Coup : ",
+  "mode.normal": "normal", "mode.slow": "retenir", "mode.fast": "hâter",
   "aiHint.ultra": "Le temps de réflexion peut augmenter nettement",
   "aiLv.ultra": "Ultra",
   "aiLevel.aria": "Force de l'ordinateur",
@@ -7941,6 +8047,27 @@ const Game = {
   // ---- 四维模式。fourD 为 false 时这一堆全都不参与，三维模式的行为一字不变。
   fourD: false,
   setupCool: 5,          // 设置页选的冷却（落子数）
+  /**
+   * v3.0.0「晨昏」的相位周期。**0 = 关（默认）**，其余是周期格数。
+   *
+   * 【为什么没有界面开关 —— 三种摆法全撞墙，都是实测】
+   *   ① 单独占一行 → 「开始游戏」在法语下被挤出视口 45px
+   *      （browser-check 那条"六种语言都不用滚动就看得见"当场抓到）
+   *   ② 塞进四维尺寸行 → 那一行本来就被「必须立方…」占满（法语 572px），再加就折行，
+   *      仍然超 44px（#dimsSlot 的高度取两条里高的那条）
+   *   ③ 塞进转动冷却那个网格、扩成 3 列 → 破了「冷却四键必须 2×2 两列各自对齐」
+   *      那条断言（六种语言 × 两种视口，6 条红）
+   * 三条不变量都是真的承重，不是可以商量的。**起始界面确实没有余量了。**
+   *
+   * 所以先给一个**零布局代价**的入口，让机制能被试玩：
+   * 在地址后面加 `?dawn=12` 打开。周期不能低于 10 —— 一个窗口里先手落 ⌈P/2⌉ 子，
+   * 要凑出"连续 5 颗同色同相位"至少得落满 5 子 → 先手 P ≥ 9、后手 P ≥ 10，
+   * 6 和 8 在数学上凑不出五连（会变成和棋机器）。
+   * 等试玩有结论，再单独设计它在界面上的位置。
+   */
+  bootDawn: 0,
+  /** 下一手要用的宣告（v3.0.0「晨昏」）。见 MoveMode。 */
+  placeMode: 0,
   rotAxis: AXIS_Z,
   rotLayer: 0,
   rotClockwise: true,
@@ -8006,7 +8133,20 @@ const Game = {
               this.el.banner.classList.contains("on"));
   },
 
+  /** 解析 `?dawn=N`。读不到 / 不合法就是 0（关）。**不抛**。 */
+  readDawnParam() {
+    try {
+      if (typeof location === "undefined" || !location.search) return 0;
+      const m = /[?&]dawn=(\d+)/.exec(location.search);
+      if (!m) return 0;
+      const n = parseInt(m[1], 10);
+      return n >= 10 ? n : 0;          // P < 10 凑不出五连，不接受
+    } catch (e) { return 0; }
+  },
+
   init() {
+    // v3.0.0「晨昏」的入口（零布局代价，理由见 bootDawn）。必须在建会话之前读。
+    this.bootDawn = this.readDawnParam();
     const ids = ["gl","modeGhost","modeSlice","modeGrid","stoneAll","stoneBlack","stoneWhite",
       "sliceGroup","sliceDown","sliceUp","sliceLabel",
       "coords","hint","hintbox","hintToggle","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
@@ -8014,6 +8154,7 @@ const Game = {
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
       "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","aiHint","orderMe","orderCpu",
+      "phaseChip","modeBtn",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
@@ -8217,6 +8358,8 @@ const Game = {
       d[1] = d[2] = d[0];
     }
     rules.rotationCooldownPlacements = this.setupCool;
+    rules.phasePeriod = this.bootDawn;       // v3.0.0「晨昏」，0 = 关；见 bootDawn
+    this.placeMode = 0;                      // 新局从"正常"开始
 
     // 一律用 FourDSession 包一层。三维模式下它是个透明的转发壳（allowRotation 为 false，
     // 转动一律被拒），这样界面只有一条代码路径，不用到处写 if (fourD)。
@@ -9292,6 +9435,11 @@ const Game = {
     if (!this.session) return;
     const s = this.session;
 
+    // v3.0.0「晨昏」：相位指示与落子宣告键跟着一起刷。
+    // **必须挂在这条总刷新链上** —— 只挂在点击处理里的话，落子之后相位变了、
+    // 倒计时变了，显示却停在上一次点键时的样子。
+    this.refreshPhaseTexts();
+
     this.el.status.textContent = s.describeStatus(this.lang);
     this.el.status.style.color = s.status === "Decided"
       ? (s.lastOutcome.status === MoveStatus.LoseByOverline ? "#c0392b" : "#a9741a")
@@ -9451,6 +9599,7 @@ const Game = {
     document.querySelectorAll(".coolBtn").forEach(b => {
       b.addEventListener("click", () => this.setSetupCool(parseInt(b.dataset.cool, 10)));
     });
+    if (this.el.modeBtn) this.el.modeBtn.addEventListener("click", () => this.cyclePlaceMode());
     document.querySelectorAll(".rotAxis").forEach(b => {
       b.addEventListener("click", () => this.setRotAxis(parseInt(b.dataset.axis, 10)));
     });
@@ -10057,7 +10206,12 @@ const Game = {
       this.toast(say(() => "转动还没确定 · 先按「确定操作」或「取消操作」", "toast.rotPreview"), false);
       return;
     }
-    const o = this.session.place(x, y, this.activeLayer, this.lang);
+    // 宣告只在晨昏开着时才有意义 —— 关掉时恒为 Normal，与以前逐位相同。
+    const mode = this.dawnOn() ? this.placeMode : 0;
+    const o = this.session.place(x, y, this.activeLayer, this.lang, mode);
+    // 【拒绝之后要把宣告复位】借不动 / 还不动时那两手被拒，若不复位，
+    // 下一手会继续带着一个用不了的宣告，玩家会以为"缓住了"而时间照走。
+    if (o.status === MoveStatus.Rejected && mode !== 0) this.setPlaceMode(0, true);
     if (o.status === MoveStatus.Rejected) this.toast(o.reason, false);
   },
 
@@ -10479,6 +10633,64 @@ const Game = {
    * 写成后者会在桩里直接抛 TypeError —— 而那个报错看起来和"冷却行"毫无关系，很难查。
    * 与 bindUi 里保持同一种写法。
    */
+  /** 本局有没有开晨昏。 */
+  dawnOn() { return !!(this.session && this.session.rules && this.session.rules.phasePeriod > 0); },
+
+  /** 落子宣告：0 正常 / 1 缓 / 2 催。循环切换。 */
+  setPlaceMode(m, silent) {
+    this.placeMode = (m === 1 || m === 2) ? m : 0;
+    this.refreshPhaseTexts();
+    if (!silent) return;
+  },
+
+  cyclePlaceMode() {
+    if (!this.dawnOn()) return;
+    this.placeMode = (this.placeMode + 1) % 3;
+    this.refreshPhaseTexts();
+  },
+
+  /**
+   * 刷新相位指示与宣告键。**晨昏关掉时两者都要回到"看不见"的状态** ——
+   * 相位指示清空、宣告键禁用淡显（不是藏起来：藏起来会让 #buttons 那一行在
+   * 开关晨昏时宽度突变，而它是居中的）。
+   */
+  refreshPhaseTexts() {
+    const on = this.dawnOn();
+    if (this.el.phaseChip) {
+      if (!on) {
+        this.el.phaseChip.textContent = "";
+      } else {
+        const p = this.session.phase | 0;
+        const left = this.session.handsUntilFlip;
+        // 【别用 ctPlural】那是**内核**的文案表（ct 系），界面这层够不着。
+        // 也不用界面这侧的复数选形 —— 把句子写成不需要复数变化的形状最省事：
+        // "Dawn · 3 to go"，1 和 3 都是同一个形。
+        // 【两个 say 各写各的字面量键】源码扫描要求第二个实参是字符串字面量 ——
+        // 写成 `p === 0 ? "phase.dawn" : "phase.night"` 它认不出，会当成漏翻。
+        const name = p === 0
+          ? say(() => "黎明", "phase.dawn")
+          : say(() => "永夜", "phase.night");
+        this.el.phaseChip.textContent =
+          name + say(() => " · 还有 " + left + " 格", "phase.left", { n: left });
+      }
+    }
+    if (this.el.modeBtn) {
+      this.el.modeBtn.disabled = !on;
+      this.el.modeBtn.classList.toggle("dim", !on);
+      this.el.modeBtn.textContent = on
+        ? say(() => "落子：", "mode.label") + this.modeName()
+        : "";
+    }
+  },
+
+  /** 三种宣告的名字。**五个键各写各的字面量键** —— 源码扫描要求键是字面量。 */
+  modeName() {
+    const i = this.placeMode;
+    if (i === 1) return say(() => "缓", "mode.slow");
+    if (i === 2) return say(() => "催", "mode.fast");
+    return say(() => "正常", "mode.normal");
+  },
+
   syncCoolRow() {
     const on = this.fourD;
     document.querySelectorAll(".coolBtn").forEach(b => { b.disabled = !on; });

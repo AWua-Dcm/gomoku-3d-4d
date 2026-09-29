@@ -258,12 +258,12 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 ### 2026.09.29
 
 - 🔧 **v2.10.15** Board size upper limit lowered from 50 to 30 (`8 – 30`)
-- ✨ **v2.10.15** Computer opponent: **4D rotation now competes with placing a stone** — Very high and
+- ✨ **v2.10.16** Computer opponent: **4D rotation now competes with placing a stone** — Very high and
   Ultra value "rotate" and "place" with the same search and take whichever scores higher (Low / Mid /
   High keep the cheaper tier heuristics, but no tier skips rotation by chance any more). Ultra also
   gains a **kill search over open threes** (VCT), and any win it claims must survive a check that works through
   every relevant defence (a strong filter, not a mathematical proof — see RULES_SPEC §11). Added a Zobrist transposition table.
-- 🎨 **v2.10.15** Setup screen: at Ultra the slider shifts up a few pixels and a small line appears
+- 🎨 **v2.10.17** Setup screen: at Ultra the slider shifts up a few pixels and a small line appears
   below it — "Thinking time may increase noticeably" — without moving any other control
 
 - ✨ **v2.10.14** The computer opponent is much stronger: fixed "its second stone wanders off to the player's layer" (a searching tier only expands the top 4 of its ordering, and extending its own stone tied exactly with blocking the player's, so the tie went to the lowest coordinates — the top 4 always landed in one corner); the leaf evaluation now adds up the two best threats instead of only the best one; Very high goes from 4 plies to 5 and Ultra now deepens iteratively (6 plies when it can afford them); the kill search no longer misses the case where the opponent has a five of its own
