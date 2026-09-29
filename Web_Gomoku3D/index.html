@@ -164,9 +164,10 @@
      它也顺便成了"右键能拖"的可见提示（桌面上看不出一个画布支不支持右键拖动）。 */
   #gl.panning { cursor: move; }
 
+  /* v3.0.0：改成纵向两条等宽行，字号收小一档。见上面那条 HTML 注释。 */
   #modebar {
     position: absolute; left: 14px; top: 14px;
-    display: flex; align-items: center; gap: 8px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
     /* 【装不下就整颗换行，按键永远不许被压窄 —— 手机版"只看白不见了"的根因】
        原来既没有 flex-wrap 也没有右边约束，而按键是可压缩的（flex-shrink 默认 1），
        于是 393px 竖屏下发生两件事，一件比一件糟：
@@ -568,7 +569,12 @@
      冷却那行用网格是因为它有四个等宽的长文案（"3 手""10 手"），
      而这五个是"关/10/12/16/20"，短且等宽，平铺更省地方也更好读。
      选中态复用 .sel，和这一页其它键一致。 */
-  .dawnBtn { min-width: 38px; }
+  /* 模式条里的两行。行内仍然是 flex（键与键 8px），行与行 6px。 */
+  #modebar .mbRow { display: flex; align-items: center; gap: 8px; }
+  /* 【字号收小一档】两行加起来要顶得上原来一行折行后的高度，否则会压到右上角那两个键。
+     12.5px 对得上这一页 .mini 原来那一档；用 #modebar 限定，别影响别处的 .mini。 */
+  #modebar .mini { font-size: 12.5px; padding: 3px 8px; }
+
 
   /* 电脑强度拉条。**真的能拖**：原生 input[type=range]，系统外观整个去掉、自己画。
      方角 + 描边，和这一页其他按钮是同一套语言（不做圆头胶囊 —— 那是另一种控件的样子）。
@@ -663,6 +669,8 @@
                  height: 92px; overflow-y: auto; }
   #ruleNote { color: var(--dim); font-size: 12.5px; text-align: center; max-width: 660px;
               line-height: 1.8; border-top: 1px solid var(--border); padding-top: 14px; }
+  /* 开始游戏 + 游戏教学并排。两个键之间 12px，整组仍然居中。 */
+  #startRow { display: flex; align-items: center; justify-content: center; gap: 12px; }
   #startBtn { font-size: 18px; font-weight: 600; padding: 13px 48px; letter-spacing: 3px; }
 
   /* ---------- 右上角：语言切换 +「具体规则」，以及规则浮层 ---------- */
@@ -2642,7 +2650,15 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
       <span id="previewTagBelow" data-i18n-html="previewTagBelow">演示棋盘 · 10 × 10 × 10<br>与下方设置无关，也不参与对局</span>
     </div>
 
+    <!-- 【v3.0.0：改成两条等宽行】原来是一条自动换行的 flex 条子，哪几个键落在哪一行
+         取决于语言和窗口宽度（法语/俄语下换行点都不一样）。现在按"管什么"分两行写死：
+           第一行 —— 怎么看（幽灵层 / 切片 / 格线）
+           第二行 —— 看谁（全部 / 只看黑 / 只看白）+ 逐层翻页
+         于是**跨语言、跨宽度，每个键都在固定的位置上** —— 手机版被吐槽的"换个语言按钮
+         就换地方"从根上没了。字号也收小一档，两行加起来才顶得上原来一行折行后的高度。
+         原来那个 .modeSep 竖线不要了：换行本身就是分组，再加一条线是两套分隔语言。 -->
     <div id="modebar">
+      <div class="mbRow">
       <button id="modeGhost" class="mini sel" data-i18n="modeGhost">幽灵层</button>
       <button id="modeSlice" class="mini" data-i18n="modeSlice">切片</button>
       <!-- 隐藏三维静态格线。`sel` 表示"格线可见"（默认），和 modeGhost 的 sel=幽灵层生效
@@ -2652,13 +2668,11 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
            立方体内部会读成一片灰网，盘里的子被糊得看不见。这是"从 15³ 起就必然发生"的，
            不是大棋盘才有的问题，所以需要一个一键关掉它的开关。 -->
       <button id="modeGrid" class="mini sel" data-i18n="modeGrid">格线</button>
-      <!-- 棋子过滤。单独占一组，左边用一条竖线和其他几项隔开 ——
-           前三个按钮管的是"怎么看"（幽灵/切片/格线），这三个管的是"看谁"，
-           不加分隔的话「全部」会被读成"所有视图模式都打开"。
-           三档而不是两个开关：两个开关会出现"都亮着 / 都灭着"这两种需要想一下的状态，
-           而这里三档互斥、任意时刻恰好一个 sel，当前在看什么一眼可见。
-           顺序和 sel 的落点都由 setStoneFilter 的取值决定，不在这里写死。 -->
-      <div class="modeSep"></div>
+      </div>
+      <div class="mbRow">
+      <!-- 棋子过滤。三档而不是两个开关：两个开关会出现"都亮着 / 都灭着"这两种
+           需要想一下的状态，而这里三档互斥、任意时刻恰好一个 sel，当前在看什么一眼可见。
+           顺序和 sel 的落点由 setStoneFilter 的取值决定，不在这里写死。 -->
       <button id="stoneAll" class="mini sel" data-i18n="stoneAll">全部</button>
       <button id="stoneBlack" class="mini" data-i18n="stoneBlack">只看黑</button>
       <button id="stoneWhite" class="mini" data-i18n="stoneWhite">只看白</button>
@@ -2666,6 +2680,7 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
         <button id="sliceDown" class="mini">-</button>
         <div id="sliceLabel"></div>
         <button id="sliceUp" class="mini">+</button>
+      </div>
       </div>
     </div>
 
@@ -2994,7 +3009,14 @@ sur un plateau 15×15×15, une couche contient en moyenne moins d'un pion, et la
     获胜方向为 13 个：3 轴向 + 6 面对角 + 4 体对角。右侧面板可以逐层查看与落子。
   </div>
 
-  <button id="startBtn" class="sel" data-i18n="startBtn">开始游戏</button>
+  <div id="startRow">
+    <button id="startBtn" class="sel" data-i18n="startBtn">开始游戏</button>
+    <!-- v3.0.0「游戏教学」。**只有选了四维模式才出现**（用户口径：没选之前不要出现，
+         也不要做成变浅不可点 —— 那种"这里有个东西但你用不了"的暗示在这一页上
+         已经有冷却和相位两行在承担了，再来一个只会让人以为坏了）。
+         HTML 里先写死 display:none：默认就是三维，JS 还没跑起来之前状态也得是对的。 -->
+    <button id="tutorialBtn" data-i18n="tutorialBtn" style="visibility:hidden">游戏教学</button>
+  </div>
 </div>
 
 <script>
@@ -6575,6 +6597,7 @@ const STATIC_TEXT = { en: {
   "firstWhite": "White first",
   "dimCube": "Link all three axes",
   "startBtn": "Start game",
+  "tutorialBtn": "Tutorial",
 
   // ---- 起始界面的规则摘要（含 <br>）。英文读者看到的是同一件事的白话说法，
   //      不是中文那一行的逐字对译。
@@ -6756,6 +6779,7 @@ STATIC_TEXT.ja = {
   "firstWhite": "白が先手",
   "dimCube": "3軸を連動",
   "startBtn": "対局開始",
+  "tutorialBtn": "ゲームの説明",
   "ruleNote": "ルール：空いているマスならどこにでも着手できます（重力はありません）。先手は<b>ちょうど5連</b>を作らなければならず、6連以上は長連で負けです。後手は5連以上で勝ちです。<br>勝ちの方向は13通り：3軸 + 面対角線6本 + 体対角線4本。右のパネルでレイヤーを切り替えて石を置きます。",
 };
 TEXT.ja = {
@@ -6874,6 +6898,7 @@ STATIC_TEXT.ko = {
   "firstWhite": "백 선수",
   "dimCube": "세 축 연동",
   "startBtn": "게임 시작",
+  "tutorialBtn": "게임 안내",
   "ruleNote": "규칙: 빈칸이면 어디든 착수할 수 있습니다 — 중력은 없습니다. 선수는 <b>정확히 다섯</b>을 이어야 하며, 여섯 이상은 장련(長連) 반칙으로 패배합니다. 후수는 다섯 이상이면 승리합니다.<br>승리 방향은 13개입니다: 축 3 + 면 대각선 6 + 공간 대각선 4. 오른쪽 패널에서 레이어를 넘기며 돌을 놓으세요.",
 };
 TEXT.ko = {
@@ -6995,6 +7020,7 @@ STATIC_TEXT.ru = {
   "firstWhite": "Первыми ходят белые",
   "dimCube": "Связать все три оси",
   "startBtn": "Начать игру",
+  "tutorialBtn": "Обучение",
   "ruleNote": "Правила: ходить можно в любую пустую клетку — гравитации нет. Первый игрок должен собрать <b>ровно пять</b> в ряд; шесть и более — перебор и поражение. Второй игрок побеждает при пяти и более.<br>Победных направлений 13: 3 оси + 6 диагоналей граней + 4 диагонали куба. Переключайте слои на панели справа и ставьте камни.",
 };
 TEXT.ru = {
@@ -7125,6 +7151,7 @@ STATIC_TEXT.fr = {
   "firstWhite": "Blancs en premier",
   "dimCube": "Lier les trois axes",
   "startBtn": "Commencer la partie",
+  "tutorialBtn": "Didacticiel",
   "ruleNote": "Règles : vous pouvez jouer sur n'importe quelle case vide — il n'y a pas de gravité. Le premier joueur doit aligner <b>exactement cinq</b> pions ; six ou plus est un alignement trop long, ce qui fait perdre. Le second joueur gagne avec cinq ou plus.<br>Il y a 13 directions gagnantes : 3 axes + 6 diagonales de face + 4 grandes diagonales. Utilisez le panneau de droite pour parcourir les couches et poser des pions.",
 };
 TEXT.fr = {
@@ -8122,7 +8149,7 @@ const Game = {
       "coords","hint","hintbox","hintToggle","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
       "chip","status","rule","info","boardWrap","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
-      "setup","firstBlack","firstWhite","sizeSummary","startBtn","view","stage","previewTag",
+      "setup","firstBlack","firstWhite","sizeSummary","startBtn","tutorialBtn","view","stage","previewTag",
       "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","aiHint","orderMe","orderCpu",
       "phaseChip","modeBtn",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
@@ -10689,6 +10716,10 @@ const Game = {
    */
   syncCoolRow() {
     const on = this.fourD;
+    // 【教学按钮：四维才出现】用户口径是没选之前不要出现，也不要做成变浅不可点——
+    // 所以这里动的是 display，不是 disabled/opacity。它是 #startRow 里的第二个键，
+    // 出现/消失会让「开始游戏」左右挪一点，这是有意的取舍（那一行在窄屏下本来就居中）。
+    if (this.el.tutorialBtn) this.el.tutorialBtn.style.visibility = on ? "" : "hidden";
     if (this.el.coolInput) this.el.coolInput.disabled = !on;
     if (this.el.phaseInput) this.el.phaseInput.disabled = !on;
     // 范围提示走和数据尺寸同一条路：从常量现算，不写死第二份。
