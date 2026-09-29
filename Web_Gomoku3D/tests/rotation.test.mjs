@@ -48,7 +48,8 @@ const core = html.slice(a + BEGIN.length, b);
 
 const M = new Function(core + `
   return { Board3D, RuleSet, GameSession, FourDSession, RotationOps, RotationMove, RotateStatus,
-           AxisName: axisName, AXIS_X, AXIS_Y, AXIS_Z, EMPTY, BLACK, WHITE };
+           AxisName: axisName, AXIS_X, AXIS_Y, AXIS_Z, EMPTY, BLACK, WHITE,
+           cellOf: cellOf, colourOf: colourOf, phaseOf: phaseOf };
 `)();
 const { Board3D, RuleSet, GameSession, FourDSession, RotationOps, RotationMove, RotateStatus,
         AxisName, EMPTY, BLACK, WHITE } = M;
@@ -199,8 +200,25 @@ for (const n of [2, 3, 4, 5, 6]) {
 
 // ---------------------------------------------------------------------------
 // 2. 动作序列：冷却 / 无变化 / 回滚 / 悔棋 / 回合，逐步比对
+//
+// 【已知分歧：转动为自己成五】下面这三条向量记的是 3.0.0 的规则 ——
+// "转动只要造出连线就整体撤销"，所以它们记着 CreatesLine + 盘面不变。
+// 3.0.1 把规则反过来了一半：**转动方自己**成五算赢（造出别人的线仍然撤销）。
+// 这三条恰好就是"全部是黑子、转一下正好补进第五颗"，于是它们现在判胜。
+//
+// 【为什么不改向量】rotation-vectors.json 由已删除的 C# 内核导出，无法重新生成，
+// run-all.sh 第 2 步用 md5 把它钉死 —— 改它等于篡改证据。
+// 所以分歧**明写在测试里**：这几条不再比对冻结的期望值，改成断言 3.0.1 的新规则，
+// 而且断言得更严（连"赢家是谁"一起钉住）。清单是**逐条列名字**的，不是按特征匹配 ——
+// 将来再冒出一条新分歧会当场变红，逼人来看，而不是被规则悄悄吞掉。
 // ---------------------------------------------------------------------------
+const OWN_FIVE_BY_ROTATION = new Set([
+  "转动造出 5 连必须回滚（顺时针 1 次）",
+  "转动造出 5 连必须回滚（顺时针 2 次）",
+  "转动造出 5 连必须回滚（顺时针 3 次）",
+]);
 let actionSteps = 0;
+let ownFiveRotations = 0;
 for (const c of vectors.actionCases) {
   const rules = new RuleSet();
   rules.winLength = c.winLength;
@@ -221,6 +239,20 @@ for (const c of vectors.actionCases) {
       const o = s.place(step.x, step.y, step.z);
       eq(o.status, step.status, "落子结果", ctx);
       eq(o.winner, step.winner, "胜者", ctx);
+    } else if (step.kind === "rotate" && OWN_FIVE_BY_ROTATION.has(c.name)) {
+      // 见上面那段【已知分歧】。这里换成 3.0.1 的期望值，比冻结的那份更严：
+      // 连"谁赢了、转完之后轮到谁"都钉住 —— 冻结的那份只记了 status + 盘面。
+      const who = s.currentPlayer;
+      const o = s.rotate(RotationMove.fromClockwiseTurns(step.axis, step.layer, step.turns));
+      eq(o.status, "Rotated", "转动结果（新规则：自己成五允许）", ctx + " → " + (o.reason || ""));
+      eq(s.status, "Decided", "棋局状态（新规则：转出自己五连即判胜）", ctx);
+      eq(s.winner, who, "赢家（新规则：转动的那个人）", ctx);
+      eq(s.rotationCount, 1, "转动次数", ctx);
+      eq(s.lastOutcome.line === null || s.lastOutcome.line.length >= rules.winLength, true,
+         "判胜给的连线长度够 winLength", ctx);
+      eq(s.currentPlayer, who, "判胜后出子权停在赢家身上（悔棋要还原它）", ctx);
+      ownFiveRotations++;
+      continue;                      // 冻结的 hash / gameStatus 对新规则不成立，跳过比对
     } else if (step.kind === "rotate") {
       const o = s.rotate(RotationMove.fromClockwiseTurns(step.axis, step.layer, step.turns));
       eq(o.status, step.status, "转动结果", ctx + " → " + (o.reason || ""));
@@ -344,8 +376,88 @@ for (const axis of [M.AXIS_X, M.AXIS_Y, M.AXIS_Z]) {
 }
 
 // ---------------------------------------------------------------------------
+// 4. 3.0.1 新规则：转动可以为自己成五
+//
+// 上面那三条向量只钉住了"允许 + 判胜"，这里把新规则的另外半边补齐 ——
+// 撤销的边界在哪、悔棋能不能退回来、异相位的线算不算数。
+// ---------------------------------------------------------------------------
+{
+  const mkRules = (extra) => { const r = new RuleSet(); r.allowRotation = true;
+    r.rotationCooldownPlacements = 0; if (extra) extra(r); return r; };
+
+  // 上面那三条分歧向量必须真的跑到了，不然清单本身烂掉了也没人知道
+  eq(ownFiveRotations, OWN_FIVE_BY_ROTATION.size,
+     "【已知分歧】清单里的三条都必须真的回放到（清单烂掉会在这里红）");
+
+  // 4.1 自己成五：允许，且判胜（用和向量同构的 5³ 局面，但这里是新断言）
+  {
+    const s = FourDSession.create(5, BLACK, mkRules());
+    for (const x of [0, 1, 2, 3]) s.board.set(x, 0, 0, BLACK);
+    s.board.set(4, 4, 0, BLACK);
+    const o = s.rotate(RotationMove.fromClockwiseTurns(M.AXIS_X, 4, 1));
+    eq(o.status, RotateStatus.Rotated, "4.1 自己成五的转动必须被接受");
+    eq(s.status, "Decided", "4.1 转出自己五连必须判胜");
+    eq(s.winner, BLACK, "4.1 赢的是转动方");
+    eq(s.currentPlayer, BLACK, "4.1 判胜后出子权留在赢家身上");
+  }
+
+  // 4.2 【送给对方】成五：仍然整体回滚，盘面一格都不能动
+  {
+    const s = FourDSession.create(5, BLACK, mkRules());
+    // 白棋四连 (0..3,0,0)（沿着 x，跨层）+ 第 4 层里的白子 (4,4,0)。
+    // 绕 x 轴转第 4 层：(y,z) -> (z, 4-y)，于是 (4,4,0) 正好落到 (4,0,0) 补成白五连。
+    // 注意要转的是【白子所在的那一层】，而线跨过它 —— 这也是转动唯一能造出线的方式。
+    for (const x of [0, 1, 2, 3]) s.board.set(x, 0, 0, WHITE);
+    s.board.set(4, 4, 0, WHITE);
+    const before = boardHash(s.board);
+    const o = s.rotate(RotationMove.fromClockwiseTurns(M.AXIS_X, 4, 1));
+    eq(o.status, RotateStatus.CreatesLine, "4.2 转出别人的五连必须整体撤销");
+    eq(boardHash(s.board), before, "4.2 撤销之后盘面必须逐格还原");
+    eq(s.status, "Playing", "4.2 撤销的转动不该结束棋局");
+    eq(s.currentPlayer, BLACK, "4.2 撤销的转动不占回合");
+    eq(s.rotationCount, 0, "4.2 撤销的转动不记账");
+  }
+
+  // 4.3 悔棋要能退掉"转出来的胜局"
+  {
+    const s = FourDSession.create(5, BLACK, mkRules());
+    for (const x of [0, 1, 2, 3]) s.board.set(x, 0, 0, BLACK);
+    s.board.set(4, 4, 0, BLACK);
+    const before = boardHash(s.board);
+    s.rotate(RotationMove.fromClockwiseTurns(M.AXIS_X, 4, 1));
+    eq(s.status, "Decided", "4.3 前提：这一转判了胜");
+    eq(s.undoLastRotation(), true, "4.3 胜局必须能悔（否则整局卡死在终局上）");
+    eq(s.status, "Playing", "4.3 悔掉之后必须回到「还在下」");
+    eq(s.winner, EMPTY, "4.3 悔掉之后不该留着胜者");
+    eq(boardHash(s.board), before, "4.3 悔掉之后盘面逐格还原");
+    eq(s.rotationCount, 0, "4.3 悔掉之后转动记账清空");
+    eq(s.currentPlayer, BLACK, "4.3 出子权回到转动方");
+    // 悔完还能接着下、接着判胜 —— 状态位没被落成半截
+    const o2 = s.place(4, 0, 0);
+    eq(o2.status, "Win", "4.3 悔完再落子仍然能正常判胜");
+  }
+
+  // 4.4 晨昏：**自己颜色、但异相位**的线不算数 —— 留在盘上就是定时炸弹，必须撤销
+  {
+    const s = FourDSession.create(5, BLACK, mkRules((r) => { r.phasePeriod = 12; }));
+    // 全用【相位 1 的黑子】摆一条和 4.1 同构的线。当前相位是 0（刚开局），
+    // 所以这条线转出来也不该算数 —— 它现在不判胜，但相位一翻它立刻就活了。
+    const bomb = M.cellOf(BLACK, 1);
+    for (const x of [0, 1, 2, 3]) s.board.set(x, 0, 0, bomb);
+    s.board.set(4, 4, 0, bomb);
+    const before = boardHash(s.board);
+    const o = s.rotate(RotationMove.fromClockwiseTurns(M.AXIS_X, 4, 1));
+    eq(o.status, RotateStatus.CreatesLine, "4.4 自己颜色但异相位的线也必须撤销");
+    eq(boardHash(s.board), before, "4.4 撤销之后盘面还原");
+    eq(s.status, "Playing", "4.4 不该判胜");
+    eq(s.winner, EMPTY, "4.4 不该产生胜者");
+  }
+}
+
+// ---------------------------------------------------------------------------
 console.log("");
 console.log("回放：置换 " + mapCases + " 组，动作 " + actionSteps + " 步");
+console.log("新规则（转动为自己成五）：分歧回放 " + ownFiveRotations + " 条");
 console.log("");
 console.log("==================================================");
 console.log("  " + passed + " 项通过 / " + failures.length + " 项失败");

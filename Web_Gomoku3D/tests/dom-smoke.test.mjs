@@ -329,6 +329,10 @@ const fullScript = html.slice(scriptStart + 8, scriptEnd);
 
 let Game = null;
 let PALETTE = null, FALLBACK_COLORS = null, cellSize = null, BoardLimits = null, CoreNS = null;
+// 内核的"0/1/2 -> 空/黑/白"，从 CoreNS 里取（见下面 runner 的返回表）
+let cnOf = null;
+// runner 的整个返回表（下面挂影子纯函数要用）
+let NS_TOPOLOGY = null;
 let renderRulesMarkdown = null, escapeHtmlNS = null;
 let TEXT_EN = null, STATIC_EN = null, t = null;
 let clampPan2d = null, OrbitCameraNS = null, GESTURE = null;
@@ -370,15 +374,22 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
       " GESTURE: { ZOOM2D_MAX: ZOOM2D_MAX, TAP_WINDOW_MS: TAP_WINDOW_MS," +
       "            TAP_NEAR_PX: TAP_NEAR_PX, PINCH_TAIL_MS: PINCH_TAIL_MS }," +
       " CoreNS: { GameSession: GameSession, FourDSession: FourDSession, RuleSet: RuleSet," +
-      "           RotateStatus: RotateStatus, MoveStatus: MoveStatus, fingerprint: fingerprint }," +
+      "           RotateStatus: RotateStatus, MoveStatus: MoveStatus, fingerprint: fingerprint," +
+      // cnOf 是内核里的"0/1/2 -> 空/黑/白"。露出来是为了教学那几步能直接读盘面字符串
+      // （"空黑黑白黑黑空"），比对着数字读清楚得多，也不是在这里另写一份实现。
+      "           cnOf: cnOf, BLACK: BLACK, WHITE: WHITE, EMPTY: EMPTY }," +
       " RotationMoveNS: RotationMove, MoveStatusNS: MoveStatus," +
-      " aiChooseMove: aiChooseMove, AI_PARAMS: AI_PARAMS };"
+      // 拓扑影子那两个纯函数。露出来是为了"内部子 0 个、面上 1 个、棱上 3 个、角上 7 个"
+      // 这条能被逐档钉住 —— 少画一颗影子的症状是"这条线凭什么算连着"，没有别的断言抓得住。
+      " aiChooseMove: aiChooseMove, AI_PARAMS: AI_PARAMS," +
+      " wrapShadowOffsets: wrapShadowOffsets, wrapImages: wrapImages };"
   );
   // requestAnimationFrame 故意做成空实现：render loop 不能无限递归
   const NS = runner(documentStub, windowStub, () => 0, console, Set, Map);
   Game = NS.Game;
   PALETTE = NS.Palette; FALLBACK_COLORS = NS.FALLBACK_COLORS;
   cellSize = NS.cellSize; BoardLimits = NS.BoardLimits; CoreNS = NS.CoreNS;
+  cnOf = NS.CoreNS.cnOf; NS_TOPOLOGY = NS;
   renderRulesMarkdown = NS.renderRulesMarkdown; escapeHtmlNS = NS.escapeHtml;
   TEXT_EN = NS.TEXT_EN; STATIC_EN = NS.STATIC_EN; t = NS.t;
   RendererNS = NS.Renderer;
@@ -589,6 +600,96 @@ step("面板点击坐标换算（cellFromEvent）命中【交织点】", () => {
   if (outX) throw new Error("板外一格应落空，却命中了 " + JSON.stringify(outX));
   const outY = Game.cellFromEvent({ clientX: sx(7), clientY: h - (lay.oy - lay.cs) }, Game.el.layerBase);
   if (outY) throw new Error("板外一格应落空，却命中了 " + JSON.stringify(outY));
+});
+
+// ---------------------------------------------------------------------------
+// 拓扑（贯通）的影子子。
+//
+// 【为什么值得单独一组】"外面那一圈画了影子"是玩家唯一能**看见**拓扑的地方 ——
+// 判定本身早就是对的（越界绕回），看不见才是这一档要解决的问题。
+// 而它坏掉的样子很安静：影子少画一颗、画错一格、或者干脆不画，
+// 棋照样能下完，只是玩家再也想不明白"凭什么这两颗算连着"。
+// ---------------------------------------------------------------------------
+// 那两个影子纯函数是模块级的，挂到 Game 上给下面几条断言用（只读地借用，不改实现）。
+Game.wrapShadowOffsets = NS_TOPOLOGY.wrapShadowOffsets;
+Game.wrapImages = NS_TOPOLOGY.wrapImages;
+
+step("拓扑影子：内部子没有像，面上 1 个、棱上 3 个、角上 7 个", () => {
+  const d = [10, 10, 10];
+  const cnt = (x, y, z) => Game.wrapShadowOffsets(d, x, y, z).length;
+  if (cnt(5, 5, 5) !== 0) throw new Error("内部的子不该有影子（实际 " + cnt(5, 5, 5) + "）");
+  if (cnt(0, 5, 5) !== 1) throw new Error("面上的子该有 1 个影子（实际 " + cnt(0, 5, 5) + "）");
+  if (cnt(0, 0, 5) !== 3) throw new Error("棱上的子该有 3 个影子（实际 " + cnt(0, 0, 5) + "）");
+  if (cnt(0, 0, 0) !== 7) throw new Error("角上的子该有 7 个影子（实际 " + cnt(0, 0, 0) + "）");
+  if (cnt(9, 9, 9) !== 7) throw new Error("另一头的角也该是 7 个（实际 " + cnt(9, 9, 9) + "）");
+
+  // 角上那 7 个必须正好是 {0,N}³ 里除了"它自己"之外的七个 —— 顺序不钉，
+  // 钉集合：写反一个分量、或者漏掉"减掉自己"这一步，这里会红。
+  const got = Game.wrapShadowOffsets(d, 0, 0, 0).map((o) => o.join(",")).sort().join(" ");
+  const want = ["0,0,10", "0,10,0", "0,10,10", "10,0,0", "10,0,10", "10,10,0", "10,10,10"]
+    .sort().join(" ");
+  if (got !== want) throw new Error("角上的七个像不对：\n  期望 " + want + "\n  实际 " + got);
+
+  // 内部子返回的是**共用的那个空数组**（每次重建实例都会跑一遍，别每颗子都分配一个）
+  if (Game.wrapShadowOffsets(d, 5, 5, 5) !== Game.wrapShadowOffsets(d, 6, 6, 6))
+    throw new Error("内部子应当共用同一个空数组，不该每次新建");
+
+  // 长方体上三个轴各按自己的边长算
+  const dz = Game.wrapShadowOffsets([8, 10, 12], 0, 0, 0).map((o) => o.join(",")).sort().join(" ");
+  if (dz.indexOf("8,") < 0 || dz.indexOf(",10") < 0 || dz.indexOf("12") < 0)
+    throw new Error("长方体应按各轴自己的边长成像：" + dz);
+});
+
+step("拓扑影子：面板要给外面那一圈留位置，但格号一个都不能变", () => {
+  const w = Game.el.layerBase.clientWidth, h = Game.el.layerBase.clientHeight, n = 15;
+
+  Game.newGame(15, 1);                       // 普通对局：wrap 关
+  const plain = Game.gridLayout(w, h, n, n);
+  if (Game.session.board.wrap) throw new Error("前置：普通对局不该是拓扑模式");
+
+  // 拓扑局：只把这一个几何事实打开，别的都不动 —— 要量的正是"它一个就能改布局"
+  Game.session.board.wrap = true;
+  const wrapped = Game.gridLayout(w, h, n, n);
+  Game.session.board.wrap = false;
+
+  if (!(wrapped.cs < plain.cs))
+    throw new Error("拓扑模式下格距必须变小（要给外面那一圈让位）：" + wrapped.cs + " vs " + plain.cs);
+  // 格距应当正好按 n+2 格算
+  const want = Math.min(w / (n + 2), h / (n + 2));
+  if (Math.abs(wrapped.cs - want) > 0.01)
+    throw new Error("拓扑模式应留出两格：期望 " + want.toFixed(2) + " 实际 " + wrapped.cs.toFixed(2));
+  // extX/extY 描述的是**棋盘本身**占多大，不该被撑大 —— 撑大了居中会偏、平移边界也会松
+  if (Math.abs(wrapped.extX - plain.extX) > 0.01 || Math.abs(wrapped.extY - plain.extY) > 0.01)
+    throw new Error("extX/extY 只描述棋盘本身，不该随影子变");
+});
+
+step("拓扑影子：点外面那一圈不落子", () => {
+  Game.closeSetup();
+  Game.startTutorial();
+  Game.tutorialBuild(1);                     // 第 2 关：wrap 开
+  if (!Game.session.board.wrap) throw new Error("前置：第 2 关应当是拓扑模式");
+  const n = Game.session.board.nx;
+  const w = Game.el.layerBase.clientWidth, h = Game.el.layerBase.clientHeight;
+  const lay = Game.gridLayout(w, h, n, n);
+  const sx = (i) => lay.ox + i * lay.cs;
+  const sy = (j) => h - (lay.oy + j * lay.cs);
+  // 壳上一格（x = n，也就是棋盘右边外面那一列）
+  const out = Game.cellFromEvent({ clientX: sx(n), clientY: sy(7) }, Game.el.layerBase);
+  if (out) throw new Error("壳上不该能落子，却命中了 " + JSON.stringify(out));
+  // 而棋盘内那一列必须照常能点
+  const inside = Game.cellFromEvent({ clientX: sx(0), clientY: sy(7) }, Game.el.layerBase);
+  if (!inside || inside.x !== 0 || inside.y !== 7)
+    throw new Error("棋盘内 (0,7) 应当照常能点，实际 " + JSON.stringify(inside));
+  // 开局就停在看得见接缝的那一层（这一关的答案在 z=7 上）
+  if (Game.activeLayer !== 7)
+    throw new Error("第 2 关开局应停在第 8 层（z=7），实际 z=" + Game.activeLayer);
+  // 【收尾：把状态还回去，别漏给后面的步骤】tutorialExit 会**打开设置页**，
+  // 而设置页一开，setHover 会把悬停直接置空（起始界面上的盘是演示盘，不参与交互）——
+  // 后面那条"悬停校准线"就会莫名其妙地拿不到悬停点。
+  // 进教学之前和之后都回到"一盘普通 15³ 对局、设置页关着"。
+  Game.tutorialExit();
+  Game.closeSetup();
+  Game.newGame(15, 1);
 });
 
 step("三维棋盘铺满 x/y/z 三个方向的格线", () => {
@@ -3308,7 +3409,9 @@ step("教学：每一关都至少存在一个合法动作能过关", () => {
       for (let a2 = 0; a2 < 3; a2++) {
         for (let layer = 0; layer < n; layer++) {
           for (let turns = 1; turns <= 3; turns++) {
-            const s2 = lv.build();
+            // 【必须包一层 FourDSession】lv.build() 返回的是裸 GameSession，它没有 rotate ——
+            // 转动是四维那一层包装出来的能力，直接调会报 "rotate is not a function"。
+            const s2 = CoreNS.FourDSession.wrap(lv.build());
             const o = s2.rotate(RotationMoveNS.fromClockwiseTurns(a2, layer, turns));
             if (o.accepted && lv.goal(s2)) {
               solution = "转动 axis=" + a2 + " layer=" + layer + " turns=" + turns;
@@ -3322,6 +3425,90 @@ step("教学：每一关都至少存在一个合法动作能过关", () => {
       throw new Error("第 " + (i + 1) + " 关无解 —— 穷举了所有落子与转动，没有一个能达成目标");
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// 教学第一关的形状。**这一关教的是"转动能一次做两件事，而且能直接赢"** ——
+// 那三件事全靠摆位成立，摆歪一件，关卡还在、教的东西没了，而没有任何东西会报警。
+//
+// 【为什么把"解法唯一"也钉上】背景子是随机撒的，撒到一定数量就会自己凑出第二条过关的
+// 转动（实测：46 颗时唯一，加到 50 颗就冒出一条 y=5 顺 2）。玩家在别处随手一转就"过关"，
+// 要教的形根本没出场 —— 而这看起来完全像"关卡设计得挺简单"，不像 bug。
+// ---------------------------------------------------------------------------
+step("教学第一关：形状与解法都钉死", () => {
+  const lv = Game.tutorialLevels()[0];
+  const board = lv.build().board;
+  const eqv = (got, want, what) => {
+    if (got !== want) throw new Error(what + "：期望 " + want + "，实际 " + got);
+  };
+
+  // ① 要转的那一层除了三颗教学子，一颗背景子都不许有 ——
+  //    混进去一颗，转完之后什么样就不可预期了（实测：一颗白子会把白棋的活四原地补回去）。
+  let layerStones = [];
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) {
+    if (!board.isEmpty(x, y, 4)) layerStones.push([x, y]);
+  }
+  eqv(layerStones.length, 3, "要转的第 5 层（z=4）上只该有三颗教学子");
+
+  // ② 那几个"必须留空"的格子。填上了会怎样，逐条都写在关卡代码的注释里。
+  for (const p of [[6, 6, 1], [6, 6, 7], [4, 4, 3], [4, 4, 8]]) {
+    if (!board.isEmpty(p[0], p[1], p[2])) {
+      throw new Error("保护格 (" + p.join(",") + ") 被占了 —— 见关卡代码里那段注释");
+    }
+  }
+
+  // ③ 白棋那条活四是活的、我那条线是死的（这是"拦不住、只能转"的全部依据）
+  eqv([3, 4, 5, 6, 7, 8].map((z) => cnOf(board.get(4, 4, z))).join(""), "空白白白白空", "白棋那条四");
+  eqv([1, 2, 3, 4, 5, 6, 7].map((z) => cnOf(board.get(6, 6, z))).join(""), "空黑黑白黑黑空", "我的竖线");
+
+  // ④ 落子一个都赢不了（缺口被白子占着）—— 否则这一关不用转就过了
+  let placeWins = 0;
+  for (let z = 0; z < board.nz; z++) for (let y = 0; y < board.ny; y++) for (let x = 0; x < board.nx; x++) {
+    if (!board.isEmpty(x, y, z)) continue;
+    if (lv.build().place(x, y, z).status === MoveStatusNS.Win) placeWins++;
+  }
+  eqv(placeWins, 0, "能赢的落子个数");
+
+  // ⑤ 过关的转动**恰好一种**，而且就是文案里写的那一种（轴 z、第 5 层、顺时针一次）
+  const sols = [];
+  for (let a = 0; a < 3; a++) for (let L = 0; L < board.nz; L++) for (let t = 1; t <= 3; t++) {
+    const s2 = CoreNS.FourDSession.wrap(lv.build());
+    const o = s2.rotate(RotationMoveNS.fromClockwiseTurns(a, L, t));
+    if (o.accepted && lv.goal(s2)) sols.push("axis=" + a + " layer=" + L + " turns=" + t);
+  }
+  eqv(sols.length, 1, "过关的转动种数");
+  eqv(sols[0], "axis=2 layer=4 turns=1", "唯一解应当是文案里那一种（z、第 5 层、顺时针 1 次）");
+
+  // ⑥ 转完之后：白棋那条四退成三，我那条线成五 —— 文案里就是这么写的
+  const after = CoreNS.FourDSession.wrap(lv.build());
+  after.rotate(RotationMoveNS.fromClockwiseTurns(2, 4, 1));
+  eqv([3, 4, 5, 6, 7, 8].map((z) => cnOf(after.board.get(4, 4, z))).join(""), "空空白白白空", "转完白棋那条线");
+  eqv([1, 2, 3, 4, 5, 6, 7].map((z) => cnOf(after.board.get(6, 6, z))).join(""), "空黑黑黑黑黑空", "转完我的竖线");
+  if (after.winner !== 1) throw new Error("转完必须当场判黑棋胜，实际 winner=" + after.winner);
+});
+
+// ---------------------------------------------------------------------------
+// 教学里不许弹胜负横幅。
+//
+// 【为什么】三关都以"达成目标"结束，而横幅正好盖在棋盘中间 —— 玩家要看的恰恰是那个
+// 刚成形的五连。过关这件事教学条自己写着，横幅只是把同一个消息再说一遍、还挡住证据。
+// 用户报的"第二关胜利后没关掉弹窗、还带到第三关"，根子就是那一关的目标就是赢。
+// ---------------------------------------------------------------------------
+step("教学：取胜之后不弹横幅，下一关也不会带着上一关的横幅", () => {
+  Game.closeSetup();
+  Game.setSetupMode(true);
+  Game.startTutorial();
+  Game.tutorialBuild(1);                    // 第 2 关：目标= 赢
+  // tryPlace 落在【当前层】上，而缺口在 z=7（adoptSession 挑的当前层是 10）——
+  // 不先换层的话这一手会落到空处，前提就崩了。
+  Game.activeLayer = 7;
+  Game.tryPlace(2, 7);                      // 缺口那一格，成五
+  if (Game.session.winner !== 1) throw new Error("前置：这一步应当直接取胜");
+  if (!Game.tutPassed) throw new Error("前置：这一步应当过关");
+  if (Game.bannerOpen) throw new Error("教学里取胜不该弹出胜负横幅（它盖住刚成形的五连）");
+  Game.tutorialBuild(2);                    // 进第 3 关
+  if (Game.bannerOpen) throw new Error("进下一关时横幅必须已经收起来");
+  Game.tutorialExit();
 });
 
 // ---------------------------------------------------------------------------

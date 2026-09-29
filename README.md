@@ -91,13 +91,13 @@ bash _verify/run-all.sh
 | 命令 | 项数 | 覆盖 |
 |---|---|---|
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 三维规则基线（回放冻结向量） |
-| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 四维转动一致性 |
+| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19427 | 四维转动一致性 |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
-| `node Web_Gomoku3D/tests/ai.test.mjs` | 123 | 电脑对手（两条硬规则、五档强弱关系、自对局逐手喂给引擎、四维转动只在必要时发生、计算量上界） |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 109 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值、拖拽方向约定） |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 213 | 电脑对手（两条硬规则、五档强弱关系、自对局逐手喂给引擎、四维转动只在必要时发生、计算量上界） |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 115 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值、拖拽方向约定） |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | 联机内核：和网页版逐格对拍 1156 组 |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | 联机 HTTP 层（本机 loopback） |
-| `node _verify/browser-check.mjs` | 327 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局） |
+| `node _verify/browser-check.mjs` | 342 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局） |
 
 后两项联机测试在第 8 步里跑，**不可跳过**（端口是随机挑的空闲端口）。
 另有三个注入验证脚本，专门证明上面那些检查**真的会红**：
@@ -221,6 +221,12 @@ bash _verify/run-all.sh
 ## 📝 更新日志
 
 > 最新的在最上面。每条一行，动词开头（新增 / 修复 / 调整 / 完成）；实现细节写在 commit 里，不写在这里。
+
+### 2026.09.30
+
+- ✨ **v3.1.0** 拓扑（贯通）**看得见了**：棋盘外面紧贴的那一圈会画出边界棋子的**影子** ——
+  从右边走出去的线，在棋盘右边外面一格就能看见它的续集，跨边界的五连不再只能靠脑补
+- 🔧 **v3.0.1** 修改若干问题
 
 ### 2026.09.29
 

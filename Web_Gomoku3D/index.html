@@ -1185,14 +1185,18 @@
 | 层号必须存在 | 拒绝 |
 | 冷却已经好了 | 拒绝 |
 | 转完的棋盘必须和转之前**不一样** | 提示"没有变化"，不算一步 |
-| 转完之后盘面上**不能出现 5 连** | 整件事回滚 |
+| 转完**不能给别人**转出 5 连 | 整件事回滚 |
 
 "转完必须不一样"这一条，看的是**棋盘的样子**，不是"转了几圈"：
 这一层本来就是空的，或者上面的图案恰好转回原样，都会被判成"没有变化"。
 这两种情况界面会分别告诉你原因，不然按钮看起来就像是坏的。
 
-最后一条意味着 **转动永远分不出胜负**：转动不能当进攻手段用，
-只能用来拆掉对手的线，或者调整自己的结构。
+最后一条只拦**别人**的线。转动**可以给自己成五** —— 那就是赢，
+和落子成五完全一样，棋局当场结束。转完之后如果盘上是**对方**的五连
+（把对方的子转到位了），那一手仍然整件事回滚：转一下白送对方一个五，不是这一手的意思。
+
+所以 **转动是可以当进攻手段用的**：它既能拆掉对手的线、调整自己的结构，
+也能直接把最后一颗子转到位取胜。
 
 ### 10.4 转动冷却
 
@@ -1245,7 +1249,11 @@
 
 所以五连可以跨过边界 —— 一边两颗、对面三颗，它们就是连着的一条五。
 
-- 棋盘的样子、落子的方式都不变。**一颗子只有一个位置**，不会在对侧再画一颗。
+- 落子的方式不变：**一颗子只有一个位置**，你下在哪儿它就在哪儿。
+- 但为了让你**看得见**这件事，棋盘外面紧贴的那一圈会画出**影子**：
+  边界上的每一颗子，在棋盘外面一格都有它自己的像（棋盘外面的那一圈就干这个用）。
+  从右边走出去的线，在棋盘右边外面一格就能看见它的续集 —— 跨边界的五连不用全靠脑补。
+  影子更小、更淡，**不是棋子**，只有真子才算数，也不能点在它上面。
 - 长连规则照旧：先手走出 6 连及以上仍然判负。环绕会让线变长，先手做五连时要多看一眼
   对面接不接得上。**一整圈同色（N 颗）也算长连。**
 
@@ -1492,14 +1500,18 @@ move, and no record is kept.
 | The layer number must exist | rejected |
 | The cooldown must be ready | rejected |
 | The rotated board must be **different** from before | "nothing changed"; not counted as a move |
-| The rotated board must **not contain five in a row** | the whole thing is rolled back |
+| The rotated board must **not make five in a row for the opponent** | the whole thing is rolled back |
 
 "Must be different" looks at **what the board looks like**, not at how many turns you asked for: a layer that was already
 empty, or a pattern that happens to rotate back onto itself, both count as "nothing changed". The interface tells you which
 of the two it was, because otherwise the button just looks broken.
 
-The last check means **a rotation can never win the game**: it cannot be used as an attack, only to break up an opponent's
-line or to rearrange your own stones.
+The last check only stops **the opponent's** lines. A rotation **may make five for you** — that is a win, exactly like
+making five by placing, and the game ends there and then. If the rotation hands the **opponent** five in a row (you swung
+their stones into place), it is still rolled back: gifting the opponent a five is not what that move meant.
+
+So **a rotation can be an attack**: it breaks up the opponent's lines, rearranges your own stones, or swings the last
+stone you need into place to win.
 
 ### 10.4 Rotation cooldown
 
@@ -1553,8 +1565,13 @@ on the opposite one. This holds for all three axes.
 
 So a five may cross an edge — two stones on one side and three on the other are one run.
 
-- The board looks the same and you place stones the same way. **A stone has exactly one
-  position**; it is not drawn again on the far side.
+- You place stones the same way: **a stone has exactly one position** — where you put it is
+  where it is.
+- But so that you can **see** this, the ring of cells hugging the outside of the board draws
+  **shadows**: every stone on the boundary has its own image one cell outside the board.
+  A line leaving the right edge shows its continuation one cell past it — a five across the
+  seam no longer has to be imagined. Shadows are smaller and fainter; they are **not stones**,
+  only real stones count, and you cannot play on a shadow.
 - The overline rule is unchanged: the first player still loses with 6 or more in a row.
   Wrapping makes lines longer, so check the far side before completing a five.
   **A full ring of one colour (N stones) is an overline too.**
@@ -1817,14 +1834,18 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 | レイヤー番号が存在すること | 拒否 |
 | クールダウンが明けていること | 拒否 |
 | 回した盤が回す前と**違う**こと | 「変化なし」と表示し、1 手とも数えない |
-| 回した後の盤面に**5 連が現れない**こと | 回転を丸ごと巻き戻す |
+| 回した盤面に**相手の** 5 連が現れないこと | 回転を丸ごと巻き戻す |
 
 「回した結果が違うこと」という条件が見るのは**盤の見た目**であり、「何回転したか」ではない：
 もともとそのレイヤーが空だった場合も、模様がたまたま元の姿に戻る場合も、どちらも「変化なし」と判定される。
 この 2 つの場合は画面がそれぞれ理由を伝える。そうしないと、ボタンが壊れているように見えてしまうから。
 
-最後の条件は、**回転では決して勝負がつかない**ことを意味する：回転は攻めの手段には使えず、
-相手の線を崩すか、自分の形を整えるかにしか使えない。
+最後の条件が止めるのは**相手の**線だけ。回転で**自分の 5 連ができれば、それは勝ち** ——
+着手で 5 連を作るのとまったく同じで、そこで対局は終わる。回した結果**相手**の 5 連ができた場合は
+これまでどおり丸ごと巻き戻す（相手に 5 連を差し出すのは、その一手の意味ではない）。
+
+つまり **回転は攻めの手段になる**：相手の線を崩す、自分の形を整える、そして最後の一石を
+定位置に送り込んで勝つ。
 
 ### 10.4 回転のクールダウン
 
@@ -1877,8 +1898,11 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 
 したがって五連は境界をまたげます —— 片側に二石、反対側に三石なら、それは一続きの五です。
 
-- 盤の見た目も着手の仕方も変わりません。**石の位置は一つだけ**で、反対側にもう一つ
-  描かれることはありません。
+- 着手の仕方は変わりません：**石の位置は一つだけ**で、打った場所がそのままその石の場所です。
+- ただしそれが**見える**ように、盤のすぐ外側を一圈するマスに**影**を描きます：
+  境界にある石は、盤の外へ一格のところに自分の像を持ちます。右へ出ていく線は、
+  盤の右のすぐ外にその続きが見えます —— 境界をまたぐ五連を頭の中だけで補う必要はもうありません。
+  影はより小さく淡く、**石ではありません**：数えられるのは本物の石だけで、影の上には打てません。
 - 長連の規則はそのまま：先手が 6 連以上で負けです。貫通で線が長くなるので、五連を
   作る前に反対側がつながっていないか確かめてください。**一周すべて同色（N 石）も長連です。**
 
@@ -2125,14 +2149,18 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 | 레이어 번호가 존재해야 합니다 | 거부 |
 | 쿨다운이 이미 끝나 있어야 합니다 | 거부 |
 | 회전한 판이 회전 전과 **달라야 합니다** | “변화 없음” 안내, 한 수로 세지 않음 |
-| 회전한 뒤 판 위에 **5개 연속이 나타나면 안 됩니다** | 일 전체를 되돌림 |
+| 회전한 뒤 판 위에 **상대의** 5개 연속이 나타나면 안 됩니다 | 일 전체를 되돌림 |
 
 “회전한 뒤 달라야 한다”는 조건이 보는 것은 **판의 모양**이지 “몇 바퀴를 돌렸는지”가 아닙니다:
 이 레이어가 원래 비어 있었거나, 위의 무늬가 마침 원래대로 돌아온 경우는 모두 “변화 없음”으로 판정됩니다.
 이 두 경우에는 인터페이스가 각각 이유를 알려 줍니다. 그러지 않으면 버튼이 고장 난 것처럼 보이기 때문입니다.
 
-마지막 조건이 뜻하는 것은 **회전으로는 절대 승부가 나지 않는다**는 것입니다: 회전은 공격 수단으로 쓸 수 없고,
-상대의 직선을 부수거나 자기 구조를 조정하는 데만 쓸 수 있습니다.
+마지막 조건이 막는 것은 **상대의** 직선뿐입니다. 회전으로 **내 5개 연속이 만들어지면 그것은 승리** ——
+착수로 5개를 잇는 것과 똑같고, 거기서 대국이 끝납니다. 회전 결과 **상대**의 5개 연속이 만들어졌다면
+예전처럼 일 전체를 되돌립니다 (상대에게 5개를 바쳐 주는 것은 그 한 수의 뜻이 아닙니다).
+
+즉 **회전도 공격 수단이 됩니다**: 상대의 직선을 부수고, 자기 구조를 조정하고,
+마지막 한 알을 제자리로 보내 이길 수도 있습니다.
 
 ### 10.4 회전 쿨다운
 
@@ -2185,8 +2213,12 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 그래서 오목은 경계를 넘을 수 있습니다 — 한쪽에 둘, 반대쪽에 셋이면 그것은 이어진 하나입니다.
 
-- 판의 모양도, 착수 방식도 그대로입니다. **돌의 위치는 하나뿐**이고 반대편에 다시
-  그려지지 않습니다.
+- 착수 방식은 그대로입니다: **돌의 위치는 하나뿐**이고, 둔 자리가 곧 그 돌의 자리입니다.
+- 다만 그것이 **보이도록**, 판 바깥을 한 겹 두른 칸에 **그림자**를 그립니다:
+  경계에 있는 돌은 판 밖으로 한 칸 떨어진 곳에 자기 모습을 둡니다. 오른쪽으로 나가는 줄은
+  판의 오른쪽 바로 밖에서 그 이어짐을 볼 수 있습니다 —— 경계를 넘는 오목을 머릿속으로만
+  메울 필요가 없습니다. 그림자는 더 작고 흐리며 **돌이 아닙니다**: 세는 것은 진짜 돌뿐이고,
+  그림자 위에는 둘 수 없습니다.
 - 장련 규칙은 그대로: 선수는 6목 이상이면 집니다. 관통은 줄을 길게 만들므로 오목을
   완성하기 전에 반대편이 이어지는지 확인하세요. **한 바퀴가 모두 같은 색(N개)이어도 장련입니다.**
 
@@ -2435,14 +2467,19 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 | Номер слоя должен существовать | отказ |
 | Перезарядка должна быть готова | отказ |
 | Доска после поворота должна **отличаться** от прежней | сообщение «изменений нет», ход не засчитывается |
-| После поворота на доске **не должно быть 5 в ряд** | всё действие откатывается |
+| После поворота на доске **не должно быть 5 в ряд у соперника** | всё действие откатывается |
 
 Пункт «после поворота доска должна отличаться» смотрит на **то, как выглядит доска**, а не на «сколько оборотов сделано»:
 если слой изначально пуст или узор на нём при повороте случайно возвращается к прежнему виду, это тоже будет признано «изменений нет».
 Интерфейс сообщает причину в каждом из этих случаев отдельно — иначе кнопка выглядела бы просто сломанной.
 
-Последний пункт означает, что **поворот никогда не решает исход партии**: его нельзя использовать для атаки,
-только чтобы разорвать линию соперника или перестроить свои камни.
+Последний пункт останавливает только линии **соперника**. Поворот **может собрать пять для вас** — это победа,
+ровно такая же, как пять, поставленные ходом, и партия на этом заканчивается. Если же в результате поворота пять
+в ряд получается у **соперника** (вы подставили его камни), действие по-прежнему откатывается: дарить сопернику
+пять — не то, что означал этот ход.
+
+Значит, **поворот может быть атакой**: он рвёт линии соперника, перестраивает ваши камни и может подвести
+последний нужный камень на место — к победе.
 
 ### 10.4 Перезарядка поворота
 
@@ -2497,8 +2534,12 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 Поэтому пятёрка может пересекать край: два камня с одной стороны и три с другой — это
 один непрерывный ряд.
 
-- Доска выглядит так же, и камни ставятся так же. **У камня ровно одно положение**,
-  на противоположной стороне он не рисуется.
+- Камни ставятся так же: **у камня ровно одно положение** — где поставили, там он и есть.
+- Но чтобы это было **видно**, по внешнему кольцу клеток вокруг доски рисуются **тени**:
+  у каждого камня на границе есть свой образ на клетку наружу. Линия, уходящая за правый
+  край, показывает своё продолжение сразу за ним — пятёрку через шов больше не нужно
+  достраивать в голове. Тени меньше и бледнее; это **не камни**: считаются только настоящие
+  камни, и поставить на тень нельзя.
 - Правило перебора сохраняется: первый игрок по-прежнему проигрывает при 6 и более в ряд.
   Склейка удлиняет линии, поэтому перед завершением пятёрки проверьте дальнюю сторону.
   **Полное кольцо одного цвета (N камней) — тоже перебор.**
@@ -2756,14 +2797,19 @@ Les contrôles s'enchaînent dans l'ordre ; si l'un d'eux échoue, toute l'opér
 | Le numéro de couche doit exister | refus |
 | La recharge doit être prête | refus |
 | Le plateau tourné doit être **différent** d'avant | « aucun changement », ne compte pas comme un coup |
-| Après la rotation, le plateau **ne doit pas présenter 5 en ligne** | tout est remis en arrière |
+| Après la rotation, le plateau **ne doit pas donner 5 en ligne à l'adversaire** | tout est remis en arrière |
 
 « Doit être différent » regarde **l'aspect du plateau**, et non « combien de tours » :
 une couche déjà vide, ou un motif qui retombe exactement sur lui-même, sont tous deux jugés « aucun changement ».
 L'interface vous dit laquelle des deux causes, sinon le bouton semblerait cassé.
 
-Le dernier contrôle signifie qu'**une rotation ne peut jamais décider du gain** : elle ne peut pas servir d'arme offensive,
-seulement à casser la ligne de l'adversaire ou à réajuster sa propre structure.
+Le dernier contrôle n'arrête que les lignes de **l'adversaire**. Une rotation **peut faire cinq pour vous** : c'est
+une victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. Si la rotation donne cinq en ligne
+à **l'adversaire** (vous avez poussé ses pierres en place), tout est toujours remis en arrière : offrir un cinq à
+l'adversaire n'est pas ce que ce coup voulait dire.
+
+Donc **une rotation peut être une arme offensive** : elle casse les lignes adverses, réajuste vos pierres, et peut
+amener la dernière pierre manquante à sa place pour gagner.
 
 ### 10.4 Recharge de rotation
 
@@ -2818,8 +2864,13 @@ bord opposé. Idem pour les trois axes.
 Une cinq peut donc traverser un bord : deux pierres d'un côté et trois de l'autre forment
 une seule suite.
 
-- Le plateau a le même aspect et on pose les pierres de la même façon. **Une pierre n'a
-  qu'une seule position** ; elle n'est pas redessinée de l'autre côté.
+- On pose les pierres de la même façon : **une pierre n'a qu'une seule position** — elle est
+  là où vous la posez.
+- Mais pour que ce soit **visible**, l'anneau de cases qui borde l'extérieur du plateau porte des
+  **ombres** : chaque pierre sur le bord a son image une case plus loin. Une ligne qui sort par le
+  bord droit montre sa suite juste au-delà — un cinq à travers la couture n'est plus à deviner.
+  Les ombres sont plus petites et plus pâles ; ce ne sont **pas des pierres** : seules les vraies
+  pierres comptent, et on ne peut pas jouer sur une ombre.
 - La règle du six est inchangée : le premier joueur perd toujours à 6 alignées ou plus.
   Le pliage allonge les lignes : vérifiez le bord opposé avant de conclure une cinq.
   **Un anneau complet d'une couleur (N pierres) compte aussi comme un six.**
@@ -3550,16 +3601,16 @@ const CORE_TEXT = {
       ru: "Ускорить нельзя: всё доступное время уже возвращено", fr: "Impossible d'accélérer : tout le temps remboursable est déjà rendu" },
 
   // ---- 转动
-  "rot.move": { zh: "{axis}={layer} 顺时针{n}次",
-                en: "{axis}={layer}, {n} turn clockwise",
-      ko: "{axis}={layer} 시계 방향 {n}회", ru: "{axis}={layer}, {n} поворот по часовой",
-      fr: "{axis}={layer}, {n} tour dans le sens horaire" },
-  "rot.move.few": { zh: "{axis}={layer} 顺时针{n}次", en: "{axis}={layer}, {n} turn clockwise",
-      ru: "{axis}={layer}, {n} поворота по часовой" },
-  "rot.move.many": { zh: "{axis}={layer} 顺时针{n}次",
-                     en: "{axis}={layer}, {n} turns clockwise",
-      ja: "{axis}={layer} 時計回り{n}回", ko: "{axis}={layer} 시계 방향 {n}회", ru: "{axis}={layer}, {n} поворотов по часовой",
-      fr: "{axis}={layer}, {n} tours dans le sens horaire" },
+  "rot.move": { zh: "{axis} 第{n}层 顺时针{c}次",
+                en: "{axis} layer {n}, {c} turn clockwise",
+      ko: "{axis} {n}층 시계 방향 {c}회", ru: "{axis}, слой {n}, {c} поворот по часовой",
+      fr: "{axis}, couche {n}, {c} tour dans le sens horaire" },
+  "rot.move.few": { zh: "{axis} 第{n}层 顺时针{c}次", en: "{axis} layer {n}, {c} turns clockwise",
+      ru: "{axis}, слой {n}, {c} поворота по часовой" },
+  "rot.move.many": { zh: "{axis} 第{n}层 顺时针{c}次",
+                     en: "{axis} layer {n}, {c} turns clockwise",
+      ja: "{axis} {n}層 時計回り{c}回", ko: "{axis} {n}층 시계 방향 {c}회", ru: "{axis}, слой {n}, {c} поворотов по часовой",
+      fr: "{axis}, couche {n}, {c} tours dans le sens horaire" },
   "rot.cw90": { zh: "顺时针 90°", en: "90° clockwise",
       ja: "時計回り 90°", ko: "시계 방향 90°", ru: "90° по часовой", fr: "90° sens horaire" },
   "rot.ccw90": { zh: "逆时针 90°", en: "90° counterclockwise",
@@ -4311,16 +4362,70 @@ class GameSession {
     for (let i = 0; i < runs.length; i++) {
       const r = runs[i];
       if (phaseOf(r.player) !== this.phase) continue;      // 不是当前相位 → 不结算
-      const colour = colourOf(r.player);
-      const fouled = this.rules.isRestricted(colour, this.firstPlayer) &&
-                     r.length > this.rules.winLength;
-      this.winner = fouled ? opponentOf(colour) : colour;
-      this.status = "Decided";
-      this.lastOutcome = { status: fouled ? MoveStatus.LoseByOverline : MoveStatus.Win,
-                           winner: this.winner, longestRun: r.length,
-                           line: RuleEngine.lineCoords(r), isOverlineFoul: fouled };
+      this._settleLine(r);
       return;
     }
+  }
+
+  /**
+   * 把一条连线结算成终局。**判胜的口子只此一个** —— 落子（judge）、相位翻转、
+   * 转动（decideByRotation）三条路都走这里。
+   *
+   * 【为什么必须合并】"这条线够不够格判胜"里装着长连判负（先手 6 连及以上算输）——
+   * 三处各写一遍的话，迟早有一处漏掉那一档，而症状是"某种赢法下长连不判负"，
+   * 极难归因。合并之后，规则只在这里改一次。
+   */
+  _settleLine(run) {
+    const colour = colourOf(run.player);
+    const fouled = this.rules.isRestricted(colour, this.firstPlayer) &&
+                   run.length > this.rules.winLength;
+    this.winner = fouled ? opponentOf(colour) : colour;
+    this.status = "Decided";
+    this.lastOutcome = { status: fouled ? MoveStatus.LoseByOverline : MoveStatus.Win,
+                         winner: this.winner, longestRun: run.length,
+                         line: RuleEngine.lineCoords(run), isOverlineFoul: fouled };
+  }
+
+  /**
+   * 【四维专用】转动之后的结算：转动方**自己**转出来的线，当场判胜。
+   *
+   * 【为什么允许】转动和落子一样是"一手"，凭什么落下第五颗算赢、把第五颗转到位不算？
+   * 转出自己的一条线就是赢 —— 这条规则 3.0.1 之前是反的（任何转动只要造出连线就整体
+   * 撤销），后果是转动永远当不了进攻手段，教学关也只能停在"转成活四"。
+   *
+   * 【为什么只结算"自己"的线】转一下白送对方一个五不是这一手的意思。那种转动在
+   * _tryRotate 里就被整体撤销了，走不到这里；这里再筛一次颜色，是为了让这一段的
+   * 前提自洽 —— 不依赖调用方的顺序。
+   *
+   * @returns 结算了返回 true（调用方就不该再交出回合）
+   */
+  decideByRotation(player) {
+    if (this.status !== "Playing") return false;
+    const P = this.rules.phasePeriod | 0;
+    const runs = RuleEngine.fullScan(this.board, this.rules.winLength);
+    for (let i = 0; i < runs.length; i++) {
+      const r = runs[i];
+      if (colourOf(r.player) !== player) continue;
+      if (P > 0 && phaseOf(r.player) !== this.phase) continue;   // 异相位的线不算数
+      this._settleLine(r);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 【四维专用】把终局状态抹掉，回到"还在下"。
+   *
+   * 只给"悔掉一次转出来的胜局"用（FourDSession.undoLastRotation）——
+   * 棋盘由转动那一层自己转回去，这里只管会话的状态位。
+   * 不这么做的话，悔棋之后盘上的五连没了、status 却还是 Decided：
+   * 界面停在"黑棋胜"、谁也落不下子，整局棋卡死。
+   */
+  clearDecision() {
+    this.status = "Playing";
+    this.winner = EMPTY;
+    this.isDraw = false;
+    this.lastOutcome = { status: MoveStatus.Placed, winner: EMPTY, longestRun: 0, line: null, isOverlineFoul: false };
   }
 
   /**
@@ -4431,7 +4536,8 @@ const RotateStatus = {
   Rejected: "Rejected",
   /** 转了，但盘面没变（空层，或本层图案在这个转动下不变）。棋盘本来就没变。 */
   NoRotation: "NoRotation",
-  /** 转完会让盘面出现 ≥winLength 的连线，已整体回滚。棋盘不动。 */
+  /** 转完会让盘面出现【不属于转动方】的 ≥winLength 连线，已整体回滚。棋盘不动。
+   *  （转动方**自己**成五是允许的，那条路是 Rotated，随后 rotate() 当场判胜。） */
   CreatesLine: "CreatesLine",
   /** 转动成功。 */
   Rotated: "Rotated",
@@ -4507,8 +4613,10 @@ class RotationMove {
     return new RotationMove(axis, layer, cwTurns);
   }
   toString(lang = "zh") {
+    // 【层号一律 1 起算】{n} 是玩家在面板上看到的层号，不是内核的 0 起算下标。
+    // 内核里 layer 仍然是 0 起的（位移公式全靠它），只在这一层"说出来"的时候 +1。
     return ctPlural("rot.move", lang, this.turns,
-                    { axis: axisName(this.axis), layer: this.layer, n: this.turns });
+                    { axis: axisName(this.axis), n: this.layer + 1, c: this.turns });
   }
 }
 
@@ -4530,12 +4638,24 @@ function describeRotationMove(m, lang = "zh") {
 
 /** 一次转动的判定结果。 */
 class RotateOutcome {
-  constructor(status, move, layerStones, reason) {
+  constructor(status, move, layerStones, reason, lines) {
     this.status = status;
     this.move = move;
     /** 转动前该层有几颗子。UI 靠它告诉玩家"转这一层到底会不会动"。 */
     this.layerStones = layerStones;
     this.reason = reason || null;
+    /**
+     * 转完之后盘上的连线条数。**只有 Rotated 且 >0 时才有意义**，
+     * 而且那时候它必定全是**转动方自己**的线（别人的线会让这次转动被判成
+     * CreatesLine 整条撤销）—— 也就是说 `accepted && lines > 0` ⟺ **这一转赢了**。
+     *
+     * 【为什么要单独带出来】AI 判断"这一转是不是直接赢了"必须用这个数：
+     * aiThreatBest 量的是"再落一手能做出多大的形"，候选点全是空格子 ——
+     * **已经**在盘上的五连它一颗都看不见。低/中档的转动走档位启发式，
+     * 拿不到这个数就会漏掉"一转就赢"（实测过：low 档去别处落子）。
+     * 顺带它也省掉了 AI 每个候选再扫一遍全盘。
+     */
+    this.lines = lines | 0;
   }
   get accepted() { return this.status === RotateStatus.Rotated; }
   describe(lang = "zh") {
@@ -4736,14 +4856,31 @@ class FourDSession {
       return new RotateOutcome(RotateStatus.NoRotation, move, layerStones, why);
     }
 
-    // 转完不允许盘面上存在任何 ≥winLength 的连线。
+    // 转完不允许盘面上出现【不属于转动方】的连线。
     //
     // 这里可以直接用全盘扫描判断"是不是这次转动造出来的"，靠的是一条不变量：
     // **棋局还在 Playing 时，盘面上必定不存在任何 ≥winLength 的极大连线** ——
     // 因为一旦出现，上一手 place 就已经把棋局判成 Decided 了（判胜与长连判负都会）。
     // 所以扫描结果非空 ⟺ 这次转动造出了连线。
+    //
+    // 【转动可以为自己成五】v3.0.1 起：造出**转动方自己**的线是允许的 ——
+    // 那和落子成五是同一件事，rotate() 紧接着会走 decideByRotation 当场判胜。
+    // 造出**别人**的线仍然整体撤销：转一下白送对方一个五不是这一手的意思，
+    // 而盘面上一旦留下那条线，棋局就废了（谁都赢不了、也判不出胜负）。
+    //
+    // 【异相位的线同样算"不属于自己"】晨昏模式下，自己颜色但对不上相位的线不算数，
+    // 留在盘上就是一颗定时炸弹（相位一翻它就活了）—— 和"送给对方"一样要撤销。
+    const P = this.inner.rules.phasePeriod | 0;
     const runs = RuleEngine.fullScan(board, this.inner.rules.winLength);
-    if (runs.length > 0) {
+    const mine = this.inner.currentPlayer;
+    let foreign = false;
+    for (let i = 0; i < runs.length; i++) {
+      const r = runs[i];
+      if (colourOf(r.player) !== mine || (P > 0 && phaseOf(r.player) !== this.inner.phase)) {
+        foreign = true; break;
+      }
+    }
+    if (foreign) {
       // 逆置换 = 顺时针再转 (4 - t) 次，不需要额外存原图
       board.rotateLayer(move.axis, move.layer, 4 - move.turns);
       return new RotateOutcome(RotateStatus.CreatesLine, move, layerStones,
@@ -4751,7 +4888,9 @@ class FourDSession {
                  { len: this.inner.rules.winLength, lines: runs.length }));
     }
 
-    return new RotateOutcome(RotateStatus.Rotated, move, layerStones, null);
+    // lines 就是上面那次扫描的结果：走到这里说明它要么是空的，要么全是转动方自己的线。
+    // 两种情况的差别是"转不转得赢"—— 见 RotateOutcome.lines 的注释。
+    return new RotateOutcome(RotateStatus.Rotated, move, layerStones, null, runs.length);
   }
 
   /**
@@ -4768,6 +4907,12 @@ class FourDSession {
     const player = this.inner.currentPlayer;
     const record = new RotationRecord(move, player, this.inner.moveCount, outcome.layerStones);
     this.rotations.push(record);
+
+    // 【转动也能赢】转出自己的一条线就当场判胜 —— 和落子判胜走同一个结算口子（_settleLine）。
+    // 顺序要紧：先结算，再交回合；判了胜之后 passTurnForRotation 自己会不动
+    // （它一开头就 `if (status !== "Playing") return`），所以这里两行都要在，
+    // 不能写成 if/else —— 那样"没判胜时交回合"这件事就有第二份写法了。
+    this.inner.decideByRotation(player);
 
     // 转动占掉整个回合：不能"转完再落子"。冷却数的是落子，所以这里不动落子计数。
     this.inner.passTurnForRotation();
@@ -4864,7 +5009,15 @@ class FourDSession {
 
     this.inner.board.rotateLayer(rec.move.axis, rec.move.layer, 4 - rec.move.turns);
     this.rotations.pop();
-    this.inner.passTurnForRotation();   // 出子权还回去
+    // 【转出来的胜局也要能悔】盘面上的五连刚被转回去，会话的状态位还停在 Decided ——
+    // 不清的话界面停在"黑棋胜"、谁也落不下子。
+    //
+    // 【交回子权要看成败，不能无条件】判过胜的那次转动**当年就没有交出回合**
+    // （decideByRotation 之后 passTurnForRotation 是空操作），所以还原时也不能反过来交一次 ——
+    // 否则悔一步棋，出子权就凭空跑到对方头上（实测：悔完该黑走，结果轮到了白）。
+    const decided = this.inner.status === "Decided";
+    this.inner.clearDecision();
+    if (!decided) this.inner.passTurnForRotation();   // 出子权还回去
 
     for (const fn of this.onRotationUndone) fn(this, rec);
     return true;
@@ -5000,6 +5153,20 @@ const AI_PARAMS = {
            pOpenThree: 1.00, rotChance: 1.00, rotProbe: 14,
            searchDepth: 5, depth4d: 5, branch: 4, vcf: true, vct: true, idMax: 6, tt: true, foeFilter: 0 },
 };
+
+/**
+ * 「转动能不能立刻赢」这一条硬规则最多探几个候选。
+ *
+ * 【为什么要有上限】这一条每手都要跑，而每个候选是一次 rotateLayer + 一次全盘扫描
+ * （30³ 上一次约 2.7 万格）。不加限，30³ 上最多 270 个候选，一手要多花几十毫秒 ——
+ * 而低档的定义就是"快而弱"，让它为一条极少出现的规则付这个钱不划算。
+ *
+ * 【为什么是 30 而不是更小】候选按"那一层有几颗子"排序（见 aiRotationCandidates）：
+ * 转动要造出线，那一层里必须先有能搬动的子，所以子多的层排在前面正是命中的那一端。
+ * 30 层以上的棋盘上，排不进前 30 的层平均一颗子都不到 —— 那里还藏着一条待补的五连，
+ * 本身就极不可能。真嫌漏，调大这个数即可，代价只是低档变慢。
+ */
+const AI_ROT_WIN_PROBE = 30;
 
 /**
  * 搜索的降档阈值（按候选点个数）。深度是耗时的指数项、候选数是线性项，
@@ -6508,12 +6675,37 @@ function aiChooseMoveInner(session, opts) {
   if (cand.length === 0) return { kind: "none" };
 
   // ---- 1. 我能立刻赢就直接赢。【硬规则，任何一档都不许跳过】
-  // 顺序上必须排在"堵对方"前面（我先走，我当然赢），也必须排在转动前面
-  // （转动永远赢不了棋，先转就是把胜手让掉）。
+  // 顺序上必须排在"堵对方"前面（我先走，我当然赢）。
+  // 【转动也排在它后面】3.0.1 起转动**能**为自己成五，所以"先转就是把胜手让掉"
+  // 这句已经不成立；这里仍然先试落子，理由换成了更朴素的一条：落子的胜手是现成的
+  // （判一遍就够），而转动要先枚举候选再逐个探针，贵得多。真只能靠转才能赢时，
+  // 第 4 步的竞价 / 档位启发式会把它挑出来 —— 见 ai.test 里那条"转动取胜"的断言。
   for (let i = 0; i < cand.length; i += 3) {
     const r = aiOutcomeAt(session, cand[i], cand[i + 1], cand[i + 2], mover, stats);
     if (r && r.status === MoveStatus.Win) {
       return { kind: "place", x: cand[i], y: cand[i + 1], z: cand[i + 2] };
+    }
+  }
+
+  // ---- 1b. 转动也能立刻赢。【硬规则，3.0.1 起 —— 转动为自己成五判胜】
+  //
+  // 【为什么单独有一段，而不是靠第 4 步的候选池】低/中档的转动走 aiRotationProbe 的
+  // 档位启发式，而那条启发式量的是 aiThreatBest —— "再落一手能做出多大的形"。
+  // 转动**已经**转出来的五连在它眼里等于不存在（候选点全是空格子，五连里没有空格）。
+  // 实测过：不加这一段，low 档看着能赢的转动跑去别处落子。
+  // 这里认的是 RotateOutcome.lines（见那个字段的注释）：accepted 且 lines>0 就是赢了。
+  //
+  // 顺序：排在"落子取胜"之后 —— 落子的胜手一遍 judge 就找出来了，比逐个探针便宜；
+  // 排在"堵对方"之前 —— 我自己能赢的棋，没有先防守的道理。
+  if (session.rotationEnabled && session.canRotate && typeof session.probeRotate === "function") {
+    const list = aiRotationCandidates(session, AI_ROT_WIN_PROBE);
+    for (let i = 0; i < list.length; i++) {
+      const rc = list[i];
+      const o = session.probeRotate(RotationMove.fromClockwiseTurns(rc.axis, rc.layer, rc.turns));
+      if (stats) stats.rotProbes++;
+      if (o.accepted && o.lines > 0) {
+        return { kind: "rotate", axis: rc.axis, layer: rc.layer, turns: rc.turns };
+      }
     }
   }
 
@@ -6968,7 +7160,7 @@ const TEXT = { en: {
   "info.moves.many": "{n} moves played",
   "info.rotations.one": " · {n} rotation",
   "info.rotations.many": " · {n} rotations",
-  "info.board": " · board {x}×{y}×{z} · layer {layer}/{n} (z={z0})",
+  "info.board": " · board {x}×{y}×{z} · layer {layer}/{n}",
   // ---- 电脑对手。中文在各自的调用点，这里只放另外五种语言。
   "info.aiOpp": " · computer plays {who}",
   "info.aiThink": " · the computer is thinking…",
@@ -6984,10 +7176,10 @@ const TEXT = { en: {
   "aiLv.ultra": "Ultra",
   "phase.dawn": "Dawn", "phase.night": "Long night",
   "tutExit": "Exit",
-"tut.1.title": "Rotation: turn the blocker away, turn your own stone in",
-"tut.1.body": "The vertical line in the corner: two of your stones sit on it, and a white stone at the bottom blocks it. You have one more stone at the far corner of that bottom layer. Turn the bottom layer clockwise — the white stone swings away and yours drops into the gap, and the line comes alive.",
+"tut.1.title": "Rotation: one turn, two problems solved",
+"tut.1.body": "White has an open four (four in a line, both ends free). Next move it makes five — and an open four cannot be blocked: block one end and it goes to the other.\n\nBut you move first, and this rotation does two things at once. You have a vertical line of your own: four stones in place, and the fifth cell you need is held by a white stone — you cannot fill it by placing. Turn that layer 90°: the white stone occupying your spot swings away, and your stone beside it drops into the gap — five in a row, and you win outright. In the same turn, one of the stones in White's open four is swung apart, so it drops to a three.\n\nHow: on the right, set Axis to z and Layer to 5 (the panel shows the layer number directly), Turns to 1 · 90°, then press Rotate — the board turns so you can see it (no turn used, not a move yet); when it looks right, press Confirm.",
 "tut.2.title": "Wrapping: the edges connect",
-"tut.2.body": "The six faces are joined: the right of x=14 is x=0. Your four stones straddle the edge — fill the gap to make five.",
+"tut.2.body": "The board is joined up: the right of one end is the other end. Picture 27 identical boards stacked in a 3×3×3 block — you only play on the middle one, but every move is stamped onto the other 26 as well. Those 26 are not drawn; instead the ring of cells hugging the outside of the board holds their shadows: for a stone on the boundary, its image sits one cell outside.\n\nLook at your row: the shadow of the leftmost stone sits just outside the RIGHT edge — that is 'out on the right, back in on the left'. The gap is the cell to the right of the two stones on the left; click it and you have five. (The gap is on layer 8; the status bar tells you which layer you are looking at.)",
 "tut.3.title": "Day and night: a line does not always count",
 "tut.3.body": "You have two fours: one laid in the day, one in the night. It is day now, so only the day four counts — and in two moves the phase turns, and the chance is gone.",
 "tut.step": "Level {n} / {total}",
@@ -7013,8 +7205,8 @@ const TEXT = { en: {
   "banner.winSub": "Move {n}",
 
   // ---- 四维面板
-  "rot.layerLabel.one": "{axis} = {layer} (1 stone in this layer)",
-  "rot.layerLabel.many": "{axis} = {layer} ({n} stones in this layer)",
+  "rot.layerLabel.one": "Layer {n} (1 stone in it)",
+  "rot.layerLabel.many": "Layer {n} ({stones} stones in it)",
   "rot.hint.over": "The game is over.",
   "rot.hint.preview": "Preview: the board already looks rotated, but nothing is committed yet. Confirm makes it real; Cancel turns it back.",
   "rot.hint.empty": "This layer is empty — nothing to rotate. Pick another layer, or check the 3D view to see where the stones are.",
@@ -7140,7 +7332,7 @@ STATIC_TEXT.ja = {
 TEXT.ja = {
   "info.moves.many": "{n}手経過",
   "info.rotations.many": " · {n}回転",
-  "info.board": " · 盤 {x}×{y}×{z} · レイヤー {layer}/{n} (z={z0})",
+  "info.board": " · 盤 {x}×{y}×{z} · レイヤー {layer}/{n}",
   "info.aiOpp": " · コンピュータは{who}番",
   "info.aiThink": " · コンピュータが考えています…",
   "toast.aiTurn": "今はコンピュータの番です",
@@ -7155,10 +7347,10 @@ TEXT.ja = {
   "aiLv.ultra": "極",
   "phase.dawn": "黎明", "phase.night": "長い夜",
   "tutExit": "終了",
-"tut.1.title": "回転：邪魔な石をどけて、自分の石を入れる",
-"tut.1.body": "角の縦の線：下から二番目と三番目があなたの石で、一番下は白石に塞がれています。その最下層の反対側の角にもう一石あります。最下層を時計回りに回すと、白石がどいてあなたの石が空きに入り、この線が生きます。",
+"tut.1.title": "回転：一手で二つ片づく",
+"tut.1.body": "白に活四があります（四つ並んで両端が空き）。次の一手で白は五連を作ります —— 活四は止められません：片端を塞げばもう片端に回られます。\n\nですが先に打つのはあなたで、しかもこの回転は一度に二つのことをします。あなたにも縦の線があり、四つは揃っていますが、足りない五つ目のマスは白石に塞がれていて、打って埋めることができません。その層を 90° 回すと、場所を取っていた白石がどき、隣にあったあなたの石がちょうど空きに入ります —— 五連が成立し、そのまま勝ちです。同じ回転で、白の活四のうち一つも散り、三に落ちます。\n\n手順：右パネルで「軸」を z、「層」を第5層（パネルに何層目か直接書いてあります）、「回数」を 1 · 90° にして「回転を実行」——盤がまず回って見せます（手番を消費しません、まだ一手ではありません）；納得したら「確定」を押してください。",
 "tut.2.title": "貫通：境界をまたいでもつながる",
-"tut.2.body": "六面はつながっています：x=14 の右は x=0 です。あなたの四石は境界をまたいでいます。隙間を埋めれば五です。",
+"tut.2.body": "盤はつながっています：片端の右はもう片端です。同じ盤が 3×3×3 で 27 枚重なっていると考えてください —— 打つのは真ん中の 1 枚だけですが、一手ごとに残りの 26 枚にも同じ位置へ刻まれます。その 26 枚は描かれず、代わりに盤のすぐ外側の一圈にその影が置かれます：境界の石は、盤の外へ一格がその像です。\n\nこの列を見てください：いちばん左の石の影が、盤の**右**のすぐ外にあります —— これが「右へ出て、左から戻る」です。隙間は左の二石の右隣のマス。そこを打てば五です。（隙間は第8層。どの層を見ているかはステータス行に出ています。）",
 "tut.3.title": "昼夜：つながっても数えられない",
 "tut.3.body": "四が二本あります。一本は昼に、一本は夜に置いたものです。いまは昼なので昼の四だけが数えられます。そして二手で位相が変わり、機会は消えます。",
 "tut.step": "第 {n} / {total} 関",
@@ -7178,7 +7370,7 @@ TEXT.ja = {
   "banner.overlineSub": "先手はちょうど5連を作る必要があります",
   "banner.win": "{who}の勝ち\n{n}連",
   "banner.winSub": "{n}手目",
-  "rot.layerLabel.many": "{axis} = {layer}（このレイヤーに石{n}個）",
+  "rot.layerLabel.many": "第{n}層（この層に石{stones}個）",
   "rot.hint.over": "対局は終了しました。",
   "rot.hint.preview": "プレビュー中：盤面は回した後の見た目ですが、まだ確定していません。「確定」で本当に回り、「キャンセル」で元に戻ります。",
   "rot.hint.empty": "このレイヤーは空です。回転するものがありません。別のレイヤーを選ぶか、3D表示で石の位置を確認してください。",
@@ -7269,7 +7461,7 @@ STATIC_TEXT.ko = {
 TEXT.ko = {
   "info.moves.many": "{n}수 착수",
   "info.rotations.many": " · {n}회 회전",
-  "info.board": " · 판 {x}×{y}×{z} · 레이어 {layer}/{n} (z={z0})",
+  "info.board": " · 판 {x}×{y}×{z} · 레이어 {layer}/{n}",
   "info.aiOpp": " · 컴퓨터는 {who}",
   "info.aiThink": " · 컴퓨터가 생각 중…",
   "toast.aiTurn": "지금은 컴퓨터 차례입니다",
@@ -7284,10 +7476,10 @@ TEXT.ko = {
   "aiLv.ultra": "극",
   "phase.dawn": "여명", "phase.night": "긴 밤",
   "tutExit": "나가기",
-"tut.1.title": "회전: 막는 돌을 돌려내고 내 돌을 들여보내기",
-"tut.1.body": "모서리의 세로줄: 아래에서 둘째·셋째가 내 돌이고 맨 아래는 백돌이 막고 있습니다. 그 맨 아래 층 반대편 모서리에 내 돌이 하나 더 있습니다. 맨 아래 층을 시계 방향으로 돌리면 백돌이 비켜나고 내 돌이 빈자리에 들어가 그 줄이 살아납니다.",
+"tut.1.title": "회전: 한 수로 두 가지가 해결됩니다",
+"tut.1.body": "백에게 활사가 있습니다(네 개가 나란히, 양쪽 끝이 비어 있음). 다음 수에 백이 오를 만듭니다 —— 활사는 막을 수 없습니다: 한쪽 끝을 막으면 다른 쪽으로 갑니다.\n\n하지만 먼저 두는 쪽은 당신이고, 게다가 이 회전은 한 번에 두 가지를 합니다. 당신에게도 세로줄이 있는데 네 개는 다 있고, 부족한 다섯 번째 칸은 백돌이 차지하고 있어 착수로는 채울 수 없습니다. 그 층을 90° 돌리면 자리를 차지한 백돌이 비켜나고, 옆에 있던 당신의 돌이 바로 그 빈자리에 들어갑니다 —— 오가 성립하고 그대로 승리입니다. 같은 회전에서 백의 활사 중 하나도 흩어져 삼으로 떨어집니다.\n\n방법: 오른쪽 패널에서 「축」을 z, 「층」을 5층(패널에 몇 층인지 그대로 적혀 있습니다), 「횟수」를 1 · 90°로 두고 「회전 실행」을 누르세요 —— 판이 먼저 돌아 보여 줍니다(차례를 쓰지 않고, 아직 한 수도 아닙니다); 확인되면 「확정」을 누르세요.",
 "tut.2.title": "관통: 경계를 넘어도 이어집니다",
-"tut.2.body": "여섯 면은 이어져 있습니다: x=14의 오른쪽은 x=0입니다. 네 개의 돌이 경계에 걸쳐 있으니 빈칸을 채우면 오가 됩니다.",
+"tut.2.body": "판은 이어져 있습니다: 한쪽 끝의 오른쪽은 다른 쪽 끝입니다. 똑같은 판이 3×3×3으로 27장 겹쳐 있다고 생각하세요 —— 두는 것은 가운데 한 장뿐이지만, 한 수마다 나머지 26장에도 같은 자리에 찍힙니다. 그 26장은 그리지 않고, 대신 판 바깥을 한 겹 두른 고리에 그 그림자를 둡니다: 경계의 돌은 판 밖으로 한 칸이 그 모습입니다.\n\n이 줄을 보세요: 가장 왼쪽 돌의 그림자가 판의 **오른쪽** 바깥 한 칸에 있습니다 —— 이것이 '오른쪽으로 나가서 왼쪽으로 돌아온다'입니다. 빈칸은 왼쪽 두 돌의 바로 오른쪽 칸입니다. 거기에 두면 오입니다. (빈칸은 8층이고, 지금 보는 층은 상태줄에 적혀 있습니다.)",
 "tut.3.title": "낮과 밤: 이어도 세지 않습니다",
 "tut.3.body": "사가 둘 있습니다. 하나는 낮에, 하나는 밤에 놓은 것입니다. 지금은 낮이라 낮의 사만 셉니다. 두 수 뒤에 위상이 바뀌면 기회는 사라집니다.",
 "tut.step": "{n} / {total} 단계",
@@ -7307,7 +7499,7 @@ TEXT.ko = {
   "banner.overlineSub": "선수는 정확히 5개를 이어야 합니다",
   "banner.win": "{who} 승리\n{n}개 연속",
   "banner.winSub": "{n}수",
-  "rot.layerLabel.many": "{axis} = {layer} (이 레이어에 돌 {n}개)",
+  "rot.layerLabel.many": "{n}층 (이 층에 돌 {stones}개)",
   "rot.hint.over": "게임이 끝났습니다.",
   "rot.hint.preview": "미리보기 중: 판은 이미 돌아간 모습이지만 아직 확정되지 않았습니다. 「확인」을 누르면 실제로 돌아가고, 「취소」를 누르면 되돌아갑니다.",
   "rot.hint.empty": "이 레이어는 비어 있습니다 — 회전할 것이 없습니다. 다른 레이어를 고르거나 3D 보기에서 돌이 있는 곳을 확인하세요.",
@@ -7405,7 +7597,7 @@ TEXT.ru = {
   "info.rotations.one": " · {n} поворот",
   "info.rotations.few": " · {n} поворота",
   "info.rotations.many": " · {n} поворотов",
-  "info.board": " · доска {x}×{y}×{z} · слой {layer}/{n} (z={z0})",
+  "info.board": " · доска {x}×{y}×{z} · слой {layer}/{n}",
   "info.aiOpp": " · компьютер: {who}",
   "info.aiThink": " · компьютер думает…",
   "toast.aiTurn": "Сейчас ход компьютера",
@@ -7420,10 +7612,10 @@ TEXT.ru = {
   "aiLv.ultra": "Ультра",
   "phase.dawn": "Рассвет", "phase.night": "Долгая ночь",
   "tutExit": "Выйти",
-"tut.1.title": "Поворот: уберите помеху, введите свой камень",
-"tut.1.body": "Вертикаль в углу: два ваших камня на ней, а нижний закрыт белым. Ещё один ваш камень стоит в дальнем углу этого нижнего слоя. Поверните нижний слой по часовой — белый уйдёт, ваш камень встанет в пробел, и линия оживёт.",
+"tut.1.title": "Поворот: один ход решает две задачи",
+"tut.1.body": "У белых открытая четвёрка (четыре в ряд, оба конца свободны). Следующим ходом они соберут пять — а открытую четвёрку не закрыть: закроете один конец, они пойдут в другой.\n\nНо ход ваш, и этот поворот делает два дела сразу. У вас есть своя вертикаль: четыре камня на месте, а нужную пятую клетку держит белый камень — ходом её не занять. Поверните этот слой на 90°: белый камень, занявший ваше место, уйдёт, а ваш камень рядом встанет ровно в пробел — пять в ряд, и вы сразу побеждаете. В том же повороте один камень из открытой четвёрки белых рассыпается, и она превращается в тройку.\n\nКак: на правой панели выберите ось z и слой 5 (на панели прямо написан номер слоя), число поворотов 1 · 90°, нажмите «Выполнить поворот» — доска повернётся, чтобы вы увидели результат (ход не тратится, это ещё не ход); когда всё понятно, нажмите «Подтвердить».",
 "tut.2.title": "Склейка: края соединены",
-"tut.2.body": "Шесть граней сшиты: справа от x=14 идёт x=0. Ваши четыре камня стоят по обе стороны края — заполните разрыв, и будет пять.",
+"tut.2.body": "Доска сшита: справа от одного края идёт другой. Представьте 27 одинаковых досок, сложенных 3×3×3 — вы играете только на средней, но каждый ход отпечатывается и на остальных 26. Их не рисуют; вместо этого по внешнему кольцу вокруг доски лежат их тени: у камня на границе его образ стоит на клетку наружу.\n\nПосмотрите на этот ряд: тень самого левого камня лежит сразу за **правым** краем — это и есть «вышел справа, вернулся слева». Разрыв — клетка справа от двух левых камней; поставьте туда, и будет пять. (Разрыв на 8-м слое; номер текущего слоя написан в строке состояния.)",
 "tut.3.title": "День и ночь: линия не всегда считается",
 "tut.3.body": "У вас две четвёрки: одна поставлена днём, другая ночью. Сейчас день, поэтому считается только дневная. А через два хода фаза сменится, и шанс уйдёт.",
 "tut.step": "Уровень {n} / {total}",
@@ -7443,9 +7635,9 @@ TEXT.ru = {
   "banner.overlineSub": "Первый игрок должен собрать ровно 5 в ряд",
   "banner.win": "{who} побеждают\n{n} в ряд",
   "banner.winSub": "Ход {n}",
-  "rot.layerLabel.one": "{axis} = {layer} (1 камень в этом слое)",
-  "rot.layerLabel.few": "{axis} = {layer} ({n} камня в этом слое)",
-  "rot.layerLabel.many": "{axis} = {layer} ({n} камней в этом слое)",
+  "rot.layerLabel.one": "Слой {n} (1 камень в нём)",
+  "rot.layerLabel.few": "Слой {n} ({stones} камня в нём)",
+  "rot.layerLabel.many": "Слой {n} ({stones} камней в нём)",
   "rot.hint.over": "Игра окончена.",
   "rot.hint.preview": "Предпросмотр: доска уже выглядит повёрнутой, но ход ещё не сделан. «Подтвердить» — повернуть по-настоящему, «Отмена» — вернуть как было.",
   "rot.hint.empty": "В этом слое пусто — поворачивать нечего. Выберите другой слой или посмотрите 3D-вид, чтобы увидеть, где стоят камни.",
@@ -7544,7 +7736,7 @@ TEXT.fr = {
   "info.moves.many": "{n} coups joués",
   "info.rotations.one": " · {n} rotation",
   "info.rotations.many": " · {n} rotations",
-  "info.board": " · plateau {x}×{y}×{z} · couche {layer}/{n} (z={z0})",
+  "info.board": " · plateau {x}×{y}×{z} · couche {layer}/{n}",
   "info.aiOpp": " · ordinateur : {who}",
   "info.aiThink": " · l'ordinateur réfléchit…",
   "toast.aiTurn": "C'est au tour de l'ordinateur",
@@ -7558,10 +7750,10 @@ TEXT.fr = {
   "aiLv.xhigh": "Très haut",
   "phase.dawn": "Aube", "phase.night": "Longue nuit",
   "tutExit": "Quitter",
-"tut.1.title": "Rotation : écartez la gêneuse, amenez votre pierre",
-"tut.1.body": "La verticale du coin : deux de vos pierres sont dessus, et la plus basse est bouchée par une blanche. Vous en avez une autre au coin opposé de cette couche du bas. Faites tourner cette couche dans le sens horaire : la blanche s'écarte, la vôtre tombe dans le trou, et la ligne revit.",
+"tut.1.title": "Rotation : un tour, deux problèmes réglés",
+"tut.1.body": "Les blancs ont un quatre ouvert (quatre alignés, les deux bouts libres). Au coup suivant ils font cinq — et un quatre ouvert ne se bloque pas : on bouche un bout, ils passent par l'autre.\n\nMais c'est vous qui jouez, et cette rotation fait deux choses d'un coup. Vous avez vous aussi une verticale : quatre pierres en place, et la cinquième case qu'il vous manque est tenue par une pierre blanche — impossible de la combler en posant. Faites tourner cette couche de 90° : la pierre blanche qui occupe votre place s'écarte, et la vôtre, à côté, tombe pile dans le trou — cinq alignés, et vous gagnez sur-le-champ. Dans la même rotation, une pierre du quatre ouvert blanc part aussi de travers : il retombe à trois.\n\nComment : à droite, réglez Axe sur z et Couche sur 5 (le panneau indique directement le numéro de couche), Tours sur 1 · 90°, puis « Exécuter la rotation » — le plateau tourne pour vous montrer le résultat (aucun tour consommé, ce n'est pas encore un coup) ; quand c'est clair, appuyez sur « Confirmer ».",
 "tut.2.title": "Pliage : les bords se rejoignent",
-"tut.2.body": "Les six faces sont cousues : à droite de x=14 vient x=0. Vos quatre pierres chevauchent le bord — comblez le trou et vous avez cinq.",
+"tut.2.body": "Le plateau est cousu : à droite d'un bord vient l'autre. Imaginez 27 plateaux identiques empilés en 3×3×3 — vous ne jouez que sur celui du milieu, mais chaque coup s'imprime aussi sur les 26 autres. Ces 26 ne sont pas dessinés ; à la place, l'anneau qui borde l'extérieur du plateau porte leurs ombres : pour une pierre sur le bord, son image se tient une case plus loin.\n\nRegardez cette ligne : l'ombre de la pierre la plus à gauche se tient juste au-delà du bord **droit** — c'est « sortir à droite, rentrer à gauche ». Le trou est la case à droite des deux pierres de gauche ; cliquez-la et vous avez cinq. (Le trou est sur la couche 8 ; la barre d'état indique la couche affichée.)",
 "tut.3.title": "Jour et nuit : une ligne ne compte pas toujours",
 "tut.3.body": "Vous avez deux quatre : l'une posée de jour, l'autre de nuit. Il fait jour, donc seule la quatre de jour compte — et dans deux coups la phase bascule, l'occasion sera passée.",
 "tut.step": "Niveau {n} / {total}",
@@ -7582,8 +7774,8 @@ TEXT.fr = {
   "banner.overlineSub": "Le premier joueur doit aligner exactement 5 pions",
   "banner.win": "Les {who} gagnent\n{n} pions alignés",
   "banner.winSub": "Coup {n}",
-  "rot.layerLabel.one": "{axis} = {layer} (1 pion dans cette couche)",
-  "rot.layerLabel.many": "{axis} = {layer} ({n} pions dans cette couche)",
+  "rot.layerLabel.one": "Couche {n} (1 pion)",
+  "rot.layerLabel.many": "Couche {n} ({stones} pions)",
   "rot.hint.over": "La partie est terminée.",
   "rot.hint.preview": "Aperçu : le plateau est déjà tourné, mais le coup n'est pas encore validé. « Confirmer » le valide, « Annuler » remet tout en place.",
   "rot.hint.empty": "Cette couche est vide — rien à tourner. Choisissez une autre couche, ou regardez la vue 3D pour voir où sont les pions.",
@@ -7749,6 +7941,55 @@ function applyStatic() {
  * 所以任何形状都框得住，相机参数不用动。
  */
 function cellSize(dims) { return 10 / Math.max(dims[0], dims[1], dims[2]); }
+
+/* --------------------------------------------------------------------------
+   拓扑（贯通）的"影子子"。
+
+   【玩法怎么理解】把棋盘想成 3×3×3 = 27 副一模一样的盘叠在一起，你只往中间那副下子，
+   每一手同时印到另外 26 副上（不画出来）。于是"右边两颗 + 左边三颗"在叠出来的空间里
+   是**实实在在的一行五**，只是那 26 副你没看见 —— 得靠脑补。
+
+   【为什么只铺一圈】棋盘 N³，外面紧贴一圈是 (N+2)³−N³ 个格子。玩家不需要看见整条
+   重复的线，只需要看见**接缝**：走出右边界的线，在紧贴右边界外面那一列里立刻又出现。
+   剩下的用脑子补。铺更多圈只会把画面淹掉。
+
+   【什么时候才有像】坐标 i 的像是 i±N，只有 i ∈ {0, N−1} 时才落进那一圈壳里：
+       i = 0    → 像在 N   （贴着右/上边界的**外侧**）
+       i = N−1  → 像在 −1  （贴着左/下边界的**外侧**）
+   所以**内部的子一个影子都没有**：面上的子 1 个像、棱上 2 个、角上最多 7 个。
+   -------------------------------------------------------------------------- */
+/**
+ * 内部子的返回：**共用同一个空数组**，免得每次重建实例都给几百颗内部子各分配一个 []。
+ * （只读，调用方不许往里面 push。）
+ */
+const EMPTY_SHADOWS = [];
+
+/** 第 i 个坐标上所有"像仍在壳里"的周期（不含 0，也就是它自己）。 */
+function wrapImages(n, i) {
+  const out = [];
+  if (i === 0) out.push(n);
+  if (i === n - 1) out.push(-n);
+  return out;
+}
+
+/**
+ * 一颗子在壳里的全部周期像，返回 [dx,dy,dz] 偏移（不含"它自己"那个 0/0/0）。
+ * 调用方拿 x+dx 当格子坐标用即可 —— 结果必定落在某一维等于 −1 或 n 的壳上。
+ */
+function wrapShadowOffsets(dims, x, y, z) {
+  const ox = wrapImages(dims[0], x), oy = wrapImages(dims[1], y), oz = wrapImages(dims[2], z);
+  if (ox.length === 0 && oy.length === 0 && oz.length === 0) return EMPTY_SHADOWS;
+  const out = [];
+  for (const dx of [0].concat(ox)) {
+    for (const dy of [0].concat(oy)) {
+      for (const dz of [0].concat(oz)) {
+        if (dx === 0 && dy === 0 && dz === 0) continue;
+        out.push([dx, dy, dz]);
+      }
+    }
+  }
+  return out;
+}
 
 /**
  * 单层棋盘的平移边界（CSS 像素）。
@@ -8790,6 +9031,9 @@ const Game = {
   adoptSession(session) {
     this.session = session;
     this.wireSession();
+    // 【必须关掉上一局的弹窗】不然它会跟着进下一关 —— 而且横幅上的字是**现读**新会话的
+    // lastOutcome 的，一盘空盘会显示成"空棋胜 0 连"这种胡说。用户报的就是这个。
+    this.hideBanner();
     this.resetViewState(session.board.dims[2]);
     // 【活动层要挑"有子的那一层"，不能固定 0】三维视图画整盘、二维面板只画活动层 ——
     // 活动层停在 0 而盘上的子都在中间（教学关和真实对局都是这样）时，
@@ -8847,13 +9091,25 @@ const Game = {
     this.maybeScheduleAi();
   },
 
+  /**
+   * 胜负横幅的显隐。**落子和转动两条路都走这里** —— 各写一份的话，转动取胜那条
+   * 迟早会漏掉 showBanner（这个坑真踩过：3.0.1 加"转动也能赢"时才发现
+   * 原来 onRotationApplied 是无条件 hideBanner）。
+   *
+   * 【教学里一律不弹】三关都以"达成目标"结束，而横幅正好盖在棋盘中间 ——
+   * 玩家要看的恰恰是那个刚成形的五连。过关这件事教学条自己写着
+   * （「过关 —— 你已经会了」），横幅只是把同一个消息再说一遍，还挡住证据。
+   * 用户报的"第二关胜利后没关掉弹窗、还带到第三关"，根子就在这里：
+   * 那一关的目标就是赢，于是每关结束都会弹一屏横幅出来。
+   */
+  syncWinBanner() {
+    if (this.session.status === "Decided" && !this.tutActive) this.showBanner();
+    else this.hideBanner();
+  },
+
   onMoveApplied(rec, outcome) {
     this.onBoardChanged(false);
-    if (outcome.status === MoveStatus.Win || outcome.status === MoveStatus.LoseByOverline || outcome.status === MoveStatus.Draw) {
-      this.showBanner();
-    } else {
-      this.hideBanner();
-    }
+    this.syncWinBanner();
     // 轮到电脑就安排下一手。放在最后：先让棋局本身结算清楚（终局就不该再排了，
     // maybeScheduleAi 里的 isAiTurn 会看 status）。
     this.maybeScheduleAi();
@@ -8876,8 +9132,9 @@ const Game = {
 
   // 转动成功时才走这里（三种"没转成"由 doRotate 自己提示，因为它们不留痕迹）
   onRotationApplied(rec, outcome) {
-    this.hideBanner();
     this.onBoardChanged(false);
+    // 【转出来的胜局也要弹横幅】和 onMoveApplied 走同一个出口（见 syncWinBanner）。
+    this.syncWinBanner();
     // rec.toString() 就是同一件事的紧凑写法，英文侧直接复用它，不另造一套措辞 ——
     // 提示语和「恢复」那条用同一个说法，玩家才认得出"这是刚才那一步"。
     this.toast(say(() => cnOf(rec.player) + "棋转动 " + axisName(rec.move.axis) + " = " + rec.move.layer +
@@ -8911,6 +9168,41 @@ const Game = {
     this.drawStrip();
     this.drawTimeline();
     this.refreshTexts();
+    // 【必须排在 refreshTexts 之后】上面那四笔画的是"当时的"面板布局，而
+    // refreshTexts → refreshRotPanel 正好会改布局（转动面板显隐、条带 compact），
+    // 时间轴也在这一步显隐。布局一变，画布的 CSS 框就换了尺寸，位图还是旧的那张 ——
+    // 浏览器把旧位图拉伸到新框上，棋盘看起来就是"变形"了（实测：1109×519 的位图
+    // 铺进 1109×722 的框，纵向拉伸 1.39 倍；教学第 1 关转到第 2 关必现，因为
+    // 第 1 关能转、面板多一行，第 2 关不能转、那一行没了）。
+    this.syncPanelLayout();
+  },
+
+  /**
+   * 把"位图和 CSS 框对不上"的画布补画一次。
+   *
+   * 【为什么不记住"哪个开关变了"再补画】那种写法要枚举所有会改布局的东西
+   * （转动面板 / 时间轴 / 条带 compact / 棋盘边长 / 将来的任何一行），
+   * 漏一个就退回原样，而且症状是"某种组合下棋盘才变形"。
+   * 这里直接查**不变量本身**：画布位图尺寸必须等于 CSS 尺寸 × dpr。
+   * 换句话说，补画的条件就是"已经坏了" —— 判据不会和布局的来源脱节。
+   *
+   * 【为什么不每帧都查】它挂在 onBoardChanged 上，一手才一次；三次比较，代价可以忽略。
+   * 真画的时候才会走 setCanvasSize，那里会把位图重新对齐。
+   */
+  syncPanelLayout() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const stale = (cv) => {
+      // 藏起来的面板（clientWidth 为 0）不算 —— drawTimeline 关掉时本来就只切显隐、
+      // 不碰位图。把它算进来的话每一手都会重画一次，永远"修不好"。
+      if (!cv || !cv.clientWidth) return false;
+      return cv.width !== Math.max(1, Math.round(cv.clientWidth * dpr)) ||
+             cv.height !== Math.max(1, Math.round(cv.clientHeight * dpr));
+    };
+    if (!stale(this.el.layerBase) && !stale(this.el.strip) && !stale(this.el.timeline)) return;
+    this.drawLayerBase();
+    this.drawLayerOverlay();
+    this.drawStrip();
+    this.drawTimeline();
   },
 
   // ------------------------------------------------------------------ 三维实例
@@ -8957,6 +9249,10 @@ const Game = {
     // 那两个色是三维和二维面板共用的；为了"淡一点/深一点"去动它们，
     // 等于把实子和面板上的子一起改了。
     const GHOST_ALPHA = 0.52;
+    // 拓扑模式下"棋盘外面那一圈影子"的两档参数。都刻意压在幽灵层之下、再小一档 ——
+    // 影子是**提示**，不是棋子；和真子分不开的话，玩家会以为那里真有一颗子。
+    const SHADOW_ALPHA = 0.22;
+    const SHADOW_SIZE = 0.52;      // 真子 0.68、非当前层 0.60
     // 球体网格是【直径】为 1 的，所以下面 push 进去的 w 就是世界空间里的直径，
     // 数值和右侧面板的圆（半径 cs*0.34 → 直径 0.68）对齐，两个视图里子看起来一样大
     // 晨昏开着吗、现在是哪个相位 —— 三档透明度要用。关掉时 phOn 为 false，行为逐位不变。
@@ -8996,6 +9292,35 @@ const Game = {
         opqCol.push(rgb[0], rgb[1], rgb[2], offPhase ? PHASE_DIM_ALPHA : 1.0);
       }
     });
+
+    // 【拓扑（贯通）的影子子】紧贴棋盘外面那一圈壳里，画出边界上那些子的周期像。
+    // 玩法与"为什么只有一圈"见 wrapShadowOffsets 上面那段。
+    //
+    // 【为什么放在主循环之后、单独再遍历一遍】主循环里那颗子自己怎么画，和"它在外面有
+    // 几个像"是两件事：内部子一个像都没有（占绝大多数），在同一个循环里写会变成
+    // "每颗子都判一次三个轴"的白算。分开之后，这一遍只为边界子上线。
+    //
+    // 【透明度分三档，影子是最低那档】当前层 1.0 / 非当前层 0.52 / 异相位再 ×0.6 /
+    // 影子 0.22。玩家一眼要能分出"真的子、别层的子、外面的影子"三种东西，
+    // 影子绝不能浓到被误当成一颗真子 —— 它是提示，不是棋子。
+    if (board.wrap) {
+      board.forEachStone((x, y, z, s) => {
+        const offs = wrapShadowOffsets(dims, x, y, z);
+        if (offs.length === 0) return;
+        // 三个视图状态（切片 / 只看黑只看白 / 相位）对影子一律沿用源子的判定 ——
+        // 影子是那颗子的像，源子不画的时候它也不该画。
+        if (this.stoneFilter && colourOf(s) !== this.stoneFilter) return;
+        const rgb = winSet.has(board.index(x, y, z)) ? cWin : (colourOf(s) === BLACK ? cBlack : cWhite);
+        const offPhase = phOn && phaseOf(s) !== curPhase;
+        for (const d of offs) {
+          // 切片模式：z 大于当前层的影子也不画（和上面主循环同一条规矩）
+          if (!this.ghostMode && z + d[2] > this.activeLayer) continue;
+          const p = this.worldOf(x + d[0], y + d[1], z + d[2], dims, cs);
+          ghPos.push(p[0], p[1], p[2], cs * SHADOW_SIZE);
+          ghCol.push(rgb[0], rgb[1], rgb[2], SHADOW_ALPHA * (offPhase ? 0.6 : 1));
+        }
+      });
+    }
 
     // 最后一手的发光标记。
     // 判据必须是"那一格还是落子方的子"，不能只判"那一格不空" —— 四维模式下转动会把棋子
@@ -9631,7 +9956,14 @@ const Game = {
   /** 格距和棋盘占多大（不含原点）。gridLayout 和"平移边界"两处共用同一套算法 ——
    *  各写一份的话，缩放之后"画出来的边界"和"能拖到哪儿"会各说各话。 */
   gridMetrics(w, h, nx, ny) {
-    const cs = Math.min(w / Math.max(1, nx), h / Math.max(1, ny)) * (this.zoom2d || 1);
+    // 【拓扑模式下要给外面那一圈留位置】棋盘仍是 0..n−1 号格，壳是 −1 和 n 号 ——
+    // 格号一个都没变，变的只是"一格有多宽"：按 n+2 格算，棋盘画出来就是整幅的 n/(n+2)。
+    // 不留这一格的话，影子会贴着画布边被裁掉，等于白画。
+    // 【为什么不动 extX/extY】它俩描述的是**棋盘本身**占多大（n−1 个格距），
+    // 平移边界、缩放边界都按它算；算进去一个格子的话，居中会偏、边界也会松一格。
+    const wrap = !!(this.session && this.session.board && this.session.board.wrap);
+    const pad = wrap ? 2 : 0;
+    const cs = Math.min(w / Math.max(1, nx + pad), h / Math.max(1, ny + pad)) * (this.zoom2d || 1);
     return { cs: cs, extX: cs * (nx - 1), extY: cs * (ny - 1) };
   },
 
@@ -9669,10 +10001,39 @@ const Game = {
     const px = (i) => lay.ox + i * cs;
     const py = (j) => lay.oy + j * cs;
 
+    // 【拓扑模式：棋盘外面那一圈】先铺壳的底 —— 颜色和板面不同，让"壳"读起来是
+    // 棋盘**外面**，而不是"棋盘变大了"。范围 = 板面再往外各一格。
+    const wrap = !!board.wrap;
+    if (wrap) {
+      ctx.fillStyle = Palette.hex("--panel");
+      ctx.fillRect(lay.ox - cs * 1.5, lay.oy - cs * 1.5, cs * (nx + 2), cs * (ny + 2));
+    }
+
     // 板面：外圈线再往外留半个格。真实棋盘的板边就是这样，
     // 少了这半个格，最外圈的线会贴着画布边，看着像画布被裁掉了一块。
     ctx.fillStyle = Palette.hex("--cell");
     ctx.fillRect(lay.ox - cs * 0.5, lay.oy - cs * 0.5, cs * nx, cs * ny);
+
+    // 格线各向外延长一格：让"第 0 列"和外面那一列看着是同一根线 ——
+    // 这正是要教的那件事（从右边出去、从左边回来）。
+    // 【画在板面之后、真格线之前】夹在中间，伸出去的那一截浮在壳上，
+    // 压在板面上的那一截随后会被真格线盖住，接缝看不到双重线。
+    if (wrap) {
+      ctx.strokeStyle = Palette.hex("--line2d");
+      ctx.lineWidth = Math.max(1, cs * 0.04);
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      for (let i = 0; i < nx; i++) {
+        ctx.moveTo(px(i), py(-1)); ctx.lineTo(px(i), py(0));
+        ctx.moveTo(px(i), py(ny - 1)); ctx.lineTo(px(i), py(ny));
+      }
+      for (let j = 0; j < ny; j++) {
+        ctx.moveTo(px(-1), py(j)); ctx.lineTo(px(0), py(j));
+        ctx.moveTo(px(nx - 1), py(j)); ctx.lineTo(px(nx), py(j));
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     // 这一列在别的层还有子的空交织点，点一个小方块提示 ——
     // 三维棋盘上最容易忽略的就是自己上/下层已经落过子。
@@ -9734,6 +10095,37 @@ const Game = {
         ctx.globalAlpha = 1;
       }
     }
+
+    // 【拓扑模式的影子子】画在真子之后、壳那一圈上（见 wrapImages 上面那段）。
+    // 只算 x/y 两个轴：面板一次只画一层，影子自然也留在同一层里，不跨层。
+    // 半径 0.26 比真子的 0.34 小一档、透明度压到 0.22 —— 玩家必须一眼分得出
+    // "这是外面的影子"而不是"这里真有一颗子"。
+    if (wrap) {
+      for (let j = 0; j < ny; j++) {
+        for (let i = 0; i < nx; i++) {
+          const s = board.get(i, j, this.activeLayer);
+          if (s === EMPTY) continue;
+          if (this.stoneFilter && colourOf(s) !== this.stoneFilter) continue;
+          const offX = wrapImages(nx, i), offY = wrapImages(ny, j);
+          if (offX.length === 0 && offY.length === 0) continue;
+          const offPhase = cPhaseOn && phaseOf(s) !== cPhase;
+          ctx.fillStyle = Palette.hex(colourOf(s) === BLACK ? "--black" : "--white");
+          ctx.strokeStyle = Palette.hex("--stone-edge");
+          ctx.lineWidth = Math.max(1, cs * 0.05);
+          for (const dx of (offX.length ? offX : [0])) {
+            for (const dy of (offY.length ? offY : [0])) {
+              if (dx === 0 && dy === 0) continue;
+              ctx.globalAlpha = 0.22 * (offPhase ? 0.6 : 1);
+              ctx.beginPath();
+              ctx.arc(px(i + dx), py(j + dy), cs * 0.26, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            }
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
   },
 
   drawLayerOverlay() {
@@ -9769,11 +10161,25 @@ const Game = {
       const foul = this.session.lastOutcome.isOverlineFoul;
       ctx.strokeStyle = Palette.hex(foul ? "--danger" : "--gold");
       ctx.lineWidth = Math.max(1, lay.cs * 0.08);
+      // 【拓扑模式下金圈也跟到壳里】跨接缝的五连，有一截是画在外面的影子上的 ——
+      // 不跟过去的话，玩家看到的是一条"走到边上就断了"的金圈，而它其实连过去了。
+      // 这一笔正是"看得见五连"最直接的证据。
+      const wrapOn = !!board.wrap;
       for (const p of this.session.lastOutcome.line) {
         if (p[2] !== this.activeLayer) continue;
         ctx.beginPath();
         ctx.arc(px(p[0]), py(p[1]), lay.cs * 0.30, 0, Math.PI * 2);
         ctx.stroke();
+        if (!wrapOn) continue;
+        const offX = wrapImages(dims[0], p[0]), offY = wrapImages(dims[1], p[1]);
+        for (const dx of (offX.length ? offX : [0])) {
+          for (const dy of (offY.length ? offY : [0])) {
+            if (dx === 0 && dy === 0) continue;
+            ctx.beginPath();
+            ctx.arc(px(p[0] + dx), py(p[1] + dy), lay.cs * 0.30, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
       }
     }
 
@@ -9988,8 +10394,8 @@ const Game = {
     }
     const d = s.dims, nz = d[2];
     info += say(() => " · 棋盘 " + d[0] + "×" + d[1] + "×" + d[2] +
-                      " · 当前层 " + (this.activeLayer + 1) + "/" + nz + " (z=" + this.activeLayer + ")",
-                "info.board", { x: d[0], y: d[1], z: d[2], layer: this.activeLayer + 1, n: nz, z0: this.activeLayer });
+                      " · 当前层 " + (this.activeLayer + 1) + "/" + nz,
+                "info.board", { x: d[0], y: d[1], z: d[2], layer: this.activeLayer + 1, n: nz });
     // 人机对战：报一句"电脑执哪一方"，轮到时再说一句"它在想"。
     // 【为什么不写进 #status】那一条在内核里（describeStatus）、被 dom-smoke 和
     // online.test.mjs 断言着；而且它是 22px 塞在 34px 高的行里，中文基线已经是两行、
@@ -10017,7 +10423,7 @@ const Game = {
     this.el.stoneBlack.classList.toggle("sel", this.stoneFilter === BLACK);
     this.el.stoneWhite.classList.toggle("sel", this.stoneFilter === WHITE);
     this.el.sliceGroup.classList.toggle("on", !this.ghostMode);
-    this.el.sliceLabel.textContent = say(() => "只画到 z ≤ " + (this.activeLayer + 1) + "/" + nz,
+    this.el.sliceLabel.textContent = say(() => "只画到第 " + (this.activeLayer + 1) + " / " + nz + " 层",
                                          "slice.label", { i: this.activeLayer + 1, n: nz });
 
     if (!this.el.banner.classList.contains("on")) return;
@@ -10972,9 +11378,9 @@ const Game = {
 
     const layerStones = this.session.board.countLayerStones(this.rotAxis, this.rotLayer);
     this.el.rotLayerLabel.textContent = sayN(
-      () => axisName(this.rotAxis) + " = " + this.rotLayer + "（本层 " + layerStones + " 子）",
+      () => "第 " + (this.rotLayer + 1) + " 层（本层 " + layerStones + " 子）",
       "rot.layerLabel", layerStones,
-      { axis: axisName(this.rotAxis), layer: this.rotLayer });
+      { n: this.rotLayer + 1, stones: layerStones });
     this.el.rotStatus.textContent = this.session.describeRotationStatus(this.lang);
     // 电脑的回合里玩家不能转（doRotate 里还有一道提示，键盘的 T 也走那里）
     this.el.rotGo.disabled = !this.session.canRotate || this.isAiTurn();
@@ -11219,8 +11625,14 @@ const Game = {
    * 【种子固定、不用 Math.random】同一种子必须铺出同一盘棋 —— 测试要能复现，
    * 关卡的可解性断言也要能稳定跑。
    */
-  tutFill(s, count, seed, avoid) {
+  tutFill(s, count, seed, avoid, protect, spreadOverride) {
     const board = s.board;
+    // 【protect：逐格的"这里必须留空"，比 avoid 那个盒子精确】盒子表达不了
+    // "这几格要空、旁边那几格随便" —— 教学结构常常是几根交错的线，用盒子圈它，
+    // 圈小了漏、圈大了把背景子全推到棋盘边缘（那正是"一盘散子"的来源）。
+    // 传进来的是一串 [x,y,z]，命中就跳过。
+    const keep = new Set();
+    if (protect) for (const p of protect) keep.add(p[0] + "," + p[1] + "," + p[2]);
     let st = (seed >>> 0) || 2463534242;
     const rnd = () => {
       st ^= (st << 13) >>> 0; st >>>= 0;
@@ -11235,15 +11647,22 @@ const Game = {
     // 第 3 关只剩 8 颗，画面反而比原来还空）。所以要的是**相对**判据：
     // 这一颗有没有把局面弄得比原来更热。
     const wl0 = s.rules.winLength;
-    const hot0 = (() => {
-      const live0 = aiCandidates(board, AI_CANDIDATE_CAP);
-      return Math.max(aiThreatBest(board, live0, BLACK, wl0, false),
-                      aiThreatBest(board, live0, WHITE, wl0, false));
-    })();
+    const live0 = aiCandidates(board, AI_CANDIDATE_CAP);
+    const baseB = aiThreatBest(board, live0, BLACK, wl0, false);
+    const baseW = aiThreatBest(board, live0, WHITE, wl0, false);
+    // 【上限要按方算，不能取两边的最大值】取 max 的后果实测过：第一关白棋那条活四
+    // （5e6）把基线顶得很高，于是背景子只要不超过 5e6 就随便造 —— 转头就给**黑棋**
+    // 也凑出了一条四，关卡又是"一进去就过关"。
+    // 规则改成：这一方基线还没到四，就不许背景子把它推到四；已经到了的，不许超过它。
+    // （所以背景子仍然能造出二三，画面不会变空 —— 那正是"看起来像一盘棋"需要的。）
+    const capOf = (base) => (base >= AI_W.FOUR ? base : AI_W.FOUR - 1);
     // 【抱团，不要均匀撒】原来撒在一个 10×10×10 的大盒子里，看着像随便倒上去的。
     // 真下起来的子会挤在一两个战场附近 —— 这里就绕着一个"战场中心"做三角分布
     // （越靠中心越密），读起来才像一盘棋。
-    const spread = Math.max(3, Math.round(n * 0.28));
+    // 【spreadOverride：把背景收紧成"一小片战场"】默认那个值是按"整个棋盘像一盘棋"
+    // 调的，用来铺满一张空盘；而教学关要的是"战场就近在眼前"，铺太开就成了一盘散子
+    // （用户报的"第一关子太散"）。第一关结构只占中间那一块，所以由它自己传一个更紧的值。
+    const spread = spreadOverride || Math.max(3, Math.round(n * 0.28));
     let placed = 0, guard = 0;
     while (placed < count && guard++ < count * 60) {
       // 三角分布 = 两个均匀数取平均，天然中间密、边上疏
@@ -11252,6 +11671,7 @@ const Game = {
       const y = Math.max(0, Math.min(n - 1, c0 + Math.round(tri() * spread)));
       const z = Math.max(0, Math.min(n - 1, c0 + Math.round(tri() * spread)));
       if (!board.isEmpty(x, y, z)) continue;
+      if (keep.size && keep.has(x + "," + y + "," + z)) continue;
       if (avoid && x >= avoid[0] && x <= avoid[1] && y >= avoid[2] && y <= avoid[3] &&
           z >= avoid[4] && z <= avoid[5]) continue;
       // 黑白交替着放，读起来像真的在对下
@@ -11265,9 +11685,9 @@ const Game = {
       //      第一关摆到棋盘中间之后就是这么红的（背景子抱团，自然凑出了四）。
       const wl = s.rules.winLength;
       const live = aiCandidates(board, AI_CANDIDATE_CAP);
-      const hotNow = Math.max(aiThreatBest(board, live, BLACK, wl, false),
-                              aiThreatBest(board, live, WHITE, wl, false));
-      const hot = hotNow > hot0 || RuleEngine.fullScan(board, wl).length > 0;
+      const hot = aiThreatBest(board, live, BLACK, wl, false) > capOf(baseB) ||
+                  aiThreatBest(board, live, WHITE, wl, false) > capOf(baseW) ||
+                  RuleEngine.fullScan(board, wl).length > 0;
       if (hot) {
         board.set(x, y, z, EMPTY);       // 这颗会把局面弄"热"，不要
         continue;
@@ -11279,38 +11699,59 @@ const Game = {
 
   tutorialLevels() {
     return [
-      { // ---- 第一关：转动（把挡子转走、把自己的子转进来）
+      { // ---- 第一关：转动（一次转动，拆掉对方的活四 + 自己直接成五）
         build: () => {
           const r = new RuleSet();
           r.allowRotation = true;
           r.rotationCooldownPlacements = 0;      // 教学关里随时可转，别让冷却挡住教学
           const s = GameSession.create(10, BLACK, r);
-          // 竖着一条 z 线在 (x,y)=(0,0)：第 1、2 层是我的，第 0 层被白子堵着。
-          // 【为什么是两颗而不是三颗 —— 这一条改了两版才对】三颗时，**另一端是空的**，
-          // 补一颗就是四连 —— 于是"最強威胁 ≥ 四"开局就成立，一进去就显示"过关"。
-          // 而把两端都堵死又不行：那样转完也成不了四（线还是死的）。
-          // 两颗、只堵一头，才是"现在够不着、转一下才够得着"。
-          // 【为什么摆在正中间】原来摆在左下角，和背景子离得老远 ——
-          // 玩家一眼看到的是"一盘散子 + 角落里三颗孤子"，读不出这是一个局。
-          // 挪到中心之后，要教的形就在战场里面。
-          const C = 5;                       // 10³ 的中心
-          s.board.set(C, C, 1, BLACK);
-          s.board.set(C, C, 2, BLACK);
-          s.board.set(C, C, 0, WHITE);
-          // 第 0 层上我还有一颗在 (4,5)：顺时针转一次（(u,v)→(v, 9−u)），
-          // (4,5) 正好落到 (5,5) —— 挡子被转到 (5,4) 去，我的子补进那个空位，
-          // 这条线就从两连变成三连（补第 3 层就是四连）。
-          s.board.set(C - 1, C, 0, BLACK);
-          // 铺一层背景子，让它读起来像一盘真棋。**避开左上角那一带和 (9,0) 那颗**
-          // （教学的结构不能被背景子搅了），而且不许凑出任何连线。
-          this.tutFill(s, 30, 0x51a1, [3, 7, 3, 7, 0, 3]);
+          // 【这一关的形状：一次转动，两件事一起成，而且当场赢】
+          //   · 白棋一条**活四**沿着 z 轴摆着：(4,4,z)，z=4..7，两头 z=3 / z=8 都空 ——
+          //     活四挡不住（堵一头它走另一头），下一手白就成五。**唯一的活路是转动。**
+          //   · 我自己的竖线在 (6,6)：z=2,3,5,6 四颗，缺的第五颗正好是 z=4 ——
+          //     而那一格被白子占着，**落子补不进去**（这就是"落子救不回来"）。
+          //   · 转 z=4 这一层（顺时针 1 次，(x,y) → (y, 9−x)），三件事同时发生：
+          //       白子 (6,6,4) → (6,3,4)   堵我的那颗走开了
+          //       我的子 (3,6,4) → (6,6,4) 补进缺口 → (6,6,2..6) 五连，**当场判胜**
+          //       白子 (4,4,4) → (4,5,4)   白那条四被打散，从四退成三
+          //
+          // 【为什么是"直接成五"而不是"转成活四"】v3.0.1 起转动允许为自己成五
+          // （造出**别人**的线仍然整体撤销）。所以这一关教的是转动最狠的那一面：
+          // 它不只是拆招，它本身就是杀招。转出来的五连走的是和落子取胜同一个结算口子。
+          // 改规则之前这里只能停在"转成活四" —— 那时转动在数学上做得到、规则上不允许。
+          // 要转的那一层是 z=4（界面上写"第 5 层"）
+          for (const z of [4, 5, 6, 7]) s.board.set(4, 4, z, WHITE);
+          for (const z of [2, 3, 5, 6]) s.board.set(6, 6, z, BLACK);
+          s.board.set(6, 6, 4, WHITE);          // 占住我缺的那一颗 —— 落子补不进去
+          s.board.set(3, 6, 4, BLACK);          // 转一下它落到 (6,6,4)
+          // 【要转的那一层必须只剩这三颗子】背景子是随机撒的，落进这一层就会跟着一起转，
+          // 于是"转完什么样"变成不可预期的 —— 实测踩过：背景里一颗白子从 (5,4,4) 转到
+          // (4,4,4)，正好把白棋刚被拆散的活四【原地补回去】，白棋一点没弱，
+          // 而教学文案还写着"白那条四退成了三"。用整层封禁把这件事从源头断掉。
+          const avoidLayer = [0, 9, 0, 9, 4, 4];
+          // 【这几个格子必须留空】
+          //   (6,6,1) / (6,6,7)：我这条线的两端。背景子要是落在任一端，我的五连就变成
+          //                       六连 —— 先手必须**恰好**五连，六连当场判负。
+          //                       玩家按着教学做对了却输掉，是这一关最坏的一种失败。
+          //   (4,4,3) / (4,4,8)：白那条四的两头。堵死一头它就不是活四了，
+          //                       "活四挡不住"这个前提也就没了。
+          // 这几个点用逐格点名，不用盒子：盒子圈它们要圈到 [4,6]×[4,6] 那么大，
+          // 背景子会被整片挤走，又变回"一盘散子"（用户报的第一关毛病）。
+          const protect = [[6, 6, 1], [6, 6, 7], [4, 4, 3], [4, 4, 8]];
+          // 【数量与铺开范围都是量出来的，不是拍的】10³ 棋盘上同种子逐档实测：
+          //   spread=3（默认）→ 背景摊到整盘，读起来就是"一盘散子"（用户报的原话）；
+          //   spread=2        → 挤进中心 5×5×5 那一团里，读起来才像"这里在打仗"。
+          //   数量 34/38/42/46 → 铺满、且**解法唯一**（只有 z=4 顺 1 能过）；
+          //   50 颗以上       → 背景子自己凑出了第二条过关的转动（y=5 顺 2），
+          //                      那会让玩家在别处随手一转就"过关"，教学要教的东西没出场。
+          // 所以取 46：体积里塞得下、又不生出第二条解法的最满一档。
+          // （这条"解法唯一"由 dom-smoke 里那条教学断言钉着，改数量会当场红。）
+          this.tutFill(s, 46, 0x51a1, avoidLayer, protect, 2);
           return s;
         },
-        goal: (s) => {
-          if (s.status !== "Playing") return false;
-          const cands = aiCandidates(s.board, AI_CANDIDATE_CAP);
-          return aiThreatBest(s.board, cands, BLACK, s.rules.winLength, false) >= AI_W.FOUR;
-        }
+        // 【判据就是"赢"】这一关要教的东西全在"转完直接五连"里，所以判据不必再描述形状：
+        // 赢不了就说明没转对（落子补不进那个缺口，别处也没有成五点）。
+        goal: (s) => s.winner === BLACK,
       },
       { // ---- 第二关：贯通（隔着边界连五）
         build: () => {
@@ -11322,6 +11763,11 @@ const Game = {
           this.tutFill(s, 48, 0x7c33, [0, 14, 5, 9, 5, 9]);
           return s;
         },
+        // 【开局就停在有接缝的那一层】adoptSession 默认挑"子最多的那一层"，
+        // 而在这一关上那多半是背景子最密的一层 —— 玩家一进去看到的是一片乱子，
+        // 要教的接缝（还有外面那一圈影子）根本不在画面里。这一关的答案就在 z=7 上，
+        // 直接停过去。
+        activeLayer: 7,
         goal: (s) => s.winner === BLACK
       },
       { // ---- 第三关：晨昏（连成不算数）
@@ -11350,20 +11796,27 @@ const Game = {
   tutorialText(i, which) {
     const t = which === "title";
     if (i === 0) {
-      return t ? say(() => "转动：把挡路的转走，把自己的转进来", "tut.1.title")
-               : say(() => "棋盘正中那条竖线：你的两颗子在中间两层，最底下那层被一颗白子堵着。" +
-                           "另外，最底层紧挨着它还有你的一颗子。" +
-                           "\n\n怎么走：右边面板「轴」选 z、「层」调到 0、「次数」选 1 · 90°，" +
-                           "点「执行转动」——棋盘会先转给你看（不占回合）；" +
-                           "看明白了再点「确定操作」。白子会被转走，你那颗子正好补进空位，" +
-                           "这条线就活了。", "tut.1.body");
+      return t ? say(() => "转动：一次解决两件事", "tut.1.title")
+               : say(() => "白棋有一条活四（四颗连成一线、两头都空着），下一手它就成五 ——" +
+                           "而活四挡不住：堵哪一头，它走另一头。" +
+                           "\n\n但你先动手，而且转动能一次做两件事。" +
+                           "你有一条竖线，四颗都在，缺的第五颗那一格被白子占着，落子补不进去。" +
+                           "把那一层转 90°，占你位置的白子会被转走，你在旁边的那颗子正好转进缺口 ——" +
+                           "五连当场成立，直接赢。" +
+                           "同一次转动里，白棋那条活四里也有一颗子被转散，它退成三。" +
+                           "\n\n怎么走：右边面板「轴」选 z，「层」调到第 5 层（面板上直接写着是第几层），" +
+                           "「次数」选 1 · 90°，点「执行转动」——" +
+                           "棋盘会先转给你看（不占回合、不算一步）；看明白了再点「确定操作」。",
+                     "tut.1.body");
     }
     if (i === 1) {
       return t ? say(() => "贯通：隔着边界也能连", "tut.2.title")
-               : say(() => "棋盘六个面是打通的：一头的右边就是另一头 —— 从这边走出去，" +
-                           "会从对面回来。你的四颗子正好压在边界两侧。" +
-                           "\n\n怎么走：在缺口那一格上点一下，就成五了。" +
-                           "（缺口在 y=7、z=7 那一层上；提示栏里写着当前看的是哪一层。）",
+               : say(() => "棋盘是通的：一头的右边就是另一头。可以把它想成 27 副一模一样的棋盘叠在一起 ——" +
+                           "你只往中间那副下子，但每一手同时印到另外 26 副上。那 26 副不画出来，" +
+                           "只在紧贴棋盘外面那一圈留了影子：边界上的子，棋盘外面一格就是它的像。" +
+                           "\n\n看你这盘：最左边那颗子的影子，就贴在棋盘右边外面一格 —— 这就是「从右边出去、从左边回来」。" +
+                           "缺口是左边那两颗子的右边一格，点一下就成五。" +
+                           "（缺口在第 8 层上；提示栏里写着当前看的是第几层。）",
                      "tut.2.body");
     }
     return t ? say(() => "晨昏：连成了也不算数", "tut.3.title")
@@ -11405,6 +11858,13 @@ const Game = {
     // 重建规则，而每一关有它自己的规则（第一关要随时可转、第二关要贯通、第三关要相位）。
     // adoptSession 把界面那一套（挂事件、复位视图、重画）做全，规则用关卡自己的。
     this.adoptSession(FourDSession.wrap(raw));
+    // 【关卡可以指定开局停在第几层】默认由 adoptSession 挑"子最多的那一层"，
+    // 但"子最多"和"看得见答案"是两回事（第二关的答案在边界那一层，背景子却更密在别处）。
+    // 排在这里之后：adoptSession 已经画过一帧，这里改完再走下面的 refreshTexts 与重画。
+    if (typeof levels[i].activeLayer === "number") {
+      this.activeLayer = levels[i].activeLayer;
+      this.onBoardChanged(false);
+    }
     this.tutPassed = false;
     this.syncTutorialUi();
     this.refreshTexts();

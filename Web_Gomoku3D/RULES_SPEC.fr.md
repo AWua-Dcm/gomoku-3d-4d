@@ -163,14 +163,19 @@ Les contrôles s'enchaînent dans l'ordre ; si l'un d'eux échoue, toute l'opér
 | Le numéro de couche doit exister | refus |
 | La recharge doit être prête | refus |
 | Le plateau tourné doit être **différent** d'avant | « aucun changement », ne compte pas comme un coup |
-| Après la rotation, le plateau **ne doit pas présenter 5 en ligne** | tout est remis en arrière |
+| Après la rotation, le plateau **ne doit pas donner 5 en ligne à l'adversaire** | tout est remis en arrière |
 
 « Doit être différent » regarde **l'aspect du plateau**, et non « combien de tours » :
 une couche déjà vide, ou un motif qui retombe exactement sur lui-même, sont tous deux jugés « aucun changement ».
 L'interface vous dit laquelle des deux causes, sinon le bouton semblerait cassé.
 
-Le dernier contrôle signifie qu'**une rotation ne peut jamais décider du gain** : elle ne peut pas servir d'arme offensive,
-seulement à casser la ligne de l'adversaire ou à réajuster sa propre structure.
+Le dernier contrôle n'arrête que les lignes de **l'adversaire**. Une rotation **peut faire cinq pour vous** : c'est
+une victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. Si la rotation donne cinq en ligne
+à **l'adversaire** (vous avez poussé ses pierres en place), tout est toujours remis en arrière : offrir un cinq à
+l'adversaire n'est pas ce que ce coup voulait dire.
+
+Donc **une rotation peut être une arme offensive** : elle casse les lignes adverses, réajuste vos pierres, et peut
+amener la dernière pierre manquante à sa place pour gagner.
 
 ### 10.4 Recharge de rotation
 
@@ -225,8 +230,13 @@ bord opposé. Idem pour les trois axes.
 Une cinq peut donc traverser un bord : deux pierres d'un côté et trois de l'autre forment
 une seule suite.
 
-- Le plateau a le même aspect et on pose les pierres de la même façon. **Une pierre n'a
-  qu'une seule position** ; elle n'est pas redessinée de l'autre côté.
+- On pose les pierres de la même façon : **une pierre n'a qu'une seule position** — elle est
+  là où vous la posez.
+- Mais pour que ce soit **visible**, l'anneau de cases qui borde l'extérieur du plateau porte des
+  **ombres** : chaque pierre sur le bord a son image une case plus loin. Une ligne qui sort par le
+  bord droit montre sa suite juste au-delà — un cinq à travers la couture n'est plus à deviner.
+  Les ombres sont plus petites et plus pâles ; ce ne sont **pas des pierres** : seules les vraies
+  pierres comptent, et on ne peut pas jouer sur une ombre.
 - La règle du six est inchangée : le premier joueur perd toujours à 6 alignées ou plus.
   Le pliage allonge les lignes : vérifiez le bord opposé avant de conclure une cinq.
   **Un anneau complet d'une couleur (N pierres) compte aussi comme un six.**

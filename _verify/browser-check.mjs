@@ -2699,6 +2699,94 @@ try {
     return 1;
   })()`);
 
+  // ------------------------------------------------------------------
+  // 拓扑（贯通）的影子子 —— **在真浏览器里量**
+  //
+  // 【为什么不能只在桩里验】这一档的全部意义是"看得见"：位置对不对、画没画出来、
+  // 会不会浓到被当成真子，只有真的把像素读出来才算数。桩里那几条只证明算得像的个数对。
+  // 【量什么】① 面板给外面那一圈留了位置（格距按 n+2 算）② 该有影子的格子真的非空
+  // ③ 关掉拓扑之后同一格必须是干净的 ④ 外部那一圈不能落子。
+  // ------------------------------------------------------------------
+  {
+    await ev(`(() => { Game.closeSetup(); Game.setSetupMode(true); Game.startTutorial();
+      Game.tutorialBuild(1); return 1; })()`);
+    await sleep(700);
+
+    const probe = `(() => {
+      const cv = document.getElementById('layerBase');
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      const img = ctx.getImageData(0, 0, W, H).data;
+      const dims = Game.session.board.dims, nx = dims[0], ny = dims[1];
+      const w = cv.clientWidth, h = cv.clientHeight;
+      const lay = Game.gridLayout(w, h, nx, ny);
+      const px = (i) => lay.ox + i * lay.cs, py = (j) => lay.oy + j * lay.cs;
+      const at = (i, j) => { const X = Math.round(px(i) * (W / w)), Y = Math.round((h - py(j)) * (W / w));
+        const k = (Y * W + X) * 4; return [img[k], img[k+1], img[k+2], img[k+3]]; };
+      // 该有影子的格子：当前层上"在边界"的那些子，各算一份像
+      const board = Game.session.board, L = Game.activeLayer;
+      const want = [];
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        if (board.get(i, j, L) === 0) continue;
+        const ox = wrapImages(nx, i), oy = wrapImages(ny, j);
+        if (!ox.length && !oy.length) continue;
+        for (const dx of (ox.length ? ox : [0])) for (const dy of (oy.length ? oy : [0])) {
+          if (!dx && !dy) continue;
+          want.push([i + dx, j + dy]);
+        }
+      }
+      // 参照色：壳上一个确定空的格子
+      const ref = at(-1, 0);
+      const far = (c) => Math.abs(c[0]-ref[0]) + Math.abs(c[1]-ref[1]) + Math.abs(c[2]-ref[2]);
+      const hits = want.filter((p) => { const c = at(p[0], p[1]); return c[3] > 0 && far(c) > 6; });
+      return JSON.stringify({
+        cs: +lay.cs.toFixed(2), wantN: want.length, hitN: hits.length,
+        expectCs: +Math.min(w / (nx + 2), h / (ny + 2)).toFixed(2),
+        wrap: !!board.wrap, layer: L,
+        // 外面那一圈点下去应当落空
+        ringPick: Game.cellFromEvent({ clientX: lay.ox + nx * lay.cs, clientY: h - (lay.oy + 7 * lay.cs) },
+                                     document.getElementById('layerBase')) ? 1 : 0
+      });
+    })()`;
+    const on = JSON.parse(await ev(probe));
+    check(on.wrap, "拓扑关：第 2 关确实是贯通模式", JSON.stringify(on));
+    check(on.wantN > 0, "拓扑关：盘上确实有「在边界上、因此有影子」的子", JSON.stringify(on));
+    check(on.hitN === on.wantN,
+      "拓扑关：该有影子的 " + on.wantN + " 个格子上全都有东西（实际 " + on.hitN + "）",
+      JSON.stringify(on));
+    check(Math.abs(on.cs - on.expectCs) < 0.05,
+      "拓扑关：面板格距按 n+2 算，给外面那一圈留了位置",
+      "格距 " + on.cs + " 期望 " + on.expectCs);
+    check(on.ringPick === 0, "拓扑关：点棋盘外面那一圈不落子", JSON.stringify(on));
+    await shot("11-拓扑影子");
+
+    // 关掉拓扑：同一格必须变回干净的面板底 —— 影子只该在拓扑模式下出现
+    const off = JSON.parse(await ev(`(() => {
+      Game.session.rules.wrapEdges = false;
+      Game.session.board.wrap = false;
+      Game.onBoardChanged(true);
+      const cv = document.getElementById('layerBase');
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      const img = ctx.getImageData(0, 0, W, H).data;
+      const dims = Game.session.board.dims;
+      const w = cv.clientWidth, h = cv.clientHeight;
+      const lay = Game.gridLayout(w, h, dims[0], dims[1]);
+      const at = (i, j) => { const X = Math.round((lay.ox + i * lay.cs) * (W / w));
+        const Y = Math.round((h - (lay.oy + j * lay.cs)) * (W / w));
+        const k = (Y * W + X) * 4; return [img[k], img[k+1], img[k+2], img[k+3]]; };
+      // 这里格距已经按 n 算了，所以量的是"棋盘右边外面一格"那块 —— 关掉拓扑后应当是空底
+      const c = at(dims[0], 7), ref = at(-1, 0);
+      return JSON.stringify({ wrap: !!Game.session.board.wrap,
+        diff: Math.abs(c[0]-ref[0]) + Math.abs(c[1]-ref[1]) + Math.abs(c[2]-ref[2]) });
+    })()`));
+    check(!off.wrap, "关掉拓扑之后 board.wrap 为假", JSON.stringify(off));
+    check(off.diff <= 6, "非拓扑模式棋盘外那一格是干净的（没有影子）", JSON.stringify(off));
+
+    await ev(`(() => { Game.tutorialExit(); Game.closeSetup(); return 1; })()`);
+    await sleep(300);
+  }
+
   // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态
   await ev(`(() => {
     Game.setGridVisible(true);

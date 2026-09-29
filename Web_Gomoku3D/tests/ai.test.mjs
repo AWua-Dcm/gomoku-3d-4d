@@ -88,7 +88,7 @@ try {
              aiRng, AI_LEVELS, AI_PARAMS,
              aiThreatBest, aiTier, AI_W, Board3D,
              aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
-             TT_EXACT, TT_LOWER, TT_UPPER,
+             TT_EXACT, TT_LOWER, TT_UPPER, AI_ROT_WIN_PROBE,
              aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
              aiOutcomeAt, aiRotationCandidates, aiRotationValue, aiSearchMove, aiEvalLeaf,
              AI_POINT_BUDGET_MAX, cellOf, colourOf, phaseOf };`)();
@@ -619,6 +619,58 @@ for (const wl of [4, 6]) {
 }
 
 // ---------------------------------------------------------------------------
+// 2b. 第三条硬规则：**只有转动能赢时，电脑必须转那一手**（3.0.1 起转动可以为自己成五）
+//
+// 【为什么单独有一条】转动会不会被选中，走的是和落子不同的那条路（候选枚举 + 探针 +
+// 竞价），落子那一侧的"能赢必赢"根本管不到它。规则改了却忘了这一侧，
+// 症状是"电脑明明能一转就赢，却去别处落子"—— 而它看起来像电脑变笨了，
+// 不会指向规则改动。
+//
+// 局面（6³，全部落在 z=3 之外那条竖线上，所以只有第 3 层被动）：
+//   黑 (0,0,0)(0,0,1)(0,0,2)(0,0,4)  —— 沿 z 的四连，缺口在 z=3
+//   白 (0,0,3)                       —— 缺口被白子占着，**落子补不进去**
+//   黑 (5,0,3)                       —— 绕 z 轴把第 3 层顺时针转一次，(x,y)->(y,5-x)，
+//                                       它正好落到 (0,0,3)：缺口填上，五连成立
+// 【为什么要白子占着缺口】不占的话直接落子就赢了 —— 那种局面测的是"能赢必赢"那条老规则，
+// 根本走不到转动那一侧。白子一占，"只有转"才成立。
+// 【为什么白子只有一颗】白棋任何威胁都不存在，电脑没有别的正当理由去别处。
+// ---------------------------------------------------------------------------
+{
+  const mkRot = () => FourDSession.create(6, BLACK, (() => {
+    const r = new RuleSet(); r.allowRotation = true; r.rotationCooldownPlacements = 0; return r;
+  })());
+  const lay = (s) => {
+    for (const z of [0, 1, 2, 4]) s.board.set(0, 0, z, BLACK);
+    s.board.set(0, 0, 3, WHITE);
+    s.board.set(5, 0, 3, BLACK);
+    return s;
+  };
+  // 先证明这个局面本身成立：落子赢不了，转一下就能赢
+  {
+    const s = lay(mkRot());
+    let placeWin = false;
+    for (let x = 0; x < 6; x++) for (let y = 0; y < 6; y++) for (let z = 0; z < 6; z++) {
+      if (!s.board.isEmpty(x, y, z)) continue;
+      const t = lay(mkRot());
+      const j = t.place(x, y, z).status;
+      if (j === MoveStatus.Win) placeWin = true;
+    }
+    check(!placeWin, "2b 前提：这个局面里落子赢不了（否则测不到转动那一侧）");
+    const s2 = lay(mkRot());
+    const o = s2.rotate(RotationMove.fromClockwiseTurns(AXIS_Z, 3, 1));
+    check(o.status === RotateStatus.Rotated && s2.winner === BLACK,
+          "2b 前提：绕 z 轴转第 3 层确实能成五",
+          o.status + " / winner=" + s2.winner);
+  }
+  for (const level of AI_LEVELS) {
+    const a = aiChooseMove(lay(mkRot()), { level: level, seed: 3 });
+    check(a && a.kind === "rotate" && a.axis === AXIS_Z && a.layer === 3 && a.turns === 1,
+          "只有转动能赢时，[" + level + "] 必须转那一手",
+          "选了 " + JSON.stringify(a));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 3. 两条硬规则之二：对方下一步能赢就必须堵 —— 而且"对方下下去会判长负"的点不是威胁。
 // ---------------------------------------------------------------------------
 
@@ -779,7 +831,14 @@ function selfPlayRotAudit(n, firstPlayer, lvBlack, lvWhite, seed, maxPlies, cool
     if (act.kind === "rotate") {
       rotations++;
       const foeAfter = threat(you), mineAfter = threat(me);
-      if (foeAfter >= AI_W.THREE) {
+      // 【转完棋局直接结束了 —— 后面那两条安全绳不适用】3.0.1 起转动可以为自己成五，
+      // 那一转结束棋局，盘上留什么都不重要了（对手没有下一手）。
+      // 但**得是"我赢"**：判成对方赢、或者结算到一半卡住，都还是必须报出来的。
+      if (s.status !== "Playing") {
+        if (s.winner !== me) {
+          bad.push("第 " + plies + " 手：转动结束了棋局，赢的却是对方（winner=" + s.winner + "）");
+        }
+      } else if (foeAfter >= AI_W.THREE) {
         bad.push("第 " + plies + " 手：转完还给对方留了活三以上（" + foeAfter + "）");
       } else if (foeBefore >= AI_W.THREE) {
         if (!(foeAfter < foeBefore)) {
@@ -1009,9 +1068,13 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   // 原来这条断言只看 rotProbe，而极限档的 rotProbe 现在是 0，会误报。
   // 8³ 全枚举上限 3 轴 × 8 层 × 3 次 = 72；rotMax=24 就是拿它截出来的。
   const p = AI_PARAMS.ultra;
-  const cap = p.rotSearch ? (p.rotMax || 3 * 8 * 3) : p.rotProbe;
+  // 【3.0.1 起上限要加上"一转就赢"那一段】那一段在所有档位之前跑，
+  // 独立于参数表、自己带 AI_ROT_WIN_PROBE 这个上限（见那条常量的注释）。
+  // 不加的话这条会误报：它量的是"这一手总共探了几次"，而赢棋检查永远排在竞价之前。
+  const cap = (p.rotSearch ? (p.rotMax || 3 * 8 * 3) : p.rotProbe) + Core.AI_ROT_WIN_PROBE;
   check(st.rotProbes <= cap, "探针数受参数表上限约束",
-        "rotProbes=" + st.rotProbes + " 上限=" + cap);
+        "rotProbes=" + st.rotProbes + " 上限=" + cap +
+        "（含一转就赢的 " + Core.AI_ROT_WIN_PROBE + " 次）");
   // 三维下一次都不许探
   const s3 = mkSession(8, BLACK, false);
   s3.place(3, 3, 3);

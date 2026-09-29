@@ -92,13 +92,13 @@ To run one piece on its own:
 | Command | Count | What it covers |
 |---|---|---|
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
-| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19408 | 4D rotation consistency |
+| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19427 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
-| `node Web_Gomoku3D/tests/ai.test.mjs` | 123 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 109 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 213 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 115 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
-| `node _verify/browser-check.mjs` | 327 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
+| `node _verify/browser-check.mjs` | 342 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
 
 The two networking tests run inside step 8 and **cannot be skipped**.
 
@@ -254,6 +254,13 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 ## 📝 Changelog
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
+
+### 2026.09.30
+
+- ✨ **v3.1.0** Topology (wrapping) is **now visible**: the ring of cells hugging the outside of the board
+  draws **shadows** of the stones on the boundary — a line leaving the right edge shows its
+  continuation one cell past it, so a five across the seam no longer has to be imagined
+- 🔧 **v3.0.1** Various fixes
 
 ### 2026.09.29
 

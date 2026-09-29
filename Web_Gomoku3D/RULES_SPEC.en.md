@@ -165,14 +165,18 @@ move, and no record is kept.
 | The layer number must exist | rejected |
 | The cooldown must be ready | rejected |
 | The rotated board must be **different** from before | "nothing changed"; not counted as a move |
-| The rotated board must **not contain five in a row** | the whole thing is rolled back |
+| The rotated board must **not make five in a row for the opponent** | the whole thing is rolled back |
 
 "Must be different" looks at **what the board looks like**, not at how many turns you asked for: a layer that was already
 empty, or a pattern that happens to rotate back onto itself, both count as "nothing changed". The interface tells you which
 of the two it was, because otherwise the button just looks broken.
 
-The last check means **a rotation can never win the game**: it cannot be used as an attack, only to break up an opponent's
-line or to rearrange your own stones.
+The last check only stops **the opponent's** lines. A rotation **may make five for you** — that is a win, exactly like
+making five by placing, and the game ends there and then. If the rotation hands the **opponent** five in a row (you swung
+their stones into place), it is still rolled back: gifting the opponent a five is not what that move meant.
+
+So **a rotation can be an attack**: it breaks up the opponent's lines, rearranges your own stones, or swings the last
+stone you need into place to win.
 
 ### 10.4 Rotation cooldown
 
@@ -226,8 +230,13 @@ on the opposite one. This holds for all three axes.
 
 So a five may cross an edge — two stones on one side and three on the other are one run.
 
-- The board looks the same and you place stones the same way. **A stone has exactly one
-  position**; it is not drawn again on the far side.
+- You place stones the same way: **a stone has exactly one position** — where you put it is
+  where it is.
+- But so that you can **see** this, the ring of cells hugging the outside of the board draws
+  **shadows**: every stone on the boundary has its own image one cell outside the board.
+  A line leaving the right edge shows its continuation one cell past it — a five across the
+  seam no longer has to be imagined. Shadows are smaller and fainter; they are **not stones**,
+  only real stones count, and you cannot play on a shadow.
 - The overline rule is unchanged: the first player still loses with 6 or more in a row.
   Wrapping makes lines longer, so check the far side before completing a five.
   **A full ring of one colour (N stones) is an overline too.**
