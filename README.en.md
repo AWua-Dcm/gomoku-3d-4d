@@ -7,7 +7,7 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-40895_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-40907_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
@@ -88,7 +88,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
 
 ```
-11733 + 19427 + 98 + 213 + 119 + 8845 + 115 + 345 = 40895 assertions, all green
+11733 + 19427 + 98 + 221 + 119 + 8845 + 115 + 349 = 40907 assertions, all green
 ```
 
 Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is

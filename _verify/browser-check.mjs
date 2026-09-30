@@ -2805,6 +2805,100 @@ try {
   }
 
   // ------------------------------------------------------------------
+  // 画布位图的尺寸必须跟得上它 CSS 框的尺寸。
+  //
+  // 【为什么单列一条】这是"教学里切换关卡之后棋盘被拉伸变形"那个 bug 的**根因**，
+  // 而且它坏起来完全没有声音：右侧面板的布局一变（转动面板显隐、时间轴显隐、
+  // 条带 compact），画布的 CSS 框就换了尺寸，而位图还是旧的那张 ——
+  // 浏览器把旧位图**拉伸**到新框上，比例就歪了。实测过一次：1109×519 的位图
+  // 铺进 1109×722 的框，纵向拉伸 1.39 倍，第一关切到第二关必现。
+  //
+  // 【为什么不靠"按钮没动"那条】那条量的是布局高度，位图尺寸是另一件事 ——
+  // 布局一个像素没动、位图照样可以是旧的。两件事各钉各的。
+  // ------------------------------------------------------------------
+  {
+    const stale = JSON.parse(await ev(`(() => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const want = (cv) => cv && cv.clientWidth
+        ? { w: Math.max(1, Math.round(cv.clientWidth * dpr)),
+            h: Math.max(1, Math.round(cv.clientHeight * dpr)),
+            bw: cv.width, bh: cv.height } : null;
+      const read = () => {
+        const out = {};
+        for (const id of ["layerBase", "strip", "timeline"]) out[id] = want(document.getElementById(id));
+        return out;
+      };
+      const bad = [];
+      const checkAt = (where) => {
+        const r = read();
+        for (const id in r) {
+          const v = r[id];
+          if (!v) continue;                       // 藏起来的不算
+          if (v.w !== v.bw || v.h !== v.bh) {
+            bad.push(where + " / " + id + "：CSS 算出 " + v.w + "×" + v.h +
+                     "，位图却是 " + v.bw + "×" + v.bh);
+          }
+        }
+      };
+      Game.closeSetup(); Game.setSetupMode(true); Game.startTutorial();
+      checkAt("第 1 关");
+      Game.tutorialBuild(1); checkAt("第 2 关");   // 转动面板从有到无，面板变高
+      Game.tutorialBuild(2); checkAt("第 3 关");   // 时间轴出现，面板变矮
+      Game.tutorialBuild(0); checkAt("回到第 1 关");
+      Game.tutorialExit(); Game.closeSetup();
+      return JSON.stringify({ bad: bad, dpr: dpr });
+    })()`));
+    check(stale.bad.length === 0,
+      "教学三关来回切，画布位图尺寸始终跟得上 CSS 框（否则浏览器会把旧位图拉伸，棋盘变形）",
+      JSON.stringify(stale.bad));
+  }
+
+  // ------------------------------------------------------------------
+  // 相位光圈真的画出来了。
+  //
+  // 【为什么要看像素】v3.1.1 把"异相位淡显"换成了"每颗子外面一圈相位色薄光"。
+  // 光圈算错颜色、画在子底下、或者干脆没画，棋照样能下完 —— 但玩家再也分不出
+  // 哪颗子属于哪个相位，而"只有当前相位的连线算数"正是靠这个看的。
+  // 桩里只能验"有一批实例进了幽灵缓冲"，验不了颜色；这里直接数二维面板上的像素。
+  // ------------------------------------------------------------------
+  {
+    const halo = JSON.parse(await ev(`(() => {
+      Game.setSetupMode(true); Game.startTutorial(); Game.tutorialBuild(2);   // 第三关：晨昏
+      const cv = document.getElementById('layerBase');
+      const img = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+      // 光圈是半透明的相位色叠在浅色板面上，所以判据是"偏向蓝 / 偏向红"，
+      // 不是等于某个具体色值。
+      let blue = 0, red = 0;
+      for (let i = 0; i < img.length; i += 4) {
+        if (img[i + 3] < 200) continue;
+        const r = img[i], g = img[i + 1], b = img[i + 2];
+        if (b > r + 18 && b > 120 && b < 235 && g > r) blue++;
+        else if (r > b + 22 && r > 150 && r < 245 && r > g + 10) red++;
+      }
+      // 前置：这一关确实两种相位都有子（否则"只数到一种颜色"可能是关卡摆错了）
+      let dawn = 0, night = 0;
+      Game.session.board.forEachStone((x, y, z, v) => { if (phaseOf(v) === 0) dawn++; else night++; });
+      // 【三维那一遍单独钉一条】上面数的是**二维面板**的像素 —— 只关掉三维那一遍光圈，
+      // 它照样全绿（实测过：把三维那段 if 条件改成 false，348 项一条都没红）。
+      // 三维的光圈走幽灵缓冲，每颗子都推一个实例进 ghPos，所以：
+      //   开着相位时，幽灵实例数**至少**等于盘上子数。
+      // 关掉那一遍就不成立了（剩下的只有"非当前层的子 + 影子 + 最后一手"，比子数少）。
+      const withHalo = Game.ghCount;
+      Game.tutorialExit(); Game.closeSetup();
+      return JSON.stringify({ blue: blue, red: red, dawn: dawn, night: night,
+        stones: dawn + night, withHalo: withHalo });
+    })()`));
+    check(halo.dawn > 0 && halo.night > 0,
+      "前置：第三关盘上两种相位的子都有（否则下面那条是空断言）", JSON.stringify(halo));
+    check(halo.blue > 0 && halo.red > 0,
+      "相位光圈画出来了：面板上同时数得到偏蓝和偏红的像素（永夜 / 黎明）",
+      JSON.stringify(halo));
+    check(halo.withHalo >= halo.stones,
+      "三维那一边也画了：开着相位时幽灵实例数至少等于子数（每颗子都带一圈光圈）",
+      JSON.stringify(halo));
+  }
+
+  // ------------------------------------------------------------------
   // v3.1.2：「设置」和「落子：正常/缓/催」在四维下交换位置（用户口径）
   //
   // 【为什么在真浏览器里量】桩里只能验类名挂没挂上；"换没换成"终究是几何问题 ——

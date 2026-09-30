@@ -671,6 +671,52 @@ for (const wl of [4, 6]) {
 }
 
 // ---------------------------------------------------------------------------
+// 2c. 贯通（空间贯通）下的自对局：**不卡死、不被拒、能收局**
+//
+// 【为什么要单列】a 到 z 上面所有对局都是**不贯通**的；而 v3.1.2 起四维常开贯通、
+// 三维也能单独勾它。贯通改的是"越界怎么算"这一层，落子判定、候选生成、威胁计数
+// 全都要跟着走 —— 哪一条忘了处理，症状是"电脑下着下着不动了"或者"挑了一个引擎会拒的手"，
+// 而这两种症状在这一组之外一条都测不到（ai.test 里 wrapEdges 此前一个字都没有）。
+//
+// 【为什么喂满 120 手而不是跑几步】贯通让线变长，五连更容易凑出来；真正要排除的是
+// "某一步之后双方都挑不出合法着法"这种死局 —— 那要走到盘面很满才暴露。
+// ---------------------------------------------------------------------------
+{
+  const wrapAudit = [];
+  for (const [n, level, seedBase] of [[10, "high", 700], [8, "ultra", 810]]) {
+    for (let g = 0; g < 2; g++) {
+      const s = FourDSession.wrap(GameSession.create(n, BLACK, (() => {
+        const r = new RuleSet(); r.wrapEdges = true; r.allowRotation = false; return r;
+      })()));
+      if (!s.board.wrap) { check(false, "前置：贯通局的 board.wrap 必须为真"); break; }
+      let plies = 0, rejected = 0, bad = null;
+      while (s.status === "Playing" && plies < 120) {
+        const a = aiChooseMove(s, { level: level, seed: seedBase + g * 7 + plies });
+        if (!a || a.kind === "none") { bad = "第 " + plies + " 手挑不出着法（电脑会卡住）"; break; }
+        if (a.kind !== "place") { bad = "第 " + plies + " 手挑了非落子动作 " + a.kind; break; }
+        const o = s.place(a.x, a.y, a.z);
+        if (o.status === MoveStatus.Rejected) {
+          if (++rejected > 2) { bad = "第 " + plies + " 手连续被引擎拒"; break; }
+        }
+        plies++;
+      }
+      // 【下界按实测取】四局实测 27 / 27 / 23 / 23 手，全部走成 Decided。
+      // 取 18 是留出余量 —— 写成 "plies > 0" 的话，AI 在第 3 手就卡住也照样绿，
+      // 而"卡住"恰恰是这一条要抓的东西。
+      check(bad === null && plies >= 18,
+        n + "³ 贯通 · " + level + " · 第 " + g + " 局：" + plies + " 手走完，没有卡死也没有被拒",
+        bad || ("只走了 " + plies + " 手 —— 手数太少说明中途卡住了"));
+      // 收局是正常结局（赢/和），没走满 120 手也不该是"还在下"却被截断的样子
+      check(s.status !== "Playing" || plies === 120,
+        n + "³ 贯通 · " + level + " · 第 " + g + " 局：要么收局、要么正好打到上限",
+        "status=" + s.status + " plies=" + plies);
+      wrapAudit.push(n + "³/" + level + "/" + g + "：" + plies + " 手 " + s.status);
+    }
+  }
+  console.log("贯通自对局：" + wrapAudit.join(" · "));
+}
+
+// ---------------------------------------------------------------------------
 // 3. 两条硬规则之二：对方下一步能赢就必须堵 —— 而且"对方下下去会判长负"的点不是威胁。
 // ---------------------------------------------------------------------------
 
