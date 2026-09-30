@@ -7,7 +7,7 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-40758_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-40895_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
@@ -17,6 +17,13 @@ The game's interface switches between six languages too — the button in the to
 opens the list. It starts in Chinese.
 
 ![Setup screen](_verify/shots/6-起始界面-英文.png)
+
+In a 4D game all three mechanics are visible at once: **the colour of the thin halo around every
+stone is its phase** (red = day, blue = night), and **the ring just outside the board holds the
+shadows drawn by wrapping** — you can see where an edge stone continues on the far side without
+having to imagine it.
+
+![4D: three mechanics](_verify/shots/12-四维三种机制.png)
 
 ---
 
@@ -81,7 +88,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
 
 ```
-11733 + 19408 + 98 + 123 + 109 + 8845 + 115 + 327 = 40758 assertions, all green
+11733 + 19427 + 98 + 213 + 119 + 8845 + 115 + 345 = 40895 assertions, all green
 ```
 
 Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -257,6 +264,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.30
 
+- 🔧 **v3.1.3** Various fixes
 - ✨ **v3.1.2** Wrapping joins the game for real: the 4D mode "4D · Myriad" turns all three on at once
   (Rubik rotation / space wrapping / day and night); 3D gains two checkboxes — "Rubik rotation" and
   "Space wrapping" — tick whichever you want (neither is ticked by default; unticked is plain 3D)

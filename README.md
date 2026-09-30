@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40758_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-40895_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -16,6 +16,11 @@
 网页界面本身也能切中英文：右上角的按钮，默认中文。
 
 ![起始界面](_verify/shots/1-起始界面.png)
+
+四维对局里三个机制同时看得见：**每颗子外面那一圈薄光的颜色就是它的相位**（红 = 黎明、蓝 = 永夜），
+**棋盘外面紧贴的那一圈是「贯通」画的影子** —— 贴边的子在对侧长什么样，不用脑补。
+
+![四维：三种机制](_verify/shots/12-四维三种机制.png)
 
 ---
 
@@ -80,7 +85,7 @@ bash _verify/run-all.sh
 九步，期望结果：
 
 ```
-11733 + 19408 + 98 + 123 + 109 + 8845 + 115 + 327 = 40758 项断言全绿
+11733 + 19427 + 98 + 213 + 119 + 8845 + 115 + 345 = 40895 项断言全绿
 ```
 
 第 9 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -224,6 +229,7 @@ bash _verify/run-all.sh
 
 ### 2026.09.30
 
+- 🔧 **v3.1.3** 修改若干问题
 - ✨ **v3.1.2** 贯通正式加入玩法：四维的「四维 · 万象」里三样一起常开（魔方旋转 / 空间贯通 / 黎明永夜）；
   三维下多出「魔方旋转」「空间贯通」两个勾选框，想加哪样勾哪样（默认都不勾，不勾就是纯三维）
 - ✨ **v3.1.1** 黎明永夜改用**光圈**表示相位：每颗子外面一圈薄光，淡红是黎明、淡蓝是永夜 ——

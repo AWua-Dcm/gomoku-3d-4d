@@ -3192,7 +3192,7 @@ le didacticiel) ramène à l'écran de départ.
       <div id="hint" data-i18n-html="hint">左键拖拽旋转 · 右键（或 Shift + 左键）拖拽平移 · 滚轮缩放 · 单击当前层落子<br>
         触屏：两指缩放 / 平移 · 双击棋盘复位（立体和单层都可以）<br>
         Z 悔棋 · R 重开 · Q/E 换层 · G 切换视图模式 · H 格线 · B 只看黑/白 · T 转动 · Y 恢复本次转动<br>
-        绿框 = 待转的那一层 · 蓝框 = 当前层（四维模式下才有绿框）</div>
+        绿框 = 待转的那一层 · 蓝框 = 当前层（开了「魔方旋转」才有绿框）</div>
     </div>
 
     <!-- v3.0.0 游戏教学。**铺满屏幕**：进入教学时把 #setup 关掉、直接进对局视图，
@@ -7272,7 +7272,7 @@ const STATIC_TEXT = { en: {
   "hint": "Drag to rotate · Right-drag (or Shift+left-drag) to pan · Scroll to zoom · Click to place on the current layer<br>" +
     "Touch: pinch to zoom / pan · double-tap a board to reset (works on both boards)<br>" +
     "Z undo · R restart · Q/E change layer · G view mode · H grid lines · B black/white only · T rotate · Y restore rotation<br>" +
-    "Green box = the layer about to rotate · Blue box = current layer (green only in 4D)",
+    "Green box = the layer about to rotate · Blue box = current layer (green appears once Rubik rotation is on)",
   "modeGhost": "Ghost layers",
   "modeSlice": "Slice",
   "modeGrid": "Grid lines",
@@ -7412,7 +7412,7 @@ const TEXT = { en: {
   "rot.hint.cool.one": "Cooling down: 1 more move. A rotation uses up the whole turn, so you can't place right after rotating.",
   "rot.hint.cool.many": "Cooling down: {n} more moves. A rotation uses up the whole turn, so you can't place right after rotating.",
   "rot.hint.undo": "The last move was a rotation — you can take it back with “Restore”.",
-  "rot.hint.ready": "Clockwise = looking from the negative end of that axis toward the origin. If a rotation would create 5 in a row it is rolled back; a rotation uses up the whole turn.",
+  "rot.hint.ready": "Clockwise = looking from the negative end of that axis toward the origin. Making five for yourself with a rotation wins; only lining up the opponent's five is rolled back. A rotation uses up the whole turn.",
 
   // ---- 浮动提示
   "toast.undone": "Undone: {move}",
@@ -7474,7 +7474,7 @@ const TEXT = { en: {
 STATIC_TEXT.ja = {
   "previewTagRight": "デモ盤 · 10 × 10 × 10<br>右の設定とは無関係、対局には含まれません",
   "previewTagBelow": "デモ盤 · 10 × 10 × 10<br>下の設定とは無関係、対局には含まれません",
-  "hint": "ドラッグで回転 · 右ドラッグ（または Shift+左ドラッグ）で平行移動 · スクロールでズーム · クリックで現在のレイヤーに着手<br>タッチ：ピンチでズーム/パン · 盤をダブルタップでリセット（どちらの盤でも有効）<br>Z 元に戻す · R 最初から · Q/E レイヤー切替 · G 表示モード · H グリッド線 · B 黒/白のみ · T 回転 · Y 回転を戻す<br>緑の枠 = 回転するレイヤー · 青の枠 = 現在のレイヤー（緑は 4D のみ）",
+  "hint": "ドラッグで回転 · 右ドラッグ（または Shift+左ドラッグ）で平行移動 · スクロールでズーム · クリックで現在のレイヤーに着手<br>タッチ：ピンチでズーム/パン · 盤をダブルタップでリセット（どちらの盤でも有効）<br>Z 元に戻す · R 最初から · Q/E レイヤー切替 · G 表示モード · H グリッド線 · B 黒/白のみ · T 回転 · Y 回転を戻す<br>緑の枠 = 回転するレイヤー · 青の枠 = 現在のレイヤー（緑は「ルービック回転」を有効にしたときだけ）",
   "modeGhost": "ゴースト表示",
   "modeSlice": "スライス",
   "modeGrid": "グリッド線",
@@ -7575,7 +7575,7 @@ TEXT.ja = {
   "rot.hint.empty": "このレイヤーは空です。回転するものがありません。別のレイヤーを選ぶか、3D表示で石の位置を確認してください。",
   "rot.hint.cool.many": "クールダウン中：あと{n}手。回転はその手番を丸ごと使うため、回転した直後には着手できません。",
   "rot.hint.undo": "直前の手は回転でした。「回転を戻す」で取り消せます。",
-  "rot.hint.ready": "時計回りは、その軸の負の側から原点を見た向きです。回転で5連ができてしまう場合は取り消されます。回転はその手番を丸ごと使います。",
+  "rot.hint.ready": "時計回りは、その軸の負の側から原点を見た向きです。回転で自分の5連ができれば勝ち、相手の5連を作ったときだけ取り消されます。回転はその手番を丸ごと使います。",
   "toast.undone": "取り消しました：{move}",
   "toast.rotated": "{move}",
   "toast.rotUndone": "回転前に戻しました（{move} を取り消し）",
@@ -7605,7 +7605,7 @@ TEXT.ja = {
 STATIC_TEXT.ko = {
   "previewTagRight": "데모 판 · 10 × 10 × 10<br>오른쪽 설정과 무관 — 게임에 포함되지 않습니다",
   "previewTagBelow": "데모 판 · 10 × 10 × 10<br>아래쪽 설정과 무관 — 게임에 포함되지 않습니다",
-  "hint": "드래그로 회전 · 오른쪽 드래그(또는 Shift+왼쪽 드래그)로 이동 · 스크롤로 확대/축소 · 클릭하면 현재 레이어에 착수<br>터치: 두 손가락으로 확대/이동 · 판을 더블탭하면 초기화 (두 판 모두 가능)<br>Z 되돌리기 · R 다시 시작 · Q/E 레이어 변경 · G 보기 모드 · H 격자선 · B 흑/백만 보기 · T 회전 · Y 회전 복원<br>초록 상자 = 곧 회전할 레이어 · 파란 상자 = 현재 레이어 (초록 상자는 4D 전용)",
+  "hint": "드래그로 회전 · 오른쪽 드래그(또는 Shift+왼쪽 드래그)로 이동 · 스크롤로 확대/축소 · 클릭하면 현재 레이어에 착수<br>터치: 두 손가락으로 확대/이동 · 판을 더블탭하면 초기화 (두 판 모두 가능)<br>Z 되돌리기 · R 다시 시작 · Q/E 레이어 변경 · G 보기 모드 · H 격자선 · B 흑/백만 보기 · T 회전 · Y 회전 복원<br>초록 상자 = 곧 회전할 레이어 · 파란 상자 = 현재 레이어 (초록 상자는 「루빅 회전」을 켰을 때만)",
   "modeGhost": "고스트 레이어",
   "modeSlice": "슬라이스",
   "modeGrid": "격자선",
@@ -7706,7 +7706,7 @@ TEXT.ko = {
   "rot.hint.empty": "이 레이어는 비어 있습니다 — 회전할 것이 없습니다. 다른 레이어를 고르거나 3D 보기에서 돌이 있는 곳을 확인하세요.",
   "rot.hint.cool.many": "쿨다운: {n}수 남음. 회전은 한 수를 전부 사용하므로 회전 직후에는 착수할 수 없습니다.",
   "rot.hint.undo": "마지막 수는 회전이었습니다 — \"복원\"으로 되돌릴 수 있습니다.",
-  "rot.hint.ready": "시계 방향 = 해당 축의 음수 끝에서 원점 쪽을 바라보는 방향입니다. 회전으로 5개가 이어지면 되돌려지며, 회전은 한 수를 전부 사용합니다.",
+  "rot.hint.ready": "시계 방향 = 해당 축의 음수 끝에서 원점 쪽을 바라보는 방향입니다. 회전으로 내 오목이 만들어지면 승리이고, 상대의 오목을 만들었을 때만 되돌려집니다. 회전은 한 수를 전부 사용합니다.",
   "toast.undone": "되돌림: {move}",
   "toast.rotated": "{move}",
   "toast.rotUndone": "회전 이전으로 복원했습니다 ({move} 되돌림)",
@@ -7736,7 +7736,7 @@ TEXT.ko = {
 STATIC_TEXT.ru = {
   "previewTagRight": "Демо-доска · 10 × 10 × 10<br>Не зависит от настроек справа — не часть игры",
   "previewTagBelow": "Демо-доска · 10 × 10 × 10<br>Не зависит от настроек снизу — не часть игры",
-  "hint": "Перетаскивание — вращение вида · Правая кнопка (или Shift+левая) — сдвиг · Прокрутка — масштаб · Клик — ход на текущем слое<br>Сенсор: двумя пальцами — масштаб и сдвиг · двойной тап по доске — сброс (работает на обеих досках)<br>Z — отменить · R — заново · Q/E — сменить слой · G — режим вида · H — линии сетки · B — только чёрные/белые · T — поворот слоя · Y — вернуть поворот<br>Зелёная рамка — слой, который повернётся · Синяя рамка — текущий слой (зелёная — только в 4D)",
+  "hint": "Перетаскивание — вращение вида · Правая кнопка (или Shift+левая) — сдвиг · Прокрутка — масштаб · Клик — ход на текущем слое<br>Сенсор: двумя пальцами — масштаб и сдвиг · двойной тап по доске — сброс (работает на обеих досках)<br>Z — отменить · R — заново · Q/E — сменить слой · G — режим вида · H — линии сетки · B — только чёрные/белые · T — поворот слоя · Y — вернуть поворот<br>Зелёная рамка — слой, который повернётся · Синяя рамка — текущий слой (зелёная — только при включённом вращении слоя)",
   "modeGhost": "Призрачные слои",
   "modeSlice": "Срез",
   "modeGrid": "Линии сетки",
@@ -7848,7 +7848,7 @@ TEXT.ru = {
   "rot.hint.cool.few": "Перезарядка: ещё {n} хода. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
   "rot.hint.cool.many": "Перезарядка: ещё {n} ходов. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
   "rot.hint.undo": "Последний ход — поворот; отменить его можно кнопкой «Вернуть поворот».",
-  "rot.hint.ready": "По часовой — это взгляд с отрицательного конца оси к началу координат. Если поворот создаёт 5 в ряд, он откатывается; поворот занимает весь ход.",
+  "rot.hint.ready": "По часовой — это взгляд с отрицательного конца оси к началу координат. Поворот, собирающий пять для вас, — это победа; откатывается только поворот, собирающий пять сопернику. Поворот занимает весь ход.",
   "toast.undone": "Отменено: {move}",
   "toast.rotated": "{move}",
   "toast.rotUndone": "Возврат к состоянию до поворота (отменено: {move})",
@@ -7882,7 +7882,7 @@ TEXT.ru = {
 STATIC_TEXT.fr = {
   "previewTagRight": "Plateau de démo · 10 × 10 × 10<br>Indépendant des réglages à droite — hors partie",
   "previewTagBelow": "Plateau de démo · 10 × 10 × 10<br>Indépendant des réglages en dessous — hors partie",
-  "hint": "Glisser pour tourner · Clic droit (ou Maj+clic gauche) pour déplacer · Molette pour zoomer · Clic pour poser sur la couche courante<br>Tactile : pincer pour zoomer / faire glisser · double appui sur un plateau pour réinitialiser (valable sur les deux plateaux)<br>Z annuler · R recommencer · Q/E changer de couche · G mode d'affichage · H lignes de grille · B noir/blanc seulement · T tourner · Y restaurer la rotation<br>Cadre vert = couche sur le point de tourner · Cadre bleu = couche courante (vert seulement en 4D)",
+  "hint": "Glisser pour tourner · Clic droit (ou Maj+clic gauche) pour déplacer · Molette pour zoomer · Clic pour poser sur la couche courante<br>Tactile : pincer pour zoomer / faire glisser · double appui sur un plateau pour réinitialiser (valable sur les deux plateaux)<br>Z annuler · R recommencer · Q/E changer de couche · G mode d'affichage · H lignes de grille · B noir/blanc seulement · T tourner · Y restaurer la rotation<br>Cadre vert = couche sur le point de tourner · Cadre bleu = couche courante (le vert n'apparaît qu'avec la rotation type Rubik)",
   "modeGhost": "Couches fantômes",
   "modeSlice": "Tranche",
   "modeGrid": "Lignes de grille",
@@ -7987,7 +7987,7 @@ TEXT.fr = {
   "rot.hint.cool.one": "Recharge : encore 1 coup. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
   "rot.hint.cool.many": "Recharge : encore {n} coups. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
   "rot.hint.undo": "Le dernier coup était une rotation — vous pouvez l'annuler avec « Restaurer ».",
-  "rot.hint.ready": "Sens horaire = vu depuis l'extrémité négative de cet axe, en direction de l'origine. Si une rotation devait créer 5 pions alignés, elle est annulée ; une rotation consomme tout le tour.",
+  "rot.hint.ready": "Sens horaire = vu depuis l'extrémité négative de cet axe, en direction de l'origine. Une rotation qui fait cinq pour vous gagne ; seule celle qui aligne cinq pour l'adversaire est annulée. Une rotation consomme tout le tour.",
   "toast.undone": "Annulé : {move}",
   "toast.rotated": "{move}",
   "toast.rotUndone": "Restauré avant la rotation ({move} annulé)",
@@ -11683,7 +11683,7 @@ const Game = {
       hint = say(() => "最后一步是转动，可以「恢复本次转动」退回去。", "rot.hint.undo");
     } else {
       hint = say(
-        () => "顺时针 = 从该轴负方向朝原点看。转完若盘面出现 5 连会被整体撤销；转动占掉一整个回合。",
+        () => "顺时针 = 从该轴负方向朝原点看。转出你自己的五连就是赢；只有把对方的子转成五连才整体撤销。转动占掉一整个回合。",
         "rot.hint.ready");
     }
     this.el.rotHint.textContent = hint;
@@ -12141,10 +12141,11 @@ const Game = {
     return t ? say(() => "晨昏：连成了也不算数", "tut.3.title")
              : say(() => "棋盘在两个相位之间轮转：黎明和永夜。每颗子属于它落下时的那个相位，" +
                          "而只有「当前相位」的连线才算数。" +
-                         "\n\n这一层里有两条四连：浅色那条是永夜下的，深色那条是黎明下的。" +
-                         "现在是黎明，所以深色那条才算数。右边写着「还有 2 格」——" +
-                         "两格之后相位就会翻过去，那时候亮的是另一条。" +
-                         "\n\n怎么走：点深色那条的两端任意一格，补成五。", "tut.3.body");
+                         "\n\n这一层里有两条四连：红圈那条是黎明下的，蓝圈那条是永夜下的" +
+                         "（每颗子外面那一圈薄光的颜色就是它的相位）。" +
+                         "现在是黎明，所以红圈那条才算数。右边写着「还有 2 格」——" +
+                         "两格之后相位就会翻过去，那时候算数的是另一条。" +
+                         "\n\n怎么走：点红圈那条的两端任意一格，补成五。", "tut.3.body");
   },
 
   /** 进入教学（第 0 关）。**关掉设置页、进对局视图** —— 这就是"铺满屏幕"的实现。 */

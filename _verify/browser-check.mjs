@@ -2838,6 +2838,49 @@ try {
       JSON.stringify(order.threeD));
   }
 
+  // ------------------------------------------------------------------
+  // 一张给 README 用的对局截图：四维的三个机制同时看得见。
+  //
+  // 【为什么要专门摆一个局面】README 里原来只有一张设置界面 —— v3.1.x 那几个机制
+  // （相位光圈 / 贯通影子）全在对局画面上，设置界面里一点都看不出来。
+  // 这个局面按要展示的东西摆：
+  //   · 贴边的黑子 → 棋盘外面那一圈有它们的**影子**（贯通）
+  //   · 两种相位的子 → 红圈 / 蓝圈（黎明 / 永夜）
+  //   · 三种状态各留一点 → 当前层不透明、别层幽灵、影子最淡，三档一眼分得开
+  // 用 Game 自己的下法摆（board.set + onBoardChanged），不走 AI —— 截图必须可复现。
+  // ------------------------------------------------------------------
+  {
+    await ev(`(() => {
+      Game.cancelAiTimer(); Game.setSetupAi("human");
+      Game.closeSetup(); Game.setSetupMode(true);
+      // 【先把上一节留下的视图状态清干净】截图里出现过两样残留：一条"已恢复转动前的样子"
+      // 的 toast 浮在棋盘中间，以及二维面板还停在上一节缩放/平移过的机位（棋子挤在一角）。
+      // 这两个都不是 bug，是前一节测试改过状态没还原 —— 但对一张要进 README 的图来说就是脏。
+      Game.toastTimer = 0;
+      if (Game.el.toast) { Game.el.toast.classList.remove("on"); Game.el.toast.textContent = ""; }
+      Game.zoom2d = 1; Game.pan2d = [0, 0];
+      Game.pan3d = [0, 0];
+      Game.setHintFolded(false);
+      Game.newGame(8, 1);
+      const b = Game.session.board;
+      const put = (x, y, z, phase) => b.set(x, y, z, cellOf(1, phase));   // 1 = 黑
+      // 【相位交替着摆】一条 红-蓝-红-蓝 的横排 —— 两种光圈挨着放，颜色差别才一眼看得出；
+      // 清一色同相位的话，图上只是一排深浅差不多的子，看不出"光圈在表示相位"。
+      // 同时它贴着 x=0 那条棱，角上那颗的周期像最多，外面的影子也就最明显。
+      for (const x of [0, 1, 2, 3, 4]) put(x, 0, 0, x % 2);
+      put(0, 0, 1, 1); put(0, 1, 0, 1); put(1, 0, 1, 0);
+      // 白子错开摆，给出纵深参照，也顺便让两种相位的白子各出现一颗
+      b.set(4, 4, 4, cellOf(2, 0)); b.set(5, 4, 4, cellOf(2, 1)); b.set(4, 5, 4, cellOf(2, 0));
+      Game.activeLayer = 0;
+      Game.ghostMode = true;                      // 幽灵层：非当前层的子淡一档
+      Game.setGridVisible(true);
+      Game.onBoardChanged(true);
+      return 1;
+    })()`);
+    await sleep(500);
+    await shot("12-四维三种机制");
+  }
+
   // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态
   await ev(`(() => {
     Game.setGridVisible(true);
