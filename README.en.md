@@ -264,6 +264,10 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.30
 
+- 🔧 **v3.1.4** Verification gaps closed: three invariants that only a throwaway probe was watching
+  are now in the real suites — canvas bitmap sizing, the phase halo (one check for the 2D panel's
+  pixels, one for the 3D instance count) and self-play under wrapping; the first halo check was a
+  **false test** (it only covered the 2D pass, and stayed green with the 3D pass removed)
 - 🔧 **v3.1.3** Various fixes
 - ✨ **v3.1.2** Wrapping joins the game for real: the 4D mode "4D · Myriad" turns all three on at once
   (Rubik rotation / space wrapping / day and night); 3D gains two checkboxes — "Rubik rotation" and
