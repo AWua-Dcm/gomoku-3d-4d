@@ -48,6 +48,20 @@ const check = (ok, name, detail) => {
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 const PORT = 9401;
+
+// 【端口被占就当场停，别连上去】实测踩过：上一次异常结束留下的 headless 还占着 9401，
+// 这一轮的 findTarget() 会**连到那个旧浏览器**上 —— 拿到的是上一轮跑完时的页面状态，
+// 于是几十条断言莫名其妙地红（连 "--compact=1"、"起始界面是打开的" 这种和本轮改动
+// 毫无关系的也红），而真正的原因一个字都不会出现在输出里。
+// 假红灯比红灯更坏：它会把人引到完全错误的地方去查。所以这里宁可退出码 2。
+try {
+  await fetch(`http://127.0.0.1:${PORT}/json/version`);
+  console.error("端口 " + PORT + " 已被占用 —— 多半是上一次留下的 headless 浏览器。\n" +
+    "先把它关掉再跑（任务管理器里那个带 --remote-debugging-port=" + PORT + " 的 chrome），" +
+    "否则这一轮会连到旧浏览器、报出一堆假的失败。");
+  process.exit(2);
+} catch (e) { /* 没监听才是对的 */ }
+
 const PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), "gomoku-cdp-"));
 const chrome = spawn(CHROME, [
   "--headless=new", `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`,
@@ -454,29 +468,178 @@ try {
   //   ② #sizeSummary 的文案长度在两种模式间差一倍以上，它下面的东西跟着跳。
   // 切换模式时 setSetupMode 还会把尺寸重置成 15³ / 8³，所以 ② 一定会被触发 ——
   // 这条断言跑的就是它。
+  //
+  // 【v3.1.5 起分成两档量】「开始游戏」的位置在三维下**本来就有两种**：
+  //   没勾新玩法 → 只有它一颗，居中；
+  //   勾了任一玩法 → 「游戏教学」出现，整组居中 = 它和四维逐像素同位置。
+  // 所以不变量改成"三维勾了玩法 ↔ 四维"完全一致，另外单独钉"没勾时真的居中"。
   const stable = await ev(`(() => {
     const ids = ["startBtn", "dimCube", "firstBlack", "mode3d", "setup"];
     const snap = () => ids.map(id => {
       const b = document.getElementById(id).getBoundingClientRect();
       return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)];
     });
-    Game.setSetupMode(false); const a = snap();
-    Game.setSetupMode(true);  const b = snap();
+    const off = () => {
+      const b = document.getElementById("startBtn").getBoundingClientRect();
+      const r = document.getElementById("startRow").getBoundingClientRect();
+      return Math.round((b.left + b.width / 2) - (r.left + r.width / 2));
+    };
+    const tutDisp = () => getComputedStyle(document.getElementById("tutorialBtn")).display;
     Game.setSetupMode(false);
-    return { ids: ids, a: a, b: b };
+    Game.setSetupSpin(false); Game.setSetupWrap(false);
+    const plain = { s: snap(), off: off(), tut: tutDisp() };
+    Game.setSetupWrap(true);                       // 三维勾一个玩法：教学键出现
+    const spin = { s: snap(), off: off(), tut: tutDisp() };
+    const tutW = Math.round(document.getElementById("tutorialBtn").getBoundingClientRect().width) + 12;
+    Game.setSetupWrap(false);
+    Game.setSetupMode(true);
+    const four = { s: snap(), off: off(), tut: tutDisp() };
+    Game.setSetupMode(false);
+    return { ids: ids, plain: plain, spin: spin, four: four, tutW: tutW };
   })()`);
+  check(stable.plain.off === 0, "三维没勾新玩法时「开始游戏」在那一行里居中",
+    "偏移 " + stable.plain.off + "px（不为 0 说明还留着游戏教学那颗键的宽度）");
+  check(stable.plain.tut === "none", "三维没勾新玩法时「游戏教学」不出现（display:none）",
+    "实际 display=" + stable.plain.tut);
+  check(stable.spin.tut !== "none", "三维勾了新玩法之后「游戏教学」出现",
+    "实际 display=" + stable.spin.tut);
+  check(stable.four.tut !== "none", "四维下「游戏教学」出现", "实际 display=" + stable.four.tut);
+  check(stable.plain.s[0][0] !== stable.spin.s[0][0],
+    "（自检）「没勾」和「勾了」两种状态下开始游戏的横坐标确实不同（否则上面几条是空断言）",
+    JSON.stringify(stable.plain.s[0]) + " vs " + JSON.stringify(stable.spin.s[0]));
+  // 三维勾了玩法 ↔ 四维：逐像素一致（含 startBtn 向右让位之后的位置）
   for (let i = 0; i < stable.ids.length; i++) {
-    const ra = stable.a[i].join(","), rb = stable.b[i].join(",");
-    check(ra === rb, "「" + stable.ids[i] + "」切到四维再切回来，位置和尺寸完全不变",
-      "三维 [l,t,w,h]=" + stable.a[i] + "  四维=" + stable.b[i] +
-      "（差 = " + stable.a[i].map((v, k) => stable.b[i][k] - v).join(",") + "）");
+    const ra = stable.spin.s[i].join(","), rb = stable.four.s[i].join(",");
+    check(ra === rb, "「" + stable.ids[i] + "」三维勾了玩法 ↔ 四维，位置和尺寸完全不变",
+      "三维(勾了玩法) [l,t,w,h]=" + stable.spin.s[i] + "  四维=" + stable.four.s[i] +
+      "（差 = " + stable.spin.s[i].map((v, k) => stable.four.s[i][k] - v).join(",") + "）");
   }
+  // 剩下那四样在"没勾 ↔ 四维"之间也不许动（它们和教学键无关）
+  for (let i = 1; i < stable.ids.length; i++) {
+    const ra = stable.plain.s[i].join(","), rb = stable.four.s[i].join(",");
+    check(ra === rb, "「" + stable.ids[i] + "」三维(没勾新玩法) ↔ 四维，位置和尺寸完全不变",
+      "三维 [l,t,w,h]=" + stable.plain.s[i] + "  四维=" + stable.four.s[i]);
+  }
+  // 没勾时「开始游戏」比勾了(或四维)时正好右移"教学键宽 + 间距"—— 界面上少一颗键，
+  // 居中的是剩下那一颗。
+  // 没勾时它独占一行居中，勾了之后整组（开始游戏 + 游戏教学）居中 ——
+  // 于是它自己向左挪"半个键位"。符号是负的（往左），这里只钉平移量。
+  const shift = stable.plain.s[0][0] - stable.spin.s[0][0];
+  check(Math.abs(shift - Math.round(stable.tutW / 2)) <= 1,
+    "「开始游戏」在「没勾」和「勾了」之间正好平移半个键位（居中 → 整组居中）",
+    "实测平移 " + shift + "px，期望 " + Math.round(stable.tutW / 2) + "px（教学键 " + stable.tutW + "px 含间距）");
   // 留一张四维状态的截图。上面那几条只说"没动"，看不出四维到底长什么样 ——
   // 而"四维那一版有没有多出一行、有没有留空槽位"正是这一版最容易出错的地方。
   await ev(`Game.setSetupMode(true)`);
   await freezePreview(-28);
   await shot("5-起始界面-四维模式");
   await ev(`Game.setSetupMode(false)`);
+
+  // ---- 2d. v3.1.5：三维勾了「魔方旋转」→ 转动冷却行出现在摘要和规则之间的空位里，
+  //          而且**不动任何人**（整页高度、规则行、开始游戏一个像素都不变）。
+  //
+  // 【为什么这几条只能在真浏览器里量】"落在空位里"的全部含义就是几何：
+  // #sizeSummary 在三维下固定 92px 是给四维那 4 行摘要准备的，三维自己的摘要只有
+  // 1~2 行，底部一直是空的 —— 冷却行填的就是那块。桩里量不了。
+  const cool3 = await ev(`(() => {
+    const box = (id) => { const el = document.getElementById(id);
+      if (!el || getComputedStyle(el).display === "none") return null;
+      const b = el.getBoundingClientRect();
+      return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) }; };
+    const sum = document.getElementById("sizeSummary");
+    // 【"整页没长高"不能用 #setup 的高度量】它是 position:fixed + top/bottom:0，
+    // 高度恒等于视口 —— 拿它比等于恒真（这一条踩过）。真正能作证的是
+    // "第一行的 y"（整列居中，内容一变它就动）和"最后一行的底"（内容的下沿）。
+    const first = document.getElementById("setup").firstElementChild;
+    const snap = () => ({ cool: box("coolRow"), sum: box("sizeSummary"), rule: box("ruleNote"),
+                          start: box("startRow"), startBtn: box("startBtn"),
+                          firstY: Math.round(first.getBoundingClientRect().top),
+                          startBottom: Math.round(document.getElementById("startRow").getBoundingClientRect().bottom),
+                          tut: getComputedStyle(document.getElementById("tutorialBtn")).display,
+                          sumOver: sum.scrollHeight - sum.clientHeight });
+    Game.setSetupMode(false); Game.setSetupSpin(false); Game.setSetupWrap(false); Game.setSetupAi("human");
+    const before = snap();
+    Game.setSetupSpin(true);                       // 勾上：冷却行应当补进那块空位
+    const after = snap();
+    Game.setSetupAi("cpu");                        // 人机那句是"必须看得见"的：2 行也要塞得下
+    const ai = snap();
+    Game.setSetupAi("human"); Game.setSetupSpin(false);
+    return { before: before, after: after, ai: ai };
+  })()`);
+  check(cool3.before.cool === null, "三维没勾旋转时没有「转动冷却」这一行",
+    JSON.stringify(cool3.before.cool));
+  check(cool3.after.cool !== null && cool3.after.cool.y >= cool3.after.sum.y + cool3.after.sum.h - 1,
+    "勾了旋转：「转动冷却」出现在摘要下面",
+    "冷却行 " + JSON.stringify(cool3.after.cool) + " 摘要 " + JSON.stringify(cool3.after.sum));
+  check(cool3.after.cool.y + cool3.after.cool.h <= cool3.after.rule.y,
+    "冷却行整行落在摘要与规则之间（不和小字打架）",
+    "冷却行底 " + (cool3.after.cool.y + cool3.after.cool.h) + " 规则行顶 " + cool3.after.rule.y);
+  check(cool3.after.rule.y === cool3.before.rule.y && cool3.after.start.y === cool3.before.start.y &&
+        cool3.after.startBtn.y === cool3.before.startBtn.y,
+    "勾这一下：规则行与「开始游戏」的位置一个像素都没动",
+    JSON.stringify({ ruleBefore: cool3.before.rule.y, ruleAfter: cool3.after.rule.y,
+                     startBefore: cool3.before.start.y, startAfter: cool3.after.start.y }));
+  // 【反空洞】这一条以前量的是 #setup 的高度 —— 它是 fixed 顶天立地，恒等于视口，
+  // 于是"整页高度不变"恒真（复核时被抓出来了）。改成量整列的第一行 y 与最后一行的底：
+  // 内容一旦真的长高 48px，居中的整列会整体上移 24px、开始游戏的下沿跟着下移。
+  check(cool3.after.firstY === cool3.before.firstY &&
+        cool3.after.startBottom === cool3.before.startBottom,
+    "整页没有长高（第一行的 y 与「开始游戏」的下沿都不动）",
+    JSON.stringify({ firstY: [cool3.before.firstY, cool3.after.firstY],
+                     startBottom: [cool3.before.startBottom, cool3.after.startBottom] }));
+  check(cool3.after.sumOver <= 0 && cool3.ai.sumOver <= 0,
+    "摘要不出内部滚动条（默认 1 行、人机 2 行都塞得进那 44px）",
+    JSON.stringify({ 默认: cool3.after.sumOver, 人机: cool3.ai.sumOver }));
+  check(cool3.before.tut === "none" && cool3.after.tut !== "none",
+    "「游戏教学」跟着勾选一起出现/收掉",
+    JSON.stringify({ 没勾: cool3.before.tut, 勾了: cool3.after.tut }));
+  // 留一张这一档的截图：上面几条只证明"几何没动"，看不出这一行落到空位里读起来顺不顺。
+  await ev(`(() => { Game.setSetupMode(false); Game.setSetupSpin(true); Game.openSetup(); return 1; })()`);
+  await freezePreview(-28);
+  await shot("14-起始界面-三维勾了旋转");
+  await ev(`(() => { Game.setSetupSpin(false); return 1; })()`);
+
+  // 同一件事在【英文】和【紧凑档】各再量一遍。
+  // 【为什么非量不可】"让出多少 / 补回多少"的算式在这两档里不一样：英文的摘要基准是
+  // 96px（不是 92）、紧凑档（手机 / ≤700px）的 #setup 行距是 12（不是 10）。
+  // 只在中文 1600×900 下量，这两档一个字都验不到 —— 实测拿写死的 44px 跑，
+  // 英文差 4px、紧凑档差 2px：勾一下「魔方旋转」，规则行和「开始游戏」就被顶动。
+  const cool3Again = async (label) => {
+    const r = JSON.parse(await ev(`(() => {
+      const first = document.getElementById("setup").firstElementChild;
+      const snap = () => ({
+        firstY: Math.round(first.getBoundingClientRect().top),
+        rule: Math.round(document.getElementById("ruleNote").getBoundingClientRect().top),
+        startBottom: Math.round(document.getElementById("startRow").getBoundingClientRect().bottom),
+        cool: getComputedStyle(document.getElementById("coolRow")).display !== "none",
+      });
+      Game.setSetupMode(false); Game.setSetupSpin(false); Game.setSetupWrap(false); Game.setSetupAi("human");
+      const before = snap();
+      Game.setSetupSpin(true);
+      const after = snap();
+      Game.setSetupSpin(false);
+      return JSON.stringify({ before: before, after: after });
+    })()`));
+    check(r.after.firstY === r.before.firstY && r.after.rule === r.before.rule &&
+          r.after.startBottom === r.before.startBottom,
+      "（" + label + "）勾「魔方旋转」：整列一行都不动（第一行 y / 规则行 / 开始游戏下沿）",
+      JSON.stringify({ 勾之前: r.before, 勾之后: r.after }));
+    check(r.after.cool && !r.before.cool, "（" + label + "）冷却行跟着勾选出现/收掉", JSON.stringify(r));
+  };
+  await ev(`Game.setLang("en")`);
+  await sleep(250);
+  await cool3Again("英文 1600×900");
+  await ev(`Game.setLang("zh")`);
+  await send("Emulation.setDeviceMetricsOverride",
+    { width: 690, height: 800, deviceScaleFactor: 1, mobile: false });
+  await sleep(350);
+  await cool3Again("紧凑档 690×800");
+  await ev(`Game.setLang("en")`);
+  await sleep(250);
+  await cool3Again("紧凑档 + 英文 690×800");
+  await ev(`Game.setLang("zh")`);
+  await send("Emulation.clearDeviceMetricsOverride");
+  await sleep(350);
 
   // 配色真的生效了（CSS 是唯一事实源，但得确认浏览器读到的就是它）
   check(setup.cssBg === "#efe8db", "CSS 变量 --bg 是古风宣纸色", "实际 " + setup.cssBg);
@@ -613,9 +776,13 @@ try {
       const b = document.getElementById("startBtn").getBoundingClientRect();
       return [Math.round(b.left), Math.round(b.top)];
     };
-    Game.setSetupMode(false); const a = snap(); const h3 = h("dimsRow3d");
+    // 【v3.1.5：必须勾一个新玩法再和四维比】没勾时三维只有「开始游戏」一颗、居中，
+    // 横坐标和四维本来就不同（见上面 2c 那一段）。这里要验的是"尺寸行换行、
+    // 格子取 max、按钮的纵向位置纹丝不动"，所以拿同一套按钮（三维勾了玩法）对四维。
+    Game.setSetupMode(false); Game.setSetupSpin(false); Game.setSetupWrap(true);
+    const a = snap(); const h3 = h("dimsRow3d");
     Game.setSetupMode(true);  const c = snap(); const h4 = h("dimsRow4d");
-    Game.setSetupMode(false);
+    Game.setSetupMode(false); Game.setSetupWrap(false);
     return { docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
              setupOver: s.scrollWidth - s.clientWidth,
              a: a, c: c, h3: h3, h4: h4 };
@@ -633,7 +800,7 @@ try {
   // 所以换行的发生与否不能影响"开始游戏"按钮的位置。
   check(narrow.a.join(",") === narrow.c.join(","),
     "窄屏下切到四维，开始游戏按钮的横纵坐标仍然完全不变",
-    "三维 [l,t]=" + narrow.a + " 四维=" + narrow.c +
+    "三维(勾了玩法) [l,t]=" + narrow.a + " 四维=" + narrow.c +
     "（尺寸行高度：三维 " + narrow.h3 + "px / 四维 " + narrow.h4 + "px —— " +
     "这就是换行发生了但按钮没动）");
 
@@ -651,9 +818,10 @@ try {
       return [Math.round(b.left), Math.round(b.top)];
     };
     const h = (id) => Math.round(document.getElementById(id).getBoundingClientRect().height);
-    Game.setSetupMode(false); const a = snap(); const h3 = h("dimsRow3d");
+    Game.setSetupMode(false); Game.setSetupSpin(false); Game.setSetupWrap(true);  // 同上：两边都得有教学键
+    const a = snap(); const h3 = h("dimsRow3d");
     Game.setSetupMode(true);  const c = snap(); const h4 = h("dimsRow4d");
-    Game.setSetupMode(false);
+    Game.setSetupMode(false); Game.setSetupWrap(false);
     return { docOver: document.documentElement.scrollWidth - document.documentElement.clientWidth,
              setupOver: s.scrollWidth - s.clientWidth,
              a: a, c: c, h3: h3, h4: h4,
@@ -666,8 +834,8 @@ try {
     "溢出 " + narrowEn.docOver + "px —— 英文每句都比中文长，这里是它最容易撑破的地方");
   check(narrowEn.setupOver <= 1, "窄屏 + 英文下起始界面本身没有横向滚动", "溢出 " + narrowEn.setupOver + "px");
   check(narrowEn.a.join(",") === narrowEn.c.join(","),
-    "窄屏 + 英文下切到四维，开始游戏按钮的横纵坐标仍然完全不变",
-    "三维 [l,t]=" + narrowEn.a + " 四维=" + narrowEn.c +
+    "窄屏 + 英文下切到四维，开始游戏按钮的横纵坐标仍然完全不变（两边都带教学键）",
+    "三维(勾了玩法) [l,t]=" + narrowEn.a + " 四维=" + narrowEn.c +
     "（尺寸行高度：三维 " + narrowEn.h3 + "px / 四维 " + narrowEn.h4 + "px）");
   // 【反空洞】和中文那条同一个道理：不换行的话上面那条什么都没测到
   check(narrowEn.h3 > 60, "窄屏 + 英文下三维尺寸行确实换行了（否则上面那条是空断言）",
@@ -2851,6 +3019,197 @@ try {
     check(stale.bad.length === 0,
       "教学三关来回切，画布位图尺寸始终跟得上 CSS 框（否则浏览器会把旧位图拉伸，棋盘变形）",
       JSON.stringify(stale.bad));
+  }
+
+  // ------------------------------------------------------------------
+  // v3.1.5：教学的两个翻页键与自动跳关。
+  //
+  // 【为什么必须真等那 1 秒】倒计时是 setTimeout 驱动的，桩里只能验"挂上了没有"。
+  // 而它坏掉的样子是**无声的**：忘了 clearTimeout 就会"点了上一关，一秒后被拽回去"；
+  // 该跳没跳则是"过关之后停在原地什么都不发生"，看起来像关卡设计成了死局。
+  // 所以这里走的是真人那条路：真过关、真等、真点。
+  //
+  // 【键的位置为什么也要量】用户口径是"这两个按键在同一个位置" ——
+  // 一颗键时必须正好落在原来「下一关」的那个槽里（右沿距视图右边 16px），
+  // 两颗时「上一关」贴在「下一关」左边同一行。桩里量不了位置。
+  // 顺带钉住"和左下角提示框不打架"：两块都贴着 #view 下沿，窄窗口下会撞。
+  //
+  // 【"不重叠"必须在**窄**视口下量才有意义】1600 宽的窗口里 #view 有 663 ——
+  // 提示框自然宽 541、一颗键的左沿在 580，本来就够不着，让位 CSS 删掉也照样绿
+  // （复核时被抓出来了）。真正会撞的是窄窗口：那一档的宽度由下面的
+  // #view.tutTwo 让位规则兜着，所以这里把窄视口那一遍也量上。
+  // ------------------------------------------------------------------
+  {
+    const NAV = `(() => {
+      const box = (id) => { const el = document.getElementById(id);
+        const b = el.getBoundingClientRect();
+        return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height),
+                 right: Math.round(b.right), off: el.classList.contains("off") }; };
+      const view = document.getElementById("view").getBoundingClientRect();
+      return JSON.stringify({ prev: box("tutPrev"), next: box("tutNext"),
+        hint: box("hintbox"), viewR: Math.round(view.right),
+        idx: Game.tutIndex, passed: Game.tutPassed, active: Game.tutActive, timer: !!Game.tutTimer,
+        done: document.getElementById("tutDone").textContent,
+        doneWeight: getComputedStyle(document.getElementById("tutDone")).fontWeight,
+        step: document.getElementById("tutStep").textContent,
+        cls: document.getElementById("view").className });
+    })()`;
+    await ev(`(() => { Game.setLang("zh"); Game.closeSetup(); Game.setSetupMode(true);
+      // 【先把提示框展开再进教学】它是"和翻页键抢地盘"的另一方，而这之前哪一节把它折起来过
+      // （折起来只剩一颗小胶囊，宽度差着几百像素）—— 不展开的话下面那条"不重叠"就是空断言。
+      Game.setHintFolded(false);
+      Game.startTutorial(); return 1; })()`);
+    await sleep(300);
+    let d = JSON.parse(await ev(NAV));
+    check(d.idx === 0 && d.prev.off && d.next.off && d.step === "第 1 / 3 关",
+      "第 1 关开局：两个翻页键都不显示", JSON.stringify({ step: d.step }));
+
+    // 真过关：第 1 关的解法 = z 轴第 5 层顺转 1 次
+    await ev(`(() => { Game.rotAxis = 2; Game.rotLayer = 4; Game.rotClockwise = true; Game.rotTurns = 1;
+      Game.doRotate(); Game.confirmRotation(); return 1; })()`);
+    await sleep(150);
+    d = JSON.parse(await ev(NAV));
+    check(d.passed && d.done.indexOf("过关") >= 0, "过关：教学条上出现「过关」", JSON.stringify(d.done));
+    check(parseInt(d.doneWeight, 10) >= 700, "「过关」是加粗的（用户口径：要明显一点）",
+      "font-weight = " + d.doneWeight);
+    check(d.timer && d.prev.off && d.next.off,
+      "过关瞬间：倒计时在跑，两个翻页键都不显示（不会闪一下再消失）",
+      JSON.stringify({ timer: d.timer, prev: d.prev.off, next: d.next.off }));
+
+    await sleep(1300);
+    d = JSON.parse(await ev(NAV));
+    check(d.idx === 1 && d.step === "第 2 / 3 关", "约 1 秒后**自动**跳到第 2 关", d.step);
+    check(!d.prev.off && d.next.off, "第 2 关只显示「上一关」（它还没解出来）",
+      JSON.stringify({ prev: d.prev.off, next: d.next.off }));
+    const prevOnly = d.prev;
+    const hintAtOne = d.hint;
+    check(prevOnly.right === d.viewR - 16,
+      "只有「上一关」时它正好落在原来「下一关」那个槽里（右沿距视图右边 16px）",
+      "键右沿 " + prevOnly.right + "、视图右沿 " + d.viewR);
+    check(hintAtOne.x + hintAtOne.w <= prevOnly.x,
+      "翻页键和左下角的提示框不重叠（一颗键）",
+      "提示框右沿 " + (hintAtOne.x + hintAtOne.w) + " 键左沿 " + prevOnly.x);
+
+    // 退回第 1 关：它过过 → 有「下一关」；而且和刚才那颗「上一关」**同一个位置**
+    await ev(`document.getElementById("tutPrev").click()`);
+    await sleep(250);
+    d = JSON.parse(await ev(NAV));
+    check(d.idx === 0 && !d.next.off && d.prev.off, "点「上一关」回到第 1 关，这时它显示「下一关」",
+      JSON.stringify({ idx: d.idx, step: d.step }));
+    check(d.next.x === prevOnly.x && d.next.y === prevOnly.y && d.next.w === prevOnly.w,
+      "两个按键在同一个位置（上一关 / 下一关只是同一颗键的两个标签）",
+      JSON.stringify({ 上一关: prevOnly, 下一关: d.next }));
+
+    // 再往前 → 第 2 关，把它也过掉（补 (2,7,7) 成五）→ 自动跳第 3 关
+    await ev(`document.getElementById("tutNext").click()`);
+    await sleep(250);
+    // 【先在倒计时那一秒里悔一手】到点时会再确认一次"这一关还成不成立"，
+    // 不成立就留在原地（并把「下一关」亮出来）—— 不能把玩家从他刚撤回的局面里拽走。
+    await ev(`(() => { Game.activeLayer = 7; Game.tryPlace(2, 7); Game.undo(); return 1; })()`);
+    await sleep(1400);
+    d = JSON.parse(await ev(NAV));
+    check(d.idx === 1 && !d.timer && d.active,
+      "过关那一秒里悔棋：到点不会把玩家拽去第 3 关", JSON.stringify({ idx: d.idx, step: d.step }));
+    check(!d.next.off && !d.prev.off, "留在原地后「上一关」「下一关」都亮着（这一关算过过）",
+      JSON.stringify({ prev: d.prev.off, next: d.next.off }));
+    // 再老老实实过一遍 → 这回该自动跳了
+    await ev(`(() => { Game.tryPlace(2, 7); return 1; })()`);
+    await sleep(1300);
+    d = JSON.parse(await ev(NAV));
+    check(d.idx === 2 && d.step === "第 3 / 3 关", "第 2 关过完自动跳到第 3 关", d.step);
+    check(!d.prev.off && d.next.off, "第 3 关只显示「上一关」", JSON.stringify({ prev: d.prev.off }));
+
+    // 退回第 2 关：它过过了 → 两个键同时在，上一关在下一关左边同一行
+    await ev(`document.getElementById("tutPrev").click()`);
+    await sleep(250);
+    d = JSON.parse(await ev(NAV));
+    check(d.idx === 1 && !d.prev.off && !d.next.off, "从第 3 关退回第 2 关：两个键同时显示",
+      JSON.stringify({ idx: d.idx, prev: d.prev.off, next: d.next.off }));
+    check(d.prev.x + d.prev.w <= d.next.x && d.prev.y === d.next.y,
+      "「上一关」在「下一关」左侧、同一行",
+      JSON.stringify({ prev: [d.prev.x, d.prev.y, d.prev.w], next: [d.next.x, d.next.y] }));
+    check(d.hint.x + d.hint.w <= d.prev.x, "两颗键时和提示框也不重叠（提示框按 tutTwo 让位）",
+      "提示框右沿 " + (d.hint.x + d.hint.w) + " 键左沿 " + d.prev.x);
+    check(d.cls.indexOf("tutTwo") >= 0, "两个键都在时 #view 挂上 tutTwo（提示框让位）", d.cls);
+    await ev(`(() => { Game.el.toast.classList.remove("on"); Game.toastTimer = 0; return 1; })()`);
+    await sleep(150);
+    await shot("13-教学翻页键");
+
+    // 第 3 关过完：**不自动退出**（用户口径 v3.1.5：最后一关停在盘上，玩家自己点退出）
+    await ev(`document.getElementById("tutNext").click()`);
+    await sleep(250);
+    await ev(`(() => { Game.activeLayer = 7; Game.tryPlace(6, 7); return 1; })()`);
+    await sleep(1600);
+    d = JSON.parse(await ev(NAV));
+    check(d.active && d.idx === 2 && d.passed && !d.timer,
+      "第 3 关过完不自动退出：停在盘上显示「过关」", JSON.stringify({ active: d.active, idx: d.idx }));
+    check(!d.prev.off && d.next.off, "最后一关没有「下一关」", JSON.stringify({ next: d.next.off }));
+
+    // ---- 窄视口那一遍：两颗键 + 展开的提示框 + 教学条，三块谁都不许压谁
+    //
+    // 900×700 时 #view 只有 378：提示框让出 230 之后只剩 148 宽，同一段文字会折成
+    // 很高的窄柱（实测 504px 高、顶到 182px），而教学条就在它上面（top:96、约 300 高、
+    // 不透明）—— 没有 max-height 那一条就会压上去。这里三块两两量一次。
+    await send("Emulation.setDeviceMetricsOverride",
+      { width: 900, height: 700, deviceScaleFactor: 1, mobile: false });
+    await sleep(400);
+    const narrowNav = JSON.parse(await ev(`(() => {
+      const r = (id) => { const b = document.getElementById(id).getBoundingClientRect();
+        return { x: Math.round(b.left), y: Math.round(b.top), r: Math.round(b.right), b: Math.round(b.bottom) }; };
+      const hit = (p, q) => p.x < q.r && q.x < p.r && p.y < q.b && q.y < p.b;
+      const hint = r("hintbox"), bar = r("tutBar"), prev = r("tutPrev"), next = r("tutNext");
+      return JSON.stringify({ hint: hint, bar: bar, prev: prev, next: next,
+        hintBar: hit(hint, bar), hintPrev: hit(hint, prev), hintNext: hit(hint, next),
+        scrolls: (() => { const h = document.getElementById("hintbox");
+          return h.scrollHeight - h.clientHeight; })() });
+    })()`));
+    check(!narrowNav.hintBar, "窄视口（900×700）下：提示框和教学条不重叠",
+      JSON.stringify({ 提示框: narrowNav.hint, 教学条: narrowNav.bar }));
+    check(!narrowNav.hintPrev && !narrowNav.hintNext,
+      "窄视口下：提示框和两个翻页键都不重叠（让位 + 高度夹住之后的实际几何）",
+      JSON.stringify({ 提示框: narrowNav.hint, 上一关: narrowNav.prev, 下一关: narrowNav.next }));
+    await send("Emulation.clearDeviceMetricsOverride");
+    await sleep(300);
+
+    // ---- 「退出」要能把那 1 秒的倒计时一起带走
+    //
+    // 【为什么单列一条】cancelTutTimer 的调用点里，tutorialExit 那条最容易漏：
+    // 漏了的话玩家点了退出、回了起始界面，1 秒后仍会被拽进下一关 —— 而桩里
+    // 验不了"之后那一秒里发生了什么"。这里真等一次。
+    await ev(`(() => { Game.setLang("zh"); Game.tutorialExit(); Game.setSetupMode(true);
+      Game.startTutorial(); Game.tutorialBuild(1);
+      Game.activeLayer = 7; Game.tryPlace(2, 7); return 1; })()`);   // 真过关 → 挂上倒计时
+    await sleep(150);
+    d = JSON.parse(await ev(NAV));
+    check(d.passed && d.timer, "前置：这一关真的过了、倒计时真的挂上了", JSON.stringify({ timer: d.timer }));
+    await ev(`(() => { document.getElementById("setupBtn").click(); return 1; })()`);   // 教学里的「退出」
+    await sleep(150);
+    const t = JSON.parse(await ev(`JSON.stringify({ active: Game.tutActive, timer: !!Game.tutTimer,
+      setupOpen: Game.setupOpen, idx: Game.tutIndex })`));
+    check(!t.active && !t.timer && t.setupOpen, "点「退出」：教学关掉、倒计时也取消（起始界面回来了）",
+      JSON.stringify(t));
+    await sleep(1400);
+    const after = JSON.parse(await ev(`JSON.stringify({ active: Game.tutActive, setupOpen: Game.setupOpen,
+      idx: Game.tutIndex, step: document.getElementById("tutStep").textContent })`));
+    check(!after.active && after.setupOpen,
+      "退出之后那一秒过去：不会被拽回教学（倒计时确实被 cancelTutTimer 带走了）",
+      JSON.stringify(after));
+    // 【那颗键的文案要还回去】教学里它写「退出」，退出之后必须写回「设置」——
+    // 漏了的话会一直写着「退出」，而且没有任何别的断言看得见（实测踩过：
+    // 一次开始教学之前已经在教学里，那句"把原文案记下来"记到的就是「退出」）。
+    check(await ev(`document.getElementById("setupBtn").textContent`) === "设置",
+      "退出教学之后那颗键写回「设置」（不是「退出」）",
+      await ev(`document.getElementById("setupBtn").textContent`));
+
+    await ev(`(() => { Game.tutorialExit(); Game.closeSetup(); Game.setSetupMode(false); return 1; })()`);
+    // 【收尾：把状态还回去，别漏给后面的步骤】这一节转了两次层，rotLayer 会被留在
+    // 第 5 层上 —— 而后面那两节（相位光圈 / 给 README 的那张对局图）都是"新建一局
+    // 直接截图"，三维视图里那个绿框（待转的那一层）读的正是 rotLayer：
+    // 漏掉这一步，截图里的绿框会跑到里层去（实测：12-四维三种机制 差 2.3 万像素，
+    // 而它平时是逐字节稳定的那一张）。
+    await ev(`(() => { Game.rotAxis = AXIS_Z; Game.rotLayer = 0;
+      Game.rotClockwise = true; Game.rotTurns = 1; return 1; })()`);
+    await sleep(200);
   }
 
   // ------------------------------------------------------------------

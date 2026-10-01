@@ -7,7 +7,7 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-40907_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-40962_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
@@ -88,7 +88,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
 
 ```
-11733 + 19427 + 98 + 221 + 119 + 8845 + 115 + 349 = 40907 assertions, all green
+11733 + 19427 + 98 + 221 + 125 + 8845 + 115 + 398 = 40962 assertions, all green
 ```
 
 Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -101,11 +101,11 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19427 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
-| `node Web_Gomoku3D/tests/ai.test.mjs` | 213 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 119 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 221 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 125 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
-| `node _verify/browser-check.mjs` | 345 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
+| `node _verify/browser-check.mjs` | 398 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
 
 The two networking tests run inside step 8 and **cannot be skipped**.
 
@@ -262,6 +262,10 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
+### 2026.10.01
+
+- 🔧 **v3.1.5** Various fixes
+
 ### 2026.09.30
 
 - 🔧 **v3.1.4** Verification gaps closed: three invariants that only a throwaway probe was watching
@@ -305,12 +309,12 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.27
 
-- 🐛 **v2.10.12** Fixed a few problems
+- 🐛 **v2.10.12** Various fixes
 - 🎨 **v2.10.11** 4D rotation panel: "Confirm" and "Cancel" are now permanent — greyed out and inert until you press "Rotate", when they light up with a ring. The "Restore rotation" button is gone (that slot now holds these two); use Undo or the `Y` key for the same thing.
 - ✨ **v2.10.10** Rotating a layer in 4D is now two steps: "Rotate" first **turns the board so you can see it** (no turn used, not counted as a move); the two buttons then become "Confirm" and "Cancel" with a highlighted ring, and only "Confirm" makes it real. No placing stones during the preview.
 - 🎨 **v2.10.9** Colour tweaks: ghost-layer stones are a shade deeper, and the 3D static grid is now a greyer, paler tone (it used to be a warm brown that read as too loud once a whole board was covered); in 4D the computer no longer rotates layers constantly — it rotates only when that genuinely breaks up an open three or better, and its 4D search now goes deeper
-- 🐛 **v2.10.8** Fixed a few problems
-- 🐛 **v2.10.7** Fixed a few problems
+- 🐛 **v2.10.8** Various fixes
+- 🐛 **v2.10.7** Various fixes
 - 🎨 **v2.10.6** Start screen: in all six languages the row labels share one column width and the buttons have a uniform minimum width, so every row lines up; the column was tightened to keep "Start game" above the fold
 - 🎨 **v2.10.5** Start screen: the strength slider is centred; with "Human" selected it is now dimmed and non-interactive rather than hidden (the same treatment the rotation-cooldown buttons get in 3D mode)
 - 🎨 **v2.10.4** Start screen: the strength slider now sits on its own row below the Human / Computer switch, and the two buttons are centred
@@ -331,7 +335,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.25
 
-- 🐛 **v2.7.1** Fixed a few problems
+- 🐛 **v2.7.1** Various fixes
 - 📱 **v2.7.0** Added portrait support — playable in a phone or tablet browser
 - ✨ **v2.6.0** Added the "black only / white only" buttons
 
@@ -339,7 +343,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 - ✨ **v2.5.0** Added the grid-lines switch, which hides the 3D lattice
 - 🌐 **v2.4.0** Added the English / Chinese switch
-- 🐛 **v2.3.3** Fixed a few problems; published the project on GitHub
+- 🐛 **v2.3.3** Various fixes; published the project on GitHub
 - 📝 **v2.3.2** Planned online multiplayer (not finished yet)
 - 🎨 **v2.3.1** Moved the buttons on the setup screen
 - 🎨 **v2.3.0** Reworked the setup screen so it no longer feels split in two
@@ -350,9 +354,9 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.09.23
 
-- 🐛 **v1.1.1** Fixed a few problems
+- 🐛 **v1.1.1** Various fixes
 - ✨ **v1.1.0** Added the hover lines that mark a cell
-- 🐛 **v1.0.1** Fixed a few problems
+- 🐛 **v1.0.1** Various fixes
 - 🎉 **v1.0.0** First working 3D gomoku prototype
 
 ---

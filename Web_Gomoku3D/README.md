@@ -528,13 +528,13 @@ BEGIN 和 END **中间**，生成一次就会把英文块整段删掉 —— 而
 
 ```bash
 node Web_Gomoku3D/tests/rules.test.mjs     # 11733 项断言（三维模式基线）
-node Web_Gomoku3D/tests/rotation.test.mjs  # 19408 项断言（四维转动一致性）
+node Web_Gomoku3D/tests/rotation.test.mjs  # 19427 项断言（四维转动一致性）
 node Web_Gomoku3D/tests/dims.test.mjs      #   98 项断言（长方体 + 尺寸约束）
-node Web_Gomoku3D/tests/ai.test.mjs        #  114 项断言（电脑对手：硬规则 + 五档强弱 + 自对局不卡死）
-node Web_Gomoku3D/tests/dom-smoke.test.mjs #  107 项断言（含六语言文案齐全性）
+node Web_Gomoku3D/tests/ai.test.mjs        #  221 项断言（电脑对手：硬规则 + 五档强弱 + 自对局不卡死）
+node Web_Gomoku3D/tests/dom-smoke.test.mjs #  125 项断言（含六语言文案齐全性）
 node Web_Gomoku3D/tests/online.test.mjs    # 8845 项断言（联机内核：和网页版逐格对拍 1156 组）
 node Web_Gomoku3D/tests/online-http.test.mjs #  115 项断言（联机 HTTP 层，本机 loopback）
-node _verify/browser-check.mjs             #  278 项断言（真实浏览器：GLSL 编译 + 布局几何 + 六语言 + 截图）
+node _verify/browser-check.mjs             #  398 项断言（真实浏览器：GLSL 编译 + 布局几何 + 六语言 + 截图）
 bash _verify/run-all.sh                    # 以上全部 + 向量冻结锁（C# 侧已删除，不再有 C# 检查）
 ```
 

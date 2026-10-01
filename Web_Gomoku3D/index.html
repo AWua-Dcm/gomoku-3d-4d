@@ -218,6 +218,36 @@
     background: var(--overlay); border: 1px solid var(--border); border-radius: 6px;
     padding: 10px 13px; line-height: 1.75; max-width: 560px;
   }
+  /* 【教学翻页键和提示框不许压在一起】两块都在 #view 里贴着下沿：#hintbox 靠左、
+     #tutNav 靠右，宽窗口下本来就差几十像素擦肩而过，窄一点的桌面窗口
+     （1280 宽时 #view 只有 538）两颗键会直接压住提示框最后那两行字 ——
+     这正是用户口径里"按钮、提示窗、弹窗不要相互冲突"要挡的那种。
+     让位量是按**六种语言实测的最宽那一组**定的（键宽随译文变："上一关" 67px、
+     "Précédent" 91px、韩语两颗 180px）：
+       一颗键 —— 最宽 91（法语 Précédent）+ 右边距 16 + 左边 14 + 14 呼吸 = 135 → 取 145
+       两颗键 —— 最宽 180（韩语）+ 16 + 14 + 10 = 220 → 取 230
+     再宽的语言（或按钮 padding 变了）要么重新量一遍，要么改成 JS 实测 ——
+     这里没用实测是因为教学期间量它会按每次落子都逼一次重排，不值那几十像素。
+     教学之外这两个类不挂，#hintbox 一个像素都不动。
+
+     【两道夹，缺一个都会翻车】
+       · 外面的 min(560px, …)：基础规则那份 560px 的封顶不能被这里顶掉 ——
+         宽屏（视口 2200 时 #view 有 924）上算出来是 694，不夹的话教学里的提示框
+         反而比平时更宽。
+       · 外面的 max(64px, …)：窗口窄到 640（#view 只有 269）时，"减 230" 会算出 39px，
+         连折叠态那颗胶囊（自然宽 58px）都装不下、直接被切。64 是它的下限。
+       · max-height：宽度一夹，同一段文字会折成很高的窄柱 —— 实测 900 宽的窗口下
+         （#view 378、让位后 148 宽）中文那几句能长到 504px 高、顶到 182px，
+         而**教学条就在那上面**（top:96、最长的一关约 300px 高、还不透明），
+         两块直接压在一起。所以高度也夹住、超出部分在框内滚：
+         430 = 96（教学条顶）+ 约 300（最长那一关）+ 14（底）+ 20（呼吸）。
+         宽窗口上这两条都不生效（文字本来就装得下）。 */
+  #view.tutKeys #hintbox { max-width: max(64px, min(560px, calc(100% - 145px))); }
+  #view.tutTwo  #hintbox { max-width: max(64px, min(560px, calc(100% - 230px))); }
+  #view.tutKeys #hintbox, #view.tutTwo #hintbox {
+    max-height: calc(100% - 430px);
+    overflow-y: auto;
+  }
   /* 坐标行和折叠按钮并排，**不把按钮绝对定位到右上角**：那样它会压在第一行文字上，
      要让它就得给 #coords 写一个按"收起/隐藏"两种语言分别量出来的 padding-right ——
      又是一个随语言漂移的写死值。并排不需要任何留白数学，英文界面下按钮宽几像素
@@ -319,14 +349,22 @@
   #tutStep { font-size: 11px; color: var(--dim); margin-bottom: 2px; }
   #tutTitle { font-weight: 600; margin-bottom: 4px; }
   #tutBody { color: var(--dim); }
-  #tutDone { margin-top: 6px; color: var(--accent); font-weight: 600; }
+  /* 「过关 —— 你已经会了」。**比正文粗一档、大一点**：它只在过关后那一秒里出现
+     （最后一关则一直停在盘上），是玩家判断"我这一手成了没有"的唯一提示 ——
+     用户口径："过关要显示的明显一点，字体加粗即可"。 */
+  #tutDone { margin-top: 6px; color: var(--accent); font-weight: 700; font-size: 14px; }
   #tutDone:empty { display: none; }
-  /* 过关之后在右下角出现「下一关」。
+  /* 过关之后在右下角出现翻页键（v3.1.5 起最多两颗）。
      【退出不在这里】它是把那一行原有的「设置」键**改名**来的 ——
      多一颗键会让那一行变宽、也让玩家多找一次；而"在教学里，设置就是退出"
-     本来就是这一行的语义。见 syncTutorialUi。 */
-  #tutNext { position: absolute; right: 16px; bottom: 16px; z-index: 20; }
-  #tutNext.off { display: none; }
+     本来就是这一行的语义。见 syncTutorialUi。
+     【为什么包一层】只有一颗时它必须正好落在原来「下一关」那个位置 ——
+     容器右对齐 + 行内排开就自动成立（两颗时「上一关」自然贴在「下一关」左边）。
+     容器在没键时整块 off，别留一个空的定位盒子在那儿。 */
+  #tutNav { position: absolute; right: 16px; bottom: 16px; z-index: 20;
+            display: flex; align-items: center; gap: 10px; }
+  #tutNav.off { display: none; }
+  #tutNext.off, #tutPrev.off { display: none; }
 
   #timelineWrap { height: 30px; background: var(--well); border: 1px solid var(--border);
                   border-radius: 4px; flex: 0 0 auto; overflow: hidden; }
@@ -594,6 +632,36 @@
      "转动冷却"四个字会跟着左右挪。写死了，两种模式下它一个像素都不动。 */
   #coolNote { width: 11em; }
 
+  /* v3.1.5：三维勾了「魔方旋转」时转动冷却行也出现 —— **不是加一行，是填进空位**。
+     三维下 #sizeSummary 写死 92px 是为四维那 4 行摘要准备的，三维自己的摘要只有 1 行，
+     底部那 ~70px 一直是空的（用户口径："放在底下那个空位，不要和小字冲突"）。
+     所以这一档里：摘要框让出 48px（一行 38 + 一个行距 10），冷却行补进去 ——
+     整页高度、以及后面每一行（规则 / 开始游戏）的位置一个像素都不动。
+
+     【为什么用 order 而不是把 #coolRow 搬进 DOM】DOM 里的顺序是四维要的
+     （冷却行紧跟勾选框下面）；这里只是"三维这一档"把它排到摘要后面。
+     四个 order 值只在这一个类下生效 —— 四维、以及三维没勾旋转时逐像素与改动前相同。 */
+  /* 【让出多少 = 冷却行 38 + #setup 的行距；摘要留多少 = 基准高度 − 让出量】
+     两个数都走 CSS 变量（--summary-h / --cool3d-take，见 #sizeSummary 上面那两条），
+     因为它们在别的档里各不相同（英文摘要基准 96、紧凑档行距 12）——
+     写死 44 的话，英文和紧凑档会各差 2~4px（实测：勾一下旋转，规则行与开始游戏
+     被顶动 2~4px；英文 1600×900 也差 2px）。那是注释里那句"一个像素都不动"的反例。
+
+     【为什么还要压行距】留 44px 时最多两行（默认那行 + 人机那句，后者**必须**看得见，
+     见 refreshSetupSummary），而 2 × 13.5 × 1.7 = 45.9 > 44 —— 差 1.9px 就会顶出
+     一条滚动条，而滚动条一出现又挤窄正文、把文本重新折成三行（实测：人机档变成
+     "3 行 / 溢出 2px"）。行距收到 1.55（2 × 20.9 = 41.8）就没这回事了。
+     三行以上的情形（人机 + 超小/超大棋盘）本来就会在这块里内部滚动 ——
+     那是 #sizeSummary 一直以来的设计。 */
+  #setup.cool3d #sizeSummary {
+    order: 1;
+    height: calc(var(--summary-h) - var(--cool3d-take));
+    line-height: 1.55;
+  }
+  #setup.cool3d #coolRow { order: 2; }
+  #setup.cool3d #ruleNote { order: 3; }
+  #setup.cool3d #startRow { order: 4; }
+
   /* 冷却那四个键排成 2×2，两列各自对齐。
      【为什么要包一层 grid】原来四个键是 .row 的直接子项（.row 是 flex-wrap 的），
      装不下就折行 —— 而折行是"整行居中"的结果：实测 393px 英文下第一行
@@ -745,9 +813,18 @@
      了 800px 高的窗口，所以改的是行距（见 #setup 的 gap），不是这里。
      人机那一句在三维下只多占一行，92px 本来装得下；只有"四维 15³"那种
      本来就要滚的情形才会被多推一行 —— 那一条是既有行为，不值得为它再抬高度。 */
+  /* 【基准高度走变量】v3.1.5 起它有两个读者：这里，以及三维"勾了魔方旋转"那一档
+     （那时摘要要让出 #cool3d-take 给转动冷却行，见上面）。写死两个数迟早对不上 ——
+     英文那份基准是 96（下面 html.lang-en 那条），一写死就漏。 */
+  :root { --summary-h: 92px; }
   #sizeSummary { color: var(--dim); font-size: 13.5px; text-align: center; max-width: 640px;
                  line-height: 1.7; white-space: pre-line;
-                 height: 92px; overflow-y: auto; }
+                 height: var(--summary-h); overflow-y: auto; }
+
+  /* 三维"勾了魔方旋转"那一档：冷却行要占的高度 = 一行 38 + #setup 的行距。
+     行距在紧凑档（手机 / ≤700px）是 12 不是 10，所以那个档在下面把变量改掉 ——
+     不改的话"填空位"会差 2px，规则行和开始游戏被顶动（实测）。 */
+  :root { --cool3d-take: 48px; }
   #ruleNote { color: var(--dim); font-size: 12.5px; text-align: center; max-width: 660px;
               line-height: 1.8; border-top: 1px solid var(--border); padding-top: 14px; }
   /* 开始游戏 + 游戏教学并排。两个键之间 12px，整组仍然居中。 */
@@ -932,8 +1009,11 @@
   html.lang-en #startBtn { letter-spacing: 1px; }
   /* 同样的信息量，英文的字符数比中文多，固定的 92px 会更早开始内部滚动。
      这里可以放宽（它只影响总高，不影响"两种模式高度相等"——那个不变量靠的是
-     这块高度【恒定】，而不是靠它恰好是 92）。 */
-  html.lang-en #sizeSummary { height: 96px; }
+     这块高度【恒定】，而不是靠它恰好是 92）。
+     【改的是变量，不是这个元素的高度】v3.1.5 起 #setup.cool3d 那一档要按
+     "基准 − 让出量"算摘要高度（见 #sizeSummary 上面）—— 只改元素高度的话，
+     那一档读到的仍是 92，英文下凭空差 4px（实测：规则行与开始游戏被顶动 2~4px）。 */
+  html.lang-en { --summary-h: 96px; }
 
   /* ---------- 竖屏：左右分栏翻成上下分栏 ----------
      判据用 CSS 的 orientation，不用 JS 量 innerWidth/innerHeight：纯 CSS 在 JS 跑起来
@@ -1011,6 +1091,9 @@
   :root { --compact: 0; }
   @media (pointer: coarse), (max-width: 700px) {
     :root { --compact: 1; }
+    /* 这一档把 #setup 的行距从 10 收到 12（见下面那条），而三维"勾了魔方旋转"时
+       转动冷却行要补回来的正是"38 + 行距" —— 变量跟着一起改，见 #sizeSummary 上面。 */
+    :root { --cool3d-take: 50px; }
 
     /* ---------- 起始界面：行距和标题各收一档 ----------
        `#setup > * { flex: 0 0 auto }` 那条把"压扁"换成了"滚动"，代价是手机上
@@ -1349,9 +1432,11 @@
 
 ### 10.10 游戏教学
 
-选了四维之后，「开始游戏」旁边会出现「游戏教学」。三关分别教转动、贯通和晨昏，
-每一关是一个摆好的局面加一个目标。教学里没有电脑对手，过关之后可以进下一关；
-点那一行原来的「设置」键（在教学里它写着「退出」）就回到起始界面。
+选了四维、或者三维里勾了「魔方旋转」/「空间贯通」之后，「开始游戏」旁边会出现「游戏教学」。
+每一关是一个摆好的局面加一个目标：四维下三关分别教转动、贯通和晨昏，
+三维下只教勾上的那几样（一样都没勾，这颗键就不出现）。教学里没有电脑对手；
+过关之后停一下会自动进下一关，右下角的「上一关」「下一关」也可以自己前后翻；
+最后一关过完停在盘上 —— 点那一行原来的「设置」键（在教学里它写着「退出」）就回到起始界面。
 
 ## 11. 人机对战
 
@@ -1686,10 +1771,14 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 
 ### 10.10 Tutorial
 
-Once 4D is selected, a **Tutorial** button appears next to Start. Three levels cover
-rotation, wrapping and day / night; each is a prepared position with a goal. There is no
-computer opponent in the tutorial; once you clear a level you can move on, and the row's
-Setup button (it reads **Exit** inside the tutorial) takes you back to the start screen.
+A **Tutorial** button appears next to Start once 4D is selected, or when a 3D game has
+Rubik rotation / Space wrapping ticked. Each level is a prepared position with a goal:
+in 4D the three levels cover rotation, wrapping and day / night, while in 3D it only
+teaches what you ticked (with neither ticked, the button does not appear). There is no
+computer opponent in the tutorial; clearing a level moves you on to the next one after a
+short pause, and the Previous / Next buttons in the corner let you move back and forth as
+well. The last level simply waits there once cleared — the row's Setup button (it reads
+**Exit** inside the tutorial) takes you back to the start screen.
 
 ## 11. Playing the computer
 
@@ -2034,9 +2123,13 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 
 ### 10.10 ゲームの説明
 
-4D を選ぶと、「開始」の隣に「ゲームの説明」が現れます。三つの関が回転・貫通・昼夜をそれぞれ扱い、
-各関は用意された局面と目標からなります。説明にはコンピュータの相手はおらず、クリアすると次へ進めます。
-その行の元の「設定」キー（説明の中では「終了」と表示されます）で開始画面に戻ります。
+4D を選ぶと、または 3D で「ルービック回転」/「空間貫通」にチェックを入れると、
+「開始」の隣に「ゲームの説明」が現れます。各関は用意された局面と目標からなります：
+4D では三つの関が回転・貫通・昼夜をそれぞれ扱い、3D ではチェックしたものだけを扱います
+（どちらもチェックしていなければこのボタンは出ません）。説明にはコンピュータの相手はありません。
+クリアすると少し間をおいて自動で次の関に進み、右下の「前の関」「次の関」でも前後に移動できます。
+最後の関はクリアしてもそのまま止まるので、その行の元の「設定」キー
+（説明の中では「終了」と表示されます）で開始画面に戻ります。
 
 ## 11. コンピュータとの対戦
 
@@ -2369,9 +2462,13 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 ### 10.10 게임 안내
 
-4D를 고르면 「시작」 옆에 「게임 안내」가 나타납니다. 세 관문이 회전·관통·낮과 밤을 각각 다루고,
-각 관문은 준비된 국면과 목표로 이루어집니다. 안내에는 컴퓨터 상대가 없고, 통과하면 다음으로 갈 수 있습니다.
-그 줄의 원래 「설정」 키(안내 안에서는 「종료」로 표시됩니다)로 시작 화면으로 돌아갑니다.
+4D를 고르면, 또는 3D에서 「루빅 회전」/「공간 관통」을 선택하면 「시작」 옆에 「게임 안내」가 나타납니다.
+각 관문은 준비된 국면과 목표로 이루어집니다: 4D에서는 세 관문이 회전·관통·낮과 밤을 각각 다루고,
+3D에서는 선택한 것만 다룹니다(아무것도 선택하지 않으면 이 버튼은 나타나지 않습니다).
+안내에는 컴퓨터 상대가 없습니다. 통과하면 잠시 뒤 자동으로 다음 관문으로 넘어가고,
+오른쪽 아래의 「이전 단계」「다음 단계」로 직접 앞뒤로 옮길 수도 있습니다.
+마지막 관문은 통과해도 그대로 멈춰 있으므로, 그 줄의 원래 「설정」 키
+(안내 안에서는 「종료」로 표시됩니다)로 시작 화면으로 돌아갑니다.
 
 ## 11. 컴퓨터와의 대국
 
@@ -2712,9 +2809,14 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 ### 10.10 Обучение
 
-После выбора 4D рядом с «Начать» появляется «Обучение». Три уровня посвящены повороту, склейке и дню с ночью;
-каждый — подготовленная позиция с целью. В обучении нет компьютерного соперника; пройдя уровень, можно перейти
-к следующему, а клавиша «Настройка» из той же строки (в обучении она подписана «Выход») возвращает на стартовый экран.
+Кнопка **Обучение** появляется рядом с «Начать», когда выбран режим 4D или когда в 3D отмечены
+«Вращение слоя» / «Склейка граней». Каждый уровень — подготовленная позиция с целью:
+в 4D три уровня посвящены повороту, склейке и дню с ночью, а в 3D — только отмеченным вами
+механикам (если не отмечено ни одной, кнопки нет). В обучении нет компьютерного соперника;
+пройдя уровень, вы через мгновение автоматически переходите к следующему, а кнопки
+«Назад» / «Дальше» в углу позволяют двигаться вперёд и назад самому. Последний уровень
+после прохождения просто остаётся на экране; клавиша «Настройка» из той же строки
+(в обучении она подписана «Выход») возвращает на стартовый экран.
 
 ## 11. Игра с компьютером
 
@@ -3063,10 +3165,14 @@ tombent dans le cas « aucun changement ».
 
 ### 10.10 Didacticiel
 
-Une fois la 4D sélectionnée, un bouton **Didacticiel** apparaît à côté de Démarrer. Trois niveaux couvrent la rotation,
-le pliage et le jour / nuit ; chacun est une position préparée avec un objectif. Il n'y a pas d'adversaire dans le
-didacticiel ; un niveau réussi, on passe au suivant, et la touche Réglages de cette ligne (elle affiche **Quitter** dans
-le didacticiel) ramène à l'écran de départ.
+Un bouton **Didacticiel** apparaît à côté de Démarrer une fois la 4D sélectionnée, ou quand une partie 3D
+coche Rotation type Rubik / Pliage de l'espace. Chaque niveau est une position préparée avec un objectif :
+en 4D, les trois niveaux couvrent la rotation, le pliage et le jour / nuit, tandis qu'en 3D il n'enseigne
+que ce que vous avez coché (sans aucune coche, le bouton n'apparaît pas). Il n'y a pas d'adversaire dans
+le didacticiel ; un niveau réussi, on passe automatiquement au suivant après une courte pause, et les
+touches Précédent / Suivant dans le coin permettent aussi d'avancer et de reculer. Le dernier niveau reste
+affiché une fois réussi — la touche Réglages de cette ligne (elle affiche **Quitter** dans le didacticiel)
+ramène à l'écran de départ.
 
 ## 11. Jouer contre l'ordinateur
 
@@ -3205,9 +3311,16 @@ le didacticiel) ramène à l'écran de départ.
       <div id="tutBody"></div>
       <div id="tutDone"></div>
     </div>
-    <!-- 文案走 data-i18n（元素 id → STATIC_TEXT），不进 TEXT ——
-         它是静态的一颗键，不是会被 JS 改写的两态按钮。 -->
-    <button id="tutNext" class="off" data-i18n="tutNext">下一关</button>
+    <!-- 翻页键（v3.1.5 起是两颗：上一关 / 下一关）。**同一个容器、同一行**：
+         只有一颗时它落在容器最右边 —— 也就是原来「下一关」那颗键的位置；
+         两颗时「上一关」加在「下一关」左边（用户口径："这两个按键在同一个位置"、
+         "上一关在下一关左侧同一行"）。整组在没键可显示时 off（display:none）。
+         文案走 data-i18n（元素 id → STATIC_TEXT），不进 TEXT ——
+         它们是静态的两颗键，不是会被 JS 改写的两态按钮。 -->
+    <div id="tutNav" class="off">
+      <button id="tutPrev" class="off" data-i18n="tutPrev">上一关</button>
+      <button id="tutNext" class="off" data-i18n="tutNext">下一关</button>
+    </div>
 
     <div id="banner">
       <button id="bannerClose" class="mini" data-i18n="bannerClose">关闭 Esc</button>
@@ -3564,11 +3677,13 @@ le didacticiel) ramène à l'écran de départ.
 
   <div id="startRow">
     <button id="startBtn" class="sel" data-i18n="startBtn">开始游戏</button>
-    <!-- v3.0.0「游戏教学」。**只有选了四维模式才出现**（用户口径：没选之前不要出现，
-         也不要做成变浅不可点 —— 那种"这里有个东西但你用不了"的暗示在这一页上
+    <!-- v3.0.0「游戏教学」。**选了四维、或三维勾了新玩法才出现**（用户口径：没选之前
+         不要出现，也不要做成变浅不可点 —— 那种"这里有个东西但你用不了"的暗示在这一页上
          已经有冷却和相位两行在承担了，再来一个只会让人以为坏了）。
-         HTML 里先写死 display:none：默认就是三维，JS 还没跑起来之前状态也得是对的。 -->
-    <button id="tutorialBtn" data-i18n="tutorialBtn" style="visibility:hidden">游戏教学</button>
+         HTML 里先写死 display:none：默认就是三维且都没勾，JS 还没跑起来之前状态也得是对的。
+         【display 而不是 visibility】v3.1.5 用户口径：它不出现时「开始游戏」必须**居中** ——
+         visibility:hidden 会留着这 46px 的宽度，那颗键就永远偏左半个键。 -->
+    <button id="tutorialBtn" data-i18n="tutorialBtn" style="display:none">游戏教学</button>
   </div>
 </div>
 
@@ -7098,6 +7213,17 @@ function fingerprint(s) {
 /* GOMOKU-CORE-END */
 /* ========================================================================== */
 
+/**
+ * 教学关「过关」之后、自动跳下一关之前的那个停顿（毫秒）。
+ *
+ * **不能是 0**：过关那一手刚把五连摆出来，瞬间切走玩家什么都看不清，
+ * 连"我这是过了还是没过了"都读不出来。1 秒是"看得见 + 不催人"的中间值
+ * （用户口径："显示过关，约 1 秒后自动跳"）。**最后一关不跳**，只停着等玩家自己退出。
+ *
+ * 【为什么放在内核区间**外面**】内核那一段被 rules.test.mjs 抽出来在纯 node 里跑，
+ * 里面只该有规则；这个数是纯界面节奏，和规则没有关系（改它不会改变任何一局棋的判定）。
+ */
+const TUT_NEXT_DELAY = 1000;
 
 /* --------------------------------------------------------------------------
    调色板。**放在内核区间之外**：它要读 getComputedStyle，而内核区间被测试抽出来
@@ -7331,6 +7457,7 @@ const STATIC_TEXT = { en: {
   "optWrap": "Space wrapping",
   "startBtn": "Start game",
   "tutNext": "Next",
+  "tutPrev": "Previous",
   "tutorialBtn": "Tutorial",
 
   // ---- 起始界面的规则摘要（含 <br>）。英文读者看到的是同一件事的白话说法，
@@ -7525,6 +7652,7 @@ STATIC_TEXT.ja = {
   "optWrap": "空間貫通",
   "startBtn": "対局開始",
   "tutNext": "次の関",
+  "tutPrev": "前の関",
   "tutorialBtn": "ゲームの説明",
   "ruleNote": "ルール：空いているマスならどこにでも着手できます（重力はありません）。先手は<b>ちょうど5連</b>を作らなければならず、6連以上は長連で負けです。後手は5連以上で勝ちです。<br>勝ちの方向は13通り：3軸 + 面対角線6本 + 体対角線4本。右のパネルでレイヤーを切り替えて石を置きます。",
 };
@@ -7656,6 +7784,7 @@ STATIC_TEXT.ko = {
   "optWrap": "공간 관통",
   "startBtn": "게임 시작",
   "tutNext": "다음 단계",
+  "tutPrev": "이전 단계",
   "tutorialBtn": "게임 안내",
   "ruleNote": "규칙: 빈칸이면 어디든 착수할 수 있습니다 — 중력은 없습니다. 선수는 <b>정확히 다섯</b>을 이어야 하며, 여섯 이상은 장련(長連) 반칙으로 패배합니다. 후수는 다섯 이상이면 승리합니다.<br>승리 방향은 13개입니다: 축 3 + 면 대각선 6 + 공간 대각선 4. 오른쪽 패널에서 레이어를 넘기며 돌을 놓으세요.",
 };
@@ -7790,6 +7919,7 @@ STATIC_TEXT.ru = {
   "optWrap": "Склейка граней",
   "startBtn": "Начать игру",
   "tutNext": "Дальше",
+  "tutPrev": "Назад",
   "tutorialBtn": "Обучение",
   "ruleNote": "Правила: ходить можно в любую пустую клетку — гравитации нет. Первый игрок должен собрать <b>ровно пять</b> в ряд; шесть и более — перебор и поражение. Второй игрок побеждает при пяти и более.<br>Победных направлений 13: 3 оси + 6 диагоналей граней + 4 диагонали куба. Переключайте слои на панели справа и ставьте камни.",
 };
@@ -7933,6 +8063,7 @@ STATIC_TEXT.fr = {
   "optWrap": "Pliage de l'espace",
   "startBtn": "Commencer la partie",
   "tutNext": "Suivant",
+  "tutPrev": "Précédent",
   "tutorialBtn": "Didacticiel",
   "ruleNote": "Règles : vous pouvez jouer sur n'importe quelle case vide — il n'y a pas de gravité. Le premier joueur doit aligner <b>exactement cinq</b> pions ; six ou plus est un alignement trop long, ce qui fait perdre. Le second joueur gagne avec cinq ou plus.<br>Il y a 13 directions gagnantes : 3 axes + 6 diagonales de face + 4 grandes diagonales. Utilisez le panneau de droite pour parcourir les couches et poser des pions.",
 };
@@ -8920,10 +9051,17 @@ const Game = {
   setupCool: 5,          // 设置页选的冷却（落子数），范围见 CoolLimits
   /** v3.0.0「晨昏」的相位周期。四维下常开，三维下不生效（见 newGame）。 */
   setupPhase: 12,
-  /** 教学状态。tutActive = 在教学里；tutIndex = 第几关；tutPassed = 这一关过了没有。 */
+  /** 教学状态。tutActive = 在教学里；tutIndex = 第几关；tutPassed = 这一关过了没有。
+   *  v3.1.5 多了两个：
+   *    tutCleared —— 这趟教学里**已经过过**的关卡下标（决定「下一关」出不出现：
+   *                  只有过过的关才给「下一关」，没过的关只能靠自己解，见 syncTutorialUi）
+   *    tutTimer   —— "过关 → 停一下 → 自动跳下一关"的倒计时句柄（0 = 没有），
+   *                  任何离开当前关卡的路径都要先 cancelTutTimer()。 */
   tutActive: false,
   tutIndex: 0,
   tutPassed: false,
+  tutCleared: null,
+  tutTimer: 0,
   /** 下一手要用的宣告（v3.0.0「晨昏」）。见 MoveMode。 */
   placeMode: 0,
   rotAxis: AXIS_Z,
@@ -8995,7 +9133,7 @@ const Game = {
     const ids = ["gl","modeGhost","modeSlice","modeGrid","stoneAll","stoneBlack","stoneWhite",
       "sliceGroup","sliceDown","sliceUp","sliceLabel",
       "coords","hint","hintbox","hintToggle","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","toast",
-      "tutBar","tutStep","tutTitle","tutBody","tutDone","tutNext",
+      "tutBar","tutStep","tutTitle","tutBody","tutDone","tutNext","tutPrev","tutNav",
       "chip","status","rule","info","boardWrap","timelineWrap","timeline","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","tutorialBtn","view","stage","previewTag",
@@ -10843,10 +10981,12 @@ const Game = {
       });
     }
     on("tutorialBtn", () => this.startTutorial());
-    on("tutNext", () => {
-      const n = this.tutorialLevels().length;
-      this.tutorialBuild((this.tutIndex + 1) % n);      // 最后一关之后回到第一关
-    });
+    // 翻页键。**只在教学里、且只在序列范围内挪** —— 边界上没有键（见 syncTutorialUi），
+    // 所以 tutorialGo 到边了自然什么都不做。
+    // 【最后一关不再绕回第一关】v3.1.5 的流程是线性的：最后一关过完停在盘上，
+    // 由玩家自己点「退出」；那两个键里也不再需要"重来"这种环回语义。
+    on("tutNext", () => { if (this.tutActive) this.tutorialGo(1); });
+    on("tutPrev", () => { if (this.tutActive) this.tutorialGo(-1); });
     on("startBtn", () => {
       this.closeSetup();
       const d = this.fourD ? [this.setupSize, this.setupSize, this.setupSize] : this.setupDims;
@@ -11849,6 +11989,9 @@ const Game = {
       this.setupDims = [this.setupDims[0], this.setupDims[0], this.setupDims[0]];
     }
     this.syncExtraRow();
+    // 【勾选态一变，冷却行和教学按钮都可能跟着变】勾上旋转 → 冷却行出现、教学按钮出现；
+    // 取消 → 两样一起收掉。syncCoolRow 两件事都管，所以这一个调用是必须的。
+    this.syncCoolRow();
     this.syncSetupInputs();
     this.refreshSetupSummary();
   },
@@ -11857,6 +12000,7 @@ const Game = {
     if (this.fourD) return;
     this.setupWrap = !!on;
     this.syncExtraRow();
+    this.syncCoolRow();          // 教学按钮的显隐跟着它变（只勾贯通也能单独开教学）
     this.refreshSetupSummary();
   },
 
@@ -11882,11 +12026,15 @@ const Game = {
     this.el.mode4d.classList.toggle("sel", fourD);
     this.el.dimsRow3d.classList.toggle("hide", fourD);
     this.el.dimsRow4d.classList.toggle("hide", !fourD);
-    // 转动冷却行**始终占着槽位**，只切按钮的禁用态和结尾那句说明 ——
-    // 藏起来的话四维会比三维多一行，居中的整列重新排、按钮全跳。见 #coolRow 的注释。
-    this.syncCoolRow();
-    // 换模式时把尺寸重置成本模式的默认值（三维 15、四维 8）。
+    // 换模式时把尺寸重置成本模式的默认值（三维 15、四维 8）；切回三维还要把两个勾还原。
     // 不这么做就会出现"切到四维、输入框里还留着三维的数"这类对不上的状态。
+    //
+    // 【这段必须在 syncCoolRow 之前】syncCoolRow 现在还要读 setupSpin/setupWrap
+    // （三维勾了新玩法才显示冷却行 / 教学键），而这两个值就是这里要清掉的。
+    // 顺序反过来的后果很安静：从四维切回三维时，coolRow / tutorialBtn / cool3d
+    // 会按**清掉之前**的旧值刷一遍，然后又没人再刷 —— 界面上就留着上一次勾选的痕迹
+    // （"勾选框明明没勾，转动冷却行和游戏教学却还在"），点那颗教学键还会被关掉设置页
+    // 却进不去教学（那一刻 tutorialPlan() 已是空的）。实测复现过。
     if (fourD) {
       this.setupCube = true;                    // 四维必须立方
       this.setupDims = [8, 8, 8];
@@ -11898,6 +12046,9 @@ const Game = {
       this.setupSpin = false;
       this.setupWrap = false;
     }
+    // 转动冷却行**始终占着槽位**，只切按钮的禁用态和结尾那句说明 ——
+    // 藏起来的话四维会比三维多一行，居中的整列重新排、按钮全跳。见 #coolRow 的注释。
+    this.syncCoolRow();
     this.syncExtraRow();
     this.syncSetupInputs();
     this.refreshSetupSummary();
@@ -12148,17 +12299,73 @@ const Game = {
                          "\n\n怎么走：点红圈那条的两端任意一格，补成五。", "tut.3.body");
   },
 
-  /** 进入教学（第 0 关）。**关掉设置页、进对局视图** —— 这就是"铺满屏幕"的实现。 */
+  /**
+   * 这趟教学要走哪几关 —— 返回 tutorialLevels() 的**下标序列**。
+   *
+   * 四维 = 全部三关；三维 = **勾了哪样教哪样**（用户口径 v3.1.5）：
+   * 只勾旋转就只教转动、只勾贯通就只教贯通、两个都勾就教前两关。
+   * 顺序恒按下面那张关卡表（转动 → 贯通 → 晨昏），与勾选先后无关 ——
+   * 用户口径："按顺序（四维玩法游戏教学关的关卡顺序）出现"。
+   *
+   * 【是"现算"不是"进场时快照"】进教学之后设置页就关了，四维/勾选在关内改不到；
+   * 而测试会直接调 setSetupMode / setSetupSpin 再调 tutorialBuild —— 现算才不会和它们打架。
+   */
+  tutorialPlan() {
+    if (this.fourD) return [0, 1, 2];
+    const plan = [];
+    if (this.setupSpin) plan.push(0);     // 第 1 关：转动
+    if (this.setupWrap) plan.push(1);     // 第 2 关：贯通
+    return plan;
+  },
+
+  /** 停掉「过关 → 停一下 → 自动跳下一关」那个倒计时。
+   *  **任何离开当前关卡的路径都要先调它** —— 不然玩家在倒计时里点了「上一关」或「退出」，
+   *  定时器到点还会再跳一次，表现是"点了上一关，过一秒又被拽回去"。 */
+  cancelTutTimer() {
+    if (this.tutTimer) { clearTimeout(this.tutTimer); this.tutTimer = 0; }
+  },
+
+  /** 过关之后该跳去第几关（关卡下标）。**没有下一关就返回 -1** —— 那时停在原地，
+   *  由玩家自己点「退出」（用户口径 v3.1.5：最后一关不自动退出）。
+   *  单独抽出来是为了让测试能直接问"下一关是谁"，而不是去等那个 1 秒定时器。 */
+  tutNextIndex() {
+    const plan = this.tutorialPlan();
+    const pos = plan.indexOf(this.tutIndex);
+    return (pos >= 0 && pos + 1 < plan.length) ? plan[pos + 1] : -1;
+  },
+
+  /** 本关的过关目标现在还成立吗。**倒计时到点的瞬间要再问一次** ——
+   *  见 tutorialCheck 里那段：玩家在那 1 秒里悔棋 / 重开 / 换先手，局面就退回没过关的样子了。 */
+  tutGoalStillMet() {
+    const lv = this.tutorialLevels()[this.tutIndex];
+    return !!(lv && this.session && lv.goal(this.session));
+  },
+
+  /** 进入教学（本趟的第一关）。**关掉设置页、进对局视图** —— 这就是"铺满屏幕"的实现。 */
   startTutorial() {
+    const plan = this.tutorialPlan();          // 三维下按勾选算出来的关卡序列（可能只有一关）
+    // 【一关都没有就什么都别做】三维一个玩法都没勾时序列是空的，而那颗键本来就不显示
+    // （见 syncCoolRow）—— 走到这里只可能是脚本调的。**绝不能往下走**：下面的
+    // tutorialBuild(undefined) 会兜底成 tutorialExit()（它会把设置页打开），
+    // 紧接着 closeSetup() 又把它关掉 —— 玩家会莫名其妙被扔出起始界面、却什么也没进去。
+    if (!plan.length) return;
     // 进教学时把「设置」这颗键的原文案记下来 —— 退出时要原样还回去。
     // （不能写死"设置"两个字：六种语言各不相同，而且切语言时它还会变。）
-    this.setupBtnLabel = this.el.setupBtn ? this.el.setupBtn.textContent : "";
-    this.tutIndex = 0;
+    // 【教学里不能再抓一次】那一刻这颗键写的是「退出」（syncTutorialUi 改的），
+    // 抓下来就等于把「退出」当成了"原文案"—— 退出之后它再也回不到「设置」。
+    // 玩家碰不到这条路（教学里设置页是关着的），但脚本/测试会连着进两次；
+    // 实测踩过：一次截图里那颗键写着「退出」，而当时根本不在教学里。
+    if (!this.tutActive) {
+      this.setupBtnLabel = this.el.setupBtn ? this.el.setupBtn.textContent : "";
+    }
+    this.tutCleared = new Set();               // 本趟的"过过关"记录，每趟从零开始
+    this.cancelTutTimer();
+    this.tutIndex = plan[0];
     this.tutActive = true;
     // 【顺序要紧：先建关卡、再关设置页】反过来的话，设置页一关，#stage 立刻露出
     // **上一个会话**的棋盘 —— 也就是起始界面那颗演示盘 —— 然后才被关卡的棋盘顶掉。
     // 肉眼看到的就是"打开教学时冒出一颗演示盘又消失"。用户报的正是这个。
-    this.tutorialBuild(0);
+    this.tutorialBuild(plan[0]);
     this.closeSetup();
     // 关掉 preview 类之后再画一帧：预览态和游戏态算的是不同的机位，
     // 不重画的话会留下预览态的那一帧。
@@ -12167,7 +12374,11 @@ const Game = {
 
   tutorialBuild(i) {
     const levels = this.tutorialLevels();
-    if (i < 0 || i >= levels.length) return this.tutorialExit();
+    // 【Number.isInteger 不是洁癖】三维一个都没勾时 tutorialPlan() 是空数组，
+    // startTutorial 会把 undefined 递进来 —— 而 undefined < 0 和 undefined >= 3
+    // 都是 false，两个老条件一个都拦不住它，下一行 levels[undefined].build() 当场炸。
+    if (!Number.isInteger(i) || i < 0 || i >= levels.length) return this.tutorialExit();
+    this.cancelTutTimer();                     // 手动翻页/重进关卡都要先把倒计时停掉
     this.tutIndex = i;
     const raw = levels[i].build();
     // 【教学里没有电脑】三关都是"自己走、达成目标"。
@@ -12190,19 +12401,69 @@ const Game = {
     this.refreshTexts();
   },
 
-  /** 落子之后调一次：过关了就把"下一关"亮出来。 */
+  /**
+   * 「上一关 / 下一关」。dir = ±1。**只在这趟要走的关卡序列里挪** ——
+   * 序列边界上没有键（见 syncTutorialUi），所以这里到边了就什么也不做。
+   */
+  tutorialGo(dir) {
+    const plan = this.tutorialPlan();
+    const pos = plan.indexOf(this.tutIndex);
+    if (pos < 0) return;
+    const to = pos + dir;
+    if (to < 0 || to >= plan.length) return;
+    this.tutorialBuild(plan[to]);
+  },
+
+  /**
+   * 每一步之后调一次：这一关的目标达成了就收尾。
+   *
+   * v3.1.5 的收尾规则（用户口径，逐条对过）：
+   *   · 记录过关（tutCleared）—— 之后「下一关」才会出现
+   *   · **还有下一关** → 停 ~1 秒（让玩家看清刚成形的五连和"过关"两个字）再自动跳过去
+   *   · **最后一关** → 停在盘上、显示「过关」，由玩家自己点「退出」
+   *     （原来那条"第三关过完自动退出教学"已被用户口径覆盖：一律不自动退出）
+   */
   tutorialCheck() {
     if (!this.tutActive || !this.session) return;
-    if (this.tutPassed) return;
+    const still = this.tutGoalStillMet();
+    // 【过关之后又被撤回来了】悔棋 / 重开 / 换先手都会把局面退回没过关的样子，
+    // 这时要跟着退回"没过"：倒计时取消、过关文案收掉（「下一关」还在 ——
+    // tutCleared 记着这一关过过）。
+    // 不这么做有两个后果：一是撤回之后还挂着"过关"两个字；二是 tutPassed 一直是真的，
+    // 玩家再解一遍时 tutorialCheck 在第一行就返回了 —— 看起来像"这关不认第二次"。
+    if (this.tutPassed && !still) {
+      this.tutPassed = false;
+      this.cancelTutTimer();
+      this.syncTutorialUi();
+      return;
+    }
+    if (this.tutPassed || !still) return;
     const lv = this.tutorialLevels()[this.tutIndex];
-    if (!lv || !lv.goal(this.session)) return;
+    if (!lv) return;
     this.tutPassed = true;
+    if (this.tutCleared) this.tutCleared.add(this.tutIndex);
+    // 【先把倒计时挂上、再刷界面】反过来的话第一帧里 tutTimer 还是 0，
+    // 两个翻页键会先亮出来闪一下、再被下一次 syncTutorialUi 收掉。
+    const next = this.tutNextIndex();
+    if (next >= 0) {
+      this.tutTimer = setTimeout(() => {
+        this.tutTimer = 0;
+        // 【到点再确认一次"这一关还处于过关状态"】玩家在那 1 秒里悔棋 / 重开 / 换先手时，
+        // 上面那段（tutorialCheck 的"退回没过"分支）已经把这次倒计时取消了 ——
+        // 这一层是兜底：万一将来有条不重画的路径改了局面，也绝不把玩家从他刚撤回的
+        // 局面里拽走。
+        if (!this.tutGoalStillMet()) { this.syncTutorialUi(); return; }
+        this.tutorialBuild(next);
+      }, TUT_NEXT_DELAY);
+    }
     this.syncTutorialUi();
   },
 
   tutorialExit() {
+    this.cancelTutTimer();
     this.tutActive = false;
     this.tutPassed = false;
+    this.tutCleared = null;        // 本趟的记录随退出作废，下一趟在 startTutorial 里重建
     if (this.el.setupBtn && this.setupBtnLabel !== undefined) {
       this.el.setupBtn.textContent = this.setupBtnLabel;
     }
@@ -12211,22 +12472,47 @@ const Game = {
     this.openSetup();
   },
 
-  /** 教学条 / 退出 / 下一关 的显隐与文案。 */
+  /**
+   * 教学条 / 退出 / 上一关 / 下一关 的显隐与文案。
+   *
+   * 【两个翻页键什么时候出现】（用户口径 v3.1.5，逐条对过）：
+   *   · 「上一关」：不是序列里的第一关就有 —— 从第 2 关起一直有。
+   *   · 「下一关」：**这一关已经过过**、而且后面还有关卡才有。
+   *     所以刚被自动跳到第 2 关时只有「上一关」（还得自己解）；从第 3 关退回来时，
+   *     第 2 关是过过的，就两个键都在 —— "上一关"排在"下一关"左边同一行。
+   *   · 倒计时（自动跳关正在路上）期间两个都不显示，免得亮一下又消失。
+   *   · 最后一关没有「下一关」，也不自动退出 —— 玩家自己点「退出」。
+   */
   syncTutorialUi() {
     const on = !!this.tutActive;
     if (this.el.tutBar) this.el.tutBar.classList.toggle("off", !on);
     // 【教学里「设置」就是「退出」】不另加一颗键 —— 多一颗键会让那一行变宽，
     // 也让玩家多找一次。改名之后它在那儿、位置不变，语义正好。
     if (this.el.setupBtn && on) this.el.setupBtn.textContent = say(() => "退出", "tutExit");
-    // 「下一关」只在过关后出现；最后一关过后它写"重来"（回到第一关）
-    // 【文案不在这里写】它是 data-i18n 的静态键（STATIC_TEXT），走 applyStatic 那条路。
-    // 这里只切显隐。最后一关按下去会绕回第一关 —— 教学是个环，不用多一个"再来一遍"状态。
-    if (this.el.tutNext) this.el.tutNext.classList.toggle("off", !(on && this.tutPassed));
+    const plan = on ? this.tutorialPlan() : [];
+    const pos = plan.indexOf(this.tutIndex);
+    const nav = on && !this.tutTimer && pos >= 0;
+    const hasPrev = nav && pos > 0;
+    const hasNext = nav && pos + 1 < plan.length && !!(this.tutCleared && this.tutCleared.has(this.tutIndex));
+    // 【文案不在这里写】两颗键都是 data-i18n 的静态键（STATIC_TEXT），走 applyStatic 那条路。
+    if (this.el.tutPrev) this.el.tutPrev.classList.toggle("off", !hasPrev);
+    if (this.el.tutNext) this.el.tutNext.classList.toggle("off", !hasNext);
+    if (this.el.tutNav) this.el.tutNav.classList.toggle("off", !(hasPrev || hasNext));
+    // 【翻页键在场时提示框要跟着让位】它俩都贴着 #view 的下沿，窄一点的窗口下会压上；
+    // 两颗键比一颗宽一倍，所以"有键"和"有两颗"分开挂类，宽度见 #hintbox 那条 CSS。
+    if (this.el.view) {
+      this.el.view.classList.toggle("tutKeys", hasPrev || hasNext);
+      this.el.view.classList.toggle("tutTwo", hasPrev && hasNext);
+    }
     if (!on) return;
     if (this.el.tutStep) {
+      // 【pos < 0 只可能来自"脚本直接 tutorialBuild 了一个不在这一趟序列里的关"】——
+      // 内部调用用的都是序列里的下标，所以那是误用；但"第 0 / 2 关"这种文案会让人
+      // 以为关卡表错了，所以兜成第 1 关，别把一个不可能的状态渲染成看着像 bug 的样子。
+      const at = pos >= 0 ? pos + 1 : 1;
       this.el.tutStep.textContent = say(
-        () => "第 " + (this.tutIndex + 1) + " / " + this.tutorialLevels().length + " 关",
-        "tut.step", { n: this.tutIndex + 1, total: this.tutorialLevels().length });
+        () => "第 " + at + " / " + plan.length + " 关",
+        "tut.step", { n: at, total: plan.length });
     }
     if (this.el.tutTitle) this.el.tutTitle.textContent = this.tutorialText(this.tutIndex, "title");
     if (this.el.tutBody) this.el.tutBody.textContent = this.tutorialText(this.tutIndex, "body");
@@ -12303,32 +12589,44 @@ const Game = {
    * 「转动冷却」和「相位周期」两行的启用/淡显 + 范围提示。
    * **两行落在同一个函数里**：它们同属"四维才有"，状态永远同步，
    * 分两个函数只有多一处会漂移的地方。
+   *
+   * v3.1.5 起这两行的出现条件不再只是"四维"：
+   *   · 转动冷却 —— 四维，**或三维勾了「魔方旋转」**（三维里它也真的管着转层，见 RULES §10.6）
+   *   · 相位周期 —— 仍然只有四维（晨昏是四维常开的，三维里没有相位这回事）
    */
   syncCoolRow() {
     const on = this.fourD;
-    // 【教学按钮：四维才出现】用户口径是没选之前不要出现，也不要做成变浅不可点——
-    // 所以这里动的是 display，不是 disabled/opacity。它是 #startRow 里的第二个键，
-    // 出现/消失会让「开始游戏」左右挪一点，这是有意的取舍（那一行在窄屏下本来就居中）。
-    if (this.el.tutorialBtn) this.el.tutorialBtn.style.visibility = on ? "" : "hidden";
-    // 【三维下整行不显示】用户口径。但**不能改布局** —— #setup 是居中的，
-    // 摘掉两行会让整列重新居中、所有按钮一起跳，而 browser-check 钉着
-    // 「切到四维再切回来，开始游戏的位置和尺寸完全不变」。
-    // visibility:hidden 两头都满足：看不见、点不到，但槽位还在，所以一个像素都不动。
-    // （和 .row.hide 在三维/四维尺寸行上用的是同一套做法。）
-    // 【三维下这两行整块撤掉，而把槽位让给「魔方旋转 / 空间贯通」那两行】——
-    // 两边的行高相同（各 38px，两行共 76px），所以总高不变。
-    // 原来是 visibility:hidden 留空槽，现在那个空槽有主了。
-    if (this.el.coolRow) this.el.coolRow.style.display = on ? "" : "none";
+    const cool = on || this.setupSpin;      // 三维下 setupSpin 才有意义，四维下四样都常开
+    // 【教学按钮：四维、或三维勾了新玩法才出现】用户口径是没选之前不要出现，
+    // 也不要做成变浅不可点 —— 所以这里是 display:none，不是 disabled/opacity。
+    // 【为什么用 display 不用 visibility】v3.1.5 用户口径：不出现时「开始游戏」要**居中**。
+    // visibility:hidden 会留着那颗键的宽度（46px），于是「开始游戏」永远偏左半个键 ——
+    // 那正是改之前的样子。browser-check 钉着"两种状态下这颗键都在该在的位置"。
+    const tut = on || this.setupSpin || this.setupWrap;
+    if (this.el.tutorialBtn) this.el.tutorialBtn.style.display = tut ? "" : "none";
+    // 【相位周期：三维下整行不显示】用户口径（晨昏是四维常开的，三维里没有相位这回事）。
+    // 但**不能改布局** —— #setup 是居中的，摘掉一行会让整列重新居中、所有按钮一起跳，
+    // 而 browser-check 钉着「切到四维再切回来，开始游戏的位置和尺寸完全不变」。
+    // 槽位让给「魔方旋转 / 空间贯通」那两块（见 syncExtraRow），两边总高相同。
+    // 【转动冷却：四维常显；三维**勾了魔方旋转才出现**（v3.1.5）】——
+    // 它在三维里排到摘要后面去占那块空位（#setup.cool3d 那几条 CSS），
+    // 所以出现这一行**不会**把整页推高，后面每一行的位置也一个像素不动。
+    if (this.el.coolRow) this.el.coolRow.style.display = cool ? "" : "none";
+    // 【三维这一档的排位交给一个类】冷却行在三维里要排到摘要后面去（见 #coolNote
+    // 下面那四条 order 规则）。四维、以及三维没勾旋转时这个类不挂，逐像素与改动前相同。
+    if (this.el.setup) {
+      this.el.setup.classList.toggle("cool3d", !on && this.setupSpin);
+    }
     if (this.el.phaseRow) this.el.phaseRow.style.display = on ? "" : "none";
     this.syncExtraRow(on);
-    if (this.el.coolInput) this.el.coolInput.disabled = !on;
+    if (this.el.coolInput) this.el.coolInput.disabled = !cool;
     if (this.el.phaseInput) this.el.phaseInput.disabled = !on;
     // 范围提示走和数据尺寸同一条路：从常量现算，不写死第二份。
     // 那个 – 是 EN DASH，六种语言共用（和 #dimRange 同一条约定）。
     const cRange = CoolLimits.Min + " – " + CoolLimits.Max;
     const pRange = PhaseLimits.Min + " – " + PhaseLimits.Max;
     if (this.el.coolNote) {
-      this.el.coolNote.textContent = on
+      this.el.coolNote.textContent = cool
         ? say(() => "可填 " + cRange, "range.allowed", { range: cRange })
         : say(() => "四维模式才有", "cool.fourDOnly");
     }

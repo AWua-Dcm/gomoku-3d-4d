@@ -288,10 +288,14 @@ tombent dans le cas « aucun changement ».
 
 ### 10.10 Didacticiel
 
-Une fois la 4D sélectionnée, un bouton **Didacticiel** apparaît à côté de Démarrer. Trois niveaux couvrent la rotation,
-le pliage et le jour / nuit ; chacun est une position préparée avec un objectif. Il n'y a pas d'adversaire dans le
-didacticiel ; un niveau réussi, on passe au suivant, et la touche Réglages de cette ligne (elle affiche **Quitter** dans
-le didacticiel) ramène à l'écran de départ.
+Un bouton **Didacticiel** apparaît à côté de Démarrer une fois la 4D sélectionnée, ou quand une partie 3D
+coche Rotation type Rubik / Pliage de l'espace. Chaque niveau est une position préparée avec un objectif :
+en 4D, les trois niveaux couvrent la rotation, le pliage et le jour / nuit, tandis qu'en 3D il n'enseigne
+que ce que vous avez coché (sans aucune coche, le bouton n'apparaît pas). Il n'y a pas d'adversaire dans
+le didacticiel ; un niveau réussi, on passe automatiquement au suivant après une courte pause, et les
+touches Précédent / Suivant dans le coin permettent aussi d'avancer et de reculer. Le dernier niveau reste
+affiché une fois réussi — la touche Réglages de cette ligne (elle affiche **Quitter** dans le didacticiel)
+ramène à l'écran de départ.
 
 ## 11. Jouer contre l'ordinateur
 

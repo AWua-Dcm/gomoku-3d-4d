@@ -282,10 +282,14 @@ on a 15×15×15 board a layer holds less than one stone on average, and most rot
 
 ### 10.10 Tutorial
 
-Once 4D is selected, a **Tutorial** button appears next to Start. Three levels cover
-rotation, wrapping and day / night; each is a prepared position with a goal. There is no
-computer opponent in the tutorial; once you clear a level you can move on, and the row's
-Setup button (it reads **Exit** inside the tutorial) takes you back to the start screen.
+A **Tutorial** button appears next to Start once 4D is selected, or when a 3D game has
+Rubik rotation / Space wrapping ticked. Each level is a prepared position with a goal:
+in 4D the three levels cover rotation, wrapping and day / night, while in 3D it only
+teaches what you ticked (with neither ticked, the button does not appear). There is no
+computer opponent in the tutorial; clearing a level moves you on to the next one after a
+short pause, and the Previous / Next buttons in the corner let you move back and forth as
+well. The last level simply waits there once cleared — the row's Setup button (it reads
+**Exit** inside the tutorial) takes you back to the start screen.
 
 ## 11. Playing the computer
 

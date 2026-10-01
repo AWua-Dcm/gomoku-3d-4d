@@ -715,6 +715,84 @@ step("附加玩法：四维三样常开，开关改不动它", () => {
     throw new Error("切回三维且没勾时，规则必须回到纯三维");
 });
 
+// ---------------------------------------------------------------------------
+// v3.1.5：三维勾了「魔方旋转」→ 转动冷却行跟着出现。
+//
+// 【为什么这条必须钉】三维 + 旋转是一个**真的受冷却门控**的模式
+// （session.canRotate 读的就是 rotationCooldownPlacements），界面上不给这个数，
+// 玩家只能按四维默认值 5 手走，却找不到地方改。反过来，没勾旋转时它必须消失 ——
+// 不然页面上会多一个"改了也没用"的输入框。
+// 位置（落在摘要和规则之间那段空位、整页高度不变）是几何，由 browser-check 量。
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// v3.1.5：勾选态不能在切模式之后"留在脸上"。
+//
+// 【为什么单列一条】setSetupMode 里那两件事有先后：先把 setupSpin/setupWrap 复位、
+// 再刷 syncCoolRow，还是反过来。反过来（先刷后复位）的时候，从四维切回三维会按
+// **复位之前的旧值**刷一遍冷却行 / 教学键 / cool3d，然后没人再刷 ——
+// 界面上留下"勾选框明明没勾、转动冷却行和游戏教学却还在"，点那颗教学键还会被
+// 关掉设置页却进不去教学（那一刻 tutorialPlan() 已经是空的）。实测复现过。
+// ---------------------------------------------------------------------------
+step("v3.1.5：勾「魔方旋转」→ 切四维 → 切回三维，冷却行与教学键都要收回去", () => {
+  Game.tutorialExit();
+  Game.setSetupMode(false);
+  Game.closeSetup();
+  Game.setSetupSpin(true);                   // 玩家在三维里勾上
+  if (Game.el.coolRow.style.display === "none") throw new Error("前置：勾上后冷却行应当出现");
+  Game.setSetupMode(true);                   // 切到四维（四维里这两样本来就常开）
+  Game.setSetupMode(false);                  // 再切回三维 —— 勾选已被复位成 false
+  if (Game.el.coolRow.style.display !== "none")
+    throw new Error("切回三维后冷却行还留着 —— syncCoolRow 用到的是复位之前的旧值");
+  if (Game.el.tutorialBtn.style.display !== "none")
+    throw new Error("切回三维后「游戏教学」还留着（点它进不去教学，还会被关掉设置页）");
+  if (Game.el.setup.classList.contains("cool3d"))
+    throw new Error("切回三维后还挂着 cool3d 排位");
+  if (Game.el.coolInput.disabled !== true)
+    throw new Error("切回三维后冷却输入框应当是禁用的");
+  Game.setSetupCube(true);
+  Game.newGame(15, 1);
+});
+
+step("v3.1.5：三维勾「魔方旋转」→ 转动冷却行出现；取消勾选 → 收回去", () => {
+  Game.tutorialExit();
+  Game.setSetupMode(false);
+  Game.closeSetup();
+  if (Game.el.coolRow.style.display !== "none")
+    throw new Error("三维没勾旋转时，转动冷却行不该显示");
+
+  Game.setSetupSpin(true);
+  if (Game.el.coolRow.style.display === "none")
+    throw new Error("三维勾了「魔方旋转」，转动冷却行必须出现（它真的管着转层）");
+  if (Game.el.coolInput.disabled)
+    throw new Error("三维勾了旋转时冷却输入框必须可填");
+  if (Game.el.phaseRow.style.display !== "none")
+    throw new Error("相位周期仍然是四维才有 —— 三维勾旋转不该把它带出来");
+  // 说明小字也要跟着换成"可填…"，不能还写着"四维模式才有"
+  if (Game.el.coolNote.textContent.indexOf("四维") >= 0)
+    throw new Error("三维勾了旋转后，说明还写着「四维模式才有」：" + Game.el.coolNote.textContent);
+  // 排位交给 #setup 上的 cool3d（CSS 里把冷却行排到摘要后面）—— 桩里量不了渲染，钉类名
+  if (!Game.el.setup.classList.contains("cool3d"))
+    throw new Error("三维勾旋转时 #setup 应当挂上 cool3d（冷却行排到摘要后面）");
+
+  // 冷却真的生效：设 3 手，落两子转不动、第三子才转得动
+  Game.setSetupCool(3);
+  Game.newGame(15, 1);
+  if (!Game.session.rules.allowRotation) throw new Error("前置：勾了旋转应当能转");
+  Game.session.place(0, 0, 0); Game.session.place(1, 0, 0);
+  if (Game.session.canRotate) throw new Error("冷却 3 手时，第 2 手不该能转");
+  Game.session.place(2, 0, 0);
+  if (!Game.session.canRotate) throw new Error("冷却 3 手时，第 3 手应当能转");
+
+  Game.setSetupSpin(false);
+  if (Game.el.coolRow.style.display !== "none")
+    throw new Error("取消勾选之后冷却行必须收回去");
+  if (Game.el.setup.classList.contains("cool3d"))
+    throw new Error("取消勾选之后不该再挂 cool3d");
+  Game.setSetupCool(5);
+  Game.setSetupCube(true);
+  Game.newGame(15, 1);
+});
+
 step("附加玩法：四维下「设置」和「落子宣告」换了位置，三维下没换", () => {
   // 判据是 CSS 的 order（靠 #buttons 上那个类名切换）—— 桩里量不了渲染，
   // 所以这里钉的是"类名有没有按规则挂上"，几何由 browser-check 在真浏览器里量。
@@ -780,6 +858,9 @@ step("拓扑影子：面板要给外面那一圈留位置，但格号一个都�
 
 step("拓扑影子：点外面那一圈不落子", () => {
   Game.closeSetup();
+  // 【必须显式开四维再进教学】v3.1.5 起教学要走哪几关由模式/勾选算出来（tutorialPlan）：
+  // 三维一个都没勾时序列是空的，startTutorial 进不去 —— 那正是"按钮都不显示"的状态。
+  Game.setSetupMode(true);
   Game.startTutorial();
   Game.tutorialBuild(1);                     // 第 2 关：wrap 开
   if (!Game.session.board.wrap) throw new Error("前置：第 2 关应当是拓扑模式");
@@ -3632,6 +3713,154 @@ step("教学：取胜之后不弹横幅，下一关也不会带着上一关的�
   Game.tutorialBuild(2);                    // 进第 3 关
   if (Game.bannerOpen) throw new Error("进下一关时横幅必须已经收起来");
   Game.tutorialExit();
+});
+
+// ---------------------------------------------------------------------------
+// v3.1.5：教学的关卡序列、翻页键、自动跳关。
+//
+// 【为什么这三条要一起钉】它们是同一台状态机的三个面：
+//   序列（tutorialPlan）决定"这趟要走哪几关"；
+//   翻页键的显隐由"第几关 + 这关过过没有"决定；
+//   过关之后要么自动跳下一关、要么停在原地等玩家自己退出。
+// 任何一面单独改都会破坏另外两面 —— 比如把「下一关」改成"一过关就有"，
+// 刚被自动跳到第 2 关时就会冒出一颗通向第 3 关的键（那时第 2 关还没解）。
+// 位置（两颗键同槽、上一关在左、与提示框不重叠）是几何，由 browser-check 在真浏览器里量。
+// ---------------------------------------------------------------------------
+step("v3.1.5：教学序列 —— 四维三关，三维按勾选", () => {
+  const plan = () => JSON.stringify(Game.tutorialPlan());
+  Game.tutorialExit();
+  Game.setSetupMode(true);
+  if (plan() !== "[0,1,2]") throw new Error("四维应当是全部三关，实际 " + plan());
+  Game.setSetupMode(false);              // 切回三维：两个勾按既有行为清成 false
+  if (plan() !== "[]") throw new Error("三维一个都没勾时应当是空序列，实际 " + plan());
+  Game.setSetupSpin(true);
+  if (plan() !== "[0]") throw new Error("只勾旋转 → [0]，实际 " + plan());
+  Game.setSetupWrap(true);
+  if (plan() !== "[0,1]") throw new Error("两个都勾 → [0,1]（按四维那张表的顺序），实际 " + plan());
+  Game.setSetupSpin(false);
+  if (plan() !== "[1]") throw new Error("只勾贯通 → [1]，实际 " + plan());
+  Game.setSetupWrap(false);
+  // 空序列时进不去教学（按钮本来也不显示）—— 不能崩，也不能真的进关
+  Game.startTutorial();
+  if (Game.tutActive) throw new Error("一关都没有时不该进入教学");
+  Game.setSetupMode(true);
+});
+
+step("v3.1.5：翻页键与自动跳关 —— 过过的关才有「下一关」", () => {
+  const off = (id) => Game.el[id].classList.contains("off");
+  Game.setSetupMode(true);
+  Game.closeSetup();
+  Game.startTutorial();
+  // 第 1 关（还没解）：两个键都不显示
+  if (!off("tutPrev") || !off("tutNext")) throw new Error("第 1 关开局不该有任何翻页键");
+  if (!Game.el.tutNav.classList.contains("off")) throw new Error("一颗键都没有时 #tutNav 应当整块 off");
+  if (Game.el.tutStep.textContent !== "第 1 / 3 关")
+    throw new Error("步骤文案应当是「第 1 / 3 关」，实际 " + JSON.stringify(Game.el.tutStep.textContent));
+
+  // 真过关：第 1 关的解法 = z 轴第 5 层顺转 1 次（关卡表里那一种）
+  Game.rotAxis = 2; Game.rotLayer = 4; Game.rotClockwise = true; Game.rotTurns = 1;
+  Game.doRotate(); Game.confirmRotation();
+  if (!Game.tutPassed) throw new Error("前置：这一次转动应当过关");
+  if (!Game.tutCleared.has(0)) throw new Error("过关之后必须记进 tutCleared");
+  if (!Game.tutTimer) throw new Error("还有下一关时必须挂上自动跳的倒计时");
+  if (!off("tutPrev") || !off("tutNext"))
+    throw new Error("倒计时期间两个翻页键都不该显示（不然会亮一下又消失）");
+  if (Game.tutNextIndex() !== 1) throw new Error("第 1 关过完，下一关应当是 1，实际 " + Game.tutNextIndex());
+
+  // 手动跑掉那次自动跳（桩里不真等那 1 秒；真实的等待由 browser-check 量）
+  Game.cancelTutTimer();
+  Game.tutorialBuild(1);
+  if (!off("tutNext") || off("tutPrev"))
+    throw new Error("刚跳到第 2 关时只该有「上一关」（第 2 关还没解出来）");
+  if (Game.el.tutNav.classList.contains("off")) throw new Error("有一颗键时 #tutNav 不能是 off");
+  if (Game.el.tutStep.textContent !== "第 2 / 3 关")
+    throw new Error("步骤文案应当是「第 2 / 3 关」，实际 " + Game.el.tutStep.textContent);
+
+  // 退回第 1 关：它过过 → 有「下一关」；它是第一关 → 没有「上一关」
+  Game.tutorialBuild(0);
+  if (!off("tutPrev") || off("tutNext"))
+    throw new Error("退回第 1 关时该只有「下一关」（第一关没有上一关）");
+
+  // 第 2 关过过之后（模拟记进 cleared）→ 两个键同时在
+  Game.tutCleared.add(1);
+  Game.tutorialBuild(1);
+  if (off("tutPrev") || off("tutNext")) throw new Error("第 2 关过过之后两个键都要在");
+  if (!Game.el.view.classList.contains("tutTwo"))
+    throw new Error("两个键都在时 #view 要挂 tutTwo（提示框按它让位）");
+
+  // 最后一关：只有「上一关」，而且过关**不自动退出**（用户口径 v3.1.5）
+  Game.tutCleared.add(2);
+  Game.tutorialBuild(2);
+  if (off("tutPrev") || !off("tutNext")) throw new Error("第 3 关该只有「上一关」");
+  if (Game.tutNextIndex() !== -1) throw new Error("最后一关没有下一关（-1），实际 " + Game.tutNextIndex());
+  Game.activeLayer = 7;
+  Game.tryPlace(6, 7);                      // 第 3 关的解法：黎明那条四的右端
+  if (!Game.tutPassed) throw new Error("前置：这一手应当过关");
+  if (Game.tutTimer) throw new Error("最后一关过关后不该挂自动跳的倒计时");
+  if (!Game.tutActive) throw new Error("最后一关过关后必须留在教学里（不自动退出）");
+  if (!Game.el.tutDone.textContent) throw new Error("过关之后教学条上要显示「过关」");
+  Game.tutorialExit();
+  if (Game.tutActive) throw new Error("点「退出」之后才离开教学");
+  if (Game.tutCleared !== null) throw new Error("退出之后 tutCleared 应当清掉（下一趟从零开始）");
+});
+
+step("v3.1.5：倒计时到点会再确认一次 —— 悔棋 / 重开之后不该被拽去下一关", () => {
+  Game.setSetupMode(true);
+  Game.closeSetup();
+  Game.startTutorial();
+  Game.tutorialBuild(1);                    // 第 2 关：贯通，目标 = 赢
+  Game.activeLayer = 7;
+  Game.tryPlace(2, 7);                      // 缺口那一格，成五
+  if (!Game.tutPassed || !Game.tutTimer) throw new Error("前置：这一步应当过关并挂上倒计时");
+  if (!Game.tutGoalStillMet()) throw new Error("前置：刚过关时这一关的目标应当成立");
+
+  // 悔棋：把那一手撤回来 —— 状态整条退回"没过"，连倒计时一起取消
+  Game.undo();
+  if (Game.tutGoalStillMet()) throw new Error("悔棋之后这一关不该还算过关");
+  if (Game.tutPassed) throw new Error("悔棋之后 tutPassed 必须退回假（否则 1 秒后仍会跳走）");
+  if (Game.tutTimer) throw new Error("悔棋之后那个自动跳关的倒计时必须取消掉");
+  if (Game.el.tutDone.textContent) throw new Error("悔棋之后「过关」文案应当收掉");
+  if (Game.el.tutNext.classList.contains("off"))
+    throw new Error("但「下一关」要还在（这一关过过）—— 玩家想走随时能走");
+
+  // 再解一遍：必须又认（tutPassed 退回假之后，过关这条路要能再走一次）
+  Game.tryPlace(2, 7);
+  if (!Game.tutPassed || !Game.tutTimer) throw new Error("再解一遍应当又过关、又挂上倒计时");
+
+  // 「重开」复位同样要退回过关状态
+  Game.restart();
+  if (Game.tutGoalStillMet() || Game.tutPassed || Game.tutTimer)
+    throw new Error("重开之后这一关应当整条退回「没过」");
+  Game.tutorialExit();
+});
+
+step("v3.1.5：只勾一个玩法 —— 单关教学，过了也没有「下一关」", () => {
+  const off = (id) => Game.el[id].classList.contains("off");
+  Game.setSetupMode(false);
+  Game.setSetupSpin(true);               // 只勾旋转
+  Game.closeSetup();
+  Game.startTutorial();
+  if (Game.tutIndex !== 0) throw new Error("只勾旋转应当从第 1 关（转动）开始");
+  if (Game.el.tutStep.textContent !== "第 1 / 1 关")
+    throw new Error("单关教学的步骤文案应当是「第 1 / 1 关」，实际 " + Game.el.tutStep.textContent);
+  if (!off("tutPrev") || !off("tutNext")) throw new Error("单关教学里两个翻页键都不该有");
+  Game.rotAxis = 2; Game.rotLayer = 4; Game.rotClockwise = true; Game.rotTurns = 1;
+  Game.doRotate(); Game.confirmRotation();
+  if (!Game.tutPassed) throw new Error("前置：这一次转动应当过关");
+  if (Game.tutTimer) throw new Error("没有下一关时不该挂倒计时");
+  if (!Game.tutActive) throw new Error("单关教学过了之后应当留在关里等玩家退出");
+  Game.tutorialExit();
+
+  // 只勾贯通 → 直接进第 2 关（贯通）
+  Game.setSetupSpin(false);
+  Game.setSetupWrap(true);
+  Game.startTutorial();
+  if (Game.tutIndex !== 1) throw new Error("只勾贯通应当从第 2 关（贯通）开始");
+  if (Game.el.tutStep.textContent !== "第 1 / 1 关")
+    throw new Error("单关教学的步骤文案应当是「第 1 / 1 关」，实际 " + Game.el.tutStep.textContent);
+  Game.tutorialExit();
+  Game.setSetupWrap(false);
+  Game.setSetupMode(true);
 });
 
 // ---------------------------------------------------------------------------
