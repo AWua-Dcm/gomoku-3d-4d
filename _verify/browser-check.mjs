@@ -3537,6 +3537,18 @@ try {
       insFontPx: parseFloat(getComputedStyle(document.getElementById("inscription")).fontSize),
       titleFontPx: parseFloat(getComputedStyle(document.getElementById("setupTitle")).fontSize),
       vh: window.innerHeight,
+      // 【断句有没有被宽度挤断】竖排下每一列 = 一个 line box = 一个 client rect。
+      // 三句话就该是三个矩形；多出来就说明某一列放不下、被折成了两列。
+      // height>1 是滤掉零高度的占位矩形（换行点处也会返回一个）。
+      insCols: (() => {
+        const el = document.getElementById("inscription");
+        const rg = document.createRange(); rg.selectNodeContents(el);
+        return [...rg.getClientRects()].filter((r) => r.height > 1).length;
+      })(),
+      insBox: (() => {
+        const b = document.getElementById("inscription").getBoundingClientRect();
+        return { w: Math.round(b.width), h: Math.round(b.height) };
+      })(),
     }))()`);
     check(re.st.hasCanvas === true && re.st.cells > 50, "回到起始界面后网格还在", JSON.stringify(re.st));
     check(re.display === "block", "这一层重新显示出来了", "display=" + re.display);
@@ -3576,6 +3588,19 @@ try {
     check(re.titleFontPx / re.vh >= 0.06,
       "主标题够显眼（字号 >= 6vh）",
       re.titleFontPx.toFixed(1) + "px / " + re.vh + "vh = " + (re.titleFontPx / re.vh).toFixed(3));
+
+    // ---- 水印的【断句】不许被宽度挤断 ----
+    // 【这一条钉的是一个真实踩过的坑】原来写的是 top:50% + translateY(-50%)，
+    // 而 position:fixed 下【没写 bottom】时包含块只到视口底 —— 元素的可用高度
+    // 被钉成视口的一半。竖排里 height 决定"一列放几个字"，于是 4/6/5 三句话
+    // 被拆成 6 列，外框从 422×690 变成 782×401（又宽又扁，正是"横向拉长"的样子）。
+    // 静态看截图只会觉得"断句怪怪的"，量 client rects 才看得见是列数不对。
+    check(re.insCols === 3,
+      "水印正好排成 3 列（一句话一列 —— 断句不许被可用高度挤断）",
+      "实际 " + re.insCols + " 列");
+    check(re.insBox.h > re.insBox.w,
+      "水印是【窄而高】的竖排块，不是被拉宽的",
+      re.insBox.w + "×" + re.insBox.h + "（宽高比 " + (re.insBox.w / re.insBox.h).toFixed(2) + "）");
 
     // ---- 演示盘的宣纸发光（只在起始界面这一档）----
     // 0.6px 是量出来的：0.35px 改 0 个像素（等于没加），
