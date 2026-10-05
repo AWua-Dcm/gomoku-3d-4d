@@ -3348,24 +3348,156 @@ try {
   }
 
   // ------------------------------------------------------------------
-  // v3.1.6 · 古风层的三件（起始界面）
+  // v3.1.6 · 字符粒子阵列（起始界面背景的鼠标交互层）
   //
-  // 这几件只有真浏览器答得了：竖排是不是真的 vertical-rl、水印的三个分句合起来
-  // 有没有断错字、主标题的墨韵滤镜有没有真的挂上、演示盘的宣纸发光有没有生效。
-  // （字符粒子那一层的断言在另一个 commit 里加 —— 它要跑鼠标、要重新加载页面。）
+  // 【为什么必须在这里验，而且【不能】靠截图】
+  // 这个效果的全部内容是【运动】，而 Page.captureScreenshot 本身要花约 300ms、
+  // 弹簧 0.55s 就归位了 —— 截到的那一帧永远是"已经归位"的样子。
+  // 试过：扫完整条轨迹立刻截图，图上什么都没有。所以这里绕开截图，
+  // 直接在页面里 getImageData 逐像素比。
+  //
+  // 【噪声底恰好是 0，所以"必须为 0"这种断言才成立】
+  // 网格用的是固定种子的伪随机（见 index.html 里那条注释），不是 Math.random。
+  // 实测：同一状态连拍两次逐像素完全相同。于是下面任何差异都是真信号，
+  // 而"归位后残留必须恰好 0"才有资格当断言 —— 有噪声底的话这条只能写"小于某个数"，
+  // 而那个数会随着渲染器版本漂，迟早变成一条没人敢碰的假绿。
+  //
+  // 【5a 那条为什么不是"把鼠标挪出窗口"】实测 Chrome 会【丢弃】窗口外的坐标，
+  // 指针其实停在最后一次扫过的位置 —— 那一小片字被永久顶开是【正确行为】。
+  // 能验的不变量是"收敛"（前后两张快照相同）和"leave 之后逐像素归位"。
   // ------------------------------------------------------------------
   {
-    // 关掉触屏模拟、钉死视口、重新加载页面 —— 理由见本项目里
-    // "拍 6-起始界面-英文 之前要先 Page.navigate 一次" 那段注释的同一套道理：
-    // 跑到这里页面已经经历过八十多条断言和好几轮视口改动，状态回不到干净，
-    // 直接从干净状态量最省事。
+    // 【必须先关掉触屏模拟 —— 这里踩过一次坑】
+    // 这个效果有一道闸门：只在 `(hover: hover) and (pointer: fine)` 的设备上开。
+    // 前面第 7 节测触屏时把 `Emulation.setTouchEmulationEnabled` 打开过，
+    // 而它在那个断言之后【又被打开了并一直留着】（见"量完要把视口和触屏还原"那一段）。
+    // 后果有两层：媒体查询变成 coarse（闸门该拦），而且鼠标事件会被 Chrome
+    // 【转成触摸事件】，`mousemove` 根本不派发。
+    // 所以这里先把它关掉，再验效果；闸门本身另外单独验一次（见下面 wants 那条）。
+    // 【这一段必须重新加载页面，不能就着现有的页面接着量 —— 实测踩过两次】
+    //
+    // 症状：moves=0、awake=0、diff=0，看起来像"效果整个坏了"，
+    //       而 cells 停在 65（≈672×616 的小视口），连 setDeviceMetricsOverride
+    //       都改不动它。
+    // 真相：这一轮跑到这里已经过了八十多条断言、开过触屏模拟、起过对局、换过视口，
+    //       页面和模拟状态都回不到"干净"了 —— 输入派发落在一个不是我以为的视口上，
+    //       Chrome 对【视口外的坐标】是静默丢弃的（同一个成因也解释了"鼠标停在窗口外
+    //       不会触发 mouseleave"）。测试的手根本没伸进画面，当然什么都没发生。
+    //
+    // 这个工程里本来就有同样的先例："拍 6-起始界面-英文 之前要先 Page.navigate 一次"
+    // （见那边的注释）。这里照做：关掉触屏 -> 钉死视口 -> 重新加载 -> 从干净状态量。
     await send("Emulation.setTouchEmulationEnabled", { enabled: false });
     await send("Emulation.setDeviceMetricsOverride",
       { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
     await send("Page.navigate", { url: PAGE });
     await sleep(3000);
 
+    // 闸门的两半都验：关掉触屏模拟之后它必须放行；
+    // 而"触屏设备上要拦住"这件事由下面那段临时打开触屏再读一次来钉。
+    const gateOnTouch = await ev(`(() => {
+      const before = InkField.stats().wants;
+      return { before: before };
+    })()`);
+    check(gateOnTouch.before === true,
+      "鼠标设备上闸门放行（关掉触屏模拟之后 wants 为真）", JSON.stringify(gateOnTouch));
+
+    await ev(`Game.openSetup()`);
+    await sleep(700);
+
+    const inkStats = () => ev(`InkField.stats()`);
+    const grab = (name) => ev(`(() => {
+      const cv = document.getElementById("inkfield");
+      const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+      window.${name} = d.slice();
+      return d.length;
+    })()`);
+    const diffFrom = (name) => ev(`(() => {
+      const cv = document.getElementById("inkfield");
+      const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] !== window.${name}[i]) n++;
+      return n;
+    })()`);
+
+    // ---- 静止态 ----
+    await sleep(400);
+    const s0 = await inkStats();
+    // 【闸门提示】这个效果只在"有鼠标 + 没开减少动效"的设备上开。
+    // 无头 Chrome 报的是 hover:hover / pointer:fine，所以正常应该开着；
+    // 真机上如果这条红了，先看是不是触屏或系统开了减少动效，而不是先怀疑代码。
+    check(s0.hasCanvas === true, "字符场拿到了 2D 上下文（没降级成空转）", JSON.stringify(s0));
+    check(s0.cells > 50,
+      "字符场的网格建起来了（真触屏 / 系统开了「减少动态效果」时这里会是 0，那是设计）",
+      "cells=" + s0.cells);
+    check(s0.awake === 0 && s0.running === false,
+      "起始界面刚打开时【没有】格子醒着、rAF 循环是停的（闲置成本为 0）", JSON.stringify(s0));
+
+    await grab("__inkRest");
+
+    // ---- 扫过：必须真的醒 ----
+    // 扫掠范围留在 1280 宽之内 —— 视口外的坐标会被 Chrome 丢掉（见上面的注释）
+    for (let x = 120; x <= 1160; x += 16) {
+      await send("Input.dispatchMouseEvent",
+        { type: "mouseMoved", x: x, y: 420, button: "none", pointerType: "mouse" });
+      await sleep(6);
+    }
+    const s1 = await inkStats();
+    // 【诊断信息要带全】awake=0 有两种完全不同的成因：事件压根没派发（moves=0），
+    // 还是事件到了但被 wanted / 筛选拦住了。只报 awake 的话这两种长得一模一样。
+    const diag = JSON.stringify(s1);
+    check(s1.awake > 0, "鼠标扫过之后有格子醒着", diag);
+    check(s1.running === true, "循环跑起来了", diag);
+    const movedPx = await diffFrom("__inkRest");
+    check(movedPx > 0, "扰动确实改变了画布像素（不是「醒着但没动」）", "diff=" + movedPx);
+
+    // ---- 指针停住：必须收敛，不能一直漂 ----
+    await send("Input.dispatchMouseEvent",
+      { type: "mouseMoved", x: 700, y: 450, button: "none", pointerType: "mouse" });
+    await sleep(900);
+
+    // 【判据是"连续两张快照逐像素相同"，但等法必须轮询，不能睡固定时长】
+    // 物理是按 dt 积分的，而 dt 有上限（MAX_DT = 1/30s）。无头浏览器在负载下掉帧时，
+    // 1.8s 挂钟时间推进的模拟时间可能只有 0.6s —— 于是"睡够再比一次"会随机红。
+    // 轮询把"够不够久"交给实际状态判断；判据一个字都没放松（仍然要求恰好 0）。
+    let drift = -1, tries = 0;
+    for (; tries < 12; tries++) {
+      await grab("__inkA");
+      await sleep(500);
+      drift = await diffFrom("__inkA");
+      if (drift === 0) break;
+    }
+    // 【这一条抓的是一个真实踩过的坑】档位门槛原本只有一套，被顶住的那几格
+    // 正好停在门槛上，最后几位小数一直抖 → 在两档之间反复横跳，看起来像"有个字在闪"。
+    // 实测单门槛时会持续差出十几个像素；加迟滞（升档/降档两套门槛）之后收敛到 0。
+    check(drift === 0,
+      "指针停住之后系统收敛（连续两张快照逐像素相同，没有持续漂移）",
+      "轮询 " + (tries + 1) + " 次，最后一次 diff=" + drift);
+
+    // ---- mouseleave：必须逐像素回到静止态 ----
+    await ev(`window.dispatchEvent(new Event("mouseleave"))`);
+    await sleep(2200);
+    const back = await diffFrom("__inkRest");
+    const s2 = await inkStats();
+    check(back === 0, "鼠标离开后【逐像素】回到静止态", "diff=" + back);
+    check(s2.awake === 0 && s2.running === false, "全部归位后循环自己停了", JSON.stringify(s2));
+
+    // ---- 进对局：整层必须停掉（看不见 ≠ 不烧 CPU）----
+    await ev(`document.getElementById("startBtn").click()`);
+    await sleep(900);
+    const off = await ev(`(() => {
+      const cv = document.getElementById("inkfield");
+      return { st: InkField.stats(), display: getComputedStyle(cv).display,
+               preview: document.getElementById("stage").className };
+    })()`);
+    check(off.st.running === false, "进对局之后 rAF 循环停了（不是只在 CSS 里藏起来）", JSON.stringify(off.st));
+    check(off.display === "none", "对局界面里这一层是 display:none 的", "display=" + off.display);
+
+    // ---- 回设置：必须能重新开起来 ----
+    await ev(`Game.openSetup()`);
+    await sleep(700);
     const re = await ev(`(() => ({
+      st: InkField.stats(),
+      display: getComputedStyle(document.getElementById("inkfield")).display,
       inset: !!document.getElementById("inscription"),
       writing: document.getElementById("inscription")
         ? getComputedStyle(document.getElementById("inscription")).writingMode : null,
@@ -3374,23 +3506,33 @@ try {
       tagline: document.getElementById("setupTagline")
         ? document.getElementById("setupTagline").textContent : null,
       titleFilter: getComputedStyle(document.getElementById("setupTitle")).filter,
-      previewGlFilter: getComputedStyle(document.getElementById("gl")).filter,
     }))()`);
+    check(re.st.hasCanvas === true && re.st.cells > 50, "回到起始界面后网格还在", JSON.stringify(re.st));
+    check(re.display === "block", "这一层重新显示出来了", "display=" + re.display);
 
+    // ---- 闸门：触屏设备上必须【拦住】----
+    // 只能验到"闸门读到的信号是对的"这一层（init 在页面加载时已经跑过了，
+    // 这里改媒体查询不会让它重跑）。要验端到端得重载页面，代价不值 ——
+    // 而真正会出错的是"判定条件写错"，这一条正好钉住它。
+    await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    await sleep(200);
+    const onTouch = await ev(`InkField.stats()`);
+    check(onTouch.wants === false,
+      "触屏设备上闸门拦住（wants 为假）—— 没有 hover 可划，还最费电", JSON.stringify(onTouch));
+    await send("Emulation.setTouchEmulationEnabled", { enabled: false });
+    await sleep(200);
+    const offTouch = await ev(`InkField.stats()`);
+    check(offTouch.wants === true, "切回鼠标设备后闸门重新放行", JSON.stringify(offTouch));
+
+    // ---- 顺手把古风层另外三件也钉住（它们同样只有真浏览器答得了）----
     check(re.inset === true && re.writing === "vertical-rl",
-      "竖排古文水印在，且真的是 vertical-rl 竖排（不是被谁改回横向了）",
-      "writing-mode=" + re.writing);
-    // 三个分句合起来必须【逐字】等于原句 —— 断句断错一个字的顺序，这里当场红
+      "竖排古文水印在，且真的是 vertical-rl 竖排（不是被谁改回横向了）", "writing-mode=" + re.writing);
     check(re.insText === "亦有格五其法布子成行以得五者胜",
       "水印文案 = 去标点的 15 字原文（三列断句合起来必须逐字等于原句）",
       JSON.stringify(re.insText));
     check(/^url\(/.test(re.titleFilter || ""),
       "主标题挂着 SVG 墨韵滤镜（filter: url(#…)）", "filter=" + re.titleFilter);
     check(re.tagline === "六面贯通，五子一线", "新副标题在位", JSON.stringify(re.tagline));
-    // 演示盘的"宣纸发光"。0.6px 是量出来的：0.35px 改 0 个像素（等于没加），
-    // 而 blur+sepia+contrast 那组会把线框整个抹掉（近白像素归零）。见 CSS 里的注释。
-    check(/blur/.test(re.previewGlFilter || ""),
-      "起始界面的演示盘挂着宣纸发光的柔化（且只在这一档）", "filter=" + re.previewGlFilter);
   }
 
   // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态

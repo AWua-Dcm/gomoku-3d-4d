@@ -1362,6 +1362,29 @@
   #aiRange::-webkit-slider-thumb { background: #f2ead8; border-color: #6d6353; }
   #aiRange::-moz-range-thumb { background: #f2ead8; border-color: #6d6353; }
 
+  /* ---------- 6b. 字符粒子画布 ----------
+     【层序的坑，实测踩过】#inkfield 只写 z-index:1 是不够的 ——
+     #view 是 `position: relative` 但【没有】z-index（即 auto），
+     而定位元素 z-index:auto 在层叠里算 0 层。于是 fixed + z-index:1 的
+     #inkfield 会**画在三维画布之上**，和"压在演示盘下面"的意图正好相反。
+     修法是给 #view 也抬一层（见下面那条），而不是把 #inkfield 降下去 ——
+     它是 fixed，负 z-index 会掉到 body 的纸纹底下，看不见了。
+
+     【为什么给 #view 而不是给 #gl】#gl 一旦单独抬层，#view 里那几个
+     absolute 的兄弟（#previewTag / #modebar）因为都是 z-index:auto，
+     会被画到画布【底下】—— #previewTag 会整个消失。抬 #view 则整棵子树
+     一起上来，内部顺序一个字不变。
+
+     【为什么它是 fixed 铺满全屏而不是只铺左侧】整页是同一张纸，字符阵列也该是
+     一整片；只铺半边会在 42% 那条线上断掉 —— 那正是这一版花力气消掉的那条缝。 */
+  #inkfield {
+    position: fixed; inset: 0; z-index: 1;
+    pointer-events: none;      /* 见 HTML 那边的注释：吃事件就全废了 */
+  }
+  /* 只在起始界面把三维视图抬到字符层之上：演示盘是有厚度的一件东西，
+     字应该待在后面，而不是浮在它表面。对局界面不加（那里本来就没有字符层）。 */
+  #stage.preview #view { z-index: 2; }
+
   /* ---------- 6c. 演示盘的"宣纸发光"质感 ----------
      只作用在【起始界面的演示盘】上，对局盘一个像素都不碰。
 
@@ -1383,6 +1406,8 @@
      代价实测为 0：帧时长（70 帧统计）在加滤镜前后都是 avg 4.17ms / p95 4.4ms。
      GPU 做这个尺寸的高斯模糊不吃亏 —— 所以这里不需要为性能做取舍。 */
   #stage.preview #gl { filter: blur(0.6px); }
+  /* 对局界面把这一层整个收掉：那是"在纸上下棋"，不是看一片飘着的字。 */
+  #stage:not(.preview) ~ #inkfield { display: none; }
 
   /* ---------- 7. 新副标题的行 ----------
      现在标题块是三行：主标题 -> 副标题 -> 原来那行「十三向连五…」。
@@ -3789,6 +3814,18 @@ ramène à l'écran de départ.
     </feMerge>
   </filter>
 </svg>
+
+<!-- 【字符粒子画布】v3.1.6 的鼠标交互层。
+     位置 = 纸的上面、所有内容（三维画布 / 面板 / 水印）的下面：
+       body 的纸纹 z 自动 -> #inkfield z:1 -> #inscription z:20 -> #stage/#setup
+     【为什么压在内容下面而不是浮在上面】你要求的是"不遮挡棋盘和操作面板"。
+     浮在上面靠低透明度也能"看起来不挡"，但那是叠了两层观感；压在下面则是真的不挡。
+     代价是左侧那 42% 的三维画布要能透出它 —— 演示盘本来就带 opacity:.3，
+     所以能透；对局界面没有这一层（见下面的启停逻辑）。
+
+     【pointer-events: none 是硬要求】它铺满全屏，一旦吃鼠标事件，下面的
+     拖拽旋转、滚轮缩放、点按钮就全废了。它只听 window 上的 mousemove。 -->
+<canvas id="inkfield" aria-hidden="true"></canvas>
 
 <!-- 【竖排古文水印】内容去标点、按朗读断气点分三列。
      vertical-rl 下 <br> 就是"另起一列"，列从右往左排 ——
@@ -10389,11 +10426,17 @@ const Game = {
     this.refreshSetupSummary();
     this.ensurePreview();
     this.uploadPreviewInstances();
+    // 背景字符场只在起始界面活着。它自己管 rAF 的启停（全静止时连循环都停），
+    // 所以这里只是"允许它跑"，不是"每帧推它一把"。
+    InkField.start();
   },
 
   closeSetup() {
     this.el.setup.classList.add("off");
     this.el.stage.classList.remove("preview");
+    // 【进去必须停干净】对局界面把 #inkfield 整个 display:none 了，
+    // 但看不见不等于不烧 CPU —— 不显式停掉的话，一整局棋都在后台跑物理。
+    InkField.stop();
   },
 
   /** 规则浮层是不是开着。和 setupOpen 一样从 DOM 派生，不另存布尔值。 */
@@ -13347,9 +13390,382 @@ const Game = {
   },
 };
 
+/* ==========================================================================
+   v3.1.6 · 字符粒子阵列 —— 鼠标扰动 + 弹簧归位
+   --------------------------------------------------------------------------
+   起始界面背景上铺一层散落的汉字，鼠标划过时被"推开"，移开后弹性归位。
+
+   【三条性能纪律（这是不卡的全部原因）】
+     ① 每个字形只画一次。全部预先渲染进一张离屏图集（atlas），每帧只做 drawImage。
+        逐格 fillText 在上千格时是跑不动的主因 —— 实测这是最大的单项开销。
+     ② 静止的格子一帧都不碰。只有"醒着"的格子参与物理和绘制；全静止时
+        【连 requestAnimationFrame 都停掉】，闲置成本真的是 0。
+     ③ 画布透明，纸纹留给 CSS。不清全屏，只 clearRect 每个醒着格子的旧矩形 ——
+        清除即透明，底下的宣纸自己透出来。
+
+   【物理常数是照着实测调的，不是拍脑袋】
+     弹簧用 dt 归一化的半隐式欧拉：a = -K·(x-home) - C·v
+       K = 170 /s²  → 固有频率 ω = √170 ≈ 13.0 rad/s
+       C = 20  /s   → 阻尼比 ζ = C / (2√K) ≈ 0.77（欠阻尼：回得快，过冲一点点）
+     实测 200px 甩出后约 0.55s 稳定、过冲只有约 1.4px。
+     【为什么必须 dt 归一化】按帧积分的话，120Hz 屏上回位速度会变成 60Hz 的两倍。
+
+   【斥力用"点到线段"的距离，不是"点到鼠标"】
+     鼠标一帧能移动几十像素，只测当前点会让快划时中间的格子整片漏掉 ——
+     表现为"划得快就没反应"。取【上一帧位置 → 这一帧位置】这条线段，
+     再算格子到线段的最短距离，快划就再也漏不掉了。
+     再叠一项沿线的动量补偿（把甩动的速度真正传给格子），才有"带起一阵风"的手感。
+
+   【图案是确定性的，不是随机的】网格用固定种子的伪随机排布，不用 Math.random。
+     否则每次加载落点都不一样，_verify 的截图对拍（尤其噪声底那一套）永远对不齐。
+   ========================================================================== */
+const InkField = (function () {
+  "use strict";
+
+  /* 字池：古文原句 + 围棋/棋盘的术语。用真字而不是符号，是为了让这层读起来
+     像"一张写满字的纸"，而不是"一堆装饰点"。 */
+  const CHARS = "亦有格五其法布子成行以得者胜弈棋势局天元星位十三向连纵横";
+  const CELL = 56;        // 网格间距
+  const GLYPH = 16;       // 字形大小（远小于间距 = 留白压倒笔墨）
+  const PAD = 5;          // 图集里每格留白，防止抗锯齿被切边
+  const FILL = 0.42;      // 有字的格子占比 —— 散落的墨点，不是排满的网格
+  const INK = "107,93,71";// 墨色 rgb（暖墨，不用纯黑）
+
+  /* 四档浓淡 + 四档大小，按"离家的距离"联动。
+     静息态只有 0.11 —— 【这是全篇最关键的一个数】。第一版用的是 0.30，
+     整片阵列糊成"另一层字"，界面完全读不了。淡到 0.11 它才是纸的纹理。 */
+  const LEVELS = [0.11, 0.32, 0.58, 0.88];
+  const SCALE = [1.00, 1.14, 1.30, 1.48];
+
+  const K_SPRING = 170;   // 弹簧刚度 /s²
+  const C_DAMP = 20;      // 阻尼 /s
+  const R_CELLS = 4.6;    // 作用半径 = 4.6 格
+  const ACCEL = 2800;     // 斥力峰值加速度 px/s²
+  const MOMENTUM = 1.6;   // 鼠标速度传导比
+  const MAX_SPEED = 4000; // 鼠标速度上限 px/s，防止瞬移时把格子甩飞
+  const MAX_DT = 1 / 30;  // dt 上限：切回标签页时那一下几十秒的 dt 会炸掉积分
+  const MAX_DPR = 2;      // DPR 封顶 2：3x 屏上画布面积是 4x 屏的 2.25 倍，收益不值
+
+  const FONT_STACK = '"Microsoft YaHei","PingFang SC",system-ui,sans-serif';
+
+  let cv = null, ctx = null, atlas = null, gw = 0;
+  let DPR = 1, W = 0, H = 0;
+  let cells = [], awake = [];
+  let raf = 0, running = false, wanted = false, last = 0, rt = 0;
+  let moves = 0;      // 收到过多少次 mousemove（只给测试看，见 stats 的注释）
+  const M = { x: -1e4, y: -1e4, lx: -1e4, ly: -1e4 };
+
+  /** 环境探测。只在【真浏览器】里干活 ——
+   *  dom-smoke 把整段脚本塞进一个桩环境跑，那里没有 canvas 2D 上下文。
+   *  探测失败就静默降级成"什么都不做"，绝不能往外抛：页面上任何一条控制台报错
+   *  都会让 browser-check 的控制台断言变红，而"背景装饰画不出来"远不该让页面看着像坏了。 */
+  function pickCanvas() {
+    if (typeof document === "undefined" || !document.getElementById) return null;
+    const el = document.getElementById("inkfield");
+    if (!el || typeof el.getContext !== "function") return null;
+    let c = null;
+    try { c = el.getContext("2d"); } catch (e) { return null; }
+    if (!c || typeof c.fillText !== "function" || typeof c.drawImage !== "function") return null;
+    return { el: el, c: c };
+  }
+
+  function buildAtlas() {
+    gw = Math.ceil(GLYPH * DPR * 1.3) + PAD * 2;   // 1.3 给放大那一档留余量
+    atlas = document.createElement("canvas");
+    atlas.width = LEVELS.length * gw;
+    atlas.height = CHARS.length * gw;
+    const a = atlas.getContext("2d");
+    a.font = Math.ceil(GLYPH * DPR) + "px " + FONT_STACK;
+    a.textAlign = "center";
+    a.textBaseline = "middle";
+    for (let r = 0; r < CHARS.length; r++) {
+      for (let c = 0; c < LEVELS.length; c++) {
+        a.fillStyle = "rgba(" + INK + "," + LEVELS[c] + ")";
+        a.fillText(CHARS[r], c * gw + gw / 2, r * gw + gw / 2);
+      }
+    }
+  }
+
+  function drawCell(cl) {
+    const s = (gw / DPR) * SCALE[cl.lv];
+    const half = s / 2;
+    ctx.drawImage(atlas, cl.lv * gw, cl.ci * gw, gw, gw, cl.x - half, cl.y - half, s, s);
+    cl.dw = half + 1;      // 记下这一帧画出去多大，下一帧才擦得干净
+  }
+
+  function clearCell(cl, x, y) {
+    const r = (cl.dw || gw / DPR / 2) + 1;
+    ctx.clearRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  /* 档位门槛。**升档和降档用不同的数** —— 这叫迟滞（hysteresis）。
+     成因实测：指针停在旁边不动时，被顶住的那几格会收敛到一个静止的
+     平衡位置，而这个位置【可能正好落在门槛上】。数值上最后几位小数一直
+     在抖，于是那几格在两档之间反复横跳 —— 画面上表现为"有个字在轻轻闪"。
+     实测基线：单门槛时相隔 900ms 的两张快照会差出 14 个像素；加迟滞后为 0。
+     两个门槛之间那段（2→4、9→12、22→26）就是"保持现状"的死区。 */
+  const TH_UP = [4, 12, 26];     // 升档门槛
+  const TH_DN = [2, 9, 22];      // 降档门槛（都比升档低，留出死区）
+
+  function levelFor(dist, cur) {
+    let lv = cur;
+    while (lv > 0 && dist < TH_DN[lv - 1]) lv--;   // 先按低门槛往下退
+    while (lv < 3 && dist > TH_UP[lv]) lv++;       // 再按高门槛往上走
+    return lv;
+  }
+
+  /** 点到线段的最短距离平方，以及线段上最近的那个点。 */
+  function segDist2(px, py, x0, y0, x1, y1) {
+    const dx = x1 - x0, dy = y1 - y0;
+    const L2 = dx * dx + dy * dy;
+    let t = L2 > 0 ? ((px - x0) * dx + (py - y0) * dy) / L2 : 0;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    const qx = x0 + t * dx, qy = y0 + t * dy;
+    const ex = px - qx, ey = py - qy;
+    return { d2: ex * ex + ey * ey, qx: qx, qy: qy };
+  }
+
+  function build() {
+    DPR = Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, MAX_DPR);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * DPR);
+    cv.height = Math.round(H * DPR);
+    cv.style.width = W + "px";
+    cv.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    buildAtlas();
+
+    cells = []; awake = [];
+    const cols = Math.ceil(W / CELL) + 1;
+    const rows = Math.ceil(H / CELL) + 1;
+    const ox = (W - (cols - 1) * CELL) / 2;
+    const oy = (H - (rows - 1) * CELL) / 2;
+
+    /* 固定种子的线性同余 —— 见文件头"图案是确定性的"那一段。
+       0x7fffffff 掩码让它一直留在正数域。 */
+    let seed = 20261005;
+    const rnd = function () { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (rnd() > FILL) continue;                  // 空格子根本不生成
+        // ±5px 的轻微错位：不这么做，整片会显出"网格"，像表格而不像散落的墨
+        const hx = ox + c * CELL + (rnd() - 0.5) * 10;
+        const hy = oy + r * CELL + (rnd() - 0.5) * 10;
+        cells.push({ hx: hx, hy: hy, x: hx, y: hy, vx: 0, vy: 0,
+                     ci: (rnd() * CHARS.length) | 0, lv: 0,
+                     px: hx, py: hy, awake: false, dw: 0 });
+      }
+    }
+    // 一次性铺底：全部画在"家"的位置，之后再也不整屏重画
+    ctx.clearRect(0, 0, W, H);
+    for (let i = 0; i < cells.length; i++) { cells[i].lv = 0; drawCell(cells[i]); }
+  }
+
+  function step(now) {
+    raf = 0;
+    const dt = last ? Math.min(MAX_DT, (now - last) / 1000) : 0;
+    last = now;
+    if (dt <= 0) { raf = requestAnimationFrame(step); return; }
+
+    const R = R_CELLS * CELL, R2 = R * R;
+
+    // 鼠标速度（px/s），夹一个上限 —— 瞬移（比如从窗口外跳进来）会算出天文数字
+    let mvx = (M.x - M.lx) / dt, mvy = (M.y - M.ly) / dt;
+    const sp = Math.sqrt(mvx * mvx + mvy * mvy);
+    if (sp > MAX_SPEED) { const k = MAX_SPEED / sp; mvx *= k; mvy *= k; }
+
+    for (let i = 0; i < awake.length; i++) {
+      const cl = awake[i];
+
+      // ---- ① 斥力：点到【线段】的距离（见文件头那一段）----
+      if (mvy !== 0 || mvx !== 0 || M.x > -1e3) {
+        const g = segDist2(cl.x, cl.y, M.lx, M.ly, M.x, M.y);
+        if (g.d2 < R2) {
+          const d = Math.sqrt(g.d2) || 1e-3;
+          const f = 1 - d / R;                       // 线性衰减
+          let ex = cl.x - g.qx, ey = cl.y - g.qy;
+          const el = Math.sqrt(ex * ex + ey * ey) || 1e-3;
+          ex /= el; ey /= el;
+          cl.vx += (ex * ACCEL * f + mvx * f * MOMENTUM) * dt;
+          cl.vy += (ey * ACCEL * f + mvy * f * MOMENTUM) * dt;
+        }
+      }
+
+      // ---- ② 弹簧 + 阻尼（半隐式欧拉，dt 归一化）----
+      cl.vx += (-K_SPRING * (cl.x - cl.hx) - C_DAMP * cl.vx) * dt;
+      cl.vy += (-K_SPRING * (cl.y - cl.hy) - C_DAMP * cl.vy) * dt;
+      cl.x += cl.vx * dt;
+      cl.y += cl.vy * dt;
+
+      // ---- ③ 擦掉上一帧的位置，再画新的 ----
+      clearCell(cl, cl.px, cl.py);
+
+      const dist = Math.abs(cl.x - cl.hx) + Math.abs(cl.y - cl.hy);
+      const lv = levelFor(dist, cl.lv);
+      if (lv !== cl.lv) cl.lv = lv;
+      cl.px = cl.x; cl.py = cl.y;
+
+      // ---- ③b 位移上限 ----
+      // 指针贴着某格停住时，斥力每帧都在加，弹簧来不及收 —— 不封顶的话
+      // 那一格会被推到屏幕外（表现为"有个字飞走了"，很久才回来）。
+      // 超过 2 格就把位移夹住、速度减半。封在位移上而不是速度上：
+      // 位移才是看得见的那件事。
+      const mdx = cl.x - cl.hx, mdy = cl.y - cl.hy;
+      if (Math.abs(mdx) > CELL * 2 || Math.abs(mdy) > CELL * 2) {
+        if (Math.abs(mdx) > CELL * 2) { cl.x = cl.hx + (mdx > 0 ? CELL * 2 : -CELL * 2); cl.vx *= 0.5; }
+        if (Math.abs(mdy) > CELL * 2) { cl.y = cl.hy + (mdy > 0 ? CELL * 2 : -CELL * 2); cl.vy *= 0.5; }
+      }
+
+      // ---- ④ 睡着了就归位收工（位移和速度都要够小）----
+      // 【速度阈值为什么是 5 而不是 0.4】速度单位是 px/s：这条弹簧的 ω=√170≈13 rad/s，
+      // 位移 0.4px 时对应的速度本来就有 ≈5px/s。阈值写成 0.4 比物理下限还小一个量级，
+      // 结果是"位置早就归位了、却还要多跑半秒才肯睡"—— 白白多烧 CPU。
+      if (dist < 0.4 && Math.abs(cl.vx) < 5 && Math.abs(cl.vy) < 5) {
+        clearCell(cl, cl.x, cl.y);
+        cl.x = cl.hx; cl.y = cl.hy; cl.vx = 0; cl.vy = 0; cl.lv = 0;
+        cl.px = cl.hx; cl.py = cl.hy;
+        drawCell(cl);                 // 回"家"，重新变成静态背景的一部分
+        cl.awake = false;
+      } else {
+        drawCell(cl);
+      }
+    }
+
+    // 醒着的收工了就原地压缩（只有真睡着了才重建数组，避免每帧分配）
+    let stillAwake = false;
+    for (let i = 0; i < awake.length; i++) { if (awake[i].awake) { stillAwake = true; break; } }
+    if (stillAwake) {
+      const keep = [];
+      for (let i = 0; i < awake.length; i++) if (awake[i].awake) keep.push(awake[i]);
+      awake = keep;
+    } else {
+      awake.length = 0;
+      running = false;
+      return;                         // 全静止：连循环都停掉
+    }
+
+    M.lx = M.x; M.ly = M.y;
+    raf = requestAnimationFrame(step);
+  }
+
+  function wake() {
+    if (!running && wanted) { running = true; last = 0; raf = requestAnimationFrame(step); }
+  }
+
+  function onMove(e) {
+    moves++;                       // 先记数：事件到了没到，是排查时第一个要分清的
+    if (!wanted) return;
+    const x = e.clientX, y = e.clientY;
+    // 首帧：上一帧位置就是当前位置，避免从 (-10000,-10000) 拉出一条横穿全屏的长线
+    if (M.x < -1e3) { M.x = M.lx = x; M.y = M.ly = y; }
+    M.x = x; M.y = y;
+
+    const R = R_CELLS * CELL + CELL;
+    for (let i = 0; i < cells.length; i++) {
+      const cl = cells[i];
+      if (cl.awake) continue;
+      // 用【家】的位置粗筛：偏离太远的不可能被这条线段碰到
+      if (cl.hx < M.lx - R || cl.hx > M.x + R) {
+        if (cl.hx < Math.min(M.lx, M.x) - R || cl.hx > Math.max(M.lx, M.x) + R) continue;
+      }
+      if (cl.hy < Math.min(M.ly, M.y) - R || cl.hy > Math.max(M.ly, M.y) + R) continue;
+      cl.awake = true;
+      awake.push(cl);
+    }
+    wake();
+  }
+
+  function onResize() {
+    if (typeof clearTimeout === "function") clearTimeout(rt);
+    rt = setTimeout(function () {
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      running = false; last = 0;
+      if (cv) { try { build(); } catch (e) { /* 重建失败就维持原样 */ } }
+    }, 160);
+  }
+
+  /** 起始界面打开时调用。 */
+  function start() {
+    wanted = true;
+    if (!cv) return;
+    if (cv.style) cv.style.display = "";
+    if (!cells.length) { try { build(); } catch (e) { return; } }
+  }
+
+  /** 进对局时调用：停循环、清干净，别让它在看不见的地方烧 CPU。 */
+  function stop() {
+    wanted = false;
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    running = false; last = 0;
+    awake.length = 0;
+    // 把还飘在外面的格子按回原位：下次进起始界面时画面是干净的
+    for (let i = 0; i < cells.length; i++) {
+      const cl = cells[i];
+      if (cl.x !== cl.hx || cl.y !== cl.hy) { cl.x = cl.hx; cl.y = cl.hy; cl.vx = 0; cl.vy = 0; cl.px = cl.hx; cl.py = cl.hy; }
+      cl.awake = false; cl.lv = 0;
+    }
+  }
+
+  /* 这个效果是不是"该出现"。
+     两道闸门，都是"宁可不要"的方向：
+       ① 只给真有鼠标的设备（hover + 精确指针）。触屏上既没有 hover 可划，
+          又最缺电 —— 为它跑一片背景物理是纯亏。
+       ② 尊重系统的"减少动态效果"。这是一片一直在动的装饰，
+          对前庭敏感的人来说正是需要关掉的那一类。
+     两道都由 matchMedia 判定；不支持 matchMedia 的老浏览器按"不支持"处理（不开）。 */
+  function wantsEffect() {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    try {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+      if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return false;
+    } catch (e) { return false; }
+    return true;
+  }
+
+  function init() {
+    const picked = pickCanvas();
+    if (!picked) return;             // 桩环境 / 老浏览器：静默降级
+    cv = picked.el; ctx = picked.c;
+    if (!wantsEffect()) return;      // 触屏 / 减少动效：画布留着，但一层都不画
+
+    if (typeof window === "undefined" || !window.addEventListener) return;
+    window.addEventListener("mousemove", onMove, { passive: true });
+    window.addEventListener("resize", onResize);
+    window.addEventListener("mouseleave", function () { M.x = M.y = -1e4; M.lx = M.ly = -1e4; });
+    // 标签页切走就彻底停 —— rAF 本来就会被浏览器节流，但这里连状态一起收干净
+    if (typeof document.addEventListener === "function") {
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) { if (raf) { cancelAnimationFrame(raf); raf = 0; } running = false; }
+        else if (wanted) { wake(); }
+      });
+    }
+  }
+
+  return {
+    init: init,
+    start: start,
+    stop: stop,
+    // 给测试用。
+    // 【为什么要暴露 moves 这个计数】排查"划过却没反应"时必须能分清两件事：
+    //   · mousemove 根本没派发到 window（事件/环境问题）
+    //   · 事件到了但格子没醒（筛选/物理问题）
+    // 少了这个计数，这两种情况在断言里长得一模一样（都是 awake=0），
+    // 只能靠猜 —— 这里直接把它变成可读的数。
+    stats: function () {
+      return { hasCanvas: !!cv, cells: cells.length, awake: awake.length,
+               running: running, wants: wantsEffect(), wanted: wanted, moves: moves };
+    },
+  };
+})();
+
 if (typeof document !== "undefined") {
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => Game.init());
-  else Game.init();
+  /* 【顺序有讲究】先 init 字符场、再 init 游戏：Game.init() 里就会调 openSetup()，
+     而 openSetup() 要调 InkField.start()。反过来的话那时 cv 还是 null，
+     start() 会安静地什么都不做，背景就永远是空的（而且不报错，很难查）。 */
+  const boot = function () { InkField.init(); Game.init(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
 }
 
 // 供 node 下的测试读取内核
@@ -13364,6 +13780,7 @@ if (typeof module !== "undefined" && module.exports) {
                      aiVct, aiFoeCanWin, aiVcfBudgetReset,
                      AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D, AI_POINT_BUDGET_MAX,
                      cellOf, colourOf, phaseOf,
+                     InkField,
                      aiZobristBoard, aiZobristMove, aiTtReset, aiTtProbe, aiTtStore,
                      TT_EXACT, TT_LOWER, TT_UPPER };
 }
