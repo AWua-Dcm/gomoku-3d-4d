@@ -262,6 +262,14 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
+### 2026.10.06
+
+- ✨ **v3.1.6** Visual overhaul plus a new interaction: renamed to **Gomokube** across all six
+  languages, and the start screen restyled — rice-paper ground, bamboo/jade controls, a
+  running-script brush title (inlined font subset, 5.5 KB, single-file premise kept) and a vertical
+  classical-Chinese watermark; behind it all, a character-particle layer scatters away from the
+  cursor and springs back, denser on the right, and stops its rAF entirely once at rest
+
 ### 2026.10.01
 
 - 🔧 **v3.1.5** Various fixes
