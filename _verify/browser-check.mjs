@@ -3499,6 +3499,15 @@ try {
       "指针停住之后系统收敛（连续两张快照逐像素相同，没有持续漂移）",
       "轮询 " + (tries + 1) + " 次，最后一次 diff=" + drift);
 
+    // 【冻结：收敛之后循环必须自己停】这不是性能优化，是"指针停着不动时别烧 CPU"的前提。
+    // 没有冻结机制的话，被顶住的格子会永远以【亚像素】速度趋近平衡点 ——
+    // rAF 一直空转，而且偶尔跨过档位门槛、画面上像"有个字在极轻地闪"。
+    // 实测：加冻结之前这条"收敛"断言两次跑一次 0 一次 213，是条假绿。
+    const parked = await ev(`InkField.stats()`);
+    check(parked.running === false && parked.frozen > 0,
+      "指针停住且收敛之后 rAF 自己停了（格子冻在原地，不再空转）",
+      JSON.stringify({ running: parked.running, frozen: parked.frozen, awake: parked.awake }));
+
     // ---- mouseleave：必须逐像素回到静止态 ----
     await ev(`window.dispatchEvent(new Event("mouseleave"))`);
     await sleep(2200);

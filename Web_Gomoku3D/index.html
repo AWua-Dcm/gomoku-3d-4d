@@ -1310,12 +1310,18 @@
        44% 时实测法语只剩 4px 余量（水印右缘 563 / 内容最左沿 568），
        而 browser-check 里那条"不许冲突"要求至少 8px —— 只判"不重叠"的话，
        4px 也算过，但那种余量下次改一个字就翻脸。43.5% 下法语约 11px。 */
+    /* 56.5% 只是【JS 还没跑起来时】的兜底 —— 真实位置由 syncInscription() 按
+       设置区内容的实际左沿算出来写进内联样式（那个左沿不是固定比例，见那边注释）。 */
     right: 56.5%; top: 3vh; bottom: 3vh;
     writing-mode: vertical-rl; text-orientation: upright;
     font-family: "BrushSub", "STXingkai", "华文行楷", "STKaiti", "华文楷体", "KaiTi", "楷体", serif;
     /* 一列 6 个字要塞进 86vh：6 × 字号 × (1+字距) <= 86vh
        -> 字号 <= 13.6vh（字距 .04em 时）。取 13vh，留一点余量。 */
-    font-size: clamp(38px, 15vh, 170px);
+    /* 【加 vw 项是为了竖屏】竖排是 3 列，每列宽 = 字号 × 行距(1.15)，
+       所以整块宽 ≈ 3.45 × 字号。窄屏上只按 vh 定字号会让整块【比屏幕还宽】——
+       实测 393×852 下字号 128px、整块 441px，直接跑到屏幕外面（x −270..171）。
+       26vw 是那条线：393 × 0.26 = 102px -> 整块 352px < 393，放得下。 */
+    font-size: clamp(38px, min(15vh, 26vw), 170px);
     line-height: 1.15;        /* 竖排下 = 列与列的距离 */
     letter-spacing: .01em;    /* 竖排下 = 列内字与字的距离 */
     color: #332c22; opacity: .15;
@@ -1325,6 +1331,18 @@
        它得和笔画同量级才起得到"把线框推开"的作用。 */
     text-shadow: 0 0 46px rgba(239,232,219,.95), 0 0 16px rgba(239,232,219,.8);
   }
+  /* 【竖屏：挪到视口右上角】横屏时水印贴在设置区左侧那条空位里，而竖屏下
+     设置区是【整宽】的（#setup 翻成上下分栏），横着根本没有空位 ——
+     原来的百分比定位会让它直接跑到屏幕外（实测 x −270..171）。
+     这一档改成从视口右上角往下排：第一个字「亦」落在右上角，整列向下延展。
+     底部内边距改成 auto 是因为 top 已经钉死 —— 两个都写会拉伸元素高度、
+     把"一列放几个字"算错（那个坑见 #inscription 上面那段）。
+     【这一档允许压住设置区】这是明确要求，所以 browser-check 里那条
+     "水印不许和面板文字冲突"只在横屏下要求。 */
+  @media (orientation: portrait) {
+    #inscription { top: 2vh; bottom: auto; left: auto; right: 2vw; }
+  }
+
   /* 只活在起始界面。进对局就把水印收掉 —— 那是"在纸上下棋"，不是"看一幅字"。 */
   #stage:not(.preview) ~ #inscription { display: none; }
 
@@ -9657,6 +9675,7 @@ const Game = {
       "chip","status","rule","info","boardWrap","timelineWrap","timeline","layerBase","layerOverlay","prevLayer","nextLayer",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","tutorialBtn","view","stage","previewTag",
+      "inscription",
       "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","aiHint","orderMe","orderCpu",
       "phaseChip","modeBtn",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
@@ -9784,6 +9803,8 @@ const Game = {
     this.syncAiLevel();
     // 行标换了语言、宽度就变了，同宽那条得重量一次
     this.syncLabelWidth();
+    // 面板内容的左沿可能跟着变（换语言 / 换模式 / 换视口）—— 水印贴的就是它
+    this.syncInscription();
     this.refreshSetupSummary();
     // 这两个是 JS 写的、不挂 data-i18n 的元素，applyStatic 管不到它们。
     // refreshHint 只在 WebGL2 失败时动手，正常情况下它直接返回。
@@ -10583,6 +10604,8 @@ const Game = {
     this.syncAiRow();
     this.syncAiLevel();
     this.syncLabelWidth();
+    // 面板内容的左沿可能跟着变（换语言 / 换模式 / 换视口）—— 水印贴的就是它
+    this.syncInscription();
     this.refreshSetupSummary();
     this.ensurePreview();
     this.uploadPreviewInstances();
@@ -12578,6 +12601,8 @@ const Game = {
     this.syncExtraRow();
     this.syncSetupInputs();
     this.refreshSetupSummary();
+    // 换模式会换掉尺寸行、加/减「魔方旋转」那一块 —— 内容左沿跟着变，重量一次
+    this.syncInscription();
   },
 
   /**
@@ -13272,6 +13297,51 @@ const Game = {
   },
 
   /**
+   * 竖排古文水印的横向位置：**贴住设置区内容的左沿，保持固定间距**。
+   *
+   * 【为什么必须用 JS 算，不能用百分比】要求是"离设置区文字最近、但不压上去"，
+   * 而设置区内容的最左沿【不是一个固定的视口比例】：实测中文在 1578 下是 51.9%，
+   * 法语在 1280 下是 44.4% —— 每行的宽度随语言变，而整列是居中的。
+   * 写死百分比只能照顾一个视口：按 1280 定，宽屏上离得太远（实测 245px）；
+   * 按 1578 定，窄屏上法语就被压住。
+   *
+   * 【和 syncLabelWidth 同一套做法】量完写进元素样式，布局只有一个事实源。
+   * 竖屏那一档不在这里管：那时水印改到视口右上角、而且【允许压面板】（明确要求），
+   * 由 CSS 的 @media (orientation: portrait) 定 —— 内联样式会盖过 @media，所以要清掉。
+   */
+  syncInscription() {
+    const el = this.el.inscription;
+    if (!el || !el.style) return;
+    if (typeof window !== "undefined" && window.matchMedia &&
+        window.matchMedia("(orientation: portrait)").matches) {
+      el.style.right = "";
+      return;
+    }
+    const setup = this.el.setup;
+    // 【桩环境里没有这个方法】dom-smoke 的元素桩上没有 querySelectorAll
+    // （见 syncCoolRow 上面那段注释），直接调会抛 TypeError，
+    // 而那个报错看起来和"水印"毫无关系、极难归因。没有就安静退出。
+    if (!setup || typeof setup.querySelectorAll !== "function") return;
+    if (typeof window === "undefined" || !window.innerWidth) return;
+    const SEL = ".row, .rowLabel, button, .dimInput, .hint, .tagline, .sub, h1," +
+                " #ruleNote, #sizeSummary, #extraRow";
+    let minL = Infinity;
+    const list = setup.querySelectorAll(SEL);
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (!e || typeof e.getBoundingClientRect !== "function") continue;
+      if (typeof e.getClientRects === "function" && e.getClientRects().length === 0) continue;
+      const b = e.getBoundingClientRect();
+      if (!b || !(b.width > 0)) continue;
+      if (b.left < minL) minL = b.left;
+    }
+    if (!isFinite(minL)) return;
+    // 24px：比 browser-check 里那条"至少 8px"留得更宽，肉眼上是"挨着但不碰"
+    const GAP = 24;
+    el.style.right = Math.round(Math.max(0, window.innerWidth - (minL - GAP))) + "px";
+  },
+
+  /**
    * 把拉条的外观刷成当前档位：填充比例、颜色、右边的档位名。
    * **两件事都只写在父元素上**（--pct / data-lv），轨道的渐变和滑块的颜色都由 CSS 读它们 ——
    * 原生滑块的轨道和滑块是伪元素，写不进内联样式；写在父元素的自定义属性上才能被它们继承到。
@@ -13517,7 +13587,7 @@ const Game = {
     this.camera.frameBoard(r.width / Math.max(1, r.height), true);
     // 视口变了，起始界面那一列的可用宽度也变了 —— 行标重新量一次；
     // 顺带把 --compact 也重读（它决定按键要不要收一档，同样影响这一行的宽度）
-    if (this.setupOpen) this.syncLabelWidth();
+    if (this.setupOpen) { this.syncLabelWidth(); this.syncInscription(); }
     // 平移量的边界是"半个视口"，转屏会改视口尺寸 —— 不重新夹一次的话，
     // 横屏里拖出来的平移量在竖屏下可能已经越界（棋盘贴边甚至露不出一半）
     this.pan3dBy(0, 0);
@@ -13585,8 +13655,14 @@ const InkField = (function () {
   /* 字池：古文原句 + 围棋/棋盘的术语。用真字而不是符号，是为了让这层读起来
      像"一张写满字的纸"，而不是"一堆装饰点"。 */
   const CHARS = "亦有格五其法布子成行以得者胜弈棋势局天元星位十三向连纵横";
-  const CELL = 42;         // 网格间距。**比第一版(56)密** —— 密才铺得满整块纸
-  const GLYPH = 12;        // 字形大小。**很小是刻意的**：一串小字才是"纸的纹理"，
+  /* 【v3.1.6 又收了一轮：42/12 -> 32/10】
+     要求是"字号再小一点、再密一点"。这两个数一起动才算数 ——
+     只缩字号会变稀（留白比例反而更大），只缩间距会让字挤在一起糊成一团。
+     现在字/间距 = 10/32 ≈ 0.31（上一版 12/42 ≈ 0.29，观感上"更密"靠的是间距降了 24%）。
+     整屏格子数从约 320 涨到约 810（1600×900）。图集方案下这只是初始铺底多画几百次
+     drawImage，每帧的开销仍然只跟【醒着的格子数】挂钩。 */
+  const CELL = 32;         // 网格间距
+  const GLYPH = 10;        // 字形大小。**很小是刻意的**：一串小字才是"纸的纹理"，
                            // 字一大就变成"另一层内容"，会和面板抢注意力
   const PAD = 5;           // 图集里每格留白，防止抗锯齿被切边
   const INK = "107,93,71"; // 墨色 rgb（暖墨，不用纯黑）
@@ -13599,8 +13675,8 @@ const InkField = (function () {
      中间用 smoothstep 过渡（不用线性：线性会在两端留下明显的"折痕"，
      眼睛对密度的突变很敏感，看起来像贴了两块不同的纸）。
      0.30 / 0.62 这两个数对着的是 #setup 的 left:42% —— 过渡带正好落在演示盘右缘附近。 */
-  const FILL_RIGHT = 0.62;
-  const FILL_LEFT = 0.12;
+  const FILL_RIGHT = 0.80;
+  const FILL_LEFT = 0.24;
   const BAND_A = 0.30, BAND_B = 0.62;
   function densityAt(t) {
     let k = (t - BAND_A) / (BAND_B - BAND_A);
@@ -13682,8 +13758,10 @@ const InkField = (function () {
      在抖，于是那几格在两档之间反复横跳 —— 画面上表现为"有个字在轻轻闪"。
      实测基线：单门槛时相隔 900ms 的两张快照会差出 14 个像素；加迟滞后为 0。
      两个门槛之间那段（2→4、9→12、22→26）就是"保持现状"的死区。 */
-  const TH_UP = [4, 12, 26];     // 升档门槛
-  const TH_DN = [2, 9, 22];      // 降档门槛（都比升档低，留出死区）
+  // 【门槛是绝对像素，必须跟着格子尺寸一起缩】它们量的是"离家多远"，
+  // 而"多远算远"是相对格子大小的。42 -> 32 之后按 0.76 缩，否则轻轻一划就跳满档。
+  const TH_UP = [3, 9, 20];      // 升档门槛
+  const TH_DN = [1.5, 7, 17];    // 降档门槛（都比升档低，留出死区）
 
   function levelFor(dist, cur) {
     let lv = cur;
@@ -13735,7 +13813,7 @@ const InkField = (function () {
         const hy = oy + r * CELL;
         cells.push({ hx: hx, hy: hy, x: hx, y: hy, vx: 0, vy: 0,
                      ci: (rnd() * CHARS.length) | 0, lv: 0,
-                     px: hx, py: hy, awake: false, dw: 0 });
+                     px: hx, py: hy, awake: false, dw: 0, frozen: false });
       }
     }
     // 一次性铺底：全部画在"家"的位置，之后再也不整屏重画
@@ -13758,11 +13836,15 @@ const InkField = (function () {
 
     for (let i = 0; i < awake.length; i++) {
       const cl = awake[i];
+      // 【冻住的格子这一帧什么都不做】它的位置已经不再变化，画出来的东西也就没变。
+      if (cl.frozen) continue;
 
       // ---- ① 斥力：点到【线段】的距离（见文件头那一段）----
+      let held = false;          // 这一帧是不是真的被指针的斥力顶着（下面"冻住"要用）
       if (mvy !== 0 || mvx !== 0 || M.x > -1e3) {
         const g = segDist2(cl.x, cl.y, M.lx, M.ly, M.x, M.y);
         if (g.d2 < R2) {
+          held = true;
           const d = Math.sqrt(g.d2) || 1e-3;
           const f = 1 - d / R;                       // 线性衰减
           let ex = cl.x - g.qx, ey = cl.y - g.qy;
@@ -13785,6 +13867,8 @@ const InkField = (function () {
       const dist = Math.abs(cl.x - cl.hx) + Math.abs(cl.y - cl.hy);
       const lv = levelFor(dist, cl.lv);
       if (lv !== cl.lv) cl.lv = lv;
+      // 本帧位移：冻结判据要用它（位移才是看得见的那件事，速度不是）
+      const moved = Math.abs(cl.x - cl.px) + Math.abs(cl.y - cl.py);
       cl.px = cl.x; cl.py = cl.y;
 
       // ---- ③b 位移上限 ----
@@ -13810,13 +13894,39 @@ const InkField = (function () {
         cl.awake = false;
       } else {
         drawCell(cl);
+        // ---- ④b 收敛了就【冻住】----
+        // 【为什么必须有这一步】指针停着不动时，被斥力顶住的格子有个静止的平衡点，
+        // 而显式积分只会【渐近】趋近它 —— 位置永远在变，只是越变越小。
+        // 两个后果都不明显但都真实：
+        //   · 画面上：偶尔有个格子跨过档位门槛（浓度 0.11 <-> 0.32、大小 1.0 <-> 1.14），
+        //     看着像"有个字在极轻地闪"；
+        //   · 测试上：相隔 900ms 的两张快照会差出 200 来个像素，两次跑一次 0 一次 213。
+        // 冻住不等于睡着：位置停在原地（它确实该停在那儿），指针一动就被解冻。
+        // 【held 这个条件不能省】只看"动得小"是不够的：指针离开窗口之后，
+        // 格子已经解冻、但还没来得及被弹簧加速起来，那一瞬间 moved≈0 且 v≈0 ——
+        // 只看这两条的话会把它【当场重新冻回去】，于是它永远停在离家很远的地方。
+        // 实测后果：归位后的残留从 0 变成 3000 像素。
+        // 加上 held 之后语义才准确：只有"被指针顶着、且不动了"才算收敛。
+        if (held && moved < 0.02 && Math.abs(cl.vx) < 1.5 && Math.abs(cl.vy) < 1.5) {
+          cl.vx = 0; cl.vy = 0; cl.frozen = true;
+        }
       }
+    }
+
+    // 【循环继续的条件：还有"醒着且没冻住"的格子】
+    // 全冻住就停表 —— 指针停在原地不动时这一层现在真的不烧 CPU 了
+    // （改之前那种情形 rAF 会一直空转，因为被顶住的格子永远睡不着）。
+    let anyMoving = false;
+    for (let i = 0; i < awake.length; i++) {
+      const c = awake[i];
+      if (c.awake && !c.frozen) { anyMoving = true; break; }
     }
 
     // 醒着的收工了就原地压缩（只有真睡着了才重建数组，避免每帧分配）
     let stillAwake = false;
     for (let i = 0; i < awake.length; i++) { if (awake[i].awake) { stillAwake = true; break; } }
     if (stillAwake) {
+      if (!anyMoving) { running = false; return; }   // 全冻住：这一帧都不用再排
       const keep = [];
       for (let i = 0; i < awake.length; i++) if (awake[i].awake) keep.push(awake[i]);
       awake = keep;
@@ -13841,6 +13951,9 @@ const InkField = (function () {
     // 首帧：上一帧位置就是当前位置，避免从 (-10000,-10000) 拉出一条横穿全屏的长线
     if (M.x < -1e3) { M.x = M.lx = x; M.y = M.ly = y; }
     M.x = x; M.y = y;
+
+    // 【指针一动，全部解冻】冻住的前提是"指针不动、所以力不变"；指针一移前提就没了。
+    for (let i = 0; i < awake.length; i++) awake[i].frozen = false;
 
     const R = R_CELLS * CELL + CELL;
     for (let i = 0; i < cells.length; i++) {
@@ -13884,7 +13997,7 @@ const InkField = (function () {
     for (let i = 0; i < cells.length; i++) {
       const cl = cells[i];
       if (cl.x !== cl.hx || cl.y !== cl.hy) { cl.x = cl.hx; cl.y = cl.hy; cl.vx = 0; cl.vy = 0; cl.px = cl.hx; cl.py = cl.hy; }
-      cl.awake = false; cl.lv = 0;
+      cl.awake = false; cl.lv = 0; cl.frozen = false;
     }
   }
 
@@ -13913,7 +14026,16 @@ const InkField = (function () {
     if (typeof window === "undefined" || !window.addEventListener) return;
     window.addEventListener("mousemove", onMove, { passive: true });
     window.addEventListener("resize", onResize);
-    window.addEventListener("mouseleave", function () { M.x = M.y = -1e4; M.lx = M.ly = -1e4; });
+    window.addEventListener("mouseleave", function () {
+      M.x = M.y = -1e4; M.lx = M.ly = -1e4;
+      // 【必须解冻】冻住的前提是"指针不动、所以力不变"；指针离开窗口，那个前提同样没了。
+      // 忘了这一步的后果很重：被顶住的格子会【原地冻在外面】再也不回家 ——
+      // 实测"归位后逐像素回到静止态"从 0 变成残留 9000 像素。
+      // 注意这条通路绕开了 onMove（那是鼠标在窗口内移动才触发的），
+      // 所以解冻这件事必须在两个地方都写。
+      for (let i = 0; i < awake.length; i++) awake[i].frozen = false;
+      wake();
+    });
     // 标签页切走就彻底停 —— rAF 本来就会被浏览器节流，但这里连状态一起收干净
     if (typeof document.addEventListener === "function") {
       document.addEventListener("visibilitychange", function () {
@@ -13943,6 +14065,7 @@ const InkField = (function () {
       const areaShare = 0.42;
       return { hasCanvas: !!cv, cells: cells.length, awake: awake.length,
                running: running, wants: wantsEffect(), wanted: wanted, moves: moves,
+               frozen: awake.length ? awake.filter(function (c) { return c.frozen; }).length : 0,
                leftCells: left,
                leftShare: cells.length ? (left / cells.length) / areaShare : 0 };
     },
