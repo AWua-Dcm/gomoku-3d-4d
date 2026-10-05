@@ -616,7 +616,8 @@ try {
     JSON.stringify({ firstY: [cool3.before.firstY, cool3.after.firstY],
                      startBottom: [cool3.before.startBottom, cool3.after.startBottom] }));
   check(cool3.after.sumOver <= 0 && cool3.ai.sumOver <= 0,
-    "摘要不出内部滚动条（默认 1 行、人机 2 行都塞得进那 44px）",
+    // 槽高 = --summary-h(84) - --cool3d-take(48) = 36px，两行 13.5px 文本要真的塞进去。
+    "摘要不出内部滚动条（默认 1 行、人机 2 行都塞得进那 36px）",
     JSON.stringify({ 默认: cool3.after.sumOver, 人机: cool3.ai.sumOver }));
   check(cool3.before.tut === "none" && cool3.after.tut !== "none",
     "「游戏教学」跟着勾选一起出现/收掉",
@@ -3601,6 +3602,52 @@ try {
     check(re.insBox.h > re.insBox.w,
       "水印是【窄而高】的竖排块，不是被拉宽的",
       re.insBox.w + "×" + re.insBox.h + "（宽高比 " + (re.insBox.w / re.insBox.h).toFixed(2) + "）");
+
+    // ---- 水印不许和设置区的文字冲突（六种语言全查）----
+    // 设计要求是：水印【可以】压在立体棋盘上（那是刻意的），但【不许】和设置区的文字重叠。
+    // 而设置区内容的最左沿是随语言变的（1280 下实测 44.4%~47.4%，法语最挤），
+    // 所以这条必须六种语言全跑 —— 只查中文会正好漏掉最挤的那一种。
+    const clash = JSON.parse(await ev(`(() => {
+      const keep = Game.lang; const bad = []; const per = []; const wrapped = [];
+      const SEL = "#setup .row, #setup .rowLabel, #setup button, #setup .dimInput, #setup .hint," +
+                  " #setup #ruleNote, #setup #sizeSummary, #setup #extraRow," +
+                  " #setup h1, #setup .tagline, #setup .sub";
+      for (const l of ["zh","en","ja","ko","ru","fr"]) {
+        Game.setLang(l); Game.openSetup();
+        const ins = document.getElementById("inscription").getBoundingClientRect();
+        let minL = 1e9;
+        for (const el of document.querySelectorAll(SEL)) {
+          if (el.getClientRects().length === 0) continue;
+          const b = el.getBoundingClientRect();
+          if (b.width < 1) continue;
+          if (b.left < minL) minL = b.left;
+        }
+        // 【主标题会不会折行】放大到 81px 之后这是个真风险：西里尔/拉丁那三种
+        // 标题比中文长得多（"Гомокуб" 比 "五子魔方" 宽），一行放不下就会折成两行，
+        // 而折行会同时撑高标题块、把「开始游戏」往下推。
+        const h1 = document.getElementById("setupTitle");
+        const hrg = document.createRange(); hrg.selectNodeContents(h1);
+        const h1Lines = [...hrg.getClientRects()].filter((r) => r.height > 1).length;
+        per.push({ l: l, insR: Math.round(ins.right), minL: Math.round(minL),
+                   gap: Math.round(minL - ins.right), h1Lines: h1Lines,
+                   h1W: Math.round(h1.getBoundingClientRect().width) });
+        if (ins.right > minL) bad.push(l);
+        if (h1Lines !== 1) wrapped.push(l + "(" + h1Lines + "行)");
+      }
+      Game.setLang(keep); Game.openSetup();
+      return JSON.stringify({ per: per, bad: bad, wrapped: wrapped });
+    })()`));
+    check(clash.bad.length === 0,
+      "水印和设置区的文字【不冲突】（六种语言全查：水印右缘 <= 内容最左沿）",
+      clash.bad.length
+        ? "重叠的语言: " + clash.bad.join(",") + "  " + JSON.stringify(clash.per)
+        : "各语言余量(px): " + clash.per.map((p) => p.l + ":" + p.gap).join(" "));
+    // 主标题放大到 81px 之后必须仍然【一行】—— 折行会撑高整块、把「开始游戏」往下推，
+    // 而那正是上面那条高度断言在守的东西。两种失败是连着的，分开报才好定位。
+    check(clash.wrapped.length === 0,
+      "主标题六种语言都还是【一行】（81px 下没有折行）",
+      clash.wrapped.length ? "折行的: " + clash.wrapped.join(",")
+        : clash.per.map((p) => p.l + ":" + p.h1W + "px").join(" "));
 
     // ---- 演示盘的宣纸发光（只在起始界面这一档）----
     // 0.6px 是量出来的：0.35px 改 0 个像素（等于没加），

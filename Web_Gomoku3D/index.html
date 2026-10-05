@@ -487,7 +487,7 @@
        #setup 是 justify-content: safe center，内容装得下时整列居中、
        上下内边距根本不参与观感；只有在【溢出的那几种语言】里它才起作用，
        而那时它省下的每一个像素都直接变成「开始游戏」少滚一点。 */
-    gap: 10px; padding: 7px 30px; overflow-y: auto;
+    gap: 10px; padding: 0 30px; overflow-y: auto;
     /* 居中，但溢出时改为从顶部开始 —— 这是 safe 关键字的全部作用。
        没有它的话（也就是今天的行为），内容一旦高过视口，flex 的居中溢出会朝两头走，
        而滚动区只从内容起点算 → **顶部那段永远滚不到**，表现为"最上面几行看不见了"。
@@ -552,10 +552,10 @@
       0 0 10px rgba(156,52,40,.42),
       0 0 26px rgba(156,52,40,.20);
   }
-  /* 【v3.1.6 放大到 54px】原来是 38px。放大是有代价的：标题块那一行跟着长高，
-     而「六种语言都不用滚动就看得见」那条断言的余量只剩个位数 —— 见 #setup 那段
-     "第三次收" 的注释，同一个 commit 里把内边距和行高一起收了回来。 */
-  #setup h1 { font-size: 54px; margin: 0; font-weight: 600; letter-spacing: 2px; }
+  /* 【v3.1.6 放大到 81px】一路 38 -> 54 -> 81（+50%）。放大是有代价的：
+     标题块那一行跟着长高，而「六种语言都不用滚动就看得见」那条断言的余量只剩个位数 ——
+     见 #setup 那段"第三次收"的注释。这一版从 #ruleNote 的行高里把这一行还了回去。 */
+  #setup h1 { font-size: 81px; margin: 0; font-weight: 600; letter-spacing: 2px; }
   #setup .sub { color: var(--dim); font-size: 14.5px; margin-top: 4px; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
   /* 每一行占一个固定高度的槽位。三种模式相关的行（三维尺寸 / 四维尺寸 / 转动冷却）
@@ -669,16 +669,21 @@
      写死 44 的话，英文和紧凑档会各差 2~4px（实测：勾一下旋转，规则行与开始游戏
      被顶动 2~4px；英文 1600×900 也差 2px）。那是注释里那句"一个像素都不动"的反例。
 
-     【为什么还要压行距】留 44px 时最多两行（默认那行 + 人机那句，后者**必须**看得见，
-     见 refreshSetupSummary），而 2 × 13.5 × 1.7 = 45.9 > 44 —— 差 1.9px 就会顶出
-     一条滚动条，而滚动条一出现又挤窄正文、把文本重新折成三行（实测：人机档变成
-     "3 行 / 溢出 2px"）。行距收到 1.55（2 × 20.9 = 41.8）就没这回事了。
+     【为什么还要压行距】这一档最多两行（默认那行 + 人机那句，后者**必须**看得见，
+     见 refreshSetupSummary），而滚动条一出现又会挤窄正文、把文本重新折成三行
+     （实测：人机档变成 "3 行 / 溢出 2px"），所以两行必须真的塞得进。
+     【v3.1.6 这两个数一起变了】槽位 92 -> 84（给放大的主标题腾高度），
+     于是这一档拿到的 = 84 - 48 = 36px。行距必须跟着从 1.55 收到 1.3：
+       2 × 13.5 × 1.55 = 41.85 > 36  —— 溢出 6px，browser-check 当场红；
+       2 × 13.5 × 1.30 = 35.1  <= 36  —— 塞得下。
+     【槽高和行距是两个数决定一件事】只改槽位不改行距必出滚动条，反过来也一样 ——
+     上面 base 那条和这里这条必须一起看。
      三行以上的情形（人机 + 超小/超大棋盘）本来就会在这块里内部滚动 ——
      那是 #sizeSummary 一直以来的设计。 */
   #setup.cool3d #sizeSummary {
     order: 1;
     height: calc(var(--summary-h) - var(--cool3d-take));
-    line-height: 1.55;
+    line-height: 1.3;
   }
   #setup.cool3d #coolRow { order: 2; }
   #setup.cool3d #ruleNote { order: 3; }
@@ -838,9 +843,19 @@
   /* 【基准高度走变量】v3.1.5 起它有两个读者：这里，以及三维"勾了魔方旋转"那一档
      （那时摘要要让出 #cool3d-take 给转动冷却行，见上面）。写死两个数迟早对不上 ——
      英文那份基准是 96（下面 html.lang-en 那条），一写死就漏。 */
-  :root { --summary-h: 92px; }
+  /* 【v3.1.6 收到 84px】主标题放大到 81px 之后要从别处还高度，这里是牵动面最小的一处：
+     这个槽是【为四维那 4 行摘要预留的】（三维自己只有 1 行，槽位照留，切模式才不跳）。
+     4 行能不能放下取决于槽高和行高【两个数】：原来 92/1.7 是 4×22.95=91.8，
+     现在 84/1.5 是 4×20.25=81 —— 一样放得下，只是行距紧了。
+     两边一起改才不会让摘要变成滚动条：只收槽高的话 4 行就溢出了。 */
+  :root { --summary-h: 84px; }
   #sizeSummary { color: var(--dim); font-size: 13.5px; text-align: center; max-width: 640px;
-                 line-height: 1.7; white-space: pre-line;
+                 /* 【1.5 -> 1.3 是跟着槽位一起定的】槽位收到 84 之后，
+                    三维勾了魔方旋转那一档要算出 84 - --cool3d-take(48) = 36px，
+                    而人机那一句是 2 行 —— 1.5 行高时 2 行要 40.5px，装不下（实测溢 6px，
+                    断言当场红）。1.3 时 2 行 35.1px 正好塞进 36；四维那 4 行也只要 70.2px。
+                    槽位和行高是【两个数决定一件事】，只改一个必然出滚动条。 */
+                 line-height: 1.3; white-space: pre-line;
                  height: var(--summary-h); overflow-y: auto; }
 
   /* 三维"勾了魔方旋转"那一档：冷却行要占的高度 = 一行 38 + #setup 的行距。
@@ -848,7 +863,7 @@
      不改的话"填空位"会差 2px，规则行和开始游戏被顶动（实测）。 */
   :root { --cool3d-take: 48px; }
   #ruleNote { color: var(--dim); font-size: 12.5px; text-align: center; max-width: 660px;
-              line-height: 1.8; border-top: 1px solid var(--border); padding-top: 14px; }
+              line-height: 1.3; border-top: 1px solid var(--border); padding-top: 12px; }
   /* 开始游戏 + 游戏教学并排。两个键之间 12px，整组仍然居中。 */
   #startRow { display: flex; align-items: center; justify-content: center; gap: 12px; }
   #startBtn { font-size: 18px; font-weight: 600; padding: 13px 48px; letter-spacing: 3px; }
@@ -1035,7 +1050,7 @@
      【改的是变量，不是这个元素的高度】v3.1.5 起 #setup.cool3d 那一档要按
      "基准 − 让出量"算摘要高度（见 #sizeSummary 上面）—— 只改元素高度的话，
      那一档读到的仍是 92，英文下凭空差 4px（实测：规则行与开始游戏被顶动 2~4px）。 */
-  html.lang-en { --summary-h: 96px; }
+  html.lang-en { --summary-h: 88px; }   /* 跟着基准一起收（92->84），比例保持一致 */
 
   /* ---------- 竖屏：左右分栏翻成上下分栏 ----------
      判据用 CSS 的 orientation，不用 JS 量 innerWidth/innerHeight：纯 CSS 在 JS 跑起来
@@ -1129,7 +1144,7 @@
 
        320px 那一档在后面还会把左右内边距再放到 20px，那条在源码里更靠后，照样赢。 */
     #setup { gap: 12px; padding: 16px 22px; }
-    #setup h1 { font-size: 42px; }      /* 跟着基准那档一起放大（原 30），比例保持一致 */
+    #setup h1 { font-size: 58px; }      /* 跟着基准那档一起放大（38→54→81），比例保持一致 */
     #setup .sub { font-size: 13.5px; }
     .seal { width: 38px; height: 38px; font-size: 22px; }
 
@@ -1250,7 +1265,13 @@
        现在改成 top/bottom 一起写死：可用高度 = 86vh，一列 6 个字绰绰有余，
        三句话回到三列，外框变成窄而高的 ~420×690 —— 这才是竖排该有的形状。
        居中也不再用 transform：上下留一样的边距，本身就是居中。 */
-    left: 1.4vw; top: 7vh; bottom: 7vh;
+    /* 【横向位置：钉右缘，不钉左缘】
+       要放的位置是"立方体右缘 <-> 设置区文字左沿"那一段。量过六种语言，设置区内容的
+       最左沿落在视口宽的 44.4%~47.4%（法语最挤，44.4%）。所以把右缘钉在 42.5% ——
+       离最挤的那一种还有约 2% 的余量，而 42% 那条线以右是 #setup 自己的 30px 内边距，
+       本来就不放字。
+       钉右缘而不是钉左缘：左缘会随视口宽度变，右缘才是"不许越过"的那一侧。 */
+    right: 57.5%; top: 7vh; bottom: 7vh;
     writing-mode: vertical-rl; text-orientation: upright;
     font-family: "BrushSub", "STXingkai", "华文行楷", "STKaiti", "华文楷体", "KaiTi", "楷体", serif;
     /* 一列 6 个字要塞进 86vh：6 × 字号 × (1+字距) <= 86vh
@@ -1478,10 +1499,17 @@
   #setup .tagline {
     color: var(--danger);
     font-size: 14.5px;            /* = #setup .sub，同档 */
-    margin-top: 0;
-    line-height: .92;
-    letter-spacing: 1px;
+    margin-top: 2px;
+    line-height: 1.15;            /* 【不是 1：这个字幕现在会换行】见下面的 max-width */
+    letter-spacing: .5px;
     opacity: .92;
+    /* 【为什么要夹宽度】主标题放大到 81px 之后，副标题如果也铺满整行，
+       拉丁/西里尔那三种语言会拖出一条很长的细线，和巨大的标题完全不成比例 ——
+       "Пять в ряд сквозь все шесть граней" 一行要 240px。
+       夹到 13em(≈189px) 之后：中文/日文/韩文那三条本来就短（约 130px），仍然一行；
+       英/俄/法自然折成两行，在标题下面形成一块紧凑的方阵，而不是一条长线。
+       【为什么用 em 而不是 px】em 跟字号走 —— 以后调字号时这个比例关系不用重算。 */
+    max-width: 13em;
   }
   /* 标题块那三行的行高各收一点 —— 和上面 #setup 的内边距一起，把新增的
      那一行还给「开始游戏」。收行高不会让任何一行换行（这三行都是单行短句），
