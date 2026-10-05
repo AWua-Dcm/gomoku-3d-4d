@@ -480,8 +480,14 @@
        【为什么不改 gap】gap 是【有外部依赖的数】：#extraRow 那块的高度写死成
        "86px = 两行 76 + 一个行距 10"（见 .extraBtn 那条注释），紧凑档还有
        --cool3d-take: 50px = 38 + 12 这一套跟着它算。动 gap 要同时改好几处，
-       而它们全都挂着"三维↔四维逐像素一致"的断言。内边距没有这个牵连。 */
-    gap: 10px; padding: 14px 30px; overflow-y: auto;
+       而它们全都挂着"三维↔四维逐像素一致"的断言。内边距没有这个牵连。
+
+       【v3.1.6 第四次收：主标题 38 -> 54】放大标题又要走一遍同一条账（+16px），
+       这次一次把上下内边距收到 7px。**内边距在这里几乎是白给的**：
+       #setup 是 justify-content: safe center，内容装得下时整列居中、
+       上下内边距根本不参与观感；只有在【溢出的那几种语言】里它才起作用，
+       而那时它省下的每一个像素都直接变成「开始游戏」少滚一点。 */
+    gap: 10px; padding: 7px 30px; overflow-y: auto;
     /* 居中，但溢出时改为从顶部开始 —— 这是 safe 关键字的全部作用。
        没有它的话（也就是今天的行为），内容一旦高过视口，flex 的居中溢出会朝两头走，
        而滚动区只从内容起点算 → **顶部那段永远滚不到**，表现为"最上面几行看不见了"。
@@ -546,7 +552,10 @@
       0 0 10px rgba(156,52,40,.42),
       0 0 26px rgba(156,52,40,.20);
   }
-  #setup h1 { font-size: 38px; margin: 0; font-weight: 600; letter-spacing: 2px; }
+  /* 【v3.1.6 放大到 54px】原来是 38px。放大是有代价的：标题块那一行跟着长高，
+     而「六种语言都不用滚动就看得见」那条断言的余量只剩个位数 —— 见 #setup 那段
+     "第三次收" 的注释，同一个 commit 里把内边距和行高一起收了回来。 */
+  #setup h1 { font-size: 54px; margin: 0; font-weight: 600; letter-spacing: 2px; }
   #setup .sub { color: var(--dim); font-size: 14.5px; margin-top: 4px; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
   /* 每一行占一个固定高度的槽位。三种模式相关的行（三维尺寸 / 四维尺寸 / 转动冷却）
@@ -1120,7 +1129,7 @@
 
        320px 那一档在后面还会把左右内边距再放到 20px，那条在源码里更靠后，照样赢。 */
     #setup { gap: 12px; padding: 16px 22px; }
-    #setup h1 { font-size: 30px; }
+    #setup h1 { font-size: 42px; }      /* 跟着基准那档一起放大（原 30），比例保持一致 */
     #setup .sub { font-size: 13.5px; }
     .seal { width: 38px; height: 38px; font-size: 22px; }
 
@@ -1206,19 +1215,41 @@
      切到英文界面时它仍然应该是中文，就像一幅字挂在那里不会因为你看的是英文说明书
      而变成英文。代价是 browser-check 的中文白名单里要加它 —— 见那边的注释。
 
-     【为什么用 aria-hidden】它是纯装饰，读屏器念一遍古文只会干扰操作。 */
+     【为什么用 aria-hidden】它是纯装饰，读屏器念一遍古文只会干扰操作。
+
+     【v3.1.6 把它放大了约 4 倍】原来是 clamp(22px, 2.9vh, 36px) —— 小得像题跋。
+     现在要的是【铺满半屏】：最长那一列 6 个字要吃掉大半个视口高度。
+     两个量一起定：
+       · 纵向 = 6 个字 × 字号 × (1 + letter-spacing)，所以字号 ≈ 85vh ÷ 6 ÷ 1.05
+         ≈ 13.5vh。取 12.5vh 留一点余量，免得矮屏上顶出去。
+       · 横向 = 3 列 × 字号 × line-height。12.5vh × 1.3 × 3 ≈ 49vh，1600×900 下约 440px,
+         正好压在左侧那一栏里，不会伸到设置面板上去。
+     【为什么用 vh 而不是 vw】竖排的"行"是竖着的，撑满它的量是视口【高度】。
+     用 vw 的话，宽屏会大得离谱、窄屏又太小。
+     【为什么同时夹一个 px 上下限】手机上 12.5vh 只有 100px 左右，而 3 列 × 130px
+     会把半个屏幕吃掉 —— 好在那一档本来就走滚动。下限 38px 是"再小就不像水印了"。 */
   #inscription {
-    position: fixed; z-index: 20; pointer-events: none;
-    left: 1.6vw; top: 50%; transform: translateY(-50%);
+    /* 【z-index 从 20 降到 1：让它退到立方体【后面】去】
+       放大到半屏之后，压在立方体【表面】的那版读起来是"贴纸糊在棋盘上" ——
+       大字的笔画和线框、棋子搅在一起，很脏。降到 1 之后它和字符层同级、
+       一起待在 #view（z-index 2）下面：立方体画在最上面，水印从纸背面透出来。
+       这也和 #stage.preview #view 去掉不透明底那一步是同一件事的两半 ——
+       不去掉底就轮不到"透"，不降 z-index 就变成"盖"。
+       【为什么是 1 而不是 0 或负数】它得压在 #inkfield 之上（DOM 里它本来就在后面，
+       同层级按顺序画），又要压在纸纹之上；负数会掉到 body 的背景底下，看不见。 */
+    position: fixed; z-index: 1; pointer-events: none;
+    left: 1.4vw; top: 50%; transform: translateY(-50%);
     writing-mode: vertical-rl; text-orientation: upright;
     font-family: "BrushSub", "STXingkai", "华文行楷", "STKaiti", "华文楷体", "KaiTi", "楷体", serif;
-    font-size: clamp(22px, 2.9vh, 36px);
-    line-height: 1.62;        /* 竖排下 = 列与列的距离 */
-    letter-spacing: .26em;    /* 竖排下 = 列内字与字的距离 */
-    color: #332c22; opacity: .17;
+    font-size: clamp(38px, 12.5vh, 150px);
+    line-height: 1.3;         /* 竖排下 = 列与列的距离 */
+    letter-spacing: .05em;    /* 竖排下 = 列内字与字的距离 */
+    color: #332c22; opacity: .15;
     /* 两圈纸色外发光：水印压到演示棋盘上时，靠它把笔画和线框拉开一点距离，
-       不然浅色纸底 + 淡墨 + 白色线框会糊成一片。 */
-    text-shadow: 0 0 20px rgba(239,232,219,.92), 0 0 7px rgba(239,232,219,.75);
+       不然浅色纸底 + 淡墨 + 白色线框会糊成一片。
+       【放大之后半径也要跟着放大】20px 的晕在 120px 的字上是看不见的 ——
+       它得和笔画同量级才起得到"把线框推开"的作用。 */
+    text-shadow: 0 0 46px rgba(239,232,219,.95), 0 0 16px rgba(239,232,219,.8);
   }
   /* 只活在起始界面。进对局就把水印收掉 —— 那是"在纸上下棋"，不是"看一幅字"。 */
   #stage:not(.preview) ~ #inscription { display: none; }
@@ -1385,6 +1416,22 @@
      字应该待在后面，而不是浮在它表面。对局界面不加（那里本来就没有字符层）。 */
   #stage.preview #view { z-index: 2; }
 
+  /* ---------- 6b-2. 左半屏也要透出字符层 ----------
+     【为什么必须把这一层的不透明底色去掉】原来 #stage.preview #view 自带一份
+     不透明的宣纸底（background-color: var(--bg) + --paper-img），本意是"把 body 那份
+     纸纹挡住、免得同一个白色径向叠两次"。但字符层是 fixed + z-index:1，而在上面那条
+     层序修正之后 #view 是 z-index:2 —— 于是 #view 那块【不透明底】正好把左半屏的字符
+     整个盖住了。表现就是"左边那张演示盘没有交互"，而代码里一切正常。
+
+     去掉之后：body 的纸纹直接透上来（只有一份，不存在叠加两次的问题），
+     字符层夹在中间，演示盘（#gl，本来就是透明清屏）画在最上面。
+     42% 那条缝也不会回来 —— 那是"左右两份纸纹对不齐"造成的，现在只剩一份。
+
+     【为什么不反过来把 #inkfield 提到 #view 之上】那样字会浮在立方体【表面】，
+     看起来像贴在玻璃上的贴纸，而不是"光从纸背面透过来"。
+     立方体是有厚度的东西，字应该在它后面。 */
+  #stage.preview #view { background: none; }
+
   /* ---------- 6c. 演示盘的"宣纸发光"质感 ----------
      只作用在【起始界面的演示盘】上，对局盘一个像素都不碰。
 
@@ -1417,16 +1464,20 @@
   #setup .tagline {
     color: var(--danger);
     font-size: 14.5px;            /* = #setup .sub，同档 */
-    margin-top: 1px;
-    line-height: 1.0;
+    margin-top: 0;
+    line-height: .92;
     letter-spacing: 1px;
     opacity: .92;
   }
   /* 标题块那三行的行高各收一点 —— 和上面 #setup 的内边距一起，把新增的
      那一行还给「开始游戏」。收行高不会让任何一行换行（这三行都是单行短句），
      而 browser-check 只比"三维↔四维"的相对位置，常量高度变化不受影响。 */
-  #setup h1 { line-height: 1.02; }
-  #setup .sub { margin-top: 2px; line-height: 1.05; }
+  /* 主标题放大到 54 之后，这几条行高要跟着收紧才能把那一行还给「开始游戏」。
+     【行高收到 1 以下安全吗】安全，而且这里没有别的选择：这三行【各自都是单行短句】，
+     收紧只是减少行盒之间的空隙，不会让任何一行换行、也不会盖住谁。
+     CJK 字形的实际高度约 0.88em，0.94 的行盒装得下。 */
+  #setup h1 { line-height: .94; }
+  #setup .sub { margin-top: 2px; line-height: .95; }
   /* 跟住紧凑档（断点必须和上面 @media (pointer: coarse), (max-width: 700px) 一致）。
      这一条放在本段末尾、也就是整个文件最后，才能盖住前面那条 #setup .sub 的档位。 */
   @media (pointer: coarse), (max-width: 700px) {
@@ -13425,11 +13476,29 @@ const InkField = (function () {
   /* 字池：古文原句 + 围棋/棋盘的术语。用真字而不是符号，是为了让这层读起来
      像"一张写满字的纸"，而不是"一堆装饰点"。 */
   const CHARS = "亦有格五其法布子成行以得者胜弈棋势局天元星位十三向连纵横";
-  const CELL = 56;        // 网格间距
-  const GLYPH = 16;       // 字形大小（远小于间距 = 留白压倒笔墨）
-  const PAD = 5;          // 图集里每格留白，防止抗锯齿被切边
-  const FILL = 0.42;      // 有字的格子占比 —— 散落的墨点，不是排满的网格
-  const INK = "107,93,71";// 墨色 rgb（暖墨，不用纯黑）
+  const CELL = 42;         // 网格间距。**比第一版(56)密** —— 密才铺得满整块纸
+  const GLYPH = 12;        // 字形大小。**很小是刻意的**：一串小字才是"纸的纹理"，
+                           // 字一大就变成"另一层内容"，会和面板抢注意力
+  const PAD = 5;           // 图集里每格留白，防止抗锯齿被切边
+  const INK = "107,93,71"; // 墨色 rgb（暖墨，不用纯黑）
+
+  /* 【疏密渐变：右密左疏】
+     左半屏是立体演示盘 + 竖排古文水印，两者都占面积；字再铺满的话三样互相打架。
+     所以按【列位置】给一个密度斜坡：
+       · 分界以右（t > 0.62）      —— 满密度，铺成一张纸
+       · 分界以左（t < 0.30）      —— 只剩零星几点，给水印让路
+     中间用 smoothstep 过渡（不用线性：线性会在两端留下明显的"折痕"，
+     眼睛对密度的突变很敏感，看起来像贴了两块不同的纸）。
+     0.30 / 0.62 这两个数对着的是 #setup 的 left:42% —— 过渡带正好落在演示盘右缘附近。 */
+  const FILL_RIGHT = 0.62;
+  const FILL_LEFT = 0.12;
+  const BAND_A = 0.30, BAND_B = 0.62;
+  function densityAt(t) {
+    let k = (t - BAND_A) / (BAND_B - BAND_A);
+    if (k < 0) k = 0; else if (k > 1) k = 1;
+    const s = k * k * (3 - 2 * k);              // smoothstep
+    return FILL_LEFT + (FILL_RIGHT - FILL_LEFT) * s;
+  }
 
   /* 四档浓淡 + 四档大小，按"离家的距离"联动。
      静息态只有 0.11 —— 【这是全篇最关键的一个数】。第一版用的是 0.30，
@@ -13548,10 +13617,13 @@ const InkField = (function () {
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        if (rnd() > FILL) continue;                  // 空格子根本不生成
-        // ±5px 的轻微错位：不这么做，整片会显出"网格"，像表格而不像散落的墨
-        const hx = ox + c * CELL + (rnd() - 0.5) * 10;
-        const hy = oy + r * CELL + (rnd() - 0.5) * 10;
+        // 【排列要有章法】第一版给每格加了 ±5px 的随机错位，怕"看起来像表格"。
+        // 现在反过来：**严格对齐的行列才是这里要的"章法"** —— 它读起来像一页
+        // 抄好的经文，而不是撒了一地的墨点。随机错位反而把秩序感打散了。
+        const t = cols > 1 ? c / (cols - 1) : 1;     // 0 = 最左，1 = 最右
+        if (rnd() > densityAt(t)) continue;          // 空格子根本不生成
+        const hx = ox + c * CELL;
+        const hy = oy + r * CELL;
         cells.push({ hx: hx, hy: hy, x: hx, y: hy, vx: 0, vy: 0,
                      ci: (rnd() * CHARS.length) | 0, lv: 0,
                      px: hx, py: hy, awake: false, dw: 0 });
@@ -13753,8 +13825,17 @@ const InkField = (function () {
     // 少了这个计数，这两种情况在断言里长得一模一样（都是 awake=0），
     // 只能靠猜 —— 这里直接把它变成可读的数。
     stats: function () {
+      // 【leftShare 是给"右密左疏"那条断言用的】它必须【按面积归一化】才可比：
+      // 左边那一栏占 42% 的宽度却只该有很少的格子，而原始计数会被"这一栏更宽"混淆。
+      // 所以这里返回的是"左侧格子的占比 ÷ 左侧面积的占比" ——
+      // 等于 1 表示两边一样密，小于 1 表示左侧更疏。
+      let left = 0, cut = W * 0.42;
+      for (let i = 0; i < cells.length; i++) if (cells[i].hx < cut) left++;
+      const areaShare = 0.42;
       return { hasCanvas: !!cv, cells: cells.length, awake: awake.length,
-               running: running, wants: wantsEffect(), wanted: wanted, moves: moves };
+               running: running, wants: wantsEffect(), wanted: wanted, moves: moves,
+               leftCells: left,
+               leftShare: cells.length ? (left / cells.length) / areaShare : 0 };
     },
   };
 })();

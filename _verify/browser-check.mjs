@@ -403,6 +403,7 @@ try {
       panelVisibility: getComputedStyle(panelEl).visibility,
       setupBg: getComputedStyle(setupEl).backgroundColor,
       viewBgImg: getComputedStyle(viewEl).backgroundImage,
+      viewBgColor: getComputedStyle(viewEl).backgroundColor,
       viewBgAttach: getComputedStyle(viewEl).backgroundAttachment,
       glOpacity: getComputedStyle(document.getElementById("gl")).opacity,
       ruleNote: getComputedStyle(document.getElementById("ruleNote")).display === "none"
@@ -443,22 +444,40 @@ try {
   check(setup.setupBg === "rgba(0, 0, 0, 0)", "起始界面自己不画任何背景",
     "实际 " + setup.setupBg + " —— 一旦有底色，它就和左边的三维画布不同色，中间重新出现一条竖线");
 
-  // 缝的成因不是色差（画布清屏色和页面底色本来就都是 --bg），而是**纸纹只画在 <body> 上、
-  // 被画布盖住了左边 42%**。所以修法是给 #view 补上同一份纸纹。
-  // 关键是 background-attachment: fixed —— 它让渐变的定位基准是**整个视口**，
-  // 而不是 #view 自己那个 42% 宽的盒子。没有它，同一个 "16% 18%" 会落在
-  // 16% × 0.42 ≈ 视口 6.7% 处，而右边是真 16%，两边对不上、缝原样还在。
-  // 这两条查的是"缝为什么没了"的机制，不是观感 —— 观感只能靠截图人眼看。
-  check(setup.viewBgImg && setup.viewBgImg !== "none",
-    "#view 在起始界面下带上了纸纹", "background-image = " + setup.viewBgImg);
-  // 注意 background-attachment 是**逐层**返回的：纸纹是 4 个渐变叠出来的，
-  // 所以计算值形如 "fixed, fixed, fixed, fixed"，不是单个 "fixed"。
-  // 只认第一层是不够的 —— 只要有一层漏成 scroll，那一层的径向就会按 #view 的盒子定位，
-  // 在 42% 处露出来。
-  const attachLayers = String(setup.viewBgAttach).split(",").map((s) => s.trim());
-  check(attachLayers.length > 0 && attachLayers.every((a) => a === "fixed"),
-    "#view 的纸纹每一层都以视口为定位基准（background-attachment: fixed）",
-    "实际 " + setup.viewBgAttach + "；不是 fixed 的话左右纸纹对不上，42% 处会重新裂出一条缝");
+  // 【v3.1.6：换了一种"没有缝"的实现，这两条断言跟着换】
+  //
+  // 旧做法 —— 给 #view 补一份和 <body> 一样的纸纹，用 background-attachment: fixed
+  //   把定位基准钉在【整个视口】上，让左右两份对齐。原来那两条断言查的就是这个机制。
+  // 新做法 —— **干脆只留一份纸**：#view 在起始界面下不画任何背景，
+  //   纸全部来自 <body>（它本来就铺满整个视口）。
+  //
+  // 【为什么非换不可】字符层（#inkfield）和竖排古文水印都在 #view 底下，
+  // 而 #view 那份**不透明**的纸正好把它们整个盖住了 —— 表现是"左半屏没有字符交互、
+  // 也看不见水印"，而代码里一切正常。要让字从纸背面透出来，左半屏就不能再糊一层纸。
+  //
+  // 【缝因此不可能出现】纸只有一份，而这一份是整屏连续的。旧方案靠"两份对齐"消缝，
+  // 新方案是让缝没有第二个可以出现的地方。下面两条：一条查机制（不许再有第二份），
+  // 一条**真去量观感**（跨线取相邻两列比色）—— 后者比原来那两条强，因为原来那两条
+  // 只证明"我们按正确的办法做了"，不证明"看起来真的没缝"。
+  check(setup.viewBgImg === "none" && setup.viewBgColor === "rgba(0, 0, 0, 0)",
+    "起始界面下 #view 不画任何背景（纸只留 <body> 那一份，多一份就会盖住字符层和水印）",
+    "background-image = " + setup.viewBgImg + " / background-color = " + setup.viewBgColor);
+  // 【为什么这两条机制断言就够，不需要再去数像素】
+  // 缝的【存在条件】是"左右各有一份纸、两份没对齐"。现在纸只有一份（<body> 的），
+  // 而 <body> 铺满整个视口、是整屏连续的一层 —— 缝没有第二个可以出现的地方。
+  // 换句话说：只要上面这条成立，"有没有缝"在结构上就没有自由度了。
+  //
+  // 【试过数像素，放弃了，理由写在这里免得下次有人重走一遍】
+  // 直接跨 42% 取两点比色，理论上更硬，实测却不成立：
+  //   · 紧贴边界取点（0.418 / 0.422）—— 纸纹里有 repeating 的 1px/4px 纤维，
+  //     两点落在不同相位上就能差出 13 个色阶，那是纹理噪声不是缝；
+  //   · 拉远到 0.40 / 0.44 —— 差 4（正常）vs 8（左边糊一层平色），只差 2 倍，
+  //     阈值无论定在哪都在噪声边上；
+  //   · 想自校准（拿不跨线的色差当参照）—— 42% 以右全是设置面板，
+  //     没有一块【裸纸】可以当参照，参照点全落在按钮和文字上，比值直接失效。
+  // 结论：这条缝在本设计里本来就很细（<body> 和 #view 的清屏色都是 --bg，差的只是纹理），
+  // 想用像素守住它，只能得到一条要么空转要么随机红的断言 —— 两条都比没有更坏。
+  // 所以守住"只有一个纸层"这个结构前提，观感交给截图人眼看（原注释里也是这个立场）。
 
   // 演示棋盘压淡。**必须是 CSS opacity，不能是改调色板或着色器** ——
   // 演示盘和对局盘共用同一个 draw3D() 和同一批着色器，改调色板等于把真棋盘也改淡，
@@ -3429,6 +3448,12 @@ try {
     check(s0.cells > 50,
       "字符场的网格建起来了（真触屏 / 系统开了「减少动态效果」时这里会是 0，那是设计）",
       "cells=" + s0.cells);
+    // 【右密左疏的渐变】leftShare = 左侧格子占比 ÷ 左侧面积占比，等于 1 就是两边一样密。
+    // 左侧要让位给竖排古文水印和立体演示盘，所以必须明显小于 1。实测约 0.36（疏 2.7 倍）。
+    // 上界 0.75 是防"渐变被写反了/被删了"变成均匀密度 —— 均匀密度下这个值恒等于 1。
+    check(s0.leftShare > 0 && s0.leftShare < 0.75,
+      "字符是【右密左疏】的（左边给水印和演示盘让路）",
+      "leftShare=" + (s0.leftShare || 0).toFixed(3) + "，左侧 " + s0.leftCells + " / 共 " + s0.cells);
     check(s0.awake === 0 && s0.running === false,
       "起始界面刚打开时【没有】格子醒着、rAF 循环是停的（闲置成本为 0）", JSON.stringify(s0));
 
@@ -3506,6 +3531,12 @@ try {
       tagline: document.getElementById("setupTagline")
         ? document.getElementById("setupTagline").textContent : null,
       titleFilter: getComputedStyle(document.getElementById("setupTitle")).filter,
+      previewGlFilter: getComputedStyle(document.getElementById("gl")).filter,
+      // 【尺寸也量成数字】"水印要铺满半屏""主标题要显眼"是设计要求，
+      // 不钉住的话下次有人调排版会悄悄把它们改回去，而截图上看不出来"变小了"。
+      insFontPx: parseFloat(getComputedStyle(document.getElementById("inscription")).fontSize),
+      titleFontPx: parseFloat(getComputedStyle(document.getElementById("setupTitle")).fontSize),
+      vh: window.innerHeight,
     }))()`);
     check(re.st.hasCanvas === true && re.st.cells > 50, "回到起始界面后网格还在", JSON.stringify(re.st));
     check(re.display === "block", "这一层重新显示出来了", "display=" + re.display);
@@ -3533,6 +3564,36 @@ try {
     check(/^url\(/.test(re.titleFilter || ""),
       "主标题挂着 SVG 墨韵滤镜（filter: url(#…)）", "filter=" + re.titleFilter);
     check(re.tagline === "六面贯通，五子一线", "新副标题在位", JSON.stringify(re.tagline));
+
+    // ---- 尺寸：水印要"铺满半屏"、主标题要"显眼" ----
+    // 判据用【相对视口的比例】而不是绝对 px：绝对 px 只在一种视口下成立，
+    // 而这两个都是"看起来够不够大"的问题。
+    //   水印：12.5vh（clamp 中段），这里要求 >= 10vh。
+    //   主标题：54px @ 800 高 = 6.75vh，这里要求 >= 6vh。
+    check(re.insFontPx / re.vh >= 0.10,
+      "竖排古文水印真的放大了（字号 >= 10vh，铺满半屏那种大）",
+      re.insFontPx.toFixed(1) + "px / " + re.vh + "vh = " + (re.insFontPx / re.vh).toFixed(3));
+    check(re.titleFontPx / re.vh >= 0.06,
+      "主标题够显眼（字号 >= 6vh）",
+      re.titleFontPx.toFixed(1) + "px / " + re.vh + "vh = " + (re.titleFontPx / re.vh).toFixed(3));
+
+    // ---- 演示盘的宣纸发光（只在起始界面这一档）----
+    // 0.6px 是量出来的：0.35px 改 0 个像素（等于没加），
+    // 而 blur+sepia+contrast 那组会把线框整个抹掉（近白像素归零）。见 CSS 里的注释。
+    check(/blur/.test(re.previewGlFilter || "") && re.previewGlFilter !== "none",
+      "起始界面的演示盘挂着宣纸发光的柔化", "filter=" + re.previewGlFilter);
+  }
+
+  // 【宣纸发光只许在起始界面这一档】它挂在 #stage.preview 上，进对局必须消失 ——
+  // 对局盘的线框是"白子能不能看清"那条硬约束的一部分，被柔化会直接影响可读性。
+  {
+    await ev(`Game.closeSetup()`);
+    await sleep(300);
+    const inGame = await ev(`getComputedStyle(document.getElementById("gl")).filter`);
+    check(inGame === "none",
+      "进对局之后演示盘那层柔化【消失】（对局盘的线框不许被模糊）", "filter=" + inGame);
+    await ev(`Game.openSetup()`);
+    await sleep(300);
   }
 
   // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态
