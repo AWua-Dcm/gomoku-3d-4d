@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>三维五子棋</title>
+<title>五子魔方</title>
 <!-- 空图标。不写这行，浏览器在 http(s) 下会自动去要 /favicon.ico；静态托管
      （GitHub Pages）上没有这个文件，于是 404、控制台多一条红字。而这条 404
      唯独在 file:// 下不会出现 —— 表现为本地跑 browser-check 是 124/124、
@@ -467,8 +467,21 @@
        第一次（v2.10.0）是加人机那一行；第二次（v2.10.6）是行标同宽 + 拉条独立成行之后，
        英文和法语的起始界面又超出了四十多像素（法语的规则摘要和按钮文案都最长）。
        配合 .row 的槽位 40→38px、英文 #sizeSummary 108→96px，一共还回去约 70px。
-       行高本身没动，模式切换时整列不跳那条不变量不受影响。 */
-    gap: 10px; padding: 26px 30px; overflow-y: auto;
+       行高本身没动，模式切换时整列不跳那条不变量不受影响。
+
+       【v3.1.6 第三次收，起因是标题块多了一行】改名之后标题是三行
+       （主标题 / 六面贯通… / 十三向连五…），比原来多出一个行盒。
+       实测 1280×800 下六种语言：**法语原来只剩 -1px 余量**（按钮下沿 799 / 视口 800），
+       加一行直接变成 +18px（818），「开始游戏」被挤出视口 —— browser-check
+       那条"六种语言都不用滚动就看得见"当场红。
+       这一版把上下内边距 26 → 18（省 16px），加上标题三行的行高/外边距各收一点
+       （见下面 .tagline 那一段，再省约 6px），把这一行还了回去。
+
+       【为什么不改 gap】gap 是【有外部依赖的数】：#extraRow 那块的高度写死成
+       "86px = 两行 76 + 一个行距 10"（见 .extraBtn 那条注释），紧凑档还有
+       --cool3d-take: 50px = 38 + 12 这一套跟着它算。动 gap 要同时改好几处，
+       而它们全都挂着"三维↔四维逐像素一致"的断言。内边距没有这个牵连。 */
+    gap: 10px; padding: 14px 30px; overflow-y: auto;
     /* 居中，但溢出时改为从顶部开始 —— 这是 safe 关键字的全部作用。
        没有它的话（也就是今天的行为），内容一旦高过视口，flex 的居中溢出会朝两头走，
        而滚动区只从内容起点算 → **顶部那段永远滚不到**，表现为"最上面几行看不见了"。
@@ -1148,6 +1161,251 @@
      360px 走不到这一档 —— 那里可用宽度 300px 已经够了。 */
   @media (max-width: 340px) {
     #setup { padding-left: 20px; padding-right: 20px; }
+  }
+
+  /* ==========================================================================
+     v3.1.6 · 古风器物层
+     --------------------------------------------------------------------------
+     【这一整块的位置是刻意的：它在【所有 @media 之后】。】CSS 里同权重后者胜，
+     放在这里才盖得住上面各档断点。代价是一条纪律 ——
+     **这一段只许写"不影响布局"的属性**：
+       ✅ color / background* / border-color / box-shadow / filter / text-shadow / opacity
+       ❌ padding / margin / font-size / letter-spacing / width / 行高
+     理由：browser-check 钉着一批几何不变量（"三维勾了玩法 ↔ 四维逐像素一致"、
+     "开始游戏在那一行居中"、竖屏 #setup 上边缘贴 #view 下边缘…）。
+     改颜色不会动它们，改盒模型会。所以这一层是**纯换皮**，一个像素都不搬。
+
+     【为什么不改底色】现有的宣纸配色（上面 :root 那一大段）是照着"淡底上白子
+     只有 1.3:1、靠 --stone-edge 描边才看得见"调出来的，动底色会连三维视图的
+     观感一起动。所以古风化只【补器物】—— 朱砂、玉、竹简、回纹、印章 —— 不动纸。
+     ========================================================================== */
+
+  /* ---------- 1. 毛笔字体：子集内联，守住"单文件"前提 ----------
+     Zhi Mang Xing（智勇行书，Google Fonts，OFL 1.1）切到【只剩水印用到的 14 个字】，
+     woff2 只有 4,856 字节 -> base64 约 6.5KB，直接躺在文件里，不发任何网络请求。
+     许可允许嵌入分发（OFL 1.1），所以 MIT 仓库里带着它没有问题。
+
+     【为什么是子集而不是整支字体】整支 CJK 字体 5MB 起步；Google Fonts 的
+     unicode-range 分片即便只取用得到的 6 片也要 408KB。切成 14 个字之后就只剩 4.8KB。
+     切分命令（本机 fonttools 4.63 + brotli 已装，不需要装任何东西）：
+       pyftsubset 合并后的字体 --text="亦有格五其法布子成行以得五者胜" \
+         --flavor=woff2 --layout-features='' --no-hinting
+     【改动水印文案时必须重新切】新字不在这个子集里就是豆腐块。 */
+  @font-face {
+    font-family: "BrushSub";
+    src: url(data:font/woff2;base64,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) format("woff2");
+    font-display: block;
+  }
+
+  /* ---------- 2. 竖排古文水印 ----------
+     内容「亦有格五／其法布子成行／以得五者胜」，去标点，按朗读断气点分三列。
+     竖排下 <br> 就是"另起一列"，而 vertical-rl 的列是从右往左排的 ——
+     所以第一列「亦有格五」在最右，正是古籍的读序。
+
+     【它永远显示中文原文，六种语言都不换】这是刻意的：水印是一件"中文书法作品"，
+     切到英文界面时它仍然应该是中文，就像一幅字挂在那里不会因为你看的是英文说明书
+     而变成英文。代价是 browser-check 的中文白名单里要加它 —— 见那边的注释。
+
+     【为什么用 aria-hidden】它是纯装饰，读屏器念一遍古文只会干扰操作。 */
+  #inscription {
+    position: fixed; z-index: 20; pointer-events: none;
+    left: 1.6vw; top: 50%; transform: translateY(-50%);
+    writing-mode: vertical-rl; text-orientation: upright;
+    font-family: "BrushSub", "STXingkai", "华文行楷", "STKaiti", "华文楷体", "KaiTi", "楷体", serif;
+    font-size: clamp(22px, 2.9vh, 36px);
+    line-height: 1.62;        /* 竖排下 = 列与列的距离 */
+    letter-spacing: .26em;    /* 竖排下 = 列内字与字的距离 */
+    color: #332c22; opacity: .17;
+    /* 两圈纸色外发光：水印压到演示棋盘上时，靠它把笔画和线框拉开一点距离，
+       不然浅色纸底 + 淡墨 + 白色线框会糊成一片。 */
+    text-shadow: 0 0 20px rgba(239,232,219,.92), 0 0 7px rgba(239,232,219,.75);
+  }
+  /* 只活在起始界面。进对局就把水印收掉 —— 那是"在纸上下棋"，不是"看一幅字"。 */
+  #stage:not(.preview) ~ #inscription { display: none; }
+
+  /* ---------- 3. 主标题：代码生成的墨韵 ----------
+     字形仍然是【真字】——走 h1 的文本节点，所以
+       · 不可能出现错别字（字形来自字体本身，不是我手画的路径）；
+       · 六种语言共用同一套处理，切语言时 applyStatic 写 textContent 照常生效。
+
+     独特性全部来自 filter 引用的那个 SVG 滤镜（见 <body> 里的 #inkdefs）：
+     噪声 -> 位移 -> 边缘毛糙 -> 朱砂套印错位 -> 墨面。三个图层叠出一枚"印"的观感。
+
+     【为什么用 CSS filter 而不是把 SVG 塞进 h1】applyStatic 是拿 textContent 覆写的，
+     h1 里只要有子元素就会被下一次切语言冲掉。挂滤镜则完全不碰 DOM 结构，
+     browser-check 读 setupTitle.textContent 的那几条断言也一个字都不用改。
+
+     【为什么是双层 drop-shadow 而不是内发光】浅底上单层柔光会被纸白吃掉。 */
+  #setup h1 {
+    filter: url(#inkTitle);
+    text-shadow: none;      /* 让滤镜独占标题的渲染，避免和 CSS 阴影两套叠加打架 */
+  }
+
+  /* ---------- 4. 器物：按钮 = 竹简 ----------
+     【只动表面色】padding/font-size/min-width 一概不碰（那是 browser-check 的几何不变量）。
+     竹简质感：暖黄底 + 上缘一道浅高光（"削过的竹青"）+ 下缘压深（"竹节"）+ 细描边。
+     这一层给【全部按钮】，对局界面也一起换 —— 换一半会让两个界面像两个游戏。 */
+  button {
+    color: var(--text);
+    border-color: #a8967a;
+    background-color: #f2ead8;
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,0) 58%),
+      linear-gradient(0deg,  rgba(122,102,70,.10),  rgba(122,102,70,0) 42%);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.34), 0 1px 0 rgba(74,64,52,.10);
+  }
+  button:hover {
+    background-color: #e8dcc2;
+    border-color: #9c6b1f;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.38), 0 1px 2px rgba(74,64,52,.16);
+  }
+  button:active {
+    background-color: #dccfb2;
+    box-shadow: inset 0 1px 3px rgba(74,64,52,.22);
+  }
+  /* 选中态 = 磨好的朱砂印泥。保留原有的 --accent 语义色（对局里还有别的用途），
+     只在起始界面这一列上换成朱砂 —— 那里"选中"就是"落印"。 */
+  #setup .row button.sel,
+  #setup #startBtn {
+    color: #fdf8f0;
+    border-color: #7d2a20;
+    background-color: var(--danger);
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,.17), rgba(0,0,0,.12)),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 3px);
+    box-shadow: inset 0 0 0 1px rgba(247,242,232,.30), 0 1px 3px rgba(125,42,32,.30);
+  }
+  #setup .row button.sel:hover,
+  #setup #startBtn:hover { background-color: #ab3b2d; border-color: #6d231a; }
+  #setup .row button.sel:active,
+  #setup #startBtn:active { background-color: #872c21; }
+
+  /* 主按钮：唯一一处"发光"给到它之外，再加一圈内描边当印边。
+     【为什么只加 box-shadow 不加 padding】#startBtn 的尺寸被
+     "三维勾了玩法 ↔ 四维逐像素一致"那条钉着，多一个像素都不行。 */
+  #startBtn {
+    box-shadow:
+      inset 0 0 0 1px rgba(247,242,232,.34),
+      inset 0 0 0 4px rgba(247,242,232,.14),
+      0 2px 10px rgba(156,52,40,.26);
+  }
+
+  /* ---------- 5. 器物：输入框 = 玉牌 ----------
+     玉质靠"上浅下深的绿灰渐变 + 内阴影压边"来装，不引任何图片。
+     【为什么是绿灰不是纯白】纯白压在暖纸上会发亮、跳出画面（和现有白子不用纯白同一条理由）。 */
+  .dimInput {
+    color: #23281f;
+    border-color: #9caa8e;
+    background-color: #eef1e6;
+    background-image: linear-gradient(180deg, rgba(255,255,255,.66), rgba(74,107,69,.10));
+    box-shadow: inset 0 1px 3px rgba(58,74,54,.16), inset 0 0 0 1px rgba(255,255,255,.30);
+  }
+  .dimInput:focus {
+    outline-color: var(--ok);
+    border-color: var(--ok);
+    background-color: #f3f6ec;
+  }
+  .dimInput.bad { border-color: var(--danger); color: var(--danger); background-color: #f7ece8; }
+  /* 【数字框的上下箭头】Chrome 【不认】`appearance: textfield`（实测：写了它毛刺照样在），
+     必须点名这两个 webkit 伪元素。它们是"系统控件"的一部分，留着的话
+     输入框右边会冒出一对灰色小箭头，和玉牌这套材质完全不搭。
+     注意这两个可以写在同一条规则里（它们是同类引擎的伪元素）；像下面 range 那种
+     【-webkit- 和 -moz- 混写】才会被 Chrome 整条丢弃 —— 见那边的注释。 */
+  .dimInput::-webkit-outer-spin-button,
+  .dimInput::-webkit-inner-spin-button {
+    -webkit-appearance: none; appearance: none; margin: 0;
+  }
+  .dimInput { -moz-appearance: textfield; appearance: textfield; }
+
+  /* ---------- 6. 器物：印章 ----------
+     原来那一圈朱砂辉光保留（它是全页唯一一处发光，是刻意的），
+     这里只把四个角收一点、加一道内印边，让它更像一枚"钤"上去的印。 */
+  .seal {
+    border-radius: 3px;
+    box-shadow:
+      inset 0 0 0 1px rgba(247,242,232,.55),
+      inset 0 0 0 4px rgba(247,242,232,.13),
+      0 0 10px rgba(156,52,40,.42),
+      0 0 26px rgba(156,52,40,.20);
+  }
+
+  /* ---------- 5b. 器物：勾选框 = 小印 ----------
+     「魔方旋转 / 空间贯通」那两行本来就是自定义控件（.extraBtn + .extraBox），
+     不是原生 checkbox，所以这里只换表面：未勾 = 一方素玉，勾了 = 钤了一枚朱砂小印。
+
+     【不动尺寸】.extraBox 的 14px 和那 4 个定位数字（left:4px; top:0; width:4px; height:8px）
+     是对勾能画正的全部依据，也是 browser-check 里"两块高度正好 86px"那条的组成部分。
+     所以这一节只写 color / background / border-color / box-shadow。
+     【也不动 transform: rotate(45deg)】那个 45° 只作用在【对勾】这个伪元素上。
+     把 45° 挪到盒子上就会把对勾也一起转，画出来是个 L —— 这条在实测里踩过。 */
+  .extraBtn { border-color: #b3a184; }
+  .extraBtn:hover:not(:disabled) { background: #f2ead8; }
+  .extraBtn .extraBox {
+    border-color: #a8967a;
+    background: #eef1e6;            /* 素玉：淡竹青底 */
+    box-shadow: inset 0 1px 2px rgba(58,74,54,.14);
+  }
+  .extraBtn[aria-pressed="true"] .extraBox {
+    background: var(--danger);      /* 钤印：朱砂 */
+    border-color: #7d2a20;
+    box-shadow: 0 0 5px rgba(156,52,40,.34);
+  }
+
+  /* ---------- 5c. 器物：拉条 = 竹尺 ----------
+     【只包外壳，不动填充色】那条渐变的两个色（--lv 档位色 / --well 凹槽色）是
+     JS 按强度档位写进去的，承载的是"现在是第几档"这个信息 —— 改它就等于改语义。
+     所以这里只给外壳一圈竹木边框和内阴影，让它从"扁平色块"变成"一把尺"。 */
+  #aiRange {
+    border-color: #a8967a;
+    box-shadow: inset 0 1px 3px rgba(74,64,52,.16), 0 1px 0 rgba(255,255,255,.34);
+  }
+  #aiRange::-webkit-slider-thumb { background: #f2ead8; border-color: #6d6353; }
+  #aiRange::-moz-range-thumb { background: #f2ead8; border-color: #6d6353; }
+
+  /* ---------- 6c. 演示盘的"宣纸发光"质感 ----------
+     只作用在【起始界面的演示盘】上，对局盘一个像素都不碰。
+
+     【为什么只能走 CSS filter】draw3D() 和那批着色器是演示盘与真棋盘共用的，
+     动 --grid / --white 等于把真棋盘一起改了 —— 而那两个颜色是照
+     "淡底上白子只有 1.3:1、全靠 --stone-edge 描边才看得见"这条硬约束调出来的
+     （见 :root 那段）。CSS filter 挂在画布元素上，是唯一一处【只在预览生效】的开关。
+
+     0.6px 这个数是量出来的，不是试出来的：
+       · blur(0.35px)  —— 实测改了 0 个像素（DPR 1 下低于可见阈），等于没加；
+       · blur(0.6px)   —— 改 6,126 个像素（左半屏 0.97%），线框结构完好，
+                          而"近白像素"从 15886 升到 16127 —— 线被柔开之后反而更亮，
+                          正是要的"半透明宣纸发光"，不是"糊掉"；
+       · blur+sepia+contrast(1.08) —— 左半屏 23.75% 像素被改，
+                          **近白像素直接归零：线框被整个抹掉了**。已否掉。
+     【为什么不是更大的 blur】那层网在 15³ 下非常密，再大就并成一团灰雾，
+     演示盘会从"一个立方体"退化成"一片脏"。
+
+     代价实测为 0：帧时长（70 帧统计）在加滤镜前后都是 avg 4.17ms / p95 4.4ms。
+     GPU 做这个尺寸的高斯模糊不吃亏 —— 所以这里不需要为性能做取舍。 */
+  #stage.preview #gl { filter: blur(0.6px); }
+
+  /* ---------- 7. 新副标题的行 ----------
+     现在标题块是三行：主标题 -> 副标题 -> 原来那行「十三向连五…」。
+     【字号必须跟着 .sub 一起走】它比 .sub 多占一行，而 #setup 是居中的 ——
+     字号对不上，整列高度就对不上，紧凑档那套"省 80px"的账也要重算。
+     所以这里显式写死 = .sub 的同档值，并在【同一个断点】再收一档。 */
+  #setup .tagline {
+    color: var(--danger);
+    font-size: 14.5px;            /* = #setup .sub，同档 */
+    margin-top: 1px;
+    line-height: 1.0;
+    letter-spacing: 1px;
+    opacity: .92;
+  }
+  /* 标题块那三行的行高各收一点 —— 和上面 #setup 的内边距一起，把新增的
+     那一行还给「开始游戏」。收行高不会让任何一行换行（这三行都是单行短句），
+     而 browser-check 只比"三维↔四维"的相对位置，常量高度变化不受影响。 */
+  #setup h1 { line-height: 1.02; }
+  #setup .sub { margin-top: 2px; line-height: 1.05; }
+  /* 跟住紧凑档（断点必须和上面 @media (pointer: coarse), (max-width: 700px) 一致）。
+     这一条放在本段末尾、也就是整个文件最后，才能盖住前面那条 #setup .sub 的档位。 */
+  @media (pointer: coarse), (max-width: 700px) {
+    #setup .tagline { font-size: 13.5px; }
   }
 </style>
 </head>
@@ -3488,11 +3746,71 @@ ramène à l'écran de départ.
   </aside>
 </div>
 
+<!-- ==========================================================================
+     v3.1.6 古风装饰层
+     ========================================================================== -->
+
+<!-- 【主标题的墨韵滤镜】宽高 0、不占位、aria-hidden。
+     被 #setup h1 用 `filter: url(#inkTitle)` 引用着 —— 注意滤镜在这一层，
+     标题那一侧只写一个 url()，所以 applyStatic 覆写 textContent 时不受任何影响。
+
+     五步的用意（每一层都可以单独调、单独删）：
+       ① feTurbulence   造一张分形噪声。baseFrequency 的 x/y 刻意不同(0.05/0.11)：
+                        相等的频率会得到"均匀砂纸"，不等才有【顺着运笔方向的墨丝】。
+       ② feDisplacementMap  拿噪声把字形的边缘推开 —— 这一步是"毛笔"感的来源，
+                        scale 越大越毛糙。3.4 是"看得出毛、但还认得出字"的量级。
+       ③ 朱砂套印     把②的结果往左下偏 1.4/1.2px、染成朱砂、压到最底层。
+                        这是模仿【一版多色套印】时印版没对准的那一点错位 ——
+                        单看是"印得不齐"，合起来就是"手工印的"。alpha 只有 .26，
+                        再高就从"韵味"变成"重影"了。
+       ④ feGaussianBlur + feComponentTransfer  先轻微渗墨（stdDeviation .5），
+                        再用一张 alpha 查找表把笔画中心重新压实。
+                        没有这一步，字会被模糊成"没对焦"而不是"墨渗进纸"。
+       ⑤ feMerge      朱砂在下、墨在上。
+     【color-interpolation-filters="sRGB"】不写的话滤镜链在线性空间里算，
+     朱砂会被算成偏橙的土色 —— 这是 SVG 滤镜最容易踩的一脚。 -->
+<svg id="inkdefs" width="0" height="0" aria-hidden="true" focusable="false">
+  <filter id="inkTitle" x="-14%" y="-20%" width="128%" height="140%"
+          color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.05 0.11" numOctaves="4"
+                  seed="11" result="grain"/>
+    <feDisplacementMap in="SourceGraphic" in2="grain" scale="3.4"
+                       xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feOffset in="rough" dx="-1.4" dy="1.2" result="shifted"/>
+    <feFlood flood-color="#9c3428" flood-opacity="0.26" result="cinnabar"/>
+    <feComposite in="cinnabar" in2="shifted" operator="in" result="redplate"/>
+    <feGaussianBlur in="rough" stdDeviation="0.5" result="soft"/>
+    <feComponentTransfer in="soft" result="inkface">
+      <feFuncA type="table" tableValues="0 0.62 0.90 1"/>
+    </feComponentTransfer>
+    <feMerge>
+      <feMergeNode in="redplate"/>
+      <feMergeNode in="inkface"/>
+    </feMerge>
+  </filter>
+</svg>
+
+<!-- 【竖排古文水印】内容去标点、按朗读断气点分三列。
+     vertical-rl 下 <br> 就是"另起一列"，列从右往左排 ——
+     于是「亦有格五」在最右，是古籍的读序。
+
+     【刻意不进 data-i18n】六种语言下它都是这句中文原文（见 CSS 里 #inscription 的注释）。
+     它不是界面文案，是一件"挂在那里的书法作品"，所以既不翻译、也不随语言变。
+
+     【aria-hidden】纯装饰；让读屏器念一遍古文只会干扰操作。 -->
+<div id="inscription" aria-hidden="true">亦有格五<br>其法布子成行<br>以得五者胜</div>
+
 <div id="setup">
   <div class="titleRow">
     <div class="seal serif">弈</div>
     <div>
-      <h1 class="serif" id="setupTitle" data-i18n="setupTitle">三维五子棋</h1>
+      <!-- v3.1.6 起标题是三行：主标题 / 副标题 / 保留的十三向那行。
+           【h1 里不许有子元素】applyStatic 是拿 textContent 覆写的，塞进去的任何
+           子节点都会在下一次切语言时被冲掉。墨韵是靠 CSS `filter: url(#inkTitle)`
+           挂上去的，DOM 结构一个字没动 —— browser-check 读 setupTitle.textContent
+           的那几条断言也因此不用改。 -->
+      <h1 class="serif" id="setupTitle" data-i18n="setupTitle">五子魔方</h1>
+      <div class="tagline serif" id="setupTagline" data-i18n="setupTagline">六面贯通，五子一线</div>
       <div class="sub serif" id="setupSub" data-i18n="setupSub">十三向连五 —— 立体棋盘上，光堵正面是没用的</div>
     </div>
   </div>
@@ -7434,7 +7752,8 @@ const STATIC_TEXT = { en: {
   "setupBtn": "Settings",
 
   // ---- 起始界面
-  "setupTitle": "3D Gomoku",
+  "setupTitle": "Gomokube",
+  "setupTagline": "Five in a Row Through Six Faces",
   "setupSub": "Thirteen directions — on a 3D board, blocking the front is not enough",
   "rowLabelMode": "Mode",
   "rowLabelFirst": "First player",
@@ -7629,7 +7948,8 @@ STATIC_TEXT.ja = {
   "restartBtn": "最初から R",
   "swapBtn": "先手を入れ替え",
   "setupBtn": "設定",
-  "setupTitle": "3D五目並べ",
+  "setupTitle": "ゴモキューブ",
+  "setupTagline": "六面を貫く五目並べ",
   "setupSub": "13方向。3Dの盤では、正面を塞ぐだけでは足りません",
   "rowLabelMode": "モード",
   "rowLabelFirst": "先手",
@@ -7761,7 +8081,8 @@ STATIC_TEXT.ko = {
   "restartBtn": "다시 시작 R",
   "swapBtn": "선수 교체",
   "setupBtn": "설정",
-  "setupTitle": "3D 오목",
+  "setupTitle": "오목큐브",
+  "setupTagline": "육면을 관통하는 오목",
   "setupSub": "13개 방향 — 3D 판에서는 앞만 막아서는 부족합니다",
   "rowLabelMode": "모드",
   "rowLabelFirst": "선수",
@@ -7896,7 +8217,8 @@ STATIC_TEXT.ru = {
   "restartBtn": "Заново (R)",
   "swapBtn": "Сменить первого игрока",
   "setupBtn": "Настройки",
-  "setupTitle": "3D Гомоку",
+  "setupTitle": "Гомокуб",
+  "setupTagline": "Пять в ряд сквозь все шесть граней",
   "setupSub": "Тринадцать направлений — на 3D-доске защиты спереди недостаточно",
   "rowLabelMode": "Режим",
   "rowLabelFirst": "Первый игрок",
@@ -8040,7 +8362,8 @@ STATIC_TEXT.fr = {
   "restartBtn": "Recommencer R",
   "swapBtn": "Échanger le premier joueur",
   "setupBtn": "Réglages",
-  "setupTitle": "Gomoku 3D",
+  "setupTitle": "Gomocube",
+  "setupTagline": "Cinq en ligne à travers les six faces",
   "setupSub": "Treize directions — sur un plateau 3D, bloquer l'avant ne suffit pas",
   "rowLabelMode": "Mode",
   "rowLabelFirst": "Premier joueur",

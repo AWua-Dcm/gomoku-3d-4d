@@ -230,10 +230,19 @@ async function freezePreview(yaw) {
  *   visibility   —— 它本来就是继承的，computed 拿到的就是生效值。
  */
 const SWEEP_EXPR = `(() => {
-  // 允许名单：这两处【故意】在英文界面里留汉字。
+  // 允许名单：这几处【故意】在英文界面里留汉字。
   //   #langBtn 写的是"点了会变成什么"，英文界面下就该写「中文」；
-  //   .seal 是装饰性的古风印章，换成拉丁字母和那圈楷体边框更不搭（见 STATIC_TEXT 的注释）。
-  const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal")]);
+  //   .seal 是装饰性的古风印章，换成拉丁字母和那圈楷体边框更不搭（见 STATIC_TEXT 的注释）；
+  //   #inscription 是 v3.1.6 的竖排古文水印（「亦有格五／其法布子成行／以得五者胜」）。
+  //     【它六种语言下都是中文原文，这是设计而不是漏翻】它是一件"挂在那里的书法作品"，
+  //     切到英文界面时不该跟着变成英文 —— 就像一幅字不会因为你看的是英文说明书而变。
+  //     【为什么必须显式放行，而不是"反正它扫不到"】：它现在带 <br> 子元素，
+  //     而下面那道筛只看叶子（el.children.length），所以眼下恰好被跳过。
+  //     但那是巧合，不是保证 —— 哪天有人把两段合成一个纯文本节点，这条就会突然变红，
+  //     而红的原因（"我合并了两行"）离现象（"英文界面里有一串汉字"）很远，极难归因。
+  //     显式写进名单，等于把"这是故意的"钉在代码里。
+  const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal"),
+                         document.getElementById("inscription")]);
   const visible = (el) => {
     if (el.getClientRects().length === 0) return false;
     if (getComputedStyle(el).visibility === "hidden") return false;
@@ -921,7 +930,9 @@ try {
     "英文的行标都排得下一行（宽度够，没有折行）",
     en.labelLines.filter((x) => x.lines > 1)
       .map((x) => x.id + " = " + JSON.stringify(x.text) + " 占了 " + x.lines + " 行").join("；"));
-  check(en.titleText === "3D Gomoku", "起始界面标题是英文", "实际 " + JSON.stringify(en.titleText));
+  // v3.1.6 改名：三维五子棋 -> Gomokube。这条断言查的是"切语言真的换了标题"，
+  // 名字本身不是重点，所以跟着新名字走。
+  check(en.titleText === "Gomokube", "起始界面标题是英文", "实际 " + JSON.stringify(en.titleText));
 
   // 规则摘要读的是【渲染出来的文字】，和中文那几条同一个套路。
   // 光查"切了语言"是不够的：data-i18n-html 那条通路（走 innerHTML 而不是 textContent）
@@ -1184,7 +1195,7 @@ try {
   })`);
   check(afterReload.lang === "en" && afterReload.domLang === "en" &&
         (" " + afterReload.cls + " ").indexOf(" lang-en ") >= 0 &&
-        afterReload.title === "3D Gomoku",
+        afterReload.title === "Gomokube",
     "重载之后界面还是英文（语言选择存在 localStorage 里，不是只活在内存里）",
     JSON.stringify(afterReload));
   check(afterReload.setupOpen === true && afterReload.fourD === false &&
@@ -2131,7 +2142,8 @@ try {
     table(STATIC_TEXT[${JSON.stringify(lang)}]);
     for (const k in CORE_TEXT) eat(CORE_TEXT[k][${JSON.stringify(lang)}]);
     const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal"),
-                           document.getElementById("langList")]);
+                           document.getElementById("langList"),
+                           document.getElementById("inscription")]);
     const visible = (el) => {
       if (el.getClientRects().length === 0) return false;
       if (getComputedStyle(el).visibility === "hidden") return false;
@@ -2160,7 +2172,8 @@ try {
   })()`;
 
   const sweepWith = (judge, extraAllow) => `(() => {
-    const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal")]);
+    const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal"),
+                           document.getElementById("inscription")]);
     ${extraAllow || ""}
     const visible = (el) => {
       if (el.getClientRects().length === 0) return false;
@@ -3332,6 +3345,52 @@ try {
     })()`);
     await sleep(500);
     await shot("12-四维三种机制");
+  }
+
+  // ------------------------------------------------------------------
+  // v3.1.6 · 古风层的三件（起始界面）
+  //
+  // 这几件只有真浏览器答得了：竖排是不是真的 vertical-rl、水印的三个分句合起来
+  // 有没有断错字、主标题的墨韵滤镜有没有真的挂上、演示盘的宣纸发光有没有生效。
+  // （字符粒子那一层的断言在另一个 commit 里加 —— 它要跑鼠标、要重新加载页面。）
+  // ------------------------------------------------------------------
+  {
+    // 关掉触屏模拟、钉死视口、重新加载页面 —— 理由见本项目里
+    // "拍 6-起始界面-英文 之前要先 Page.navigate 一次" 那段注释的同一套道理：
+    // 跑到这里页面已经经历过八十多条断言和好几轮视口改动，状态回不到干净，
+    // 直接从干净状态量最省事。
+    await send("Emulation.setTouchEmulationEnabled", { enabled: false });
+    await send("Emulation.setDeviceMetricsOverride",
+      { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+    await send("Page.navigate", { url: PAGE });
+    await sleep(3000);
+
+    const re = await ev(`(() => ({
+      inset: !!document.getElementById("inscription"),
+      writing: document.getElementById("inscription")
+        ? getComputedStyle(document.getElementById("inscription")).writingMode : null,
+      insText: document.getElementById("inscription")
+        ? document.getElementById("inscription").textContent : null,
+      tagline: document.getElementById("setupTagline")
+        ? document.getElementById("setupTagline").textContent : null,
+      titleFilter: getComputedStyle(document.getElementById("setupTitle")).filter,
+      previewGlFilter: getComputedStyle(document.getElementById("gl")).filter,
+    }))()`);
+
+    check(re.inset === true && re.writing === "vertical-rl",
+      "竖排古文水印在，且真的是 vertical-rl 竖排（不是被谁改回横向了）",
+      "writing-mode=" + re.writing);
+    // 三个分句合起来必须【逐字】等于原句 —— 断句断错一个字的顺序，这里当场红
+    check(re.insText === "亦有格五其法布子成行以得五者胜",
+      "水印文案 = 去标点的 15 字原文（三列断句合起来必须逐字等于原句）",
+      JSON.stringify(re.insText));
+    check(/^url\(/.test(re.titleFilter || ""),
+      "主标题挂着 SVG 墨韵滤镜（filter: url(#…)）", "filter=" + re.titleFilter);
+    check(re.tagline === "六面贯通，五子一线", "新副标题在位", JSON.stringify(re.tagline));
+    // 演示盘的"宣纸发光"。0.6px 是量出来的：0.35px 改 0 个像素（等于没加），
+    // 而 blur+sepia+contrast 那组会把线框整个抹掉（近白像素归零）。见 CSS 里的注释。
+    check(/blur/.test(re.previewGlFilter || ""),
+      "起始界面的演示盘挂着宣纸发光的柔化（且只在这一档）", "filter=" + re.previewGlFilter);
   }
 
   // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态
