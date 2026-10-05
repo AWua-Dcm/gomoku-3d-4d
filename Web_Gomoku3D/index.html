@@ -555,7 +555,15 @@
   /* 【v3.1.6 放大到 81px】一路 38 -> 54 -> 81（+50%）。放大是有代价的：
      标题块那一行跟着长高，而「六种语言都不用滚动就看得见」那条断言的余量只剩个位数 ——
      见 #setup 那段"第三次收"的注释。这一版从 #ruleNote 的行高里把这一行还了回去。 */
-  #setup h1 { font-size: 81px; margin: 0; font-weight: 600; letter-spacing: 2px; }
+  /* 【81px 是上限，不是定值】固定 px 在窄窗口上会撑破面板：900×700 时 #setup 只有
+     462px 内容宽，减掉印章和间距留给标题的约 402px，而 "Gomokube" 在 Georgia 下
+     81px 要 ~418px —— 实测溢出 27px，"窄屏+英文没有横向滚动"那条断言当场红。
+     标题能占的宽 ≈ 0.58×视口 − 120（面板 58%、内边距 60、印章+间距 60），
+     而最长的标题（Gomokube，8 个字符）约 5.0×字号 + 16px 字距 ——
+     反解出字号 ≤ 0.116×视口 − 27。取 7.8vw 是这条线的一个保守近似：
+       1600/1280/1080 下都是 81px（不缩），900 下 70px，701 下 55px。
+     【为什么不做成 max-width + 省略号】标题被截断比小一号难看得多。 */
+  #setup h1 { font-size: min(81px, 7.8vw); margin: 0; font-weight: 600; letter-spacing: 2px; }
   #setup .sub { color: var(--dim); font-size: 14.5px; margin-top: 4px; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
   /* 每一行占一个固定高度的槽位。三种模式相关的行（三维尺寸 / 四维尺寸 / 转动冷却）
@@ -1029,6 +1037,23 @@
     font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR",
                  system-ui, sans-serif;
   }
+  /* 【v3.1.6 补：.serif 也得跟着语言换 —— 上面那几条只换了 body】
+     `.serif` 是个类，它把字体栈【又覆盖回】楷体/宋体；而标题块那三行
+     （h1 / .tagline / .sub）都挂着这个类。于是英文/俄语/法语的标题其实是
+     用中文书法字体渲染的。
+     后果在俄语上最刺眼：KaiTi 没有西里尔字形 -> 回退到 SimSun，
+     而【宋体把西里尔字母画成全角宽】。实测「Тринадцать направлений — на
+     3D-доске защиты спереди недостаточно」自然宽 856px —— 65 个字符平均
+     13.2px/字，几乎一个汉字那么宽，比正常衬线宽出约 60%。
+     换掉之后俄语才谈得上"紧凑"，顺带把标题块那一列的整体宽度也带下来了。
+     【为什么是 Georgia / Times New Roman】两者在 Windows 和 macOS 上都带
+     西里尔字形；而且都是衬线 —— 拉丁/西里尔没有"楷体"这种东西，衬线是最近的
+     对应物，和标题上那层墨韵滤镜的气质也接得上。 */
+  html.lang-en .serif,
+  html.lang-fr .serif,
+  html.lang-ru .serif {
+    font-family: Georgia, "Times New Roman", "Source Serif Pro", serif;
+  }
   /* 【这里原来有一条 html.lang-en .rowLabel { width: 138px }，已删除】——
      见上面 .rowLabel 的注释。留一个记号在这里，是因为 browser-check 里
      曾经有一条"英文 .rowLabel 宽 138px"的断言，它现在改成了"行标贴合自己的文字"。
@@ -1144,7 +1169,9 @@
 
        320px 那一档在后面还会把左右内边距再放到 20px，那条在源码里更靠后，照样赢。 */
     #setup { gap: 12px; padding: 16px 22px; }
-    #setup h1 { font-size: 58px; }      /* 跟着基准那档一起放大（38→54→81），比例保持一致 */
+    /* 紧凑档同理：393px 竖屏下 13vw = 51px，320px 下 42px ——
+       都能塞进那一档窄得多的面板，同时不会小到看不出"这是个大标题"。 */
+    #setup h1 { font-size: min(58px, 13vw); }
     #setup .sub { font-size: 13.5px; }
     .seal { width: 38px; height: 38px; font-size: 22px; }
 
@@ -1217,7 +1244,7 @@
      【改动水印文案时必须重新切】新字不在这个子集里就是豆腐块。 */
   @font-face {
     font-family: "BrushSub";
-    src: url(data:font/woff2;base64,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) format("woff2");
+    src: url(data:font/woff2;base64,d09GMgABAAAAABW0AA4AAAAAIpgAABViAAIAQQAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcCgZgAIEkEQgKuySrHAE2AiQDJgskAAQgBYNeByAMBxt2GVGUr1qS7KsD85CucdCmqKjj8WnpIuyXvhhIpdJuZIQkswO0za44jhAOJBQrsWBWQtsTxOpalNFL3T5cZb7bu4iUB+Levb8qkIDWeVlaGo5tXeeBRtHYtE0CK7Bwnef/q7Pv/KInwI5wCapi25k2ae97T5Y9LEVK7JMsODPOB0BltAQlIjLhAsYJBsFVDsGaLJS0GK7e1fHFOjAUUxH+hWEU04J0f2yunlzh+pLQ1tkShJHZrqtbSsfhdpUrXmlOqbbBbaVE8sv9r7V6YlHQetYpkdIpZXZ9/mD22bSX9pFOvCFa095UVBq/XeRKiURIAduWnNBkv/UYJsOVXeDmmldV9eCARpAS50d6rwJAAECmzxBYUwRrAAzyH0ACWo3Z5HokWgEuARIANIOiAQAI6urAIeAY8EXf77TzMK+K7cilwKHQvlENXDzbDYBfYNNDffANvVHPGLRD8IECFWIITdVFFEqfDF0b+lhVGReWCCcNpuIZu7NI2d7515sJzfe6g0c1fJ7w9Kc3F2+O22y2oXdiz2poZdH4z5HwYeLg2V73ZlKTZdXR9I2gJ2tBSuB/FqDHGVHTiEeG9NumFLVkdUjoEgYhigCIOCEE/cBvH5IV08nag3QtjJhFnYphFFG06OQmjOG4hk60IzqwmRoqTsEicWN6OkZR0mjt8xg0dh27l4V/nL+dfX6lbNIbhnshGbRFIHL0thJTDQ3fsroaNftLoLqEi12T/Uqr76j+jYJKjJvtn7a7uWliNfl2qrpXvVlefTL6D9oD8bQWbgA415mrZK+Zni4Ffb4zzDClxlcWWb3nWjKslmyle3NxSxv9PezyWGmeVd1H0bXInFu739l3dWojTeuuZ1lMEQTvbtX0CRuSKrnuJeKJbE4lUPpKBZHIckBf1+G2rc0B6TOoAfLKZcIFgH9r2fqR8OPExIos4qmSoFKz8+uz8TIVgSlOZ42PECm2mFqQ7XWLmyZu0K8Je8Wzjpb0bLHX+CGRjy5gaVlJoCfUAtNNtA6utdZGpd8pxZhaZpaB4SEgxrY51FHuX6nboQsqY2xjQLkRacn+S/POU+9mf4teQK/Z/My7OpQ85Cl68ye4NZ1IU0zGDUQDUIVOcQn3CC9S8V+IoFsNH2nJHKa3gvPl/UnqAGjddm1rFeu+G8pyyUxwyZvnFg8rPcfJfSolnSp9VupJ1iLTxnamqdI+b45mhIk+h25EWCAWZF+pCrwEsnmZE13P0pywrOO7hAFmwSVBVaq6BoYTXqWCSUJUxM43xYh+njDzrtyy6/UpgQAkKU2TciNH2N/Xuj1Mw7DLAbHV05LYdrt3mXMZl9yy3fi5invTNVZyZngZVNjXj7YIcM/N9UEw7wjfQAz8CyMaK9yXTSptKrjr9xNmhqqKVBVTJwzR/+cTptuSWaIotiW2eh3Hc1bLdtselbFFnXVDLTWLTTV0qqrJJFoPMdLVTXFBHw55cAs86FyVCFfu3pRNU/oRwgE8Tf/+vlQ0rmNq2+6nf8G+gHiBFncBWYbrL9GcP9+cu4UpHdAnlX7IkHmho/TTSAs9yAO8RVToV7sJNyV+H1Q1nlxnzO4cEVQg84KS8ONXNlkUgwJz7qGz1oqV1q5V924YL6uKAwrCzHwgTGW2NJ5PLLEHo4NXECmmgzJI5cE9gImG0dKcCekU4AmioleoCH+GoLNa0ui7EkpU0DKNaoiTxxJSuokgX1mUTRVxzWqUORU7bu51yeDPIA9kp8ep3H+uUUzlJkK2ou26Uv3vfl2oYiWr5y08FccAsLJxF0FzAKuGTvGqt26R1Ru4Lwg/AvWI8BuEkn9B6TMmNeNaEvF3/4RbWgtuCjXwvNyImgOZ7MZxWfB5Sc/SXAThPs9lnyBsEa7MTsSSTrGdbM6bKq7ZAZWYQ7FX6IW0vdeNtkYGVpW0SGatkIQRIJLMnUvTt2jx0LT3s/YkdZy2prbLHRnpw1OVqYFz+A3h4TVvWN2i3U3TcRboMxPgZ2kc3Mc21ogDrjm+pTTGpKrhqRAGB2MVYEKiV91cGOlMuYF++2zbsrGkkC1zgiD8hk73JM8kFSsbe93RWzcY8f3HmNYlMb3znt3MquEeoPn6nqmnPaU1wLGgQlJeOB9yZsIur5Z9I03tuqBSLE6/sbqhQ+mFk1Nb2pgmN9UfrsJ0jbZ8jSGSEpkULZYfDsKhmFVX32OQQRWxUoomRL86IO+ta+LmNsVZddr26ncyLbsG8MInwLK+A157TX/P/T+B5/swjIDfE2KdB8z+IDxa9aN/kjv+kar6+oc7N2h4r5/v/fjYawEGMOF7Si/9ajVJh+Kx1Vxujs2p6hMgShCiGEz06YoOcvJzbPVus0DY6FQ4od82e9eD94r57UknfH77dovKAmnr2221hkx7va8Ch9TqupD99YkFKm4naG/dUrrRdwq14Ft4ZfqNDblAJACuKtlcf74YeJI7KMBqDZ03F1NB8zWfadQueMxlMfWs/lYRjApyZT1VfZuO1h9rwhS61Zv9ckvnBADgssHBK8JIj95IvMBdJ4OPZ9+cCnQ9Qz8BOC/5ZYu+UhHkKyWru9wwwyAw+nc1e13N4lo3wgIwp6oh4HQDUzAMZlNXwRwn3BV1l21XeeR1BomXHXKv7JLJou6U/DwPw9yQEB2EjbxXD4qDUoEhhFeMdNPIjK7REOPmvBnQxN0RaRbtQjetqOT2/x6EbUdrcy17HRAClvzBiOZsv22tcq5xMrZjiTkWPONdzOI2dYLKGNOyF9YHFU/0FuCTfOQlPWOkoiDLPc+h3NrxO0ff7aARdR81QtX0S+2aPRsFyAdmAjcPKo0b4fuKp08JU0n0Fjr5W7/MES6uT5zgbKW51HNzbGeDhP19nZ+YKsOZh4tFQ3JAQqdTfI9ritiyjzFxBwNsYHTXiHeVVNQL4mzdjf8qNwzNm9ktVXFmmEns/K0xEegcgnFURBo3QqKnlKn4EiAPTQq2D1kwIT1ycG+0NW4mtENVZNjNxdYOug7MfORUkgDlgwqnttt7LnfjeepoQ7Ht3qfsL0HYYnh3jwy6LmFmDlMUAW5hiqn7WXcxTjb0/9kOkkZhSJ6iG3oyqZumhN8EOyPOAmEzM2ygiDBAGvQnObhjiBCcGn8mCbLOxXf6fCseuFe2Hkr/j8JdW+g2SJww/aE3YHvxk8ZMTK6OAjqF5D9fUpoW5ONgRt6fhazaTz2lwabCGvPmeT1TV56eIU6487RR8os5IjJFhILcMRolOi2RIpBRB+8fCIYGoAyrxpb7xwekFGDJ64KGT+afLr0gq/4Jv/YqnXk7N9e0d8/zTFGsMDtli42Hr5oz5ruDVp9oLFu7+KJiopSeajKAco2MAj0AlbD6cD8XjVBk/rNn2VJzyd1+90mmZ/Df5eWwmdlD3ubVRMAqR99t90hqR2eF2Jhyg1mwQCSdeFzgI+Ji12a+Hl0Z/dsQqzxcRA9gfzx61ezv1ybUTlx3dZIFRuHRGC9tAilsVlZcro2uH5Ecaj/vwqmB06TkZKiYrgctM9oEAktaevYL7NQBpSU+scNE11nddEAcqrJXLOXRETSBiFakXrj49ufjEB4QPAlLFcgyZMnDfX2lRhzXK6xIpX/R4TchZ1CiWiqUac5bibMnBwoiudlPmNpw/Jz15pCGmB2lZKCYfS479909KK3knRaYDcm0lu1sAQ6rDZgnCxv16jMPjtBFdlo5EZZtF4mK6BssofqMUW8zsyUqOoZ0105w4sTJzpeuit3V2fe6MgmO/wJzhR2oUKVqWUq8RwloF0bCcQmZkNwTvVPIjV02/Q1laAd1DtK0DA8uPsfcNwzcrs8NyFD7NX2cnxKbkf0rM6vb0N/7O8Pz9jmTvbOXyIHnTfSDUcsVm0m0ugCM/KDKKp5EVwpk9iEEbPPY1Rdn/1Fx9EhadWTMEEWj/hMbd2SU7MKFVMKBG2uPfoo5YdeltR1kiVVM/BWCbtr2oqvb18yLitcwD8VRKOqLFxdpE0gfD7ednx8lf+dhHItTjYOubh6NmLptKDU2lT3IZBBglKQULXOKMwk7EVJllhaTh0gLvTaRJ5bSF3n3KFDC0aV9vtXTwU6S62SyCvh86mrp71CfUof6EMM9OUMX+ktavrZ+xAVz58qTFSjm2Pk9gNFVztkSCtReK5fa5F6I44LvX//RNJeM2pAgmS17+8qsSC6ltcarpPUyhl4S6S5pTjSQYjkWesZfCU+vqC4T5iuL/1y7vr2/dnyhAxxQkhYdJvczBQyqaYfWjpxzYjNbRRauOwO/PlxYEdVgGeVkQr3ED3U/8kFBPftlc2kxL2KpztHwIFUi5faUT1MgGUImilMFkL/13x8oafkkzDGYxsu2zayoCtmwEoUh60K3lzbUYWe5s5rvavYEml5KfPyMPXDi/1Tf+zHCIBNrrG7tViRc8zdLiB5EPXbW5a9a+tYNbKUMchgL5pg47MuHRKCUQ2U6DP2DhBxZFEUNCzbyuyNA6cD6V42d3a849PyJcydO0YM65WuWmW21Tcg0MQxjyY0raMRTFeUe/qZObZ/NtkSTmMfGOjUiR8orK8tPYYJeP0Rc7u1qKd3WFkmt7Fxj9mso49duJl/pYqv79cT2/EKcnNEykzJkOAxGvKgJEYC454vo4EvpjQg8kVFSupSI8r8y357HNEDmOM9JvmqKXJJKf0BAym8Qkcy08q/wilW/cHIlncd0cvciWi64mahRe+vKmbrTm/by+RjVFELvEmU8Eo+mWufa5Vtl4te6K2OAAOsayqdVIIgnANJPFk4MM9PDKLnbMLl4jZQTgRlRvt9+0IYS4H9dNhf7b1ubdHaW4OD7MNnj3KtXERb1/S47yiESoqXrL8wl0/648sc2ISEl7fcb7f2vGcmNbI1mkwlT8mDtv5V/AY2KDWb+4zMMV6p/onD6KOhSqqAQNigc2LRvGMq5Nph582wljoaUCaUzlhpGxJLaqutXRMraDOHiBZOpqjSJBwPPdYaswppX2t3t1whr7qeGrZw1IT3cerWGqu2m+H2vGnPa7Oi03qqjCNh/nwrtj+TyPLY82nBA6b+7+OmxRvp0Hl0i67mmOuFl8fMJiUbVNajo0ghO/NRV63HdbCF3Wkj0lrYU4s3at3O8OHPnj/gH8JhMHQk3Nm5P8md+iKUDKcZNlCAs45Kyr5bH1PvXL58aUWQRgcR1xRReR8zn6prStWqfLqCxwzvYzjOOgwTyNIlqejh8yZKpsRwDGtia33g2oMHROmq6V3K7d0maP9rlH4M0QvUyCWEDAx/uqXROJK2KNnPQKBro5WbRsfRalV48NUYP6BJyT7oPyjiy64AqULUI5axM48lSdwsrl8ubD0yfvTN/Hpqwpg9m3btsEP24DtdZc/WZDhqrpOKEYS6glSn7P9ycRYEiM8nvzYhbONyt1GzDSFZk8mq9lUD0fD9d6yZtC4+OK0/Iv9p8xTJDXb/+PN89HAwFr/N0VjFD79zFGMil4m8Adhkv7bxOuO49F5A2smir5jwmohS6ib79PFzXPZXvT8biPI33CE3kqzvDr9iXFAHi3KMJaFGShjuXzSN+C09dEGiSZqjvBdTHbBgih8+hDX2FggzMJ39f5GivbkEQazWk6KnXIUQkfaeezkOOXa7rjzkXbG4K9PgUjOhG6PaJXShdBvqnOt8Fj18iWxT8Tde0+S98qq0VaLn/rdezrR6ZpnnmxVejItL67VTGAUYqlLi3pPIWwp83rU0WMh+R0eAlfYvzLEXLCYQgOCgL9ynCiSkTMwEBT3txyvo0tzIGzn9QFeJG3r3QOYx7kzafP+1A4iQvo3IiwpyPjP7VpE2756giA6XHQT27wf0yA30dCYPHFOHYUxa1B7yu0avKcJ61DCJLqEE0zZLs45fEZfSO9qCKpcecsrq9KZD2GXlqUW8zrHyiNJeZhFHfXtQu2pvAN6TO3g6qOqV7ZrBntP3Qsy0Ro1n0JgVwuhNFp/ycwANVtKpMSBFu1LhBMaI6vmBb6myKzfX/4QUTxtVbrC0uFVONzOsDhsOt0xt5QtU6JtCXGK8Cuurv2A8TqUcZXEclScH5/emaDxLpF0Omu4oXrRKqb3DpN+Im3PDJ/abl+2ATftHiX9WhIyQ8aqzPKTve3aD9AgdY9q3jWsk9tpyG2qu0sk8PyRjMlVmJiU1NzIscQK+cOdM3efCQueGLwR3CB+cd9g1fCJBZnb5Y6CHduIJGE4x/OWpMNAg1oJC79XI4IuM4gch+7R/qt/oYTV+rhvWXDASD4Fo+FDFTc+ihtuZ1BHf66od2fogvFAdLEWLlahe1z4L5M+Tb7cqg96a7SW0omPznW5fGwe+1+2XeO1F1qHmXFCYUcefRliSjR0MeUgi9l79wLVybYuw32WDnnw3tPyk7LPESubOigp4+muF6FP3/0VQk+LzsKjzjfacW0NxDcbuV2py+e0bB/BSJSYCnhRFyaDWn+kOO5isJiXCTfU0sk2R6JsqbZs8vzDwhAcjnc4KE7wTiiTphC4bEErZa3QikXBh5NcIQL3rvqPYTOZpFyuv0rt7K/rnsgwtlgDfv/dMjGgeSfWPw7qkmm4gvD1fWM+jh7eZde/SZrksR/M/90rS1szN95iW5Ky3xYON9I2smiVzb/VnhlaaRHGA85zGv7YwvSvGN6fWVu0wlaptZfHl0o+Y781SvrvjZuW4rwT8eimoWgzuBmZoiJrTayIyhFBxRmp3jGpHKt8C7zHofb3i8lxHFLiso7z50RBag0DnyN0cPB2vG5HbbrSdPmOkWW6svAHDG7vRwHT32szUrtdXATko/Py+56yxzVXEirQVOt0bt1SgREwUSiLmcB3d7nbaE7B/viJppJmMUnJ2g6X3GDK0y1gRZimeQlJO8X3cNPX+9ec1kfF+wiDq5o/39Kq6YsKYATOLhYMo0HhvB/5fL1Cd5AT+r3woRP4IOUJLo3p8xGH4GAADw5HnfwW4w+++Hi+B5gN+x9g32j2kgGWx952AroEfUwVOgxZFiaX9IIXPtwEimOr3AGqhYafotJUZgBBAjoM8Q6ivpD4E0Gwtei0nf1A5ABcSzowKhuVSBeXtQQdgEvAoBL5B9HGUZJAJSRYrVKJUjS7ZyxhwJzeHuqJmiGRhrwLgQKQpliZZDNGBYRRbJ5ZRWSbEKw+wZMiyLZP0wUCwO0pOgQ0HknKxTIZUDvCIFB8Cw6KJ8rYBjIceyjGohkwXJ6iU+LyvGdMWYSrWMV1bIT5tLOXIglGTQS6wYctLhaHKJ/W3HffxlxtSLlCEr5XB9zhjwNEA2YO1Cs12gpHEXONuxCVkI) format("woff2");
     font-display: block;
   }
 
@@ -1271,14 +1298,26 @@
        离最挤的那一种还有约 2% 的余量，而 42% 那条线以右是 #setup 自己的 30px 内边距，
        本来就不放字。
        钉右缘而不是钉左缘：左缘会随视口宽度变，右缘才是"不许越过"的那一侧。 */
-    right: 57.5%; top: 7vh; bottom: 7vh;
+    /* 【v3.1.6：整块往右平移 + 放大】两条都有硬限制，数字是算出来的：
+       · 放大受【高度】卡：最长那列 6 个字要塞进 (100vh − 2×内边距)。
+         内边距 7vh -> 3vh（可用 94vh），字距 .04em -> .01em，
+         于是字号上限从 13vh 提到 15vh（6 × 15 × 1.01 = 90.9vh，留了余量）。
+       · 右移受【设置区文字】卡：法语的内容最左沿在窄视口下落在 44.4%，
+         所以右缘最多到 44%（原来 42.5%）。
+       · 为了让它真的是"往右平移"而不是"只往左长"，列距(1.35)同时收到 1.15 ——
+         字形大了 15%，整块却没变宽，多出来的位移才是真的往右挪。 */
+    /* 【右缘 44% -> 43.5%：让出 8px 的最小间距】
+       44% 时实测法语只剩 4px 余量（水印右缘 563 / 内容最左沿 568），
+       而 browser-check 里那条"不许冲突"要求至少 8px —— 只判"不重叠"的话，
+       4px 也算过，但那种余量下次改一个字就翻脸。43.5% 下法语约 11px。 */
+    right: 56.5%; top: 3vh; bottom: 3vh;
     writing-mode: vertical-rl; text-orientation: upright;
     font-family: "BrushSub", "STXingkai", "华文行楷", "STKaiti", "华文楷体", "KaiTi", "楷体", serif;
     /* 一列 6 个字要塞进 86vh：6 × 字号 × (1+字距) <= 86vh
        -> 字号 <= 13.6vh（字距 .04em 时）。取 13vh，留一点余量。 */
-    font-size: clamp(38px, 13vh, 150px);
-    line-height: 1.35;        /* 竖排下 = 列与列的距离 */
-    letter-spacing: .04em;    /* 竖排下 = 列内字与字的距离 */
+    font-size: clamp(38px, 15vh, 170px);
+    line-height: 1.15;        /* 竖排下 = 列与列的距离 */
+    letter-spacing: .01em;    /* 竖排下 = 列内字与字的距离 */
     color: #332c22; opacity: .15;
     /* 两圈纸色外发光：水印压到演示棋盘上时，靠它把笔画和线框拉开一点距离，
        不然浅色纸底 + 淡墨 + 白色线框会糊成一片。
@@ -1288,6 +1327,21 @@
   }
   /* 只活在起始界面。进对局就把水印收掉 —— 那是"在纸上下棋"，不是"看一幅字"。 */
   #stage:not(.preview) ~ #inscription { display: none; }
+
+  /* ---------- 2b. 主标题的字形：行书（只给中文） ----------
+     标题块三行原来都走 .serif，也就是【楷体】—— 楷书一笔一画、很"板正"。
+     这一版把【主标题】换成行书。
+     【字形从哪来】就是水印那支内联的 Zhi Mang Xing，子集扩到 16 个字
+     （水印那 14 个 + 魔 + 方），woff2 5,556 字节，比原来只大 934 字节。
+     【为什么只挂 html.lang-zh】这支字体是中文毛笔行书，子集里也只有这 16 个汉字；
+     日文假名、韩文谚文、西里尔、拉丁一个都没有，挂上去只会掉进回退链。
+     选择器 (1,1,1) 能稳稳压过 html.lang-en/fr/ru .serif 那几条 (0,1,2)，
+     不会把已经修好的"拉丁/西里尔走衬线"又打回去。
+     【为什么不用华文行楷 STXingkai】本机确实有，但它不能嵌进仓库；放进字体栈当兜底
+     是可以的，所以栈里留了它 —— 子集缺字时（比如以后名字改了）还能接上。 */
+  html.lang-zh #setup h1 {
+    font-family: "BrushSub", "STXingkai", "华文行楷", "KaiTi", "SimSun", serif;
+  }
 
   /* ---------- 3. 主标题：代码生成的墨韵 ----------
      字形仍然是【真字】——走 h1 的文本节点，所以
@@ -1508,8 +1562,13 @@
        "Пять в ряд сквозь все шесть граней" 一行要 240px。
        夹到 13em(≈189px) 之后：中文/日文/韩文那三条本来就短（约 130px），仍然一行；
        英/俄/法自然折成两行，在标题下面形成一块紧凑的方阵，而不是一条长线。
-       【为什么用 em 而不是 px】em 跟字号走 —— 以后调字号时这个比例关系不用重算。 */
-    max-width: 13em;
+       【为什么用 em 而不是 px】em 跟字号走 —— 以后调字号时这个比例关系不用重算。
+       【17em 这个数是量出来的】六种语言的副标题自然宽（换成 Georgia 之后）：
+         zh 135 / en 223 / ja 135 / ko 151 / ru 255 / fr 239
+       17em = 246px 正好卡在"英语(223)和法语(239)放得下、俄语(255)放不下"之间：
+       于是英/法各一行、俄语两行 —— 正是要的"英语不必另起一行，俄语还是要折"。
+       再宽一点俄语就一行了，再窄一点法语就跟着折。 */
+    max-width: 17em;
   }
   /* 标题块那三行的行高各收一点 —— 和上面 #setup 的内边距一起，把新增的
      那一行还给「开始游戏」。收行高不会让任何一行换行（这三行都是单行短句），
@@ -1519,7 +1578,15 @@
      收紧只是减少行盒之间的空隙，不会让任何一行换行、也不会盖住谁。
      CJK 字形的实际高度约 0.88em，0.94 的行盒装得下。 */
   #setup h1 { line-height: .94; }
-  #setup .sub { margin-top: 2px; line-height: .95; }
+  /* 【下面那行也夹宽度，而且只让俄语折】
+     自然宽：zh 319 / en 444 / ja 348 / ko 355 / ru 485 / fr 425。
+     31.5em = 456px 卡在"英语(444)一行、俄语(485)两行"之间。
+     （这两个数是在 .serif 换成 Georgia 之后量的 —— 换之前俄语这行是 856px，
+      因为它被回退到宋体、西里尔字母按全角画，那是另一个 bug，见上面字体那一段。）
+     【行高必须从 .95 抬起来】它原来是单行的紧凑值；俄语折成两行之后 .95 会让
+     两行叠在一起（14.5 × .95 = 13.8px，而字形本身高约 12.8px）。1.05 是
+     "两行分得开、单行也几乎不增高"的最小值。 */
+  #setup .sub { margin-top: 2px; line-height: 1.05; max-width: 31.5em; }
   /* 跟住紧凑档（断点必须和上面 @media (pointer: coarse), (max-width: 700px) 一致）。
      这一条放在本段末尾、也就是整个文件最后，才能盖住前面那条 #setup .sub 的档位。 */
   @media (pointer: coarse), (max-width: 700px) {

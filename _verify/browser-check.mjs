@@ -3607,7 +3607,8 @@ try {
     // 设计要求是：水印【可以】压在立体棋盘上（那是刻意的），但【不许】和设置区的文字重叠。
     // 而设置区内容的最左沿是随语言变的（1280 下实测 44.4%~47.4%，法语最挤），
     // 所以这条必须六种语言全跑 —— 只查中文会正好漏掉最挤的那一种。
-    const clash = JSON.parse(await ev(`(() => {
+    // 【临时探针】把异常原样带回来 —— 否则 ev() 只返回 undefined，看不出是哪一步炸的
+    const clashRaw = await ev(`(() => { try {
       const keep = Game.lang; const bad = []; const per = []; const wrapped = [];
       const SEL = "#setup .row, #setup .rowLabel, #setup button, #setup .dimInput, #setup .hint," +
                   " #setup #ruleNote, #setup #sizeSummary, #setup #extraRow," +
@@ -3625,18 +3626,34 @@ try {
         // 【主标题会不会折行】放大到 81px 之后这是个真风险：西里尔/拉丁那三种
         // 标题比中文长得多（"Гомокуб" 比 "五子魔方" 宽），一行放不下就会折成两行，
         // 而折行会同时撑高标题块、把「开始游戏」往下推。
+        const linesOf = (el) => {
+          const r = document.createRange(); r.selectNodeContents(el);
+          return [...r.getClientRects()].filter((x) => x.height > 1).length;
+        };
         const h1 = document.getElementById("setupTitle");
-        const hrg = document.createRange(); hrg.selectNodeContents(h1);
-        const h1Lines = [...hrg.getClientRects()].filter((r) => r.height > 1).length;
+        const h1Lines = linesOf(h1);
+        const tag = document.getElementById("setupTagline");
+        const sub = document.getElementById("setupSub");
+        // .serif 的字体栈也要按语言换 —— 不换的话拉丁/西里尔会掉进楷体->宋体那条回退链，
+        // 而【宋体把西里尔字母画成全角宽】（实测俄语那行因此宽了 60%，856px vs 485px）
+        const serifFont = getComputedStyle(sub).fontFamily;
+        const h1Font = getComputedStyle(h1).fontFamily;
         per.push({ l: l, insR: Math.round(ins.right), minL: Math.round(minL),
                    gap: Math.round(minL - ins.right), h1Lines: h1Lines,
-                   h1W: Math.round(h1.getBoundingClientRect().width) });
-        if (ins.right > minL) bad.push(l);
+                   h1W: Math.round(h1.getBoundingClientRect().width),
+                   tagLines: linesOf(tag), subLines: linesOf(sub),
+                   serifFont: String(serifFont).slice(0, 40),
+                   h1Font: String(h1Font).slice(0, 40) });
+        // 【要求的是'留出余量'，不是'刚好不撞'】只判大于 的话，4px 的间隙也算过 ——
+        // 而那种余量下次改一个字就会翻脸。这里要求至少 8px。
+        if (ins.right > minL - 8) bad.push(l + "(余 " + Math.round(minL - ins.right) + "px)");
         if (h1Lines !== 1) wrapped.push(l + "(" + h1Lines + "行)");
       }
       Game.setLang(keep); Game.openSetup();
       return JSON.stringify({ per: per, bad: bad, wrapped: wrapped });
-    })()`));
+    } catch (e) { return JSON.stringify({ err: String((e && e.stack) || e) }); } })()`);
+    if (clashRaw && clashRaw.indexOf('"err"') >= 0) console.log("clash 求值失败: " + clashRaw);
+    const clash = JSON.parse(clashRaw);
     check(clash.bad.length === 0,
       "水印和设置区的文字【不冲突】（六种语言全查：水印右缘 <= 内容最左沿）",
       clash.bad.length
@@ -3648,6 +3665,41 @@ try {
       "主标题六种语言都还是【一行】（81px 下没有折行）",
       clash.wrapped.length ? "折行的: " + clash.wrapped.join(",")
         : clash.per.map((p) => p.l + ":" + p.h1W + "px").join(" "));
+
+    // ---- 两行小字的折行：按语言分别要求 ----
+    // 这两条是明确的设计要求，不是"看着还行"：
+    //   · 副标题【英语必须一行】（俄语可以折 —— 它本来最长）
+    //   · 下面那行【只有俄语折两行】，其余语言一行
+    // 判据都来自实测的自然宽（换 Georgia 之后：副标题 zh135/en223/ja135/ko151/ru255/fr239；
+    // 下面那行 zh319/en444/ja348/ko355/ru485/fr425），max-width 卡在中间那条缝里。
+    const tagBad = clash.per.filter((p) => p.l !== "ru" && p.tagLines !== 1);
+    check(tagBad.length === 0,
+      "副标题除俄语外都是一行（【英语不另起一行】是明确要求）",
+      tagBad.length ? "折行的: " + tagBad.map((p) => p.l + "(" + p.tagLines + ")").join(",")
+        : clash.per.map((p) => p.l + ":" + p.tagLines).join(" "));
+    const subBad = clash.per.filter((p) => (p.l === "ru" ? p.subLines !== 2 : p.subLines !== 1));
+    check(subBad.length === 0,
+      "下面那行只有俄语折两行，其余语言一行",
+      subBad.length ? "不符的: " + subBad.map((p) => p.l + "(" + p.subLines + ")").join(",")
+        : clash.per.map((p) => p.l + ":" + p.subLines).join(" "));
+
+    // ---- 中文主标题必须是行书（不是楷体）----
+    // 标题块三行原来都走 .serif = 楷体，一笔一画很"板正"。这一版把主标题换成
+    // 内联的 Zhi Mang Xing（行书）子集。这里查的是"真的用上了"而不是"写了规则"——
+    // 子集缺字时会静默回退到楷体，界面上只是"没那么行书"，不说根本看不出来。
+    {
+      const zh = clash.per.find((p) => p.l === "zh");
+      check(/BrushSub/.test(zh.h1Font),
+        "中文主标题走的是行书字体（BrushSub），不是楷体", "h1 font-family = " + zh.h1Font);
+    }
+
+    // ---- 拉丁/西里尔的标题不许掉进中文书法字体的回退链 ----
+    // .serif 原来只写死了楷体/宋体，而那两种都没有西里尔字形 -> 回退到 SimSun，
+    // 宋体把西里尔按【全角】画，俄语因此宽了 60%。这条钉住"按语言换 .serif"。
+    const lat = clash.per.filter((p) => ["en", "fr", "ru"].includes(p.l));
+    check(lat.every((p) => /Georgia|Times/.test(p.serifFont)),
+      "英/法/俄的标题走衬线字体栈（不是楷体->宋体，否则西里尔会被画成全角）",
+      lat.map((p) => p.l + ":" + p.serifFont).join("  "));
 
     // ---- 演示盘的宣纸发光（只在起始界面这一档）----
     // 0.6px 是量出来的：0.35px 改 0 个像素（等于没加），
