@@ -1,4 +1,4 @@
-# Gomoku 3D · Règles
+# Gomocube · Règles
 
 Du gomoku (cinq en ligne) sur un plateau en volume N×N×N : **le premier à aligner 5 pions de même couleur sur toute une ligne droite gagne**.
 

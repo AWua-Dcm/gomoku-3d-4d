@@ -1,4 +1,4 @@
-# 3D Gomoku · Rules
+# Gomokube · Rules
 
 Gomoku (five in a row) played on a solid N×N×N board: **whoever first lines up five stones of one color along a single straight line wins**.
 
