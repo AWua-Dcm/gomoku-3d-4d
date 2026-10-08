@@ -315,6 +315,9 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
     connections were still reaped after 30 idle minutes
   - **Docs**: assertion counts re-synced with what the suite actually prints; rules text aligned with
     the implementation; several hard-coded numbers in comments corrected
+
+### 2026.10.06
+
 - ✨ **v3.1.6** Visual overhaul plus a new interaction: renamed to **Gomokube** across all six
   languages, and the start screen restyled — rice-paper ground, bamboo/jade controls, a
   running-script brush title (inlined font subset, 5.5 KB, single-file premise kept) and a vertical
