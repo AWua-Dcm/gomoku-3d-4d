@@ -239,7 +239,7 @@ next phase. No phase may be shorter than 2 moves, and borrowing and repaying are
 > Between two rotations you must **place** at least 5 stones.
 
 - **Only placements count**; a rotation itself does not — otherwise it becomes "only one turn in five may be a rotation", which is too hard to keep track of.
-- It can be set to 3 / 5 / 8 / 10, default 5.
+- Any integer from 3 to 10 works (default 5).
 - The first rotation is subject to it too: you must place 5 stones after the game starts before you can rotate.
 - **The cooldown only starts once you press Confirm** — the preview has not landed, so it must not consume cooldown.
 - Undo rolls the cooldown back as well, so the counter and the board never disagree.
@@ -303,12 +303,15 @@ well. The last level simply waits there once cleared — the row's Setup button 
   three leaves you more than one defence: it works through **every reply that either blocks it or
   makes a four of your own**, and if it cannot get through them all it says "unknown" rather than
   claim a win that does not hold.
-  In 4D, Very high and Ultra also **value a rotation with the same search they use for a move** —
-  whether a rotation is worth a whole turn is decided on the same scale as placing a stone; Low, Mid
-  and High keep the cheaper tier heuristics.
-  **In 4D every tier looks one or two plies deeper** — a rotation can move a whole formation, and at
-  3D depth the computer cannot see that its own last move has just been slid away. So High and above walk away from positions where your next
-  move would make an open four, while Low happily walks into them. All five stay deliberately on
+  In 4D all five tiers **value a rotation with the same cheap probe** (at most 6–14 candidates per
+  move, each one a single rotated layer plus one full-board scan). Letting Very high and Ultra value a
+  rotation with the same search they use for a move was tried and measured negative — much slower, no
+  stronger — and has been reverted.
+  **In 4D Mid and High look deeper** (one ply to three, three to five) — a rotation can move a whole
+  formation, and at 3D depth the computer cannot see that its own last move has just been slid away.
+  Low does not search at all (that is what "Low" means), and Very high and Ultra are five plies to
+  begin with. So High and above walk away from positions where your next move would make an open four,
+  while Low happily walks into them. All five stay deliberately on
   the weak side — an "easy" opponent that beats beginners every time is the usual failure of this
   feature.
 - **Ultra will beat you before you see the danger.** That is the kill search, not luck: it can set
@@ -318,8 +321,10 @@ well. The last level simply waits there once cleared — the row's Setup button 
   colour. So "Black first + Computer" means the computer plays Black and opens, and you play White.
   The summary line at the bottom of the settings spells out which colour you are.
 - **The computer is bound by the overline rule too** — it avoids the cells that would give it six in a
-  row and lose. It still misses open threes and does not see double threats; that is deliberate,
-  not a bug.
+  row and lose. Its real shortcomings are elsewhere: Low misses open threes (it blocked them in only
+  17 of 60 measured games; Mid and above blocked all 60), and no tier sees **two separate** threats
+  sitting in different parts of the board (a double three or a four-three on a single square **is**
+  recognised — see the next section). Both are deliberate trade-offs, not bugs.
 - **Undo takes back your move and the computer's reply together.** "Restore this rotation" is not
   available against the computer — use Undo instead.
 - **In 4D the computer rotates layers, but only when it is worth a move.** It never rotates just to see
@@ -327,8 +332,9 @@ well. The last level simply waits there once cleared — the row's Setup button 
   worse**, or when it lifts its own shape a whole tier. A rotation that would leave the opponent an open
   three is one it rejects itself. The old rule — "rotate if the best move available to me in the affected
   band went up" — rotated three times a game, one turn in three, and only a third of those actually
-  lowered the threat. The easy tier still only considers it about once in ten turns. A rotation can never
-  win the game; it only breaks up formations and slides your own stones around.
+  lowered the threat. (All five tiers now generate rotation candidates on every move; none of them
+  skips by probability any more.) A rotation can never win the game; it only breaks up formations and
+  slides your own stones around.
 
 ## 12. What this game does not do
 
@@ -336,8 +342,9 @@ well. The last level simply waits there once cleared — the row's Setup button 
   barred from "one move making two open threes / two fours" and the like; this game implements the overline loss only. The
   penalty falls after the move — there is no cell you are forbidden to play.
 - **The computer opponent is not an engine.** Its threat counting uses a sliding window, so **it does
-  recognise gapped shapes and double threats**; but it has no opening book, no joseki and no quiescence
-  search.
+  recognise gapped shapes**, and a double three or four-three **on a single square**; **two separate**
+  threats on different parts of the board are only discounted into the leaf evaluation at a quarter of
+  their weight — visible, but barely. It has no opening book, no joseki and no quiescence search.
   Good enough as a sparring partner; for a serious game, use a dedicated engine.
 - **Rotations are not animated**; they land instantly, with only a brief highlight on the rotated layer.
 - **Rotations can only be made with the panel buttons**, not by dragging in the 3D view.

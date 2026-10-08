@@ -218,7 +218,7 @@ curl -X POST localhost:8080/action -d '{"t":"place","x":3,"y":4,"z":5}'
 |---|---|---|
 | `create` | `name`, `dims`, `mode`, `first`, `rules`, `coreHash` | **建房（B1）**。回 `joined` + `state`。房间号由**服务器**生成，不信客户端 |
 | `join` | `room`, `name`, `token?`, `coreHash` | 加入房间。带 `token` = **重连回原座位（B2）** |
-| `start` | `id` | **房主开局**，全屋只认第一条。`dims`/`mode`/`first`/`rules` 在 `create` 时就定了，这里只是「我准备好了」 |
+| `start` | `id` | **房主开局**，全屋只认第一条。`dims`/`mode`/`first`/`rules` 在 `create` 时就定了，这里只是「我准备好了」。**⚠ 尚未实现**：服务器的 `dispatch` 只认 place / rotate / restoreRotation / restart / undoReq / undoAnswer / undoCancel，发 `start` 会回「未知动作 start」 |
 | `place` | `id`, `x`, `y`, `z` | 落子 |
 | `rotate` | `id`, `axis`, `layer`, `dir`, `turns` | 转层（四维） |
 | `undoReq` | `reqId` | **发起**悔棋请求（请求-同意版，见 §7.3） |
@@ -226,7 +226,7 @@ curl -X POST localhost:8080/action -d '{"t":"place","x":3,"y":4,"z":5}'
 | `undoCancel` | `reqId` | 撤回自己还没被应答的请求 |
 | `restoreRotation` | `id` | 撤销本次转动 |
 | `restart` | `id` | 重开（**A4：初版连这个 case 都没有**） |
-| `resync` | `since` | 请求从 `since` 之后补发。正常走 `Last-Event-ID`，这条是兜底 |
+| `resync` | `since` | 请求从 `since` 之后补发。正常走 `Last-Event-ID`，这条是兜底。**⚠ 尚未实现**：发它会回「未知动作 resync」—— 现阶段要重放只能重连 `/events` 并把 `Last-Event-ID` 设成 0 |
 
 **`id` 是上行幂等键（B5）。** 客户端为每个**会改变状态**的动作生成一个随机 `id`
 （`crypto.randomUUID()` 即可，只要同一个动作重发时 `id` 不变）。服务器按座位记住最近 N 个 `id`，
@@ -680,8 +680,8 @@ function sanitizeDims(raw, allowRotation) {
 | 单房间人数 | 2（第三个拒绝） | |
 | 单 IP 的 SSE 连接数 | 8 | 否则一个脚本就能撑爆文件描述符 |
 | POST 请求体上限 | 4 KB | 正常消息不到 200 字节 |
-| 房间空置回收 | 30 分钟 | 否则 `rooms` 只增不减 |
-| 落子频率限制 | 单连接 5 次/秒 | 防脚本刷 |
+| 房间回收 | 无连接、且 30 分钟没有动作 | 否则 `rooms` 只增不减。**心跳也算动作** —— 两个人挂着长考不该被回收（原来不算，30 分钟一到整局被删、SSE 被掐断，而且没有存档可恢复） |
+| 动作频率限制 | 单 IP 30 次/秒（`create` / `join` / 落子 / 悔棋 / 重开共用同一个桶） | 防脚本刷。**不是"单连接 5 次/秒"** —— 键是 IP 不是连接，同一 NAT 后面的玩家共享配额 |
 
 另外：**国内云服务器的 80/443 端口要 ICP 备案才能开**，用 8080 之类的非标端口通常不需要。这是国内部署一个绕不开的实际限制。
 
@@ -1120,15 +1120,24 @@ data: {"t":"rejected","reason":"该位置已有棋子 3,4,5"}
 
 `pending` 字段也在 `sync` 里 —— 重连的人立刻知道自己有一个待应答的悔棋请求（§7.3.5）。
 
-### 8.4 `room.events` **永不截断**
+### 8.4 `room.events` 平时不截断，到 20000 条时兜底丢弃最老的
 
-只靠"房间空闲 30 分钟就整体回收"来限制内存，**不做滑动窗口**。
+日常只靠"房间空闲 30 分钟就整体回收"来限制内存，**不做滑动窗口** ——
+一局几百条事件 × 每条几十字节，一个房间不到 100KB；房间数上限 200（§5.4）→ 最坏 20MB。
 
-原因：一旦截断，`Last-Event-ID` 落在窗口之外的重连者就永久拿不到开头那一段 ——
-他会建不出 `session`，而且**没有任何办法自愈**（服务器手上也没有了）。
+**但代码里有一条硬兜底**（`LIMITS.replayLogMax = 20000`，server.js 的 `pushEvent`）：
+超过就丢弃最老的一条并往 stderr 打一行警告。这是有意的选择，不是漏做的滑动窗口 ——
+它换来的是"内存有上界"，代价是下面这条：
 
-代价是可控的：一局几百条事件 × 每条几十字节，一个房间不到 100KB；
-房间数上限 200（§5.4）→ 最坏 20MB。**用 20MB 换掉一整类不可恢复的 bug，值得。**
+> 一旦真的截断，`Last-Event-ID` 落在窗口之外的重连者就永久拿不到开头那一段 ——
+> 他会建不出 `session`，而**目前没有任何办法自愈**：`sync` 不带盘面数据（§4.3），
+> 而 `resync` 这条上行消息还**没有实现**（见 §4.2 那张表下面的注）。
+> 也就是说：**20000 条是"内存上界"和"可恢复性"之间的一条线，不是随便定的数。**
+
+怎么才会撞到 20000：单 IP 30 次/秒（§5.4）连续发约 11 分钟，30×30×30 的盘面装得下
+20000 手。所以这条兜底只会在被刷的时候触发，正常对局够不着。
+（注：`applied` 事件现在只带协议里用得上的字段，一条请求体再大也不会把日志撑肥 ——
+见 server.js 里 `pickApplied` 那段。）
 
 > 初版这里还写着 "`state` 消息也要进 `events`" —— 那是对的，§4.3 已经把它写成了
 > 「有 `seq` ⟺ 进日志」这条不变量的推论，不再是需要单独记住的一条。
@@ -1349,7 +1358,7 @@ node server.js --port 0 --host 127.0.0.1
 - Node **v24.19.0**；工程内**没有任何 `node_modules`**
 - `RotationDirection = { Clockwise: 0, CounterClockwise: 1 }`、`AXIS_X/Y/Z = 0/1/2`、
   `BLACK = 1 / WHITE = 2`、`MoveStatus` 5 个值、`RotateStatus` 4 个值
-- `rotationCooldownPlacements` 的界面取值是 **3 / 5 / 8 / 10**（默认 5）；
+- `rotationCooldownPlacements` 的界面取值范围是 **3 – 10 的任意整数**（默认 5）；
   `winLength` **没有界面入口，恒为 5** —— 但协议仍然带它，所以仍然要白名单夹取
 - `run-all.sh` 现在是 **7 步**（初版写的"9 步"是 C# 删除前的旧数字）
 - `browser-check.mjs` 现在是 **63 项**（初版写的"49"是阶段 1 之前的旧数字）

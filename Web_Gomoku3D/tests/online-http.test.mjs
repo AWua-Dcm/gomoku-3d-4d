@@ -520,6 +520,83 @@ let ROOM, TOKEN_A, TOKEN_B, SEAT_A, SEAT_B;
 }
 
 /* ==========================================================================
+   健壮性：三条"外部输入直接打到服务器"的路径
+   ========================================================================== */
+{
+  // 【畸形 Host 头不许把整个进程打死】req.headers.host 完全由客户端控制，而
+  // new URL(req.url, "http://" + host) 对它严格解析：`[`、含空格的、非 ASCII 的
+  // 都会抛 ERR_INVALID_URL。这个异常在 http.createServer 的 request 回调里、
+  // 没有任何 try/catch，于是变成 uncaughtException —— **整个进程退出**：
+  // 一发 raw 请求就让所有房间、所有正在下的一局棋一起消失。
+  const bad = await get("/health", { Host: "[" });
+  check(bad.status === 200 || bad.status === 400,
+    "畸形 Host 头不会让服务器崩掉（当成正常请求给 200，或当坏请求给 400）",
+    "status=" + bad.status + " netError=" + (bad.netError || "无"));
+  const afterBadHost = await get("/health");
+  eq(afterBadHost.status, 200, "发过畸形 Host 之后服务器还活着");
+  eq(afterBadHost.json && afterBadHost.json.ok, true, "而且 /health 是好的（进程没重启过）");
+  // 同族：另一类扫描器会带上的值
+  const bad2 = await get("/health", { Host: "a b" });
+  check(bad2.status === 200 || bad2.status === 400, "含空格的 Host 同样打不死它",
+    "status=" + bad2.status);
+  eq((await get("/health")).status, 200, "第二个畸形 Host 之后还活着");
+}
+
+{
+  // 【applied 不许把请求体原样转发】传进来的 action 就是 JSON.parse 出来的整份请求体。
+  // 里面可能有 token（座位凭据）：broadcast 给对手 = 把房主凭证交出去（对手拿到就能
+  // 以房主身份 restart）。顺带它还是个内存放大器：4KB 的请求体 → 4KB 的 applied，
+  // 补发日志上限 20000 条 → 单房间约 76MB。
+  const a = await post("/action", { t: "create", dims: 8, rules: {}, name: "A" });
+  const ROOM2 = a.json.room, TOK2A = a.json.token;
+  const b = await post("/action", { t: "join", name: "B", room: ROOM2 });
+  const TOK2B = b.json.token;
+  check(!!TOK2A && !!TOK2B, "建房 / 加入都拿到了 token");
+
+  const s = openSSE(ROOM2, TOK2B);
+  await s.ready;
+  const filler = "J".repeat(900);
+  const r = await post("/action?room=" + ROOM2 + "&token=" + TOK2A,
+    { t: "place", x: 0, y: 0, z: 0, room: ROOM2, token: TOK2A, note: filler });
+  eq(r.json.ok, true, "把 token 放进请求体的落子被接受（服务端明确支持这种写法）");
+  eq(await waitFor(s, (f) => f.some((x) => x.data && x.data.t === "applied")), true,
+    "对手的流里收到了 applied");
+  const applied = dataOf(s).find((d) => d.t === "applied");
+  eq(applied.action.token === undefined, true,
+    "applied.action 里不许出现 token（对手凭它就能替房主 restart）");
+  eq(applied.action.note === undefined, true, "applied.action 里不许出现请求体里多余的字段");
+  eq(JSON.stringify(applied.action), JSON.stringify({ t: "place", x: 0, y: 0, z: 0 }),
+    "applied.action 只带协议里用得上的字段");
+  s.close();
+}
+
+{
+  // 【坐标必须是整数】内核的 inBounds 只做大小比较、index 是 x + nx*(y+ny*z) ——
+  // x 是字符串时那一句变成字符串拼接，于是棋谱记一格、子落在另一格（幽灵子），
+  // 而"它声称下的那格"还是空的；非规范数字串还会让空盘格子被报成"已有棋子"。
+  const a = await post("/action", { t: "create", dims: 8, rules: {}, name: "A" });
+  const ROOM3 = a.json.room, TOK3A = a.json.token;
+  await post("/action", { t: "join", name: "B", room: ROOM3 });
+
+  for (const bad of [{ x: "1", y: 1, z: 1 }, { x: 1.5, y: 1, z: 1 },
+                     { x: null, y: 1, z: 1 }, { x: true, y: 1, z: 1 },
+                     { x: [], y: 1, z: 1 }, { x: "0", y: 1, z: 1 }]) {
+    const r = await post("/action?room=" + ROOM3 + "&token=" + TOK3A,
+      Object.assign({ t: "place" }, bad));
+    eq(r.json.ok, false, "非整数坐标被拒：" + JSON.stringify(bad),
+      "reason=" + (r.json && r.json.reason));
+  }
+  // 拒掉之后盘面还是空的、也没有幽灵子
+  const ok = await post("/action?room=" + ROOM3 + "&token=" + TOK3A,
+    { t: "place", x: 4, y: 4, z: 4 });
+  eq(ok.json.ok, true, "整数坐标照常能落");
+  const dup = await post("/action?room=" + ROOM3 + "&token=" + TOK3A,
+    { t: "place", x: 4, y: 4, z: 4 });
+  eq(dup.json.ok, false, "同一格不能再落（没有多出来的幽灵子）",
+    "reason=" + (dup.json && dup.json.reason));
+}
+
+/* ==========================================================================
    收尾
    ========================================================================== */
 try { child.kill(); } catch { /* 已经退了 */ }

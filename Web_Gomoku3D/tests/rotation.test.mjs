@@ -48,11 +48,11 @@ const core = html.slice(a + BEGIN.length, b);
 
 const M = new Function(core + `
   return { Board3D, RuleSet, GameSession, FourDSession, RotationOps, RotationMove, RotateStatus,
-           AxisName: axisName, AXIS_X, AXIS_Y, AXIS_Z, EMPTY, BLACK, WHITE,
+           RuleEngine, AxisName: axisName, AXIS_X, AXIS_Y, AXIS_Z, EMPTY, BLACK, WHITE,
            cellOf: cellOf, colourOf: colourOf, phaseOf: phaseOf };
 `)();
 const { Board3D, RuleSet, GameSession, FourDSession, RotationOps, RotationMove, RotateStatus,
-        AxisName, EMPTY, BLACK, WHITE } = M;
+        RuleEngine, AxisName, EMPTY, BLACK, WHITE } = M;
 
 const vectors = JSON.parse(fs.readFileSync(VECTORS_PATH, "utf8"));
 
@@ -248,7 +248,7 @@ for (const c of vectors.actionCases) {
       eq(s.status, "Decided", "棋局状态（新规则：转出自己五连即判胜）", ctx);
       eq(s.winner, who, "赢家（新规则：转动的那个人）", ctx);
       eq(s.rotationCount, 1, "转动次数", ctx);
-      eq(s.lastOutcome.line === null || s.lastOutcome.line.length >= rules.winLength, true,
+      eq(s.inner.lastOutcome.line === null || s.inner.lastOutcome.line.length >= rules.winLength, true,
          "判胜给的连线长度够 winLength", ctx);
       eq(s.currentPlayer, who, "判胜后出子权停在赢家身上（悔棋要还原它）", ctx);
       ownFiveRotations++;
@@ -451,6 +451,68 @@ for (const axis of [M.AXIS_X, M.AXIS_Y, M.AXIS_Z]) {
     eq(boardHash(s.board), before, "4.4 撤销之后盘面还原");
     eq(s.status, "Playing", "4.4 不该判胜");
     eq(s.winner, EMPTY, "4.4 不该产生胜者");
+  }
+
+  // 4.5 【长连优先】转动同时造出五连和六连时，判定必须与"谁先被 fullScan 扫到"无关。
+  // 回归的是：decideByRotation 原来取扫到的【第一条】就结算，而 fullScan 是按
+  // z→y→x + 方向表顺序吐的 —— 于是同一个局面会因为两条线在盘上的先后给出相反的
+  // 结论（先手胜 / 长连判负），和落子那条路（judge 的 overlineTakesPrecedence）矛盾。
+  {
+    const withLines = (fiveY, sixY) => {
+      const s = FourDSession.create(8, BLACK, mkRules());
+      for (const x of [0, 1, 2, 3, 4]) s.board.set(x, fiveY, 0, BLACK);
+      for (const x of [0, 1, 2, 3, 4, 5]) s.board.set(x, sixY, 0, BLACK);
+      return s;
+    };
+    const s1 = withLines(6, 7);
+    eq(s1.inner.decideByRotation(BLACK), true, "4.5 转动造出的线要被结算");
+    eq(s1.inner.lastOutcome.status, "LoseByOverline", "4.5 同时有五连和六连 → 按长连判负（先手受限）");
+    eq(s1.winner, WHITE, "4.5 长连判负 → 判对方胜");
+    eq(s1.inner.lastOutcome.longestRun, 6, "4.5 报出来的长度是那条长连的 6");
+    // 把两条线的 y 对调：六连挪到会【先】被扫到的位置 —— 结论必须一模一样
+    const s2 = withLines(7, 6);
+    s2.inner.decideByRotation(BLACK);
+    eq(s2.inner.lastOutcome.status, "LoseByOverline", "4.5 两条线换个位置，结论不变");
+    eq(s2.inner.lastOutcome.longestRun, 6, "4.5 换个位置报的还是长连");
+    // 对照组：只有一条恰好五连 → 判胜（不能把长连优先扩大成"有长连才结算"）
+    const s3 = FourDSession.create(8, BLACK, mkRules());
+    for (const x of [0, 1, 2, 3, 4]) s3.board.set(x, 6, 0, BLACK);
+    s3.inner.decideByRotation(BLACK);
+    eq(s3.inner.lastOutcome.status, "Win", "4.5 只有恰好五连时判胜");
+    // 后手（不受限）走长连是赢，不是负 —— 长连优先只对【先手】生效。
+    // 受限制的那一方由 firstPlayer 决定（isRestricted），不是颜色写死的：
+    // 所以这一局的先手是白，黑才是后手。
+    const s4 = FourDSession.create(8, WHITE, mkRules());
+    for (const x of [0, 1, 2, 3, 4, 5]) s4.board.set(x, 7, 0, BLACK);
+    s4.inner.decideByRotation(BLACK);
+    eq(s4.inner.lastOutcome.status, "Win", "4.5 后手转出六连是胜（长连判负只管先手）");
+  }
+
+  // 4.6 【环绕】绕边的连线只许算一条，长度是整条，坐标必须取模。
+  // 回归的是：fullScan 的起点守卫用的是不环绕的 getOrDefault，于是 x=0 永远被当成
+  // 新起点 —— 一条绕边的六连被报成「6 + 一段被截断的 5」，而碎片的下标更小、
+  // 扫描顺序在前，喂给结算就成了"先手六连被判成赢"。
+  {
+    const s = FourDSession.create(8, BLACK, mkRules((r) => { r.wrapEdges = true; }));
+    for (const x of [7, 0, 1, 2, 3, 4]) s.board.set(x, 7, 0, BLACK);   // x=7→0 跨过边界
+    const runs = RuleEngine.fullScan(s.board, 5);
+    eq(runs.length, 1, "4.6 绕边的六连只算一条极大连线（原来会报成 6 和 5 两条）");
+    eq(runs[0].length, 6, "4.6 报出来的长度是整条 6，不是被截断的 5");
+    s.inner.decideByRotation(BLACK);
+    eq(s.inner.lastOutcome.status, "LoseByOverline", "4.6 绕边的六连同样按长连判负");
+    eq(s.inner.lastOutcome.longestRun, 6, "4.6 longestRun 是 6");
+    const line = s.inner.lastOutcome.line;
+    eq(line.every((p) => p[0] >= 0 && p[0] < 8 && p[1] >= 0 && p[1] < 8 && p[2] >= 0 && p[2] < 8),
+       true, "4.6 获胜连线里不许出现盘外坐标（界面拿它当扁平下标用，会烧到别的子）",
+       JSON.stringify(line));
+    eq(JSON.stringify(line[0]), "[7,7,0]", "4.6 环绕线从起点开始，逐颗取模");
+    eq(JSON.stringify(line[1]), "[0,7,0]", "4.6 跨过边界的下一颗落在 x=0");
+    // 整圈同色：环上没有"自然的起点"，但也必须恰好报一条（不能一条都不报）
+    const s2 = FourDSession.create(8, WHITE, mkRules((r) => { r.wrapEdges = true; }));
+    for (let x = 0; x < 8; x++) s2.board.set(x, 3, 3, WHITE);
+    const whole = RuleEngine.fullScan(s2.board, 5);
+    eq(whole.length, 1, "4.6 整圈同色（8 连）只报一条");
+    eq(whole[0].length, 8, "4.6 整圈同色的长度是环长 8");
   }
 }
 

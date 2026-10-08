@@ -312,9 +312,23 @@
 
   /* ---------- 右侧：操作面板 ---------- */
   #panel { flex: 1 1 auto; background: var(--panel); display: flex; flex-direction: column;
-           padding: 16px 18px 14px; gap: 12px; min-width: 0; }
+           padding: 16px 18px 14px; gap: 12px; min-width: 0;
+           /* 【min-height:0 + overflow-y:auto 原来只写在竖屏那一档】但它的理由和方向无关：
+              面板是 flex 列，装不下时它默认按 min-height:auto（= 内容高度）不肯收缩，
+              于是整块溢出 #stage，而 body 是 overflow:hidden —— 多出来的部分直接看不见。
+              横屏一样中招，而且更狠：852×393 的四维局里"执行转动/确定/取消/悔棋/重开/
+              设置"六个键全在视口外（实测 #panel scrollHeight 682 / clientHeight 393），
+              页面又滚不动（body overflow:hidden、#panel 是 visible）——玩家转不了层也悔不了棋。
+              内容装得下时这两条什么也不做（auto 不显滚动条），所以提到基础规则里是安全的。 */
+           min-height: 0; overflow-y: auto; }
 
-  #statusRow { display: flex; align-items: center; gap: 10px; min-height: 34px; }
+  /* 【行长不能被压扁】#statusRow 是定高槽（min-height:34px + align-items:center），
+     而它是个 flex 列里的项 —— 默认 flex-shrink:1，面板装不下时它会被压到 34px，
+     里面的 #status 却照旧排 2~6 行（22px 的字），多出来的部分【没有 overflow 裁剪】，
+     直接画到下一个兄弟 #rule 上：法语竖屏实测 6 行、其中两行叠印在规则正文上，
+     前两行还向上溢出面板块压到三维画布上（中文 3 行同样叠印）。
+     flex:0 0 auto 让它保住自己的内容高度，装不下的部分交给上面的 overflow-y 去滚。 */
+  #statusRow { display: flex; align-items: center; gap: 10px; min-height: 34px; flex: 0 0 auto; }
   #chip { width: 20px; height: 20px; border-radius: 50%; background: var(--black);
           border: 1px solid var(--stone-edge); flex: 0 0 auto; }
   #status { font-size: 22px; font-weight: 600; flex: 1 1 auto; }
@@ -378,7 +392,12 @@
                border-radius: 4px; flex: 0 0 auto; }
   #strip { display: block; width: 100%; height: 100%; cursor: pointer; }
 
-  #buttons { display: flex; gap: 8px; flex: 0 0 auto; }
+  /* 【要肯换行】四维下这一行是 5 个键（多一个「落子：正常/缓/催」），而 ru/fr 的标签
+     又是最长的：一行总宽 426~446px，窄屏竖屏只分给面板 284~357px —— 键会被压到
+     min-content 之后【横向溢出行盒】。表现是最后一颗键被切掉甚至整个跑到屏外
+     （320×568 法语实测「设置」在 x 368..444，视口只有 320 宽，得横向滚 124px 才拉得到）。
+     flex-wrap 让装不下的键换到第二行。1280 宽下这一行本来放得下，换行规则不生效。 */
+  #buttons { display: flex; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; }
   #buttons button { flex: 1 1 0; }
   /* 【四维下「设置」和「落子：正常/缓/催」交换位置】用户口径。
      只动 flex 的排位，不动 DOM —— 两个键的 id、事件、文案一个字都不变，
@@ -531,6 +550,14 @@
   }
 
   .titleRow { display: flex; align-items: center; gap: 14px; }
+  /* 【v3.1.7：让标题那一列肯收缩】flex 项默认 min-width:auto（= 内容的最小宽度），
+     而这个块里三行文字的最小宽度可能比可用列宽还大：320×568 的法语下
+     「印章 38 + 间距 14 + 文字块 242」= 294，而这一列只有 280 —— #setup 于是横向
+     溢出 9px。它自己是 overflow-y:auto，overflow-x 会被算成 auto，那 9px 就成了一条
+     "整列能被横着拖走"的缝。给了 min-width:0 之后这个块可以收缩到可用宽度，
+     里面那三行按各自的规则换行；标题是单个长词、换不了行，所以还需要
+     syncTitleFit() 按实际宽度把字号收一档 —— 两条合起来才是完整的修法。 */
+  #setup .titleRow > div { min-width: 0; }
   /* 印章：朱砂底 + 楷体字。用字体而不是画一个图形，是为了不引任何外部资源。
 
      【v2.10.13 加的两圈外发光】全页【唯一】一处"发光"就放在这里。
@@ -864,6 +891,18 @@
                     断言当场红）。1.3 时 2 行 35.1px 正好塞进 36；四维那 4 行也只要 70.2px。
                     槽位和行高是【两个数决定一件事】，只改一个必然出滚动条。 */
                  line-height: 1.3; white-space: pre-line;
+                 /* 【v3.1.7 查过一次、没有改：这个槽是定高，四维的说明在 en / fr / ru
+                    下会被裁掉最后一行】
+                    量到的事实：1600×900 下四维摘要内容 123px，而槽只有 84px（英文 88px），
+                    最后那句"按实测中位 N 手算…最多转 M 次"看不见（框里会出现一个内部滚动条）。
+                    成因是当初按"四维 4 行"估的槽高 —— 而那是按 640px 宽、中文/日文/韩文估的，
+                    en / fr / ru 同一段话要折 6~7 行。
+                    试过改成 min-height（按内容长高），**当场踩了断言**：窄屏下切三维↔四维时
+                    「开始游戏」的横纵坐标会动（实测 4px 与 34px），而"两种模式总高恒等、
+                    按钮一个像素都不动"是这一版刻意设计出来、并且被 browser-check 钉住的不变量。
+                    所以维持定高 —— 要真正修好有两条路，都属于排版决策，留给作者定：
+                      ① 把 en / fr / ru 那三段四维文案各砍掉约两行（不动布局）；
+                      ② 让四维那一档多占 39px，同时从别处（比如 #ruleNote 的行距）还回来。 */
                  height: var(--summary-h); overflow-y: auto; }
 
   /* 三维"勾了魔方旋转"那一档：冷却行要占的高度 = 一行 38 + #setup 的行距。
@@ -1054,6 +1093,23 @@
   html.lang-ru .serif {
     font-family: Georgia, "Times New Roman", "Source Serif Pro", serif;
   }
+  /* 【v3.1.7 补：ja / ko 当时漏了，和上面那一组同一个理由】
+     .serif 把字体栈覆盖回楷体/宋体，而"日语的汉字不能落进简体中文字形"正是
+     上面 html.lang-ja body 那段开头点名的纪律（骨、直、画、令、每 中日写法不同）——
+     标题块那三行恰恰都挂着 .serif，于是那条纪律在最重要的三行上没有被执行。
+     实测（无头 Chrome + CSS.getPlatformFontsForNode）：ja 的 #setupTitle /
+     #setupTagline / #setupSub 三行全部由 KaiTi 渲染（KaiTi 里有假名，所以
+     「ゴモキューブ」也一起掉进去了）；ko 则是空格与数字走 KaiTi、谚文走 Malgun Gothic，
+     同一行两套字形。
+     【为什么点名明朝体 / 바탕】和拉丁那边同一个道理：楷体只属于中文，
+     日韩最近的对应物是它们各自的衬线体（日文明朝体、韩文明朝体 Batang），
+     和标题上那层墨韵滤镜的气质也接得上。清单按 Windows / macOS 实装顺序排。 */
+  html.lang-ja .serif {
+    font-family: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "MS PMincho", serif;
+  }
+  html.lang-ko .serif {
+    font-family: "Batang", "Nanum Myeongjo", "AppleMyungjo", "Noto Serif KR", serif;
+  }
   /* 【这里原来有一条 html.lang-en .rowLabel { width: 138px }，已删除】——
      见上面 .rowLabel 的注释。留一个记号在这里，是因为 browser-check 里
      曾经有一条"英文 .rowLabel 宽 138px"的断言，它现在改成了"行标贴合自己的文字"。
@@ -1232,16 +1288,19 @@
      ========================================================================== */
 
   /* ---------- 1. 毛笔字体：子集内联，守住"单文件"前提 ----------
-     Zhi Mang Xing（智勇行书，Google Fonts，OFL 1.1）切到【只剩水印用到的 14 个字】，
-     woff2 只有 4,856 字节 -> base64 约 6.5KB，直接躺在文件里，不发任何网络请求。
+     Zhi Mang Xing（智勇行书，Google Fonts，OFL 1.1）切到【水印 + 主标题用到的那 16 个字】，
+     woff2 只有 5,556 字节 -> base64 7,408 字符（约 7.2KB），直接躺在文件里，不发任何网络请求。
      许可允许嵌入分发（OFL 1.1），所以 MIT 仓库里带着它没有问题。
 
      【为什么是子集而不是整支字体】整支 CJK 字体 5MB 起步；Google Fonts 的
-     unicode-range 分片即便只取用得到的 6 片也要 408KB。切成 14 个字之后就只剩 4.8KB。
-     切分命令（本机 fonttools 4.63 + brotli 已装，不需要装任何东西）：
-       pyftsubset 合并后的字体 --text="亦有格五其法布子成行以得五者胜" \
+     unicode-range 分片即便只取用得到的 6 片也要 408KB。切成 16 个字之后就只剩 5.4KB。
+     【v3.1.7 更正】这段原来写的是"14 个字 / 4,856 字节 / 6.5KB"，命令里也只列了水印那
+       14 个字 —— 主标题「五子魔方」要的魔、方是后来补进子集的（见下面第 2b 节的注释）。
+       照旧命令重切一次不会报错，只会让标题里的魔、方静默回退到楷体（肉眼才看得出来，
+       字号/布局都不变），所以命令必须连标题的字一起写。下面是【现役】的那条：
+       pyftsubset 合并后的字体 --text="亦有格五其法布子成行以得者胜魔方" \
          --flavor=woff2 --layout-features='' --no-hinting
-     【改动水印文案时必须重新切】新字不在这个子集里就是豆腐块。 */
+     【改动水印文案或改游戏名时必须重新切】新字不在这个子集里就是豆腐块。 */
   @font-face {
     font-family: "BrushSub";
     src: url(data:font/woff2;base64,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) format("woff2");
@@ -1289,7 +1348,7 @@
        量出来的外框是 782×401：又宽又扁，正是"横向拉长"的样子。
        （Range.getClientRects() 是铁证：「亦有格五」返回了 2 个矩形而不是 1 个。）
 
-       现在改成 top/bottom 一起写死：可用高度 = 86vh，一列 6 个字绰绰有余，
+       现在改成 top/bottom 一起写死：可用高度 = 94vh（上下各 3vh），一列 6 个字绰绰有余，
        三句话回到三列，外框变成窄而高的 ~420×690 —— 这才是竖排该有的形状。
        居中也不再用 transform：上下留一样的边距，本身就是居中。 */
     /* 【横向位置：钉右缘，不钉左缘】
@@ -1315,8 +1374,10 @@
     right: 56.5%; top: 3vh; bottom: 3vh;
     writing-mode: vertical-rl; text-orientation: upright;
     font-family: "BrushSub", "STXingkai", "华文行楷", "STKaiti", "华文楷体", "KaiTi", "楷体", serif;
-    /* 一列 6 个字要塞进 86vh：6 × 字号 × (1+字距) <= 86vh
-       -> 字号 <= 13.6vh（字距 .04em 时）。取 13vh，留一点余量。 */
+    /* 一列 6 个字要塞进 94vh：6 × 字号 × (1+字距) <= 94vh
+       -> 字号 <= 15.5vh（字距 .01em 时）。取 15vh，留一点余量。
+       【v3.1.7 更正】这段原来写的是"86vh / 字距 .04em / 取 13vh"，那是上一版
+       （内边距 7vh、字距 .04em）的数，上面那条注释已经把现役值写全了。 */
     /* 【加 vw 项是为了竖屏】竖排是 3 列，每列宽 = 字号 × 行距(1.15)，
        所以整块宽 ≈ 3.45 × 字号。窄屏上只按 vh 定字号会让整块【比屏幕还宽】——
        实测 393×852 下字号 128px、整块 441px，直接跑到屏幕外面（x −270..171）。
@@ -1851,7 +1912,7 @@
 > 两次转动之间，至少要**落** 5 个子。
 
 - **只有落子算数**，转动本身不算 —— 否则就变成"每 5 手里只准有一手是转动"，太难算了。
-- 可以调成 3 / 5 / 8 / 10，默认 5。
+- 可以在 3 – 10 之间填任意整数（默认为 5）。
 - 第一次转动同样受这条约束：开局之后落满 5 个子才能转。
 - **只有「确定操作」之后才开始算冷却** —— 预览期间既没落地，也就不该消耗冷却。
 - 悔棋会把冷却一起退回去，不会出现"计数器和棋盘对不上"。
@@ -1908,10 +1969,12 @@
   极限档另外会**算杀** —— 强制取胜路线的搜索：连续冲四（你的应手每次都被逼成唯一一个），
   以及连续活三。后者难得多，因为活三的应手不止一个 —— 它把"你所有能堵的点、加上你自己反击做四的点"
   逐个试一遍，试不完就宁可判"不知道"，绝不报一个站不住的"必胜"。
-  极高和极限在四维下还会**拿同一段搜索去给转动估值**：转一下值不值一整手，
-  和落子放在同一个尺度上比；低 / 中 / 高仍然用便宜的档位启发式。
-  **四维模式里各档还要再深一到两层**：转动会把整个阵型挪走，浅一层看不出来
-  「我刚落的那一手已经被转没了」，于是会走出白送一手棋。
+  四维下**五档用的是同一套便宜的转动探针**（每手最多试 6 – 14 个候选，每个候选只做
+  一次转层 + 一次全盘扫描）来判断"这一转值不值"。曾经试过让极高 / 极限改用
+  "和落子同一段搜索"来给转动估价，实测是负的（慢得多、棋力没有变好），已经退回。
+  **四维模式里中、高两档会再加深**（一层 → 三层、三层 → 五层）：转动会把整个阵型
+  挪走，浅一层看不出来「我刚落的那一手已经被转没了」，于是会走出白送一手棋。
+  低档不搜索（那是"低"这一档的定义），极高与极限本来就是五层，四维下不再加深。
   所以高档以上会主动躲开"我下这里、他下一手就成四"这类局面，低档看不出来。
   五档都刻意不去做得太强 —— 低级难度把玩家打得没脾气是这类功能最常见的毛病。
 - **极限档会下出"你还没看出危险就已经输了"的棋** —— 那是算杀算出来的，不是走运。
@@ -1919,22 +1982,27 @@
 - **两个选择各管一件事**：「谁先手」选的是**哪个颜色**先走（顺带也就定了谁背长连判负），
   「谁先下」选的是**哪个人**执那个颜色。所以「黑棋先手 + 人机」= 电脑执黑走第一手、你执白。
   起始界面底下那句总结会把「你执哪个色」写出来。
-- **电脑一样受长连判负约束**，它也会躲开让自己连成 6 个的点。但它照样会漏堵活三、
-  看不见双威胁 —— 这是刻意的，不是 bug。
+- **电脑一样受长连判负约束**，它也会躲开让自己连成 6 个的点。它的短板在别处：
+  低档会漏堵活三（实测 60 局里只堵了 17 局，中档以上 60/60），而**散在棋盘两处**的双威胁
+  五档都看不见（同一个点上形成的双三 / 四三是认得的，见下一节）—— 这些是刻意的取舍，
+  不是 bug。
 - **悔棋一次退回你落子之前**：电脑的应手会一并撤掉。人机对战里「恢复本次转动」不对玩家开放，
   要退回去请用「悔棋」。
 - **四维模式下电脑也会转动层，而且只在必要的时候转。** 它不会「试试看」：只有转完能真的把
   对方**活三以上**的阵型拆掉（或者自己的形跨了一个档）时才动手；转完反而给对方留下活三的那一转，
   它自己就不会选。从前的判据是「转完我这一带能拿到的最好一手变高了就转」，实测每局转三次、
-  占自己回合的三分之一，其中只有三分之一真的把对方的威胁压下去过。弱档还是大约十次里才考虑一次。
+  占自己回合的三分之一，其中只有三分之一真的把对方的威胁压下去过。
+  （五档现在每一手都会生成转动候选，不再按概率跳过。）
   转动永远赢不了棋 —— 它只能拆别人的形、挪自己的子。
 
 ## 12. 本作没有做的事
 
 - **没有双三、双四禁手。** 传统连珠（Renju）里，先手还有"一手同时形成两个活三 / 两个四"
   这类禁手，本作只实现了长连判负这一条。判罚发生在落子之后，不存在"这个点不能落"。
-- **电脑对手不是棋力引擎。** 它的威胁计数用的是滑窗，所以**跳子形状和双威胁是认得的**；
-  但它没有开局库、没有定式，也不做静止搜索。当陪练够用，想认真下棋请找专门的引擎。
+- **电脑对手不是棋力引擎。** 它的威胁计数用的是滑窗，所以**跳子形状**、以及
+  **同一个点上**的双三 / 四三是认得的；**散在棋盘两处**的双威胁只在叶子评估里
+  按四分之一折价算进去 —— 看得见，但看得很轻。它没有开局库、没有定式，也不做静止搜索。
+  当陪练够用，想认真下棋请找专门的引擎。
 - **转动没有动画**，是瞬间到位，只会高亮一下被转的那一层。
 - **转动只能用面板上的按钮完成**，不能在立体视图里直接拖动。
 </script>
@@ -2189,7 +2257,7 @@ next phase. No phase may be shorter than 2 moves, and borrowing and repaying are
 > Between two rotations you must **place** at least 5 stones.
 
 - **Only placements count**; a rotation itself does not — otherwise it becomes "only one turn in five may be a rotation", which is too hard to keep track of.
-- It can be set to 3 / 5 / 8 / 10, default 5.
+- Any integer from 3 to 10 works (default 5).
 - The first rotation is subject to it too: you must place 5 stones after the game starts before you can rotate.
 - **The cooldown only starts once you press Confirm** — the preview has not landed, so it must not consume cooldown.
 - Undo rolls the cooldown back as well, so the counter and the board never disagree.
@@ -2253,12 +2321,15 @@ well. The last level simply waits there once cleared — the row's Setup button 
   three leaves you more than one defence: it works through **every reply that either blocks it or
   makes a four of your own**, and if it cannot get through them all it says "unknown" rather than
   claim a win that does not hold.
-  In 4D, Very high and Ultra also **value a rotation with the same search they use for a move** —
-  whether a rotation is worth a whole turn is decided on the same scale as placing a stone; Low, Mid
-  and High keep the cheaper tier heuristics.
-  **In 4D every tier looks one or two plies deeper** — a rotation can move a whole formation, and at
-  3D depth the computer cannot see that its own last move has just been slid away. So High and above walk away from positions where your next
-  move would make an open four, while Low happily walks into them. All five stay deliberately on
+  In 4D all five tiers **value a rotation with the same cheap probe** (at most 6–14 candidates per
+  move, each one a single rotated layer plus one full-board scan). Letting Very high and Ultra value a
+  rotation with the same search they use for a move was tried and measured negative — much slower, no
+  stronger — and has been reverted.
+  **In 4D Mid and High look deeper** (one ply to three, three to five) — a rotation can move a whole
+  formation, and at 3D depth the computer cannot see that its own last move has just been slid away.
+  Low does not search at all (that is what "Low" means), and Very high and Ultra are five plies to
+  begin with. So High and above walk away from positions where your next move would make an open four,
+  while Low happily walks into them. All five stay deliberately on
   the weak side — an "easy" opponent that beats beginners every time is the usual failure of this
   feature.
 - **Ultra will beat you before you see the danger.** That is the kill search, not luck: it can set
@@ -2268,8 +2339,10 @@ well. The last level simply waits there once cleared — the row's Setup button 
   colour. So "Black first + Computer" means the computer plays Black and opens, and you play White.
   The summary line at the bottom of the settings spells out which colour you are.
 - **The computer is bound by the overline rule too** — it avoids the cells that would give it six in a
-  row and lose. It still misses open threes and does not see double threats; that is deliberate,
-  not a bug.
+  row and lose. Its real shortcomings are elsewhere: Low misses open threes (it blocked them in only
+  17 of 60 measured games; Mid and above blocked all 60), and no tier sees **two separate** threats
+  sitting in different parts of the board (a double three or a four-three on a single square **is**
+  recognised — see the next section). Both are deliberate trade-offs, not bugs.
 - **Undo takes back your move and the computer's reply together.** "Restore this rotation" is not
   available against the computer — use Undo instead.
 - **In 4D the computer rotates layers, but only when it is worth a move.** It never rotates just to see
@@ -2277,8 +2350,9 @@ well. The last level simply waits there once cleared — the row's Setup button 
   worse**, or when it lifts its own shape a whole tier. A rotation that would leave the opponent an open
   three is one it rejects itself. The old rule — "rotate if the best move available to me in the affected
   band went up" — rotated three times a game, one turn in three, and only a third of those actually
-  lowered the threat. The easy tier still only considers it about once in ten turns. A rotation can never
-  win the game; it only breaks up formations and slides your own stones around.
+  lowered the threat. (All five tiers now generate rotation candidates on every move; none of them
+  skips by probability any more.) A rotation can never win the game; it only breaks up formations and
+  slides your own stones around.
 
 ## 12. What this game does not do
 
@@ -2286,8 +2360,9 @@ well. The last level simply waits there once cleared — the row's Setup button 
   barred from "one move making two open threes / two fours" and the like; this game implements the overline loss only. The
   penalty falls after the move — there is no cell you are forbidden to play.
 - **The computer opponent is not an engine.** Its threat counting uses a sliding window, so **it does
-  recognise gapped shapes and double threats**; but it has no opening book, no joseki and no quiescence
-  search.
+  recognise gapped shapes**, and a double three or four-three **on a single square**; **two separate**
+  threats on different parts of the board are only discounted into the leaf evaluation at a quarter of
+  their weight — visible, but barely. It has no opening book, no joseki and no quiescence search.
   Good enough as a sparring partner; for a serious game, use a dedicated engine.
 - **Rotations are not animated**; they land instantly, with only a brief highlight on the rotated layer.
 - **Rotations can only be made with the panel buttons**, not by dragging in the 3D view.
@@ -2541,7 +2616,7 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 > 二回の回転のあいだに、少なくとも **5 子**を打つ必要があります。
 
 - **数えるのは着手だけ**で、回転そのものは数えません —— そうしないと「5 手のうち 1 手だけが回転」となり、数えるのが大変すぎます。
-- 3 / 5 / 8 / 10 に設定でき、既定は 5 です。
+- 3 ～ 10 の任意の整数を指定できます（既定は 5）。
 - 最初の回転も同じ制約を受けます：対局開始後に 5 子打つまで回せません。
 - **クールダウンが始まるのは「確定」を押してから**です —— プレビューはまだ成立していないので、消費してはいけません。
 - 待ったはクールダウンも一緒に戻すので、「カウンターと盤が食い違う」ことはありません。
@@ -2603,12 +2678,15 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
   ただ一マスに強制される手順）と、**連続活三**の両方を見ます。後者は格段に難しく、
   活三はあなたの応手が一つではないため、**塞ぐ手と、あなた自身が四を作る手を一つ残らず試して**初めて勝ちと数えます。
   試し切れないときは「不明」と判断し、成り立たない「必勝」は決して名乗りません。
-  4D では最強と極が**着手と同じ探索で回転の価値も測ります** —— 回転が一手分の価値があるかを
-  着手と同じ尺度で比べます。弱・中・強は従来どおり安い段階ヒューリスティックのままです。だから強以上は「ここに打つと次の相手の一手で活四に
-  なる」という局面を避け、弱は平気で踏み込みます。5 段階とも**わざと弱め**に振ってあります ——
-  「簡単」な相手が初心者を毎回負かしてしまうのはこの手の機能でありがちな失敗なので。
-  **4D では各段階とももう一〜二手深く読みます** —— 回転は陣形ごと動かすので、
+  4D では**5 段階とも同じ安い回転プローブ**で回転の価値を測ります（一手あたり最大 6〜14 候補、
+  1 候補 = レイヤーを 1 回回して盤面を 1 回走査するだけ）。最強と極を「着手と同じ探索」に
+  切り替える案は試して実測で負けでした（大幅に遅くなり、強くもならない）ので元に戻してあります。
+  **4D で深くなるのは中と強だけ**（一手 → 三手、三手 → 五手）—— 回転は陣形ごと動かすので、
   浅いままだと「自分が置いたばかりの手がもう動かされた」ことに気づけず、一手を無駄にします。
+  弱は探索しません（それが「弱」という段階の定義です）し、最強と極はもともと五手先です。
+  だから強以上は「ここに打つと次の相手の一手で活四になる」という局面を避け、弱は平気で踏み込みます。
+  5 段階とも**わざと弱め**に振ってあります —— 「簡単」な相手が初心者を毎回負かしてしまうのは
+  この手の機能でありがちな失敗なので。
 - **極は「危険に気づく前に負けている」手を打ちます** —— それは殺しが読んだ結果で、偶然ではありません。
   開局で十数手後に効いてくる罠を仕掛けてくることもあります。
 - **2 つの選択は役割が違う**：「誰が先手」は**どの色**が先に打つか（＝長連による負けを負う側）を選び、
@@ -2616,7 +2694,10 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
   「黒が先手 + コンピュータ」ならコンピュータが黒で初手を打ち、あなたは白です。
   設定の下の要約に「あなたがどちらの色か」が書いてあります。
 - **コンピュータも長連の規則に縛られます** —— 自分が 6 連になる点は避けます。
-  それでも活三を止め損ねたり、二重の脅威を見落としたりします。これは意図的です。
+  弱点はそこではありません：弱は活三を止め損ねます（実測 60 局で止めたのは 17 局、
+  中以上は 60/60）。そして**盤の離れた二か所に散った**二重の脅威は 5 段階とも見えません
+  （同じマスに生じる三三・四四は認識します —— 次の節を参照）。どちらも意図的な割り切りで、
+  バグではありません。
 - **「取り消し」はあなたの手とコンピュータの応手をまとめて戻します。**
   コンピュータ対戦では「この回転を戻す」は使えません —— 取り消しを使ってください。
 - **4D ではコンピュータも層を回しますが、回すのは必要なときだけです。** 「試しに回す」ことはしません：
@@ -2624,14 +2705,17 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
   回した結果かえって相手に活三を残してしまう手は、自分から選びません。
   以前の判定は「回したあと自分の側で一番良い手の値が上がったら回す」で、実測では一局に三回・
   自分の手番の三分の一を占め、そのうち本当に相手の脅威を下げたのは三分の一だけでした。
-  弱では今も十回に一回程度しか検討しません。回転で勝つことはできません。
+  （5 段階とも毎手で回転候補を生成します。確率で候補を間引くことはもうしていません。）
+  回転で勝つことはできません。
 
 ## 12. 本作がやっていないこと
 
 - **三三禁・四四禁はない。** 伝統的な連珠（Renju）では、先手に「1 手で同時に 2 つの活三 / 2 つの四を作る」
   といった禁手もあるが、本作が実装しているのは長連による負けの 1 つだけ。反則の判定は着手の後に行われ、「この点には打てない」ということはない。
-- **コンピュータは棋力エンジンではありません。** 脅威の計数はスライド窓なので、**跳びの形も
-  二重の脅威も認識します**。ただし定石も定跡もなく、静止探索も行いません。
+- **コンピュータは棋力エンジンではありません。** 脅威の計数はスライド窓なので、**跳びの形**と、
+  **同じマスに生じる**三三・四四は認識します。**盤の離れた二か所に散った**二重の脅威は
+  葉の評価で 4 分の 1 に割り引かれるだけ —— 見えてはいますが、ごく薄くしか見ていません。
+  定石も定跡もなく、静止探索も行いません。
   練習相手には十分ですが、本気で打つなら専用のエンジンを使ってください。
 - **回転にアニメーションはない**。瞬時に移動し、回したレイヤーが一瞬ハイライトされるだけ。
 - **回転はパネルのボタンでしか行えない**。立体ビューの中で直接ドラッグすることはできない。
@@ -2881,7 +2965,7 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 > 두 번의 회전 사이에 적어도 **5개**를 두어야 합니다.
 
 - **세는 것은 착수뿐**이고 회전 자체는 세지 않습니다 —— 그러지 않으면 "5수 중 1수만 회전"이 되어 세기가 너무 어렵습니다.
-- 3 / 5 / 8 / 10 으로 설정할 수 있고, 기본은 5입니다.
+- 3 – 10 사이의 임의의 정수를 넣을 수 있습니다 (기본 5).
 - 첫 회전도 같은 제약을 받습니다: 대국 시작 후 5개를 두어야 돌릴 수 있습니다.
 - **쿨다운은 「확인」을 누른 뒤에야 시작됩니다** —— 미리보기는 성립하지 않았으므로 소모해서는 안 됩니다.
 - 무르기는 쿨다운도 함께 되돌리므로 "카운터와 판이 어긋나는" 일은 없습니다.
@@ -2943,12 +3027,15 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   후자는 훨씬 어렵습니다. 활삼은 상대의 응수가 하나가 아니므로
   **막는 수와 상대가 직접 사를 만드는 수를 하나도 빠뜨리지 않고 다 시도해야** 비로소 승리로 셉니다.
   다 시도할 수 없으면 "모름"으로 판단하고, 성립하지 않는 "필승"은 결코 내세우지 않습니다.
-  4D에서는 최상과 극이 **착수와 같은 탐색으로 회전의 가치도 재봅니다** — 회전이 한 수 값어치가
-  있는지를 착수와 같은 자로 비교합니다. 하·중·상은 기존의 저렴한 단계 휴리스틱 그대로입니다. 그래서 상 이상은 "여기에 두면 다음 상대 수에 활사가
-  된다" 같은 국면을 피하고, 하 단계는 그냥 밟고 들어갑니다. 다섯 단계 모두 **일부러 약한 쪽**으로
-  맞췄습니다 — "쉬움" 상대가 초보자를 매번 이기는 것은 이런 기능에서 흔한 실패라서요.
-  **4D에서는 모든 단계가 한두 수 더 깊게 읽습니다** — 회전은 진형 전체를 옮기므로,
-  얕게 읽으면 "방금 둔 내 수가 이미 옮겨졌다"는 것을 알아채지 못해 한 수를 헛되게 씁니다.
+  4D에서는 **다섯 단계 모두 같은 저렴한 회전 탐침**으로 회전의 가치를 재봅니다 (한 수에 최대
+  6~14개 후보, 후보 하나 = 층을 한 번 돌리고 판을 한 번 훑는 것). 최상과 극을 "착수와 같은
+  탐색"으로 바꾸는 안은 시험해 봤지만 실측에서 손해였습니다 (훨씬 느려지고 강해지지도 않음) —
+  되돌려 놓았습니다. **4D에서 더 깊게 읽는 것은 중·상 두 단계뿐입니다** (한 수 → 세 수,
+  세 수 → 다섯 수) — 회전은 진형 전체를 옮기므로, 얕게 읽으면 "방금 둔 내 수가 이미 옮겨졌다"는
+  것을 알아채지 못해 한 수를 헛되게 씁니다. 하 단계는 탐색을 하지 않고(그것이 "하"라는 단계의
+  정의입니다), 최상과 극은 애초에 다섯 수입니다. 그래서 상 이상은 "여기에 두면 다음 상대 수에
+  활사가 된다" 같은 국면을 피하고, 하 단계는 그냥 밟고 들어갑니다. 다섯 단계 모두 **일부러 약한
+  쪽**으로 맞췄습니다 — "쉬움" 상대가 초보자를 매번 이기는 것은 이런 기능에서 흔한 실패라서요.
 - **극 단계는 "위험을 알아차리기 전에 이미 진" 수를 둡니다** — 연속 사 읽기 결과지, 운이 아닙니다.
   초반에 십여 수 뒤에나 드러나는 함정을 깔아둘 수도 있습니다.
 - **두 선택은 역할이 다릅니다**: 「누가 선수인가」는 **어느 색**이 먼저 두는지(곧 장련 패배를 지는 쪽)를,
@@ -2956,7 +3043,10 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   「흑 선수 + 컴퓨터」면 컴퓨터가 흑으로 첫 수를 두고 당신은 백입니다.
   설정 아래 요약에 당신이 어느 색인지 적혀 있습니다.
 - **컴퓨터도 장련 규칙에 묶입니다** — 자기가 6연이 되는 자리는 피합니다.
-  그래도 활삼을 놓치거나 두 겹 위협을 보지 못합니다. 이는 의도된 것입니다.
+  약점은 그쪽이 아닙니다: 하 단계는 활삼을 놓칩니다 (실측 60국에서 막은 것은 17국,
+  중 단계 이상은 60/60). 그리고 **판의 서로 다른 두 곳에 흩어진** 두 겹 위협은 다섯 단계 모두
+  보지 못합니다 (같은 자리에 생기는 삼삼·사사는 알아봅니다 — 다음 절 참고).
+  둘 다 의도된 절충이며 버그가 아닙니다.
 - **「되돌리기」는 당신의 수와 컴퓨터의 응수를 함께 되돌립니다.**
   컴퓨터 대국에서는 「이번 회전 되돌리기」를 쓸 수 없습니다 — 되돌리기를 쓰세요.
 - **4D에서는 컴퓨터도 층을 돌리지만, 돌리는 것은 필요한 때뿐입니다.** "일단 돌려 보자"는 하지 않습니다:
@@ -2964,14 +3054,17 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   돌린 결과 오히려 상대에게 활삼을 남기는 수는 스스로 고르지 않습니다.
   예전 판정은 "돌린 뒤 내 쪽에서 가장 좋은 수의 값이 올라가면 돌린다"였고, 실측으로 한 판에 세 번·
   자기 차례의 삼분의 일을 차지했으며, 그중 정말로 상대의 위협을 낮춘 것은 삼분의 일뿐이었습니다.
-  하 단계는 지금도 열 번에 한 번 정도만 따집니다. 회전으로 이길 수는 없습니다.
+  (다섯 단계 모두 이제 매 수마다 회전 후보를 만듭니다. 확률로 후보를 걸러 내지 않습니다.)
+  회전으로 이길 수는 없습니다.
 
 ## 12. 이 게임이 하지 않은 것
 
 - **쌍삼, 쌍사 금지가 없습니다.** 전통 렌주(Renju)에서는 선수에게 “한 수로 활삼 둘 / 사 둘을 만드는”
   같은 금지가 더 있지만, 이 게임은 장련 패배 하나만 구현했습니다. 판정은 착수 뒤에 이루어지고, “이 점에는 둘 수 없다”는 것은 없습니다.
-- **컴퓨터는 기력 엔진이 아닙니다.** 위협 계산은 슬라이딩 윈도라서 **건너뛴 모양과
-  이중 위협도 알아봅니다**. 다만 정석도 없고 정지 탐색도 하지 않습니다.
+- **컴퓨터는 기력 엔진이 아닙니다.** 위협 계산은 슬라이딩 윈도라서 **건너뛴 모양**과
+  **같은 자리에 생기는** 삼삼·사사는 알아봅니다. **판의 서로 다른 두 곳에 흩어진** 두 겹 위협은
+  잎 평가에서 4분의 1로 깎여 들어갈 뿐입니다 — 보이기는 하지만 아주 옅게 봅니다.
+  정석도 없고 정지 탐색도 하지 않습니다.
   연습 상대로는 충분하지만, 진지하게 두려면 전용 엔진을 쓰세요.
 - **회전에는 애니메이션이 없습니다**, 순간적으로 자리를 잡고, 회전한 레이어만 잠깐 강조 표시됩니다.
 - **회전은 패널의 버튼으로만 할 수 있습니다**, 입체 뷰에서 직접 끌어서 돌릴 수는 없습니다.
@@ -3226,7 +3319,7 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 > Между двумя поворотами нужно **поставить** не менее 5 камней.
 
 - **Считаются только ходы камнем**; сам поворот — нет: иначе получилось бы «только один ход из пяти может быть поворотом», а это слишком трудно отслеживать.
-- Можно задать 3 / 5 / 8 / 10, по умолчанию 5.
+- Можно задать любое целое от 3 до 10 (по умолчанию 5).
 - Первый поворот подчиняется тому же правилу: после начала партии нужно поставить 5 камней.
 - **Перезарядка начинается только после нажатия «Подтвердить»** — предпросмотр не состоялся, значит и не должен её расходовать.
 - Отмена хода возвращает и перезарядку, так что «счётчик и доска не расходятся».
@@ -3291,14 +3384,17 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   поэтому движок перебирает **все ваши ответы — и закрывающие, и те, что делают четвёрку вам**,
   и только тогда засчитывает выигрыш;
   если перебрать не удалось — он говорит «неизвестно», а не объявляет несуществующий выигрыш.
-  В 4D Оч. сильн и Ультра ещё и **оценивают поворот тем же поиском, что и ход**: стоит ли поворот
-  целого хода, решается на той же шкале, что и постановка камня. Поэтому Сильн и выше уходят из позиций,
-  где ваш следующий ход сделал бы открытую четвёрку, а Слаб спокойно туда входит. Все пять уровней
-  намеренно смещены в слабую сторону — «лёгкий» соперник, обыгрывающий новичка каждый раз, это
-  обычная беда таких функций.
-  **В 4D каждый уровень считает на один-два полухода глубже**: поворот сдвигает весь строй,
-  и на «трёхмерной» глубине компьютер не замечает, что его собственный ход только что уехал, —
-  то есть дарит сопернику целый ход.
+  В 4D **все пять уровней оценивают поворот одним и тем же дешёвым зондом** (не более 6–14 кандидатов
+  на ход; кандидат — это один поворот слоя плюс одно сканирование всего поля). Вариант «пусть Оч.
+  сильн и Ультра оценивают поворот тем же поиском, что и ход» пробовали, и замеры вышли
+  отрицательными (намного медленнее, ничуть не сильнее) — его вернули назад.
+  **В 4D глубже считают только Средний и Сильный** (один полуход → три, три → пять): поворот
+  сдвигает весь строй, и на «трёхмерной» глубине компьютер не замечает, что его собственный ход
+  только что уехал, — то есть дарит сопернику целый ход. Слабый вообще не ищет (это и есть
+  определение уровня «Слабый»), а Оч. сильн и Ультра и так считают на пять полуходов.
+  Поэтому Сильн и выше уходят из позиций, где ваш следующий ход сделал бы открытую четвёрку,
+  а Слаб спокойно туда входит. Все пять уровней намеренно смещены в слабую сторону — «лёгкий»
+  соперник, обыгрывающий новичка каждый раз, это обычная беда таких функций.
 - **Ультра обыграет вас раньше, чем вы увидите опасность.** Это работа серий четвёрок, а не везение:
   она может поставить ловушку уже в дебюте, которая сработает через десяток ходов.
 - **Два выбора делают разное.** «Первый игрок» выбирает **цвет**, который ходит первым (он же несёт
@@ -3306,8 +3402,10 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   «Первыми ходят чёрные + Компьютер» — компьютер играет чёрными и начинает, а вы белыми.
   Строка под настройками прямо говорит, какого цвета вы.
 - **Компьютер тоже связан правилом перебора** — он не станет играть туда, где получит шесть в ряд и
-  проиграет. Но открытые тройки он всё равно пропускает и двойных угроз не видит. Это сделано
-  намеренно, а не является ошибкой.
+  проиграет. Слабые места у него в другом: Слабый пропускает открытые тройки (по замерам он закрыл
+  их лишь в 17 партиях из 60; Средний и выше — 60 из 60), а **разбросанные по разным местам доски**
+  двойные угрозы не видит ни один из пяти уровней (двойная тройка или четвёрка-тройка **в одной
+  точке** распознаётся — см. следующий раздел). И то и другое — намеренный компромисс, а не ошибка.
 - **Отмена возвращает и ваш ход, и ответ компьютера.** «Вернуть этот поворот» в игре с компьютером
   недоступно — пользуйтесь отменой.
 - **В 4D компьютер тоже поворачивает слои, но только тогда, когда это стоит хода.** Он не крутит
@@ -3316,16 +3414,18 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
   которого у соперника остаётся открытая тройка, он сам не выберет.
   Прежний критерий — «повернуть, если лучший мой ход в затронутой полосе стал дороже» — давал три
   поворота за партию, каждый третий свой ход, и лишь треть из них действительно снижала угрозу.
-  На слабом уровне, как и раньше, поворот рассматривается примерно один раз из десяти.
+  (Теперь все пять уровней порождают кандидатов на поворот каждый ход; по вероятности их
+  больше никто не отсеивает.)
   Победу поворот не приносит никогда: он только ломает чужие построения и двигает свои камни.
 
 ## 12. Чего в этой игре нет
 
 - **Нет запретов на двойную тройку и двойную четвёрку.** В традиционном рэндзю (Renju) у первого игрока есть ещё такие запреты, как «один ход образует две открытые тройки / две четвёрки»;
   в этой игре реализовано только поражение за перебор. Наказание наступает после хода — запретных точек, куда нельзя ставить камень, не существует.
-- **Компьютер — не шахматный движок.** Подсчёт угроз идёт скользящим окном, поэтому **он
-  распознаёт разорванные формы и двойные угрозы**. Но у него нет ни дебютной книги, ни дзёсэки,
-  ни форсированного доигрывания.
+- **Компьютер — не шахматный движок.** Подсчёт угроз идёт скользящим окном, поэтому **он распознаёт
+  разорванные формы**, а также двойную тройку и четвёрку-тройку **в одной точке**; **разбросанные по
+  разным местам** двойные угрозы лишь входят в оценку листа с коэффициентом в четверть — видны, но
+  еле-еле. Но у него нет ни дебютной книги, ни дзёсэки, ни форсированного доигрывания.
   Как спарринг-партнёр он хорош; для серьёзной игры берите специальный движок.
 - **У поворота нет анимации** — он происходит мгновенно, лишь на миг подсвечивается повёрнутый слой.
 - **Поворот выполняется только кнопками на панели**, его нельзя сделать перетаскиванием прямо в объёмном виде.
@@ -3581,7 +3681,7 @@ sont plafonnés.
 > Entre deux rotations, il faut **poser** au moins 5 pierres.
 
 - **Seules les poses comptent** ; la rotation elle-même non — sinon cela deviendrait « un seul coup sur cinq peut être une rotation », trop difficile à suivre.
-- Réglable sur 3 / 5 / 8 / 10, par défaut 5.
+- Réglable sur n'importe quel entier de 3 à 10 (par défaut 5).
 - La première rotation y est soumise aussi : il faut poser 5 pierres après le début de la partie.
 - **La recharge ne commence qu'après avoir appuyé sur « Confirmer »** — l'aperçu n'a pas eu lieu, il ne doit donc pas la consommer.
 - L'annulation remet aussi la recharge en arrière, si bien que le compteur et le plateau ne se contredisent jamais.
@@ -3649,14 +3749,17 @@ ramène à l'écran de départ.
   celles qui bloquent comme celles qui font une quatre pour vous**, et s'il ne peut pas toutes les
   essayer il répond « inconnu » plutôt
   que d'annoncer un gain qui ne tient pas.
-  En 4D, Très haut et Ultra **évaluent aussi une rotation avec la même recherche qu'un coup** :
-  savoir si une rotation vaut un tour complet se décide sur la même échelle que poser une pierre. Haut et au-dessus
-  évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que Bas y entre sans
-  broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat les débutants
-  à tous les coups est le défaut habituel de cette fonction.
-  **En 4D, chaque niveau calcule un ou deux demi-coups plus loin** : une rotation déplace toute une
-  formation, et à la profondeur « 3D » l'ordinateur ne voit pas que son propre dernier coup vient d'être
-  déplacé — il offre alors un coup gratuit.
+  En 4D, **les cinq niveaux évaluent une rotation avec la même sonde économique** (au plus 6 à 14
+  candidats par coup ; un candidat = une rotation de couche plus un balayage complet du plateau). La
+  variante « laisser Très haut et Ultra évaluer une rotation avec la même recherche qu'un coup » a été
+  essayée et mesurée négative (beaucoup plus lente, pas plus forte) : elle a été retirée.
+  **En 4D, seuls Moyen et Haut descendent plus loin** (un demi-coup → trois, trois → cinq) : une
+  rotation déplace toute une formation, et à la profondeur « 3D » l'ordinateur ne voit pas que son
+  propre dernier coup vient d'être déplacé — il offre alors un coup gratuit. Bas ne calcule pas du tout
+  (c'est la définition même de « Bas »), et Très haut et Ultra sont déjà à cinq demi-coups.
+  Haut et au-dessus évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que
+  Bas y entre sans broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat
+  les débutants à tous les coups est le défaut habituel de cette fonction.
 - **Ultra vous battra avant que vous ne voyiez le danger.** C'est le résultat de la recherche de gain
   forcé, pas de la chance : il peut poser une trappe dès l'ouverture qui ne paiera que dix coups plus tard.
 - **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
@@ -3664,8 +3767,11 @@ ramène à l'écran de départ.
   couleur. Ainsi « Noirs en premier + Ordinateur » : l'ordinateur joue Noirs et ouvre, vous jouez
   Blancs. La ligne sous les réglages indique votre couleur.
 - **L'ordinateur est soumis lui aussi à la règle de l'alignement trop long** — il évite les cases qui
-  lui donneraient six alignés et la défaite. Il rate quand même des trois ouverts et ne voit pas les
-  menaces doubles : c'est délibéré, pas un bug.
+  lui donneraient six alignés et la défaite. Ses vraies faiblesses sont ailleurs : Bas rate des trois
+  ouverts (il n'en a bloqué que 17 sur 60 parties mesurées ; Moyen et au-dessus, 60 sur 60), et **deux
+  menaces séparées** à des endroits différents du plateau échappent aux cinq niveaux (un double-trois ou
+  un quatre-trois **sur une même case** est bien reconnu — voir la section suivante). Les deux sont des
+  compromis délibérés, pas des bugs.
 - **Annuler retire votre coup et la réponse de l'ordinateur ensemble.** « Restaurer la rotation » est
   indisponible contre l'ordinateur : utilisez Annuler.
 - **En 4D, l'ordinateur tourne aussi des couches, mais seulement quand cela vaut un coup.** Il ne tourne
@@ -3674,15 +3780,18 @@ ramène à l'écran de départ.
   trois ouvert à l'adversaire, il ne la choisit pas lui-même.
   L'ancien critère — « tourner si le meilleur coup à ma disposition dans la bande touchée a augmenté » —
   produisait trois rotations par partie, un tour sur trois, dont seulement un tiers faisait réellement
-  baisser la menace. Au niveau facile, la rotation n'est toujours envisagée qu'une fois sur dix environ.
-  Une rotation ne fait jamais gagner : elle ne fait que casser des formations et déplacer vos pierres.
+  baisser la menace. (Les cinq niveaux engendrent désormais des candidats de rotation à chaque coup ;
+  plus aucun ne les écarte par probabilité.) Une rotation ne fait jamais gagner : elle ne fait que casser
+  des formations et déplacer vos pierres.
 
 ## 12. Ce que ce jeu ne fait pas
 
 - **Pas de double-trois ni de double-quatre.** Dans le renju traditionnel, le premier joueur a aussi des interdits comme
   « un coup qui forme à la fois deux trois ouverts / deux quatre » ; ce jeu n'implémente que la défaite pour alignement trop long. La sanction tombe après la pose du pion : il n'existe pas de « cette case est interdite ».
 - **L'ordinateur n'est pas un moteur d'échecs.** Son comptage de menaces utilise une fenêtre
-  glissante : **il reconnaît donc les formes trouées et les menaces doubles**. Mais il n'a ni
+  glissante : **il reconnaît donc les formes trouées**, ainsi que le double-trois et le quatre-trois
+  **sur une même case** ; **deux menaces séparées** à des endroits différents ne sont prises en compte
+  dans l'évaluation terminale qu'avec un coefficient d'un quart — visibles, mais à peine. Il n'a ni
   bibliothèque d'ouvertures, ni joseki, ni recherche de quiescence.
 - **Les rotations n'ont pas d'animation** : elles se font instantanément, seule la couche tournée est brièvement mise en évidence.
 - **Les rotations ne se font qu'avec les boutons du panneau**, pas en glissant directement dans la vue 3D.
@@ -3995,7 +4104,8 @@ ramène à l'écran de départ.
 
 <!-- 【字符粒子画布】v3.1.6 的鼠标交互层。
      位置 = 纸的上面、所有内容（三维画布 / 面板 / 水印）的下面：
-       body 的纸纹 z 自动 -> #inkfield z:1 -> #inscription z:20 -> #stage/#setup
+       body 的纸纹 z 自动 -> #inkfield z:1 与 #inscription z:1 -> #stage/#setup
+       （水印那层后来从 20 降到 1，好让它退到立方体后面去 —— 见 #inscription 上面那段注释）
      【为什么压在内容下面而不是浮在上面】你要求的是"不遮挡棋盘和操作面板"。
      浮在上面靠低透明度也能"看起来不挡"，但那是叠了两层观感；压在下面则是真的不挡。
      代价是左侧那 42% 的三维画布要能透出它 —— 演示盘本来就带 opacity:.3，
@@ -4344,7 +4454,14 @@ function pluralForm(lang, n) {
     if (b >= 2 && b <= 4) return "few";
     return "many";
   }
-  if (lang === "en" || lang === "fr") return n <= 1 ? "one" : "many";  // 法语把 0 也算单数
+  /* 【英语和法语在这里必须分开】原来两个共用 `n <= 1 ? "one" : "many"`，注释只说了
+     "法语把 0 也算单数"—— 那对法语是对的，但标准英语里 0 是复数。共用的后果是英文界面上
+     一句 "0 move played"（应为 0 moves）和一层空空如也的棋盘写着 "Layer 1 (1 stone in it)"
+     （应为 0 stones），两处都能在开局第一眼看见（实测 #info 与 #rotLayerLabel）。
+     法语保留 n <= 1：0 coup joué 正是法语的写法 —— 但法语那几条单数文案【不能把数字写死】，
+     否则 0 会显示成 "1 pion"（见 TEXT.fr 里 rot.layerLabel.one）。 */
+  if (lang === "fr") return n <= 1 ? "one" : "many";
+  if (lang === "en") return n === 1 ? "one" : "many";
   return "many";
 }
 
@@ -4480,10 +4597,21 @@ const CORE_TEXT = {
       fr: "après {n} : {who} {move} ({stones} pions dans cette couche)" },
   "rot.status.over": { zh: "棋局已结束", en: "The game is over",
       ja: "対局終了", ko: "게임이 끝났습니다", ru: "Игра окончена", fr: "La partie est terminée" },
+  /* 【这一条也要选形】原来是不带复数的整句，英文写成 "({n} moves since the last one)" ——
+     n = 1 时就是 "1 moves since the last one"。平时够不到（界面上冷却最小 3），
+     但教学第一关把冷却设成 0（随时可转），玩家只要先落一手就必然看到 n = 1。
+     结构照抄下面的 rot.status.wait：基名 = 单数那一形，另有 .few / .many。 */
   "rot.status.ready": { zh: "可以转动（距上次转动已过 {n} 手）",
-                        en: "Ready to rotate ({n} moves since the last one)",
-      ja: "回転できます（前回の回転から{n}手）", ko: "회전 가능 (마지막 회전 후 {n}수 지남)", ru: "Можно повернуть (с прошлого поворота: {n})",
-      fr: "Rotation possible (coups depuis la dernière : {n})" },
+      en: "Ready to rotate ({n} move since the last one)",
+      ru: "Можно повернуть (с прошлого поворота: {n} ход)",
+      fr: "Rotation possible ({n} coup depuis la dernière)" },
+  "rot.status.ready.few": { zh: "可以转动（距上次转动已过 {n} 手）",
+      ru: "Можно повернуть (с прошлого поворота: {n} хода)" },
+  "rot.status.ready.many": { zh: "可以转动（距上次转动已过 {n} 手）",
+      en: "Ready to rotate ({n} moves since the last one)",
+      ja: "回転できます（前回の回転から{n}手）", ko: "회전 가능 (마지막 회전 후 {n}수 지남)",
+      ru: "Можно повернуть (с прошлого поворота: {n} ходов)",
+      fr: "Rotation possible ({n} coups depuis la dernière)" },
   "rot.status.wait": { zh: "距下次转动还需 {left} 手（已过 {since} 手）",
                        en: "{left} more move before the next rotation ({since} since the last one)",
       ko: "다음 회전까지 {left}수 남음 (지난 회전 후 {since}수)", ru: "До следующего поворота ещё {left} ход (с прошлого поворота: {since})",
@@ -5049,9 +5177,10 @@ const RuleEngine = {
           if (s === EMPTY) continue;
           for (let i = 0; i < DIRS13.length; i++) {
             const d = DIRS13[i];
-            if (board.getOrDefault(x - d[0], y - d[1], z - d[2]) === s) continue;
             const len = 1 + RuleEngine.countRun(board, { x: x, y: y, z: z }, d, s);
-            if (len >= minLength) out.push({ player: s, length: len, dir: d, start: [x, y, z] });
+            if (len < minLength) continue;
+            if (!RuleEngine.isRunStart(board, x, y, z, d, len)) continue;
+            out.push({ player: s, length: len, dir: d, start: [x, y, z] });
           }
         }
       }
@@ -5059,10 +5188,66 @@ const RuleEngine = {
     return out;
   },
 
-  lineCoords(run) {
+  /**
+   * 这一格是不是 d 方向上那条连线的【起点】—— 保证每条极大连线只被记一次。
+   *
+   * 【环绕盘上的起点必须取模去判】原来这里直接 `getOrDefault(x - d[0], …)`：
+   * 那是个不环绕的查询（越界即 EMPTY），而它要为之去重的 countRun 是会绕边的。
+   * 于是 x = 0（y / z 同理）在任何绕边的线上都被当成新起点 —— 一条绕边的六连
+   * 被报成两条：完整的那条 + 一段被截断的碎片（8³ 贯通实测：5@0,7,7 与 6@7,7,7）。
+   * 碎片的下标更小、按 z→y→x 的扫描顺序还排在前面，喂给 decideByRotation 之后
+   * 就变成"先手（受限方）转出六连被判成赢"。玩家侧的症状是转动提示里的
+   * "盘面上会出现 N 连（M 条）"多数一条。
+   *
+   * 【整圈同色是唯一的例外】那时每个格子的前驱都同色，取模判据会把整条环全判掉、
+   * 一条都不报 —— 那等于漏了这条 n 连。所以整圈同色改成"只让环上线性下标最小的
+   * 那一格报"。len 取 countRun 的封顶值（nx−1）+ 1，环上一条线最多 nx 格。
+   */
+  isRunStart(board, x, y, z, d, len) {
+    const s = board.get(x, y, z);
+    if (!board.wrap) {
+      return board.getOrDefault(x - d[0], y - d[1], z - d[2]) !== s;
+    }
+    const nx = board.nx, ny = board.ny, nz = board.nz;
+    const idx = x + nx * (y + ny * z);
+    if (len < nx) {
+      const px = (((x - d[0]) % nx) + nx) % nx;
+      const py = (((y - d[1]) % ny) + ny) % ny;
+      const pz = (((z - d[2]) % nz) + nz) % nz;
+      return board.cells[px + nx * (py + ny * pz)] !== s;
+    }
+    let cx = x, cy = y, cz = z, best = idx;
+    for (let k = 1; k < nx; k++) {
+      cx = (((cx + d[0]) % nx) + nx) % nx;
+      cy = (((cy + d[1]) % ny) + ny) % ny;
+      cz = (((cz + d[2]) % nz) + nz) % nz;
+      const j = cx + nx * (cy + ny * cz);
+      if (j < best) best = j;
+    }
+    return idx === best;
+  },
+
+  /**
+   * 一条线的所有坐标。**环绕盘上要取模** —— 不取模的话返回的是盘外坐标，
+   * 而界面拿它当扁平下标用（Board3D.index 不做越界检查），于是金线会画到盘外、
+   * 高亮还会烧到别的子身上（实测 lastOutcome.line 里出现 x = 8,9,10，
+   * 而 index(8,6,7) 恰好等于真实格 (0,7,7) 的下标 504）。
+   * 传 board 才取模：不传（老调用点 / 不环绕的盘）时逐字节与从前相同。
+   */
+  lineCoords(run, board) {
     const out = [];
+    const w = !!(board && board.wrap);
+    const nx = board ? board.nx : 0, ny = board ? board.ny : 0, nz = board ? board.nz : 0;
     for (let i = 0; i < run.length; i++) {
-      out.push([run.start[0] + i * run.dir[0], run.start[1] + i * run.dir[1], run.start[2] + i * run.dir[2]]);
+      let x = run.start[0] + i * run.dir[0];
+      let y = run.start[1] + i * run.dir[1];
+      let z = run.start[2] + i * run.dir[2];
+      if (w) {
+        x = ((x % nx) + nx) % nx;
+        y = ((y % ny) + ny) % ny;
+        z = ((z % nz) + nz) % nz;
+      }
+      out.push([x, y, z]);
     }
     return out;
   },
@@ -5228,7 +5413,7 @@ class GameSession {
     this.status = "Decided";
     this.lastOutcome = { status: fouled ? MoveStatus.LoseByOverline : MoveStatus.Win,
                          winner: this.winner, longestRun: run.length,
-                         line: RuleEngine.lineCoords(run), isOverlineFoul: fouled };
+                         line: RuleEngine.lineCoords(run, this.board), isOverlineFoul: fouled };
   }
 
   /**
@@ -5248,14 +5433,33 @@ class GameSession {
     if (this.status !== "Playing") return false;
     const P = this.rules.phasePeriod | 0;
     const runs = RuleEngine.fullScan(this.board, this.rules.winLength);
+    const mine = [];
     for (let i = 0; i < runs.length; i++) {
       const r = runs[i];
       if (colourOf(r.player) !== player) continue;
       if (P > 0 && phaseOf(r.player) !== this.phase) continue;   // 异相位的线不算数
-      this._settleLine(r);
+      mine.push(r);
+    }
+    if (!mine.length) return false;
+    /* 【长连优先：这一手的产物要一起看，不能"先扫到哪条算哪条"】
+       fullScan 是按 z→y→x + 方向表顺序吐的，而同一手转动可能同时造出五连和六连。
+       只结算第一条的话，判定就取决于两条线谁在盘上排得靠前 —— 实测把两条线的 y 坐标
+       对调，同一个转动从「先手胜」变成「长连判负」。而落子那条路（judge）的语义是明确的：
+       restricted && hasOverline && (overlineTakesPrecedence || !hasExactWin) → 长连判负。
+       这里按同一套语义挑出"该结算的那一条"，再交给 _settleLine —— 判胜的口子仍然只有一个。 */
+    const wl = this.rules.winLength;
+    let over = null, exact = false;
+    for (let i = 0; i < mine.length; i++) {
+      if (mine[i].length === wl) exact = true;
+      if (mine[i].length > wl && (!over || mine[i].length > over.length)) over = mine[i];
+    }
+    if (over && this.rules.isRestricted(player, this.firstPlayer) &&
+        (this.rules.overlineTakesPrecedence || !exact)) {
+      this._settleLine(over);
       return true;
     }
-    return false;
+    this._settleLine(mine[0]);
+    return true;
   }
 
   /**
@@ -5641,7 +5845,10 @@ class FourDSession {
     if (!this.rotationEnabled) return "";
     if (this.inner.status !== "Playing") return ct("rot.status.over", lang);
     if (this.canRotate) {
-      return ct("rot.status.ready", lang, { n: this.placementsSinceLastRotation });
+      // 走 ctPlural：教学第一关（冷却 0）里落一手就会读到 n = 1，
+      // 英文写成 "1 moves since the last one" 是错的 —— 见表里那一段注释。
+      return ctPlural("rot.status.ready", lang, this.placementsSinceLastRotation,
+                      { n: this.placementsSinceLastRotation });
     }
     // 只剩 1 手时英文要写 "1 more move"（俄语还有少数形），所以这一句也走 pluralForm。
     // 这一行是常显的 22px 状态行，界面上够得到（冷却 3 时落满 2 子就是 1）。
@@ -8072,7 +8279,7 @@ const TEXT = { en: {
   // 这一处【界面上够得到】：冷却选 3 时落两手，placementsUntilRotation 就是 1。
   "rot.hint.cool.one": "Cooling down: 1 more move. A rotation uses up the whole turn, so you can't place right after rotating.",
   "rot.hint.cool.many": "Cooling down: {n} more moves. A rotation uses up the whole turn, so you can't place right after rotating.",
-  "rot.hint.undo": "The last move was a rotation — you can take it back with “Restore”.",
+  "rot.hint.undo": "The last move was a rotation — Undo Z takes it back.",
   "rot.hint.ready": "Clockwise = looking from the negative end of that axis toward the origin. Making five for yourself with a rotation wins; only lining up the opponent's five is rolled back. A rotation uses up the whole turn.",
 
   // ---- 浮动提示
@@ -8097,7 +8304,7 @@ const TEXT = { en: {
   "setup.perLayer": "{n} stones",
   "setup.perLayerEst": "total stones ÷ {n}",
   // 两句话拆成两条，因为只有第一句带那个会变的数（冷却）。冷却 = 1 时英文必须写
-  // "every move" —— 写成 "every 1 moves" 是错的，而界面上选不到 1（按钮是 3/5/8/10），
+  // "every move" —— 写成 "every 1 moves" 是错的，而界面上选不到 1（冷却框允许 3 – 10），
   // 所以这条只在脚本把冷却调成 1 时才露出来，谁也不会顺手发现它。
   "setup.fourD.every.one": "\n4D: every move you may rotate one layer (it uses up the whole turn; the rotation itself doesn't count as a move).",
   "setup.fourD.every.many": "\n4D: every {cool} moves you may rotate one layer (it uses up the whole turn; the rotation itself doesn't count as a move).",
@@ -8237,7 +8444,7 @@ TEXT.ja = {
   "rot.hint.preview": "プレビュー中：盤面は回した後の見た目ですが、まだ確定していません。「確定」で本当に回り、「キャンセル」で元に戻ります。",
   "rot.hint.empty": "このレイヤーは空です。回転するものがありません。別のレイヤーを選ぶか、3D表示で石の位置を確認してください。",
   "rot.hint.cool.many": "クールダウン中：あと{n}手。回転はその手番を丸ごと使うため、回転した直後には着手できません。",
-  "rot.hint.undo": "直前の手は回転でした。「回転を戻す」で取り消せます。",
+  "rot.hint.undo": "直前の手は回転でした。「元に戻す Z」で取り消せます。",
   "rot.hint.ready": "時計回りは、その軸の負の側から原点を見た向きです。回転で自分の5連ができれば勝ち、相手の5連を作ったときだけ取り消されます。回転はその手番を丸ごと使います。",
   "toast.undone": "取り消しました：{move}",
   "toast.rotated": "{move}",
@@ -8370,7 +8577,7 @@ TEXT.ko = {
   "rot.hint.preview": "미리보기 중: 판은 이미 돌아간 모습이지만 아직 확정되지 않았습니다. 「확인」을 누르면 실제로 돌아가고, 「취소」를 누르면 되돌아갑니다.",
   "rot.hint.empty": "이 레이어는 비어 있습니다 — 회전할 것이 없습니다. 다른 레이어를 고르거나 3D 보기에서 돌이 있는 곳을 확인하세요.",
   "rot.hint.cool.many": "쿨다운: {n}수 남음. 회전은 한 수를 전부 사용하므로 회전 직후에는 착수할 수 없습니다.",
-  "rot.hint.undo": "마지막 수는 회전이었습니다 — \"복원\"으로 되돌릴 수 있습니다.",
+  "rot.hint.undo": "마지막 수는 회전이었습니다 — 「되돌리기 Z」로 되돌릴 수 있습니다.",
   "rot.hint.ready": "시계 방향 = 해당 축의 음수 끝에서 원점 쪽을 바라보는 방향입니다. 회전으로 내 오목이 만들어지면 승리이고, 상대의 오목을 만들었을 때만 되돌려집니다. 회전은 한 수를 전부 사용합니다.",
   "toast.undone": "되돌림: {move}",
   "toast.rotated": "{move}",
@@ -8514,7 +8721,7 @@ TEXT.ru = {
   "rot.hint.cool.one": "Перезарядка: ещё 1 ход. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
   "rot.hint.cool.few": "Перезарядка: ещё {n} хода. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
   "rot.hint.cool.many": "Перезарядка: ещё {n} ходов. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
-  "rot.hint.undo": "Последний ход — поворот; отменить его можно кнопкой «Вернуть поворот».",
+  "rot.hint.undo": "Последний ход — поворот; вернуть его можно кнопкой «Отменить (Z)».",
   "rot.hint.ready": "По часовой — это взгляд с отрицательного конца оси к началу координат. Поворот, собирающий пять для вас, — это победа; откатывается только поворот, собирающий пять сопернику. Поворот занимает весь ход.",
   "toast.undone": "Отменено: {move}",
   "toast.rotated": "{move}",
@@ -8648,14 +8855,16 @@ TEXT.fr = {
   "banner.overlineSub": "Le premier joueur doit aligner exactement 5 pions",
   "banner.win": "Les {who} gagnent\n{n} pions alignés",
   "banner.winSub": "Coup {n}",
-  "rot.layerLabel.one": "Couche {n} (1 pion)",
+  // 【数字必须走占位符】法语把 0 也算单数（0 pion 才是对的写法），所以这一形会被
+  // n = 0 选中 —— 写死成 "1 pion" 的话，空层会显示成"有 1 颗子"。
+  "rot.layerLabel.one": "Couche {n} ({stones} pion)",
   "rot.layerLabel.many": "Couche {n} ({stones} pions)",
   "rot.hint.over": "La partie est terminée.",
   "rot.hint.preview": "Aperçu : le plateau est déjà tourné, mais le coup n'est pas encore validé. « Confirmer » le valide, « Annuler » remet tout en place.",
   "rot.hint.empty": "Cette couche est vide — rien à tourner. Choisissez une autre couche, ou regardez la vue 3D pour voir où sont les pions.",
   "rot.hint.cool.one": "Recharge : encore 1 coup. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
   "rot.hint.cool.many": "Recharge : encore {n} coups. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
-  "rot.hint.undo": "Le dernier coup était une rotation — vous pouvez l'annuler avec « Restaurer ».",
+  "rot.hint.undo": "Le dernier coup était une rotation — « Annuler Z » la retire.",
   "rot.hint.ready": "Sens horaire = vu depuis l'extrémité négative de cet axe, en direction de l'origine. Une rotation qui fait cinq pour vous gagne ; seule celle qui aligne cinq pour l'adversaire est annulée. Une rotation consomme tout le tour.",
   "toast.undone": "Annulé : {move}",
   "toast.rotated": "{move}",
@@ -9682,6 +9891,11 @@ const Game = {
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
       "extraRow","optSpinBtn","optWrapBtn","buttons",
+      /* setupTitle 原来不在这张表里（它是 .serif 的静态标题，applyStatic 直接按
+         data-i18n 写文案，不需要 el 引用）。v3.1.7 有两处要读它：标签页标题跟着语言
+         走（document.title）与主标题按列宽缩一档（syncTitleFit）—— 少了它这两处
+         都会静默变成空操作（`if (this.el.setupTitle)` 直接跳过）。 */
+      "setupTitle",
       "coolInput","phaseRow","phaseInput","phaseNote",
       "dimRange","dimRange4d","coolNote",
       "rotPanel","rotStatus","rotLayerDown","rotLayerUp","rotLayerLabel",
@@ -9790,6 +10004,22 @@ const Game = {
     // 关的动作在那个点击处理里。
     this.syncLangList();
     applyStatic();
+    /* 【标签页标题也要跟着语言走】<title> 在 HTML 里写死的是中文「五子魔方」，
+       而游戏名六种语言各不相同（Gomokube / ゴモキューブ / 오목큐브 / Гомокуб / Gomocube）——
+       v3.1.6 改名时只改了页内的大标题，标签页、书签、另存的文件名都还是中文。
+       直接从刚被 applyStatic 写好的 h1 读，走的是同一份文案（包括切回中文时
+       从 HTML 快照还原的那一份），不另立一张表。 */
+    if (this.el.setupTitle && typeof document !== "undefined") {
+      document.title = this.el.setupTitle.textContent;
+    }
+    /* 【教学里那颗键和教学条也要一起刷】applyStatic 会把 #setupBtn 写回静态表的
+       "设置 / Settings"，而教学里它写的是「退出」—— 不补这一句，切完语言标签就和
+       动作对不上了（点它仍然是退出教学）。教学条那四块（进度 / 标题 / 正文 / 过关）
+       也只有 syncTutorialUi 一处写，而它平时只在达成目标那一支被调用。
+       顺带把 setupBtnLabel（退出时用来还原的"原文案"）刷成当前语言的 —— 它原来是
+       进教学那一刻抓的，在教学里切过语言再退出，写回去的就是旧语言的标签。 */
+    if (this.el.setupBtn) this.setupBtnLabel = this.el.setupBtn.textContent;
+    if (this.tutActive) this.syncTutorialUi();
     // JS 拼出来的文案：挨个重刷。refreshTexts 要求有棋局，其余几个读的是设置页状态，
     // 没有棋局时也成立（起始界面就是那种情况）。
     if (this.session) this.refreshTexts();
@@ -9805,6 +10035,9 @@ const Game = {
     this.syncLabelWidth();
     // 面板内容的左沿可能跟着变（换语言 / 换模式 / 换视口）—— 水印贴的就是它
     this.syncInscription();
+    // 换个语言就换个标题长度（ゴモキューブ 六个全角字 / Gomokube 八个字母），
+    // 放不下的要按列宽缩一档 —— 见 syncTitleFit 的注释
+    this.syncTitleFit();
     this.refreshSetupSummary();
     // 这两个是 JS 写的、不挂 data-i18n 的元素，applyStatic 管不到它们。
     // refreshHint 只在 WebGL2 失败时动手，正常情况下它直接返回。
@@ -9910,6 +10143,10 @@ const Game = {
     // 而此刻旧 session 马上就要被整个换掉，转回去纯属白算（而且换 session 的分支里
     // this.session 可能还是 null）。直接置空就够，盘面是新的。
     this.rotPreview = null;
+    // 双击窗口里扣着的那一子也一样：新盘上不该冒出上一盘点的那颗子（见 handleTap）。
+    // 放在这里而不是每个调用点，是因为 newGame / adoptSession / tutorialBuild 三条路
+    // 都要它，而它们最后都落到这个函数上。
+    this.cancelPendingTap();
     this.placeMode = 0;
   },
 
@@ -10037,6 +10274,12 @@ const Game = {
     this.maybeScheduleAi();
   },
   onRotationUndone(rec) {
+    // 【撤掉的那一手如果是"转出来的胜局"，横幅必须一起收掉】
+    // 落子那条路（onMoveUndone）第一句就是 hideBanner，转动这条原来漏了 ——
+    // 于是撤销之后盘面回到 Playing，横幅却还挂在 .on 上；而 refreshTexts 的横幅分支
+    // 是【现读】lastOutcome 重渲染的，clearDecision 把它清空之后就读成
+    // "空棋胜 · 0 连"，活棋上盖着一张胡说八道的胜局横幅（实测截图里就压在棋盘中间）。
+    this.hideBanner();
     this.onBoardChanged(false);
     this.toast(say(() => "已恢复转动前的样子（" + describeRotationMove(rec.move) + " 已撤销）",
                    "toast.rotUndone", { move: describeRotationMove(rec.move, "en") }), true);
@@ -10595,6 +10838,10 @@ const Game = {
     // 预览中的那一手没落地就得先撤掉：不然玩家在设置界面里改了尺寸再回来，
     // 棋盘还是"转过的样子"，而记账里根本没有那一手 —— 这局棋就对不上了。
     this.dropRotPreview();
+    // 双击窗口里扣着的那一子同理：让它在设置界面开着的时候落下来，收起来时
+    // 棋盘上就凭空多了一颗（和上面那条"看着像闹鬼"是同一类）。而且这一颗
+    // 还是落在"设置界面背后那一局"上的，玩家根本没看见它落下。
+    this.cancelPendingTap();
     this.el.setup.classList.remove("off");
     this.el.stage.classList.add("preview");
     this.setHover(null);
@@ -10606,6 +10853,8 @@ const Game = {
     this.syncLabelWidth();
     // 面板内容的左沿可能跟着变（换语言 / 换模式 / 换视口）—— 水印贴的就是它
     this.syncInscription();
+    // 标题的可用宽也跟着列宽走（换语言换个标题长度、换视口改列宽），重量一次
+    this.syncTitleFit();
     this.refreshSetupSummary();
     this.ensurePreview();
     this.uploadPreviewInstances();
@@ -11555,7 +11804,7 @@ const Game = {
     this.el.layerBase.addEventListener("pointerdown", (e) => this.trackPointer(e, "down", "layer"));
     this.el.layerBase.addEventListener("click", (e) => {
       const cell = this.cellFromEvent(e, this.el.layerBase);
-      if (cell) this.handleTap("layer", e.clientX, e.clientY, () => this.tryPlace(cell.x, cell.y));
+      if (cell) this.handleTap("layer", e.clientX, e.clientY, () => this.tryPlace(cell.x, cell.y), cell);
     });
     this.el.layerBase.addEventListener("mousemove", (e) => {
       const cell = this.cellFromEvent(e, this.el.layerBase);
@@ -11657,22 +11906,57 @@ const Game = {
    * 不去做"按在按钮上就不拖"的判断：那要用 closest()/tagName，DOM 桩不一定有，
    * 而且会让"按在标题上能拖、按在按钮附近拖不动"这种边界变得难以解释。
    */
+  /**
+   * 横幅可拖的范围（**以"居中基准"为原点的偏移量**，和 bannerDX/DY 同一个坐标系）。
+   *
+   * 【为什么必须减掉当前偏移】getBoundingClientRect() 拿到的矩形【已经含了】
+   * bannerDX/DY 那一段位移，而 pointermove 里算出来的 dx 是"相对居中基准的绝对偏移"。
+   * 两个坐标系混用的话，整个夹取窗口被平移了 |dx|：拖过一次之后再往反方向拖，
+   * 第一下就会被夹回中间 —— 实测鼠标只动 40px，横幅一次跳了 181px。
+   * 窄窗口下还会拖出 #view（left = −103）。
+   * 所以这里统一换算到"居中基准"：base = 当前矩形 − 当前偏移。
+   */
+  bannerClampBounds() {
+    const banner = this.el.banner;
+    if (!banner) return null;
+    const viewRect = this.el.view.getBoundingClientRect();
+    const rect = banner.getBoundingClientRect();
+    const baseL = rect.left - this.bannerDX, baseR = rect.right - this.bannerDX;
+    const baseT = rect.top - this.bannerDY, baseB = rect.bottom - this.bannerDY;
+    return {
+      minX: viewRect.left - baseL, maxX: viewRect.right - baseR,
+      minY: viewRect.top - baseT, maxY: viewRect.bottom - baseB,
+    };
+  },
+
+  /** 把当前的 bannerDX/DY 夹回合法范围。resize 之后要重来一次 ——
+   *  边界是"#view 的四条边"，而视口一变它就变了：不重夹的话，拖动过的横幅
+   *  转屏之后可能整块停在面板甚至屏幕外面（实测 900×700 下 left = −103 那一档）。 */
+  reclampBanner() {
+    if (!this.bannerOpen) return;
+    const b = this.bannerClampBounds();
+    if (!b) return;
+    // 窄窗口下 #view 可能比横幅还窄（#banner 是 min-width:300px + 34px 内边距 ≈ 368px，
+    // 而 #view 只有视口的 42%），这时 min > max —— 显式归零，
+    // 表现就是"居中并溢出"，和没拖过一样（见下面 pointermove 里同一句）。
+    this.bannerDX = b.maxX < b.minX ? 0 : Math.max(b.minX, Math.min(b.maxX, this.bannerDX));
+    this.bannerDY = b.maxY < b.minY ? 0 : Math.max(b.minY, Math.min(b.maxY, this.bannerDY));
+    this.applyBannerOffset();
+  },
+
   bindBannerDrag() {
     const banner = this.el.banner;
     if (!banner) return;
 
     banner.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
-      const viewRect = this.el.view.getBoundingClientRect();
-      const rect = banner.getBoundingClientRect();
+      const dims = this.bannerClampBounds();
+      if (!dims) return;
       this.bannerDrag = {
         x: e.clientX, y: e.clientY,
         dx: this.bannerDX, dy: this.bannerDY,
         // 可拖范围：横幅四边都不越出 #view。缓存一次，不在 pointermove 里重读（理由见字段注释）。
-        minX: viewRect.left - rect.left,
-        maxX: viewRect.right - rect.right,
-        minY: viewRect.top - rect.top,
-        maxY: viewRect.bottom - rect.bottom,
+        minX: dims.minX, maxX: dims.maxX, minY: dims.minY, maxY: dims.maxY,
       };
     });
 
@@ -11861,10 +12145,19 @@ const Game = {
   },
 
   /** 这一下点击和上一次算不算"同一处的双击"：时间和距离两道门槛，缺一不可。 */
-  isDoubleTap(key, x, y, nowMs) {
+  isDoubleTap(key, x, y, nowMs, cell) {
     const prev = this.lastTap[key];
-    return !!(prev && nowMs - prev.t < TAP_WINDOW_MS &&
-              Math.hypot(x - prev.x, y - prev.y) < TAP_NEAR_PX);
+    if (!prev || nowMs - prev.t >= TAP_WINDOW_MS) return false;
+    /* 【两边都拿得到格子时，按"是不是同一格"判，不按像素距离】
+       固定 50px 在密集棋盘上比相邻两个交叉点还宽 —— 15³ 默认取景实测相邻交点只有
+       32px，于是"手快在相邻两格连下两手"的第二下被当成双击复位：落子被静默丢掉，
+       既不报错也没有提示（实测 80ms 间隔只落 1 颗，400ms 就落 2 颗）。
+       而 handleTap 上面那段注释写的正是反过来的意图（"两个不同的格子上快速连下两手
+       不会被误判成复位 —— 这是这个窗口最要紧的一条"）。格子判据还顺带修好了
+       30³、以及二维面板那种更密的格距。
+       拿不到格子（测试直接调 handleTap、或拾取没命中）时退回像素距离。 */
+    if (cell && prev.cell) return cell.x === prev.cell.x && cell.y === prev.cell.y;
+    return Math.hypot(x - prev.x, y - prev.y) < TAP_NEAR_PX;
   },
 
   /**
@@ -11878,17 +12171,18 @@ const Game = {
    *   · 窗口过了 → 定时器把它补上。
    * 少任何一条都会"吞子"，而吞子比延迟严重得多 —— 玩家会以为是自己没点到。
    */
-  handleTap(key, x, y, commit) {
+  handleTap(key, x, y, commit, cell) {
     const now = this.nowMs();
     if (now - this.pinchEndedAt < PINCH_TAIL_MS) return;
-    if (this.isDoubleTap(key, x, y, now)) {
+    if (this.isDoubleTap(key, x, y, now, cell)) {
       this.lastTap[key] = null;   // 双击只认一次：接着点第三下不该再复位一次
       this.cancelPendingTap();
       this.resetView(key);
       return;
     }
     this.flushPendingTap();
-    this.lastTap[key] = { x: x, y: y, t: now };
+    // 记下格子：下一次点击要靠它判"是不是同一处"（见 isDoubleTap）
+    this.lastTap[key] = { x: x, y: y, t: now, cell: cell || null };
     if (!this.viewMoved(key)) { commit(); return; }
     const token = {};
     this.pendingToken = token;
@@ -11985,7 +12279,7 @@ const Game = {
         const cell = this.pick(e.clientX - r.left, e.clientY - r.top);
         // 格子在这里就算出来、扣在闭包里 —— 双击窗口里相机可能被别的操作动过，
         // 到时候再 pick 一次算出来的可能已经是另一格了
-        if (cell) this.handleTap("gl", e.clientX, e.clientY, () => this.tryPlace(cell.x, cell.y));
+        if (cell) this.handleTap("gl", e.clientX, e.clientY, () => this.tryPlace(cell.x, cell.y), cell);
       }
       this.pressInView = false;
       this.dragging = false;
@@ -12369,7 +12663,7 @@ const Game = {
         "rot.hint.cool", this.session.placementsUntilRotation,
         { n: this.session.placementsUntilRotation });
     } else if (this.session.canUndoLastRotation) {
-      hint = say(() => "最后一步是转动，可以「恢复本次转动」退回去。", "rot.hint.undo");
+      hint = say(() => "最后一步是转动，按「悔棋 Z」可以把它退回去。", "rot.hint.undo");
     } else {
       hint = say(
         () => "顺时针 = 从该轴负方向朝原点看。转出你自己的五连就是赢；只有把对方的子转成五连才整体撤销。转动占掉一整个回合。",
@@ -12382,6 +12676,9 @@ const Game = {
     // 【预览期间，悔棋就是取消这次预览】盘面上还没落地的东西只有这一手，
     // 撤掉它才是"悔一步"的正解；继续往下走会去撤更早的落子，而棋盘此刻是转过的样子。
     if (this.rotPreview) { this.cancelRotation(); return; }
+    // 【双击窗口里扣着的那一子也要撤掉】它是"还没落地的一手"，和预览是同一类东西：
+    // 不清的话它会在这手棋被悔掉【之后】落下来 —— 玩家看到的是"按了悔棋，反而多一颗子"。
+    this.cancelPendingTap();
     // 先把待走的电脑着撤掉：不清的话它会在悔棋之后才落下来，看起来像闹鬼
     this.cancelAiTimer();
     if (this.aiMode) {
@@ -12394,18 +12691,55 @@ const Game = {
         if (!this.isAiTurn()) break;
       }
       if (n === 0) this.toast(say(() => "没有可悔的棋了", "toast.noUndo"), true);
-      else this.maybeScheduleAi();
+      // 【必须无条件重排一次，不能只在 n > 0 时排】上面那句 cancelAiTimer() 已经把
+      // "待走的电脑着"撤掉了。如果这一手又什么都没悔成（n === 0），就没人把它排回来：
+      // 电脑执先手时按一下 Z（开局第 0 手、无可悔）正是这种情形 —— 电脑永远不再走，
+      // 玩家落子又被 isAiTurn 挡着提示"现在是电脑的回合"，棋局就此死锁（等多久都不动，
+      // 只有按 R 能救回来）。maybeScheduleAi 自己会先 cancelAiTimer、再只在确实轮到
+      // 电脑时才排，所以无条件调用是安全的。
+      this.maybeScheduleAi();
       return;
     }
     if (!this.session.undo()) this.toast(say(() => "没有可悔的棋了", "toast.noUndo"), true);
   },
   restart() {
+    // 【教学关里的「重开」是"重开这一关"，不是"清空棋盘"】
+    // 关卡的预设局面只写在关卡自己的 build() 里，不是靠 move 落下的 —— 所以它不在
+    // history 里、也重建不出来。走 session.restart() 会把整盘预设子清光（实测第一关
+    // 56 颗 → 0），而教学文案还在讲盘上那条活四：局面变成"这一关根本到不了的样子"，
+    // 照着提示做已经做不了；空盘上自己连五还会显示「过关」。重开这一关才是
+    // tutorialCheck 里那句"退回没过关的样子"的准确含义。
+    if (this.tutActive) {
+      this.tutorialBuild(this.tutIndex);
+      this.toast(say(() => "已重开", "toast.restarted"), true);
+      return;
+    }
+    // 【预览中的那一转必须先丢掉】理由见 dropRotPreview 的注释。这里不用它，是因为
+    // 旧盘马上就要被整个换掉，转回去纯属白算 —— 和 resetViewState 里同一个取舍。
+    // 不清的后果不轻：this.rotPreview 还拿着旧 move，面板继续认定"预览中"，这时点
+    // 「取消操作」会走 cancelPreviewRotate，而那一步是【盲转当前棋盘】—— 于是新开的
+    // 一盘上、电脑刚落的那颗子被转到别的格，history 还记着原格，从此盘面与记账永久分叉。
+    this.rotPreview = null;
+    // 双击窗口里扣着的那一子同理：不清的话定时器到点会把它落【在新盘上】（见 handleTap）。
+    this.cancelPendingTap();
     this.hideBanner(); this.session.restart();
     this.toast(say(() => "已重开", "toast.restarted"), true);
   },
   swapFirst() {
+    // 教学里"换先手"同样会把关卡预设清空，而且"改为白先手"对一关的预设局面没有意义 ——
+    // 和「重开」同一处理：重开这一关。
+    if (this.tutActive) {
+      this.tutorialBuild(this.tutIndex);
+      this.toast(say(() => "已重开", "toast.restarted"), true);
+      return;
+    }
     const next = opponentOf(this.session.firstPlayer);
-    this.setupFirst = next;
+    // 【走 setSetupFirst，不直接写 this.setupFirst】设置页那两个键的高亮只有它一处维护。
+    // 直接写字段的话，回到设置页会看到摘要写着「· 白先手」、而高亮的仍是「黑棋先手」——
+    // 同一屏上两处各说各的，而且点「开始游戏」开出来的确实是白先手（与高亮相反）。
+    this.setSetupFirst(next);
+    this.rotPreview = null;          // 同 restart()：旧盘马上换掉，预览要丢干净
+    this.cancelPendingTap();
     this.hideBanner();
     this.session.reset(this.session.board.dims, next, this.session.rules);
     this.toast(say(() => "已重开，改为" + cnOf(next) + "先手", "toast.swapped", { who: sideName(next, LANG) }), true);
@@ -13309,6 +13643,109 @@ const Game = {
    * 竖屏那一档不在这里管：那时水印改到视口右上角、而且【允许压面板】（明确要求），
    * 由 CSS 的 @media (orientation: portrait) 定 —— 内联样式会盖过 @media，所以要清掉。
    */
+  /**
+   * 主标题的字号：按【这一列真正能用的宽度】封顶。**只缩不放**。
+   *
+   * 【为什么 CSS 那条不够】`#setup h1 { font-size: min(81px, 7.8vw) }` 只防"标题横向
+   * 溢出视口"，没按列宽算 —— 而列宽 = 面板宽 − 内边距，再扣掉同一行里的印章与间距。
+   * 900×700 下留给标题的只有约 402px，日文标题 6 个全角假名在 70.2px 下要 421px；
+   * 日文可以在任意字间断行，于是最后一个「ブ」被挤到第二行（一个字独占一行，
+   * 整列还因此比中文高 100px）。法语在 320×568 下更糟：标题顶出去 8.8px，
+   * 而 #setup 的 overflow-y:auto 会让 overflow-x 也计算成 auto ——
+   * 那 8.8px 就成了一条"整列可以被横向拖走"的缝（实测能拖 9px）。
+   *
+   * 【量的是"自然宽度"】把这一行临时设成 nowrap 量一次：折过行的元素量出来的是
+   * 折行后的宽度，拿它反算字号会得出"已经装得下"的错误结论。
+   * 【缩不下就不缩】natural ≤ 可用宽时一个像素都不动，所以中文、韩文这些本来就
+   * 放得下的语言排版与从前逐像素相同；桩环境（没有 createRange / getClientRects）
+   * 直接安静退出，dom-smoke 那套断言不受影响。
+   */
+  syncTitleFit() {
+    const h1 = this.el.setupTitle, setup = this.el.setup;
+    if (!h1 || !h1.style || !setup || !this.setupOpen) return;
+    if (typeof document === "undefined" || !document.createRange) return;
+    if (typeof h1.getBoundingClientRect !== "function") return;
+    h1.style.fontSize = "";                      // 每次都从 CSS 那一档重新量，否则会越量越小
+    const cs = window.getComputedStyle ? window.getComputedStyle(h1) : null;
+    let cur = cs ? parseFloat(cs.fontSize) : 0;
+    if (!(cur > 0)) return;
+    /* 【要的是 .titleRow，不是 h1.parentNode】h1 的父节点是【文字那一列】
+       （标题/副标题/小字三行那个块），它里面没有印章 —— 溢出发生在再上面一层：
+       「印章 + 间距 + 文字列」这条 flex 行才是顶出容器的那一个。
+       拿错一层会量到"这一列没溢出"（它当然没溢出，撑破的是行），于是整段静默失效。 */
+    const row = (h1.closest && h1.closest(".titleRow")) || h1.parentNode;
+    if (!row || typeof row.getBoundingClientRect !== "function") return;
+    const setupRect = setup.getBoundingClientRect();
+    const scs = window.getComputedStyle ? window.getComputedStyle(setup) : null;
+    const pad = scs ? (parseFloat(scs.paddingLeft) || 0) + (parseFloat(scs.paddingRight) || 0) : 0;
+    const box = setupRect.width - pad;           // 这一列的内容宽
+    if (!(box > 0)) return;
+    /* 【这一行必须被显式夹住】#setup 是 align-items:center 的列，子项的宽度按
+       fit-content 算 —— 而 fit-content 的下界是这一行的【最小宽度】（印章 + 间距 +
+       文字块的最小宽度）。文字块里那三行只要有一行放不下，整行就会顶出容器，而
+       #setup 是 overflow-y:auto（overflow-x 因此也算 auto）—— 于是那几像素变成
+       "整列能被横着拖走"的缝。给行本身写死 max-width 是唯一可靠的一刀：
+       子项随后只能按这个宽度换行，标题再由下面的循环收字号。 */
+    if (row.style) row.style.maxWidth = Math.floor(box) + "px";
+
+    /** h1 文字的【真实】宽度：临时 nowrap 量一次 Range。 */
+    const textW = () => {
+      const prevWS = h1.style.whiteSpace;
+      h1.style.whiteSpace = "nowrap";
+      let w = 0;
+      try {
+        const r = document.createRange();
+        r.selectNodeContents(h1);
+        const rects = r.getClientRects();
+        for (let i = 0; i < rects.length; i++) if (rects[i].width > w) w = rects[i].width;
+      } catch (e) { w = 0; }
+      h1.style.whiteSpace = prevWS;
+      return w;
+    };
+
+    /* 【按"实测溢出多少"迭代，不是按理论公式一次算完】
+       一次算的时候量到的文字宽与最终排出来的宽能差 0.5%（Range 宽 vs 排版宽：
+       字距、滤镜、亚像素取整各贡献一点）—— 900×700 的日文标题就卡在这个缝里：
+       算出来 68px，而 68px 下那一行实际还要 417px、可用只有 402px，于是仍然折成两行。
+       改成一圈一圈收：每圈量"这一行到底还溢出几像素"，按同样的比例再收一点。
+       三轮足够（每轮误差都按比例缩小），并且【收不动就退出】——
+       如果溢出不是标题造成的（比如印章 + 副标题本身就超宽），缩标题救不了它，
+       那种情况宁可不动，也不要一路缩到看不见。 */
+    /** 这一行文字排成了几行（日文可以在任意字间断行，所以它会先于溢出发生）。 */
+    const lines = () => {
+      try {
+        const r = document.createRange();
+        r.selectNodeContents(h1);
+        return r.getClientRects().length;
+      } catch (e) { return 1; }
+    };
+
+    let prev = cur;
+    for (let k = 0; k < 4; k++) {
+      const rowW = row.getBoundingClientRect().width;
+      const h1Box = h1.getBoundingClientRect().width;   // 块级：等于分给它的那一列宽
+      const w = textW();
+      // 两种毛病一起收：①整行溢出容器（法语 320 宽），②文字比自己的盒子宽、被折行（日文）
+      let over = Math.max(rowW - box, w - h1Box);
+      // 【折行要单独算】日文标题折成两行时，量出来的"宽了多少"可能只有 0.4px ——
+      // 阈值以下的余量看不见它，而画面上是实打实的两个字一行。所以只要排成了多于
+      // 一行，就至少再收 2%（四轮足够从"差 1px"收到"真的塞得下"）。
+      if (lines() > 1 && over < w * 0.02) over = w * 0.02;
+      if (over <= 0.5) return;
+      const next = cur * (w - over) / w;
+      if (!(next > 20) || next >= cur - 0.1) return;
+      prev = cur; cur = next;
+      h1.style.fontSize = next.toFixed(1) + "px";
+      // 【进度检查】这一轮必须真的让某一样变好。缩了标题、行宽和文字宽都纹丝不动，
+      // 说明溢出根本不是它造成的（比如印章 + 副标题本身就超宽）—— 退回去收工，
+      // 别一路缩到看不见。
+      if (row.getBoundingClientRect().width >= rowW - 0.2 && textW() >= w - 0.2) {
+        h1.style.fontSize = prev.toFixed(1) + "px";
+        return;
+      }
+    }
+  },
+
   syncInscription() {
     const el = this.el.inscription;
     if (!el || !el.style) return;
@@ -13587,10 +14024,13 @@ const Game = {
     this.camera.frameBoard(r.width / Math.max(1, r.height), true);
     // 视口变了，起始界面那一列的可用宽度也变了 —— 行标重新量一次；
     // 顺带把 --compact 也重读（它决定按键要不要收一档，同样影响这一行的宽度）
-    if (this.setupOpen) { this.syncLabelWidth(); this.syncInscription(); }
+    if (this.setupOpen) { this.syncLabelWidth(); this.syncInscription(); this.syncTitleFit(); }
     // 平移量的边界是"半个视口"，转屏会改视口尺寸 —— 不重新夹一次的话，
     // 横屏里拖出来的平移量在竖屏下可能已经越界（棋盘贴边甚至露不出一半）
     this.pan3dBy(0, 0);
+    // 终局横幅同理：它的边界是 #view 的四条边，视口一变那四条边就变了 ——
+    // 拖动过的横幅不动它的话，转屏之后可能整块停在面板甚至屏幕外（实测 left = −103）。
+    this.reclampBanner();
     this.drawLayerBase();
     this.drawLayerOverlay();
     this.drawStrip();
@@ -13706,6 +14146,14 @@ const InkField = (function () {
   let DPR = 1, W = 0, H = 0;
   let cells = [], awake = [];
   let raf = 0, running = false, wanted = false, last = 0, rt = 0;
+  /* allowed = "这台设备该不该有这一层"。init() 里由 wantsEffect() 判一次就定下来，
+     start() 每次都看它 —— 【闸门必须拦在绘制上，不能只拦监听器】。
+     原来 init() 里 `if (!wantsEffect()) return;` 只把 addEventListener 那几句跳过了，
+     start() 照样 build() 把整片字画上画布：于是触屏 / 开了"减少动态效果"的设备
+     仍然看得见这一层（和 init 的注释"一层都不画"、browser-check 里那句
+     "真触屏 / 减少动效时这里会是 0，那是设计"都说反了），而且因为没有挂 resize，
+     位图尺寸停在首次那一版 —— 转屏之后被 CSS 拉伸变形。 */
+  let allowed = false;
   let moves = 0;      // 收到过多少次 mousemove（只给测试看，见 stats 的注释）
   const M = { x: -1e4, y: -1e4, lx: -1e4, ly: -1e4 };
 
@@ -13757,7 +14205,9 @@ const InkField = (function () {
      平衡位置，而这个位置【可能正好落在门槛上】。数值上最后几位小数一直
      在抖，于是那几格在两档之间反复横跳 —— 画面上表现为"有个字在轻轻闪"。
      实测基线：单门槛时相隔 900ms 的两张快照会差出 14 个像素；加迟滞后为 0。
-     两个门槛之间那段（2→4、9→12、22→26）就是"保持现状"的死区。 */
+     两个门槛之间那段（1.5→3、7→9、17→20，见下面的 TH_UP / TH_DN）就是"保持现状"的死区。
+     【v3.1.7 更正】这台注释里原来写的是第一版（CELL=56）的 2→4、9→12、22→26，
+     和现役门槛差一大截 —— 跟着 CELL 缩过两轮之后没人回头改它。 */
   // 【门槛是绝对像素，必须跟着格子尺寸一起缩】它们量的是"离家多远"，
   // 而"多远算远"是相对格子大小的。42 -> 32 之后按 0.76 缩，否则轻轻一划就跳满档。
   const TH_UP = [3, 9, 20];      // 升档门槛
@@ -13983,8 +14433,40 @@ const InkField = (function () {
   function start() {
     wanted = true;
     if (!cv) return;
+    if (!allowed) return;            // 触屏 / 减少动效：一层都不画，见 allowed 的注释
     if (cv.style) cv.style.display = "";
-    if (!cells.length) { try { build(); } catch (e) { return; } }
+    M.x = M.y = M.lx = M.ly = -1e4;   // 见 onMove 开头那个哨兵：不复位的话，从对局回来
+                                      // 的第一次轻微移动会沿"对局期间鼠标走过的整条路径"
+                                      // 掀起一条长带（实测 8481 像素 vs 复位后的 422）
+    /* 【第一次整片建；之后每次进来都把画面"拍平"回静止态】
+       · 空（第一次进来）→ build()；
+       · 已经有网格 → **把格子搬回"家"再整片重画一遍**。
+       为什么必须有这一步：stop() 只把模型按回"家"，画布上那一笔没人擦 —— 被推开的那几格，
+       墨迹画在离家几十像素的地方，而它们在家里的那一格早在 step() 里被 clearCell 擦掉了。
+       原来这里写的是 `if (!cells.length)`，于是永远不重建：再进起始界面时那片残影原样显示、
+       而且每次累积（实测连进三轮 13277 → 13830 → 14029 个像素；鼠标必须停在按钮上才点得下去，
+       停在那儿时按钮附近那撮格子本来就一直被斥力顶着，所以【每次】用鼠标点"开始游戏"都会留下它）。
+       stop() 里那句"下次进起始界面时画面是干净的"当时只说了模型，画布要靠这一步。
+       【为什么不直接 build() 重建】重建会用【当前】视口尺寸，而"起始界面开着的时候视口刚好被改过"
+       （测试里 CDP 改视口、真机上缩放窗口都会这样）会让画布停在和视口对不上的尺寸上 —— 实测：
+       设置页在 393 宽的视口下打开，画布就变成 393×852；视口还原之后要等 onResize 那 160ms 的
+       防抖才会自愈，那段时间里整片字的位置是错的。尺寸交给 onResize（与改动前一致），
+       这里只负责"画面干净" —— 顺带这一步很便宜：几百次 drawImage，不重建图集、不重新量视口。 */
+    if (!cells.length) {
+      try { build(); } catch (e) { return; }
+      return;
+    }
+    try {
+      ctx.clearRect(0, 0, W, H);
+      for (let i = 0; i < cells.length; i++) {
+        const cl = cells[i];
+        cl.x = cl.hx; cl.y = cl.hy; cl.vx = 0; cl.vy = 0;
+        cl.px = cl.hx; cl.py = cl.hy;
+        cl.awake = false; cl.frozen = false; cl.lv = 0;
+        drawCell(cl);
+      }
+      awake.length = 0;
+    } catch (e) { /* 画不出来就维持原样 */ }
   }
 
   /** 进对局时调用：停循环、清干净，别让它在看不见的地方烧 CPU。 */
@@ -13993,7 +14475,8 @@ const InkField = (function () {
     if (raf) { cancelAnimationFrame(raf); raf = 0; }
     running = false; last = 0;
     awake.length = 0;
-    // 把还飘在外面的格子按回原位：下次进起始界面时画面是干净的
+    // 把还飘在外面的格子按回原位。（画布上那一笔不用在这里擦：这一层在对局界面是
+    // display:none，而 start() 下次进来会把整片字重画一遍 —— 见 start() 里那段说明。）
     for (let i = 0; i < cells.length; i++) {
       const cl = cells[i];
       if (cl.x !== cl.hx || cl.y !== cl.hy) { cl.x = cl.hx; cl.y = cl.hy; cl.vx = 0; cl.vy = 0; cl.px = cl.hx; cl.py = cl.hy; }
@@ -14021,7 +14504,8 @@ const InkField = (function () {
     const picked = pickCanvas();
     if (!picked) return;             // 桩环境 / 老浏览器：静默降级
     cv = picked.el; ctx = picked.c;
-    if (!wantsEffect()) return;      // 触屏 / 减少动效：画布留着，但一层都不画
+    allowed = wantsEffect();         // 判一次就定下来，start() 每次都看它
+    if (!allowed) return;            // 触屏 / 减少动效：画布留着，但一层都不画
 
     if (typeof window === "undefined" || !window.addEventListener) return;
     window.addEventListener("mousemove", onMove, { passive: true });

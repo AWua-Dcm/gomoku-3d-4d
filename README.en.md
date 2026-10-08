@@ -7,7 +7,7 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-40962_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-41036_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
@@ -88,7 +88,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
 
 ```
-11733 + 19427 + 98 + 221 + 125 + 8845 + 115 + 398 = 40962 assertions, all green
+11733 + 19444 + 98 + 221 + 130 + 8845 + 134 + 431 = 41036 assertions, all green
 ```
 
 Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -99,13 +99,13 @@ To run one piece on its own:
 | Command | Count | What it covers |
 |---|---|---|
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
-| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19427 | 4D rotation consistency |
+| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19444 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 221 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 125 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 130 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
-| `node _verify/browser-check.mjs` | 398 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
+| `node _verify/browser-check.mjs` | 431 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
 
 The two networking tests run inside step 8 and **cannot be skipped**.
 
@@ -119,7 +119,7 @@ each deliberately breaks the code and requires that the tests catch every case:
 | `node _verify/inject-online.mjs` | Breaks the networking code 25 ways; every case must turn a test red (slow, not part of `run-all.sh`) |
 
 > The first two temporarily break `index.html` and restore it in a `finally` block.
-> They run `browser-check` against a scratch directory, so the six baseline PNGs in
+> They run `browser-check` against a scratch directory, so the baseline PNGs in
 > `_verify/shots/` are never overwritten: screenshots are taken *before* the failures are
 > reported, so writing to the default directory would put captures of a deliberately broken
 > page into version control — after which `git status` can no longer tell "the image went
@@ -252,6 +252,20 @@ and it is stated here rather than papered over.
 - On very full boards (more than 4000 stones) the **thumbnail degrades into an occupancy bar**
 - Coordinate picking on rectangular boards falls back to "ray × current layer plane", so
   looking exactly edge-on at the current layer makes depth ambiguous
+- **In a narrow window with a long game name, the title slides under the two fixed keys**
+  (language / full rules) in the top-right corner: at 900×700 every one of the six languages has
+  the end of its title covered (measured: English loses "ube", French five characters). The title
+  is only capped by viewport width (`min(81px, 7.8vw)`) and does not step aside for those two
+  keys — shrinking it until they no longer overlap would take it down to about 40px at 900 wide,
+  which is a typographic trade-off rather than a plain bug fix. No overlap from 1600×900 up.
+  (The two title problems fixed in v3.1.7 were horizontal overflow and the Japanese title
+  wrapping onto two lines.)
+- **The 4D summary box clips its last line in en / fr / ru**: the box has a fixed height of
+  84px (88px in English) while those three 4D paragraphs wrap to 6–7 lines at 640px wide
+  (measured 123px — two lines more than Chinese). An inner scrollbar appears; scrolling reveals
+  the rest. Letting the box grow to fit breaks the pinned invariant "switching 3D↔4D must not move
+  the buttons by a single pixel" (measured: it moved them 4–34px), so it stays as is — fixing it
+  properly means cutting copy or paying for the height elsewhere, which is a layout decision.
 
 A more complete list (including which claims are verified and which are merely my belief)
 is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
@@ -262,8 +276,45 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
-### 2026.10.06
+### 2026.10.09
 
+- 🔧 **v3.1.7** Fixed a batch of issues found by testing. Grouped by whether a player can feel it:
+  - **UI state**: the start screen's character-particle layer left a permanent ghost of displaced
+    glyphs (it accumulated on every mouse click on "Start game", and nothing ever rebuilt or reset it);
+    pressing `R` while a 4D rotation preview was up, then "Cancel", **blindly rotated the layer on the
+    new board** — the stone the computer had just placed moved, and undo could never repair it;
+    `R` in a tutorial level wiped its preset position (leaving the instructions describing a line that
+    was no longer there); a tap made on a zoomed/panned board is held for 300 ms, and restart / undo /
+    swap inside that window dropped the stone onto the *new* board; after "swap first player" the
+    start screen still highlighted the old colour; undoing a rotation that *won* left the victory
+    banner up, re-rendered as "no stones won on 0 in a row"
+  - **Interaction**: with the computer going first, pressing `Z` cancelled its pending move without
+    rescheduling it — the game deadlocked (only `R` recovered); dragging the end-of-game banner twice
+    made it jump back to the centre (clamp and offset were computed in two different coordinate
+    spaces), and after a resize it could be dragged off-screen; two quick taps on adjacent points
+    had the second stone silently swallowed as a "double-tap reset"
+  - **Layout**: the in-game status line was squeezed and printed over the rules text (six lines in
+    French portrait); in phone landscape the 4D panel could not scroll and six buttons sat outside the
+    viewport; on narrow portrait screens the button row overflowed and the last key left the screen;
+    the start screen overflowed by a few pixels (the whole column could be dragged sideways); the
+    Japanese title wrapped onto two lines; the 4D summary box clipped its last line
+  - **Type**: the title now shrinks to fit its column (it was only capped by viewport width); the
+    Japanese and Korean title block no longer falls back to a Simplified-Chinese brush face; the
+    browser tab title follows the interface language
+  - **Copy**: English showed "0 move played" and "1 stone in it" for an empty layer (plurals treated
+    zero as singular); the rotation panel pointed at a **"Restore" button that no longer exists**;
+    four statements in the rules text contradicted the implementation (cooldown 3/5/8/10, rotation
+    valued with the same search, every tier deeper in 4D, easy tier skipping nine turns out of ten)
+  - **Rules core**: a rotation creating both a five and an overline was judged a win instead of an
+    overline loss, depending only on which line was scanned first; on a wrapping board one boundary
+    line was counted twice (the truncated fragment fed the verdict, so a first player's six was judged
+    a win), and the winning line's coordinates were not wrapped, lighting up the wrong stones
+  - **Online server**: a single malformed `Host` header killed the whole process (every room with it);
+    `applied` events echoed the entire request body to the opponent (seat token included); non-integer
+    coordinates were accepted (the record said one cell, the stone landed on another); rooms with live
+    connections were still reaped after 30 idle minutes
+  - **Docs**: assertion counts re-synced with what the suite actually prints; rules text aligned with
+    the implementation; several hard-coded numbers in comments corrected
 - ✨ **v3.1.6** Visual overhaul plus a new interaction: renamed to **Gomokube** across all six
   languages, and the start screen restyled — rice-paper ground, bamboo/jade controls, a
   running-script brush title (inlined font subset, 5.5 KB, single-file premise kept) and a vertical

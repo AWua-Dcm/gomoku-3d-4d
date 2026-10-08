@@ -272,7 +272,15 @@ function newRoom(id, hostSeat, hostName) {
 }
 
 function newSeat(name, token) {
-  return { name: String(name || "").slice(0, 24) || "无名", token, conns: new Set() };
+  /* 【名字要滤控制字符，不能只截长度】名字会原样进 stdout 的日志行、也会通过 peer
+     事件原样发给对手。只截 24 个字符挡不住换行：`AAA\n房间 000000 建立\nBBB`
+     这样 24 字符以内的名字，会在日志里伪造出一行【从来没有被打印过的】"房间 … 建立"，
+     格式和真日志一模一样；`\r` 能盖掉上一行，ANSI 转义能改终端颜色/标题。
+     C0 控制字符（含 \n \r \t）与 DEL 一律去掉；名字是给人看的，不需要它们。
+     （将来客户端若用 innerHTML 渲染这个名字，这条同时挡掉一类 XSS，但页面还没接上
+     server.js，那一层没法在这里验证。） */
+  const clean = String(name || "").replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 24);
+  return { name: clean || "无名", token, conns: new Set() };
 }
 
 const isEmpty = (s) => !s || s.conns.size === 0;
@@ -386,6 +394,20 @@ function requireTurn(room, seat) {
 function doPlace(room, seat, msg) {
   const bad = requireTurn(room, seat);
   if (bad) return { ok: false, reason: bad };
+
+  /* 【坐标必须是整数】内核那边 Board3D.inBounds 只做大小比较（`"1" >= 0 && "1" < 8` 为真），
+     而 Board3D.index 是 `x + nx * (y + ny * z)` —— x 是字符串时这一句变成【字符串拼接】：
+     8 盘上 "1" + 8*(1+8*1) = "172"，而 cells 是 Uint8Array，"172" 是规范数字串，
+     赋值落到元素 172 = 格子 (4,5,2)。于是棋谱记的是 (1,1,1)、子实际落在 (4,5,2)：
+     一颗谁也说不清来历的幽灵子挡住对手，而"它声称下的那格"还是空的；反过来，
+     非规范数字串（"0" / "1e0" / " 5 "）拼出来的键不是规范数字串，cells[key] 得到
+     undefined，isEmpty 于是把【空盘的格子】报成"该位置已有棋子"。
+     实测还能接受 null / true / false / [] / "" （都当 0 用）。页面自己的 UI 走不到
+     （activeLayer 的赋值点都是数字），但服务器是唯一入口、要长期对外，任何手写、
+     第三方、或将来把 x 从 input.value 里读出来的客户端都会踩到。 */
+  if (!Number.isInteger(msg.x) || !Number.isInteger(msg.y) || !Number.isInteger(msg.z)) {
+    return { ok: false, reason: "坐标必须是整数" };
+  }
 
   const s = room.session;
   const o = s.place(msg.x, msg.y, msg.z);
@@ -620,13 +642,38 @@ function pushEvent(room, ev) {
  * 【关键】任何被接受的落子/转动，**必须先取消未决的悔棋请求，再应用**。
  * 这不是妥协，是正确性要求：seq 变了之后，那个 undo 撤销的会是**另一步棋**。
  */
+/** 一个动作在广播里只带这些字段。见 commit() 里那段说明。 */
+const APPLIED_FIELDS = {
+  place: ["t", "x", "y", "z"],
+  rotate: ["t", "axis", "layer", "dir", "turns"],
+  restoreRotation: ["t"],
+};
+
+/** 把"整份请求体"削成"协议里真用得上的那几个字段"。 */
+function pickApplied(action) {
+  const keys = APPLIED_FIELDS[action && action.t];
+  const out = {};
+  if (!keys) return out;                       // 未知动作类型：什么都不带
+  for (const k of keys) if (action[k] !== undefined) out[k] = action[k];
+  return out;
+}
+
 function commit(room, seat, action) {
   const events = [];
   const cancelEv = cancelPending(room, "对方下了新的一手，请求已作废");
   if (cancelEv) events.push(emitTransient(room, cancelEv));
 
   events.push(emit(room, {
-    t: "applied", by: seat, action,
+    /* 【绝不能把请求体原样转发】传进来的 action 就是 JSON.parse 出来的整份请求体，
+       里面可能有 token（座位凭据）、note、room 以及任意键。原样广播的后果有两个，
+       都实测过：
+         · 凭据泄露 —— 服务器明确支持把 token 放进请求体（见 handleAction 里那条），
+           于是对手从自己的 SSE 流里就能读到房主的 token，随后凭它发 restart 被接受；
+         · 内存放大器 —— 一条 3954 字节的请求会产生一条 4016 字节的 applied，
+           补发日志上限 20000 条 → 单房间约 76MB，房间数上限 200 → 约 15GB。
+           （ONLINE.md §5.4 那份估算写的是"一个房间不到 100KB"，差了约 800 倍。）
+       客户端只读 t/x/y/z/axis/layer/dir/turns，其余字段本来就没用。 */
+    t: "applied", by: seat, action: pickApplied(action),
     // 盘面指纹。ONLINE.md §2.3② 自己说"规则分叉没有症状"，
     // 这一行就是把它变成有症状的唯一手段。客户端算一遍，对不上就 resync。
     checksum: fingerprint(room.session),
@@ -890,6 +937,13 @@ function handleEvents(req, res, url) {
 
   const hb = setInterval(() => {
     try { res.write(": ping\n\n"); } catch { /* 下面 close 会清理 */ }
+    /* 【心跳也要算"这个房间还有人"】回收的判据原来是"最后一次活动时间超过 30 分钟"
+       （见下面第 8 节），而 touch() 只在建房/加入/动作/SSE 连断时调用 —— 心跳不 touch。
+       于是"房间里有没有活着的连接"完全不参与判断：两个人各开一个标签页坐着长考、
+       或者去接了个电话，30 分钟一到，服务器把整局删掉、SSE 被掐断、房间变 404，
+       而这局棋没有存档也没有"恢复房间"入口 —— 永久消失（实测把时间加速 60 倍复现）。
+       ONLINE.md:683 把这条写成"房间空置回收"，实现的语义应该是"既没连接、也没动作"。 */
+    touch(room);
   }, 20000);
 
   const cleanup = () => {
@@ -916,7 +970,22 @@ function serveIndex(res) {
 }
 
 function requestHandler(req, res) {
-  const url = new URL(req.url, "http://" + (req.headers.host || "localhost"));
+  /* 【畸形 Host 头不许把整个进程打死】req.headers.host 完全由客户端控制，而 new URL
+     对它做严格解析：`[`、含空格的、非 ASCII 的……都会抛 ERR_INVALID_URL。这个异常
+     发生在 request 回调里、没有任何 try/catch（main 只挂了 server.on("error")，
+     那管的是"监听失败"），于是变成 uncaughtException —— **整个进程退出**：
+     一发 raw 请求就能让所有房间、所有正在下的一局棋一起消失，stderr 里只留一行
+     Invalid URL，运营者第一眼根本看不出是外部输入引起的。实测 12 个 Host 值都能
+     一击打死（`[` / `a b` / `%` / `x:99999999` / 非 ASCII …），打哪个路径都一样。
+     这台服务器是准备挂公网的（ONLINE.md §5.4），而扫描器/GRE 探测随手就会带上来这种头。
+     兜底两层：先退回一个写死的安全基址，再不行就当坏请求回 400。 */
+  let url;
+  try {
+    url = new URL(req.url, "http://" + (req.headers.host || "localhost"));
+  } catch (e) {
+    try { url = new URL(req.url, "http://localhost"); }
+    catch (e2) { return json(res, 400, { ok: false, reason: "请求格式不对" }); }
+  }
 
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
     return serveIndex(res);

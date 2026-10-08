@@ -2801,9 +2801,15 @@ step("横幅拖动：位移跟手、transform 是两个 translate 叠加", () =>
   // 所以这里替成一组真实几何：800×600 的 #view 里居中一个 300×150 的横幅。
   const rectOf = (l, t, r, b) => ({ left: l, top: t, right: r, bottom: b,
                                     width: r - l, height: b - t, x: l, y: t });
-  const bannerRect = rectOf(250, 225, 550, 375);
+  /* 【矩形必须跟着 bannerDX/DY 走】真实浏览器里位移是写进 style.transform 的，
+     而 getBoundingClientRect() 拿到的是【已经位移过】的矩形。桩原来返回一个固定矩形
+     （不管位移多少），于是"第二次拖动"那条路径在桩里根本走不到 —— 而真实浏览器里
+     它会把整个夹取窗口平移 |dx|（症状：拖到右边界后再往左拖，第一下就被夹回中间，
+     实测鼠标动 40px、横幅跳 181px）。桩如实建模，下面那条"从边界往回拖"才测得到东西。 */
+  const baseRect = () => rectOf(250 + Game.bannerDX, 225 + Game.bannerDY,
+                                550 + Game.bannerDX, 375 + Game.bannerDY);
   const realBanner = banner.getBoundingClientRect, realView = view.getBoundingClientRect;
-  banner.getBoundingClientRect = () => bannerRect;
+  banner.getBoundingClientRect = () => baseRect();
   view.getBoundingClientRect = () => rectOf(0, 0, 800, 600);
   const move = (x, y) => { for (const fn of (windowStubListeners.pointermove || [])) fn({ clientX: x, clientY: y }); };
   const up = (x, y) => { for (const fn of (windowStubListeners.pointerup || [])) fn({ button: 0, clientX: x, clientY: y }); };
@@ -2835,10 +2841,18 @@ step("横幅拖动：位移跟手、transform 是两个 translate 叠加", () =>
     move(5400, 5300);
     if (Game.bannerDX !== 250 || Game.bannerDY !== 225)
       throw new Error("越界应夹到 (250,225)，实际 (" + Game.bannerDX + "," + Game.bannerDY + ")");
-    if (bannerRect.left + Game.bannerDX < 0 || bannerRect.right + Game.bannerDX > 800 ||
-        bannerRect.top + Game.bannerDY < 0 || bannerRect.bottom + Game.bannerDY > 600)
+    const after = banner.getBoundingClientRect();
+    if (after.left < 0 || after.right > 800 || after.top < 0 || after.bottom > 600)
       throw new Error("夹取之后横幅仍在 #view 之外：dx=" + Game.bannerDX + " dy=" + Game.bannerDY);
     up(5400, 5300);
+
+    // 【从边界往回拖要跟手，不能跳回中间】夹取范围必须与 bannerDX/DY 用同一个坐标系
+    // （都是"相对居中基准的偏移"）。混用的话范围被平移 |dx|，第一下就被夹到错误位置。
+    banner.dispatch("pointerdown", { button: 0, clientX: 400, clientY: 300 });
+    move(360, 260);               // 从 (250,225) 各往回拖 40px
+    if (Game.bannerDX !== 210 || Game.bannerDY !== 185)
+      throw new Error("从边界往回拖应跟手 (210,185)，实际 (" + Game.bannerDX + "," + Game.bannerDY + ")");
+    up(360, 260);
 
     // 反方向同样要夹住
     banner.dispatch("pointerdown", { button: 0, clientX: 400, clientY: 300 });
@@ -3860,6 +3874,118 @@ step("v3.1.5：只勾一个玩法 —— 单关教学，过了也没有「下一
     throw new Error("单关教学的步骤文案应当是「第 1 / 1 关」，实际 " + Game.el.tutStep.textContent);
   Game.tutorialExit();
   Game.setSetupWrap(false);
+  Game.setSetupMode(true);
+});
+
+/* ==========================================================================
+   v3.1.7：这一版修掉的状态漏洞，一条一条钉住。
+   【为什么写在这里而不是只留个临时探针】这些症状全都是"某个入口没把状态收干净"，
+   而漏掉的那个入口每次都不一样（预览 / 待落子 / 教学预设 / 电脑的待走一手）——
+   没有断言盯着的话，下次再加一个"局面要变"的入口时会照样漏。
+   ========================================================================== */
+
+step("v3.1.7：重开 / 换先手要丢掉转动预览，之后点「取消操作」不许改盘面", () => {
+  Game.setSetupMode(false);
+  Game.setSetupSpin(true);          // 三维也开转动（不必进四维）
+  Game.setSetupCool(0);             // 随时可转
+  Game.closeSetup();
+  Game.newGame([8, 8, 8], 1);
+  Game.session.board.set(0, 0, 0, 1);
+  Game.rotAxis = 2; Game.rotLayer = 0; Game.rotTurns = 1; Game.rotClockwise = true;
+  Game.doRotate();
+  if (!Game.rotPreview) throw new Error("前置：doRotate 应当进入预览");
+  Game.restart();
+  if (Game.rotPreview) throw new Error("重开之后 this.rotPreview 必须被丢掉（否则面板锁在「预览中」）");
+  // 【最重的一条】内核的 cancelPreviewRotate 是【盲转当前棋盘】——
+  // 旧的 move 留在手上时点「取消操作」会把新盘上的子转到别的格子，
+  // 而 history 还记着原格，从此盘面与记账永久分叉（悔棋也悔不掉）。
+  Game.session.board.set(3, 3, 0, 1);          // 新盘上摆一颗，冒充"电脑刚落的那一手"
+  Game.cancelRotation();
+  if (Game.session.board.get(3, 3, 0) !== 1)
+    throw new Error("重开之后再点「取消操作」把盘上的子转走了 —— 预览没丢干净");
+});
+
+step("v3.1.7：重开 / 悔棋要丢掉「双击窗口里扣着的那一子」", () => {
+  Game.setSetupSpin(false);
+  Game.setSetupMode(false);
+  Game.newGame([8, 8, 8], 1);
+  Game.camera.distance = Game.camera.homeDistance * 0.7;     // 让 handleTap 走"被扣住"那一支
+  let fired = 0;
+  Game.handleTap("gl", 400, 300, () => { fired++; }, { x: 5, y: 5 });
+  if (!Game.pendingTap) throw new Error("前置：缩放之后这一下应当被扣进双击窗口");
+  Game.restart();
+  if (Game.pendingTap) throw new Error("重开之后 pendingTap 必须被丢掉 —— 否则那 300ms 到点会落在新盘上");
+  // 悔棋那条路同理：扣着的一子会在"悔完之后"落下来，看起来像悔棋反而多了一颗子
+  Game.session.board.set(2, 2, 0, 1);
+  Game.session.history.push({ x: 2, y: 2, z: 0, player: 1 });
+  Game.handleTap("gl", 400, 300, () => { fired++; }, { x: 6, y: 6 });
+  if (!Game.pendingTap) throw new Error("前置：第二下也应当被扣住");
+  Game.undo();
+  if (Game.pendingTap) throw new Error("悔棋之后 pendingTap 必须被丢掉");
+  if (fired !== 0) throw new Error("被扣住的那两子都不该落地，实际落了 " + fired + " 颗");
+});
+
+step("v3.1.7：教学关按「重开」是重开这一关，不是清空棋盘", () => {
+  Game.setSetupMode(true);
+  Game.closeSetup();
+  Game.startTutorial();
+  const lv = Game.tutIndex;
+  const before = Game.session.board.stoneCount;
+  if (before < 10) throw new Error("前置：第一关进来就该有一盘预设局面，实际 " + before + " 颗");
+  Game.restart();
+  const after = Game.session.board.stoneCount;
+  if (after !== before)
+    throw new Error("教学关按重开之后盘面应有 " + before + " 颗（预设原样回来），实际 " + after +
+      " —— 走 session.restart() 会把预设清成空盘，而文案还在讲那条活四");
+  if (!Game.tutActive || Game.tutIndex !== lv) throw new Error("重开之后应当还停在同一关");
+  Game.tutorialExit();
+  Game.setSetupMode(true);
+});
+
+step("v3.1.7：人机局电脑执先手时按悔棋，电脑的待走一手要重排（不然双方都不动）", () => {
+  Game.setSetupMode(false);
+  Game.setSetupAi("cpu");
+  Game.setSetupLevel(1);
+  Game.setSetupOrder("cpu");        // 电脑先手
+  Game.setSetupFirst(1);            // 先手是黑 —— setupMyColor / aiColor 都从它现算
+  Game.closeSetup();
+  Game.newGame([15, 15, 15], 1);
+  if (!Game.isAiTurn()) throw new Error("前置：这一局该轮到电脑走");
+  Game.cancelAiTimer();
+  Game.maybeScheduleAi();           // 桩里不让真定时器跑，手动排一次
+  if (!Game.aiPending) throw new Error("前置：电脑执先手时开局就该排上第一手");
+  Game.undo();                       // 电脑还没出手就按 Z（棋没得悔）
+  if (!Game.aiPending)
+    throw new Error("悔棋把待走的电脑着撤了却没重排 —— 电脑永远不再走，玩家落子又被「现在是电脑的回合」挡住");
+  Game.cancelAiTimer();
+  Game.setSetupAi("human");
+  Game.setSetupOrder("me");
+});
+
+step("v3.1.7：撤销「转出来的胜局」要把终局横幅一起收掉", () => {
+  Game.setSetupMode(false);
+  Game.setSetupSpin(true);
+  Game.setSetupCool(0);
+  Game.closeSetup();
+  Game.newGame([8, 8, 8], 1);
+  const s = Game.session;
+  // 【转动唯一能造出连线的方式：转的是【第五颗子所在的那一层】，而线【跨过】它】
+  // 转整条线所在的那一层是没用的：层内旋转是刚体变换，五连转完还是五连（转之前就已经是了）。
+  // 所以这里转 x=4 那一层，线沿 x 跨过它 —— 只有第五颗子在那层里。
+  // 映射来自内核自己的 RotationOps.mapCoord（绕 x 轴：(y,z) -> (z, m−y)）：
+  // (4,7,0) 顺时针转一次正好落到 (4,0,0)，接上 (0..3,0,0) 就是五连。
+  for (const x of [0, 1, 2, 3]) s.board.set(x, 0, 0, 1);
+  s.board.set(4, 7, 0, 1);
+  s.rotateBy(0, 4, 0, 1);           // 0 = 绕 x 轴；第 4 层；顺时针 1 次
+  if (s.status !== "Decided" || s.lastOutcome.status !== "Win")
+    throw new Error("前置：这一转应当当场判胜，实际 " + s.status + " / " + (s.lastOutcome && s.lastOutcome.status));
+  Game.syncWinBanner();
+  if (!Game.bannerOpen) throw new Error("前置：判胜之后横幅该弹出来");
+  Game.undo();
+  if (s.status !== "Playing") throw new Error("悔棋之后应当回到还在下，实际 " + s.status);
+  if (Game.bannerOpen)
+    throw new Error("悔掉胜局之后横幅还挂着 —— 它会被重渲染成「空棋胜 0 连」压在活棋上");
+  Game.setSetupSpin(false);
   Game.setSetupMode(true);
 });
 

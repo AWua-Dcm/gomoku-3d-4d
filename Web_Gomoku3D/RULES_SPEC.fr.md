@@ -243,7 +243,7 @@ sont plafonnés.
 > Entre deux rotations, il faut **poser** au moins 5 pierres.
 
 - **Seules les poses comptent** ; la rotation elle-même non — sinon cela deviendrait « un seul coup sur cinq peut être une rotation », trop difficile à suivre.
-- Réglable sur 3 / 5 / 8 / 10, par défaut 5.
+- Réglable sur n'importe quel entier de 3 à 10 (par défaut 5).
 - La première rotation y est soumise aussi : il faut poser 5 pierres après le début de la partie.
 - **La recharge ne commence qu'après avoir appuyé sur « Confirmer »** — l'aperçu n'a pas eu lieu, il ne doit donc pas la consommer.
 - L'annulation remet aussi la recharge en arrière, si bien que le compteur et le plateau ne se contredisent jamais.
@@ -311,14 +311,17 @@ ramène à l'écran de départ.
   celles qui bloquent comme celles qui font une quatre pour vous**, et s'il ne peut pas toutes les
   essayer il répond « inconnu » plutôt
   que d'annoncer un gain qui ne tient pas.
-  En 4D, Très haut et Ultra **évaluent aussi une rotation avec la même recherche qu'un coup** :
-  savoir si une rotation vaut un tour complet se décide sur la même échelle que poser une pierre. Haut et au-dessus
-  évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que Bas y entre sans
-  broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat les débutants
-  à tous les coups est le défaut habituel de cette fonction.
-  **En 4D, chaque niveau calcule un ou deux demi-coups plus loin** : une rotation déplace toute une
-  formation, et à la profondeur « 3D » l'ordinateur ne voit pas que son propre dernier coup vient d'être
-  déplacé — il offre alors un coup gratuit.
+  En 4D, **les cinq niveaux évaluent une rotation avec la même sonde économique** (au plus 6 à 14
+  candidats par coup ; un candidat = une rotation de couche plus un balayage complet du plateau). La
+  variante « laisser Très haut et Ultra évaluer une rotation avec la même recherche qu'un coup » a été
+  essayée et mesurée négative (beaucoup plus lente, pas plus forte) : elle a été retirée.
+  **En 4D, seuls Moyen et Haut descendent plus loin** (un demi-coup → trois, trois → cinq) : une
+  rotation déplace toute une formation, et à la profondeur « 3D » l'ordinateur ne voit pas que son
+  propre dernier coup vient d'être déplacé — il offre alors un coup gratuit. Bas ne calcule pas du tout
+  (c'est la définition même de « Bas »), et Très haut et Ultra sont déjà à cinq demi-coups.
+  Haut et au-dessus évitent donc les positions où votre coup suivant ferait un quatre ouvert, alors que
+  Bas y entre sans broncher. Les cinq restent volontairement faibles : un adversaire « facile » qui bat
+  les débutants à tous les coups est le défaut habituel de cette fonction.
 - **Ultra vous battra avant que vous ne voyiez le danger.** C'est le résultat de la recherche de gain
   forcé, pas de la chance : il peut poser une trappe dès l'ouverture qui ne paiera que dix coups plus tard.
 - **Deux choix, deux rôles.** « Premier joueur » choisit la **couleur** qui commence (celle qui porte
@@ -326,8 +329,11 @@ ramène à l'écran de départ.
   couleur. Ainsi « Noirs en premier + Ordinateur » : l'ordinateur joue Noirs et ouvre, vous jouez
   Blancs. La ligne sous les réglages indique votre couleur.
 - **L'ordinateur est soumis lui aussi à la règle de l'alignement trop long** — il évite les cases qui
-  lui donneraient six alignés et la défaite. Il rate quand même des trois ouverts et ne voit pas les
-  menaces doubles : c'est délibéré, pas un bug.
+  lui donneraient six alignés et la défaite. Ses vraies faiblesses sont ailleurs : Bas rate des trois
+  ouverts (il n'en a bloqué que 17 sur 60 parties mesurées ; Moyen et au-dessus, 60 sur 60), et **deux
+  menaces séparées** à des endroits différents du plateau échappent aux cinq niveaux (un double-trois ou
+  un quatre-trois **sur une même case** est bien reconnu — voir la section suivante). Les deux sont des
+  compromis délibérés, pas des bugs.
 - **Annuler retire votre coup et la réponse de l'ordinateur ensemble.** « Restaurer la rotation » est
   indisponible contre l'ordinateur : utilisez Annuler.
 - **En 4D, l'ordinateur tourne aussi des couches, mais seulement quand cela vaut un coup.** Il ne tourne
@@ -336,15 +342,18 @@ ramène à l'écran de départ.
   trois ouvert à l'adversaire, il ne la choisit pas lui-même.
   L'ancien critère — « tourner si le meilleur coup à ma disposition dans la bande touchée a augmenté » —
   produisait trois rotations par partie, un tour sur trois, dont seulement un tiers faisait réellement
-  baisser la menace. Au niveau facile, la rotation n'est toujours envisagée qu'une fois sur dix environ.
-  Une rotation ne fait jamais gagner : elle ne fait que casser des formations et déplacer vos pierres.
+  baisser la menace. (Les cinq niveaux engendrent désormais des candidats de rotation à chaque coup ;
+  plus aucun ne les écarte par probabilité.) Une rotation ne fait jamais gagner : elle ne fait que casser
+  des formations et déplacer vos pierres.
 
 ## 12. Ce que ce jeu ne fait pas
 
 - **Pas de double-trois ni de double-quatre.** Dans le renju traditionnel, le premier joueur a aussi des interdits comme
   « un coup qui forme à la fois deux trois ouverts / deux quatre » ; ce jeu n'implémente que la défaite pour alignement trop long. La sanction tombe après la pose du pion : il n'existe pas de « cette case est interdite ».
 - **L'ordinateur n'est pas un moteur d'échecs.** Son comptage de menaces utilise une fenêtre
-  glissante : **il reconnaît donc les formes trouées et les menaces doubles**. Mais il n'a ni
+  glissante : **il reconnaît donc les formes trouées**, ainsi que le double-trois et le quatre-trois
+  **sur une même case** ; **deux menaces séparées** à des endroits différents ne sont prises en compte
+  dans l'évaluation terminale qu'avec un coefficient d'un quart — visibles, mais à peine. Il n'a ni
   bibliothèque d'ouvertures, ni joseki, ni recherche de quiescence.
 - **Les rotations n'ont pas d'animation** : elles se font instantanément, seule la couche tournée est brièvement mise en évidence.
 - **Les rotations ne se font qu'avec les boutons du panneau**, pas en glissant directement dans la vue 3D.
