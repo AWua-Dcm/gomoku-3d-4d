@@ -22,3 +22,6 @@ desktop.ini
 # 真实浏览器检查（_verify/browser-check.mjs）会在系统临时目录里建 Chrome profile，
 # 不会落在这里。但万一有人手动跑出残留，别提交。
 _verify/.chrome-profile/
+
+# Obsidian 打开仓库根当 vault 时生成（工具配置不进库，同 .vscode/）
+.obsidian/
