@@ -12,6 +12,6 @@
 **两个机关**：
 
 - **端口自检**：开头检查 9401 端口——被上一轮留下的 headless 占着就会连到旧浏览器、报一堆与改动无关的假红；现在占着就退出码 2 并提示去关掉那个 `--remote-debugging-port=9401` 的 chrome。
-- **残留**：它用 `fs.mkdtempSync` 建 Chrome profile、正常结束在 `finally` 里自删——所以 `%TEMP%` 里的 `gomoku-*`、`probe*-cdp-*`、`bc*.log`、`shots*` 等残留＝**被中途杀掉 / 崩溃的运行**留下的（2026-10-01 清过一轮约 2GB；uuid 命名的 `.tmp` / `.png` 不是本项目的，`cv_debug.log` 是 VS Code 的，别误删）。探针脚本（拷去 temp 跑的 `probe*.mjs` 等）同样会遗留同名目录。
+- **残留**：临时 Chrome profile 由 `fs.mkdtempSync` 创建、正常结束在 `finally` 里自删——所以 `%TEMP%` 里留下的 `gomoku-*`、`probe*-cdp-*`、`bc*.log`、`shots*` 这类残骸，全是**被中途杀掉 / 崩溃的运行**留下的（2026-10-01 清过一轮约 2GB；uuid 命名的 `.tmp` / `.png` 不是本项目的，`cv_debug.log` 是 VS Code 的，别误删）。探针脚本（拷去 temp 跑的 `probe*.mjs` 等）同样会遗留同名目录。
 
 **出处**：`_verify/browser-check.mjs` 本体；2026-10-01 的清理记录；[[坑/shots 基线图的真假判定]]、[[坑/ev() 里别写反引号]]。

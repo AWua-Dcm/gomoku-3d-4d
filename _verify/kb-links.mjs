@@ -5,8 +5,8 @@
 //   · wikilink：[[目标]]、[[目标|别名]]、[[目标#锚点]]、![[…]]
 //   · markdown 链接：[文字](相对路径)
 // 解析规矩（与 Obsidian 对齐，见 知识库/首页.md 的"链接规矩"）：
-//   · 带 / 的按路径后缀匹配（唯一才算数）；不带 / 的先看库根同名文件，
-//     再看全库文件名（唯一才算数；≥2 命中报「歧义」）
+//   · 带 / 的按「库根精确路径 + 路径后缀」一起匹配（命中两处不同文件＝歧义）
+//   · 不带 / 的先看库根同名文件，再看全库文件名（唯一才算数；≥2 命中报「歧义」）
 //   · #锚点 按目标文件的标题文本精确匹配；^块引用不支持，出现即报
 //   · 除 知识库/首页.md 外，每篇笔记必须至少被另一篇笔记链到（孤儿检查）
 //   · 围栏代码块与行内代码里的 [[…]] 不算（示例不参与检查）
@@ -14,6 +14,9 @@
 // 用法: node _verify/kb-links.mjs [--root <目录>]   （--root 供夹具自测）
 // 输出: 知识库：文件 N / 链接 M / 悬空 X / 歧义 Y / 锚点 A / 孤儿 Z
 // 任何非零计数 → 附逐条明细并 exit 1；全绿 exit 0。
+//
+// 注意：它按「vault 根＝仓库根」解析。Obsidian 必须打开仓库根（不是 知识库/ 子文件夹）——
+// 开错根时跨目录链接全断、点未解析链接还会就地生成空笔记；本脚本全绿只保证在这一前提下成立。
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -43,25 +46,42 @@ const kbNotes = vaultFiles.filter((p) => p.startsWith(KB + path.sep) && p.endsWi
 const isKbNote = (p) => p.startsWith(KB + path.sep) && p.endsWith('.md');
 const HOME = path.join(KB, '首页.md');
 
-// ---------- 剥代码：示例里的 [[…]] 不算链接 ----------
-const stripCode = (md) =>
-  md.replace(/```[\s\S]*?```/g, '').replace(/~~~[\s\S]*?~~~/g, '').replace(/`[^`\n]*`/g, '');
+// ---------- 剥代码与注释：这些位置里的 [[…]] 不算链接 ----------
+// 围栏用按行状态机（按开栏长度配对）；%% 注释与 HTML 注释整段剥掉。
+const stripCode = (md) => {
+  const s = md.replace(/%%[\s\S]*?%%/g, '').replace(/<!--[\s\S]*?-->/g, '');
+  const out = [];
+  let fence = null; // { char, len }
+  for (const line of s.split('\n')) {
+    const m = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      if (m && m[1][0] === fence.char && m[1].length >= fence.len) fence = null;
+      continue;
+    }
+    if (m) { fence = { char: m[1][0], len: m[1].length }; continue; }
+    out.push(line);
+  }
+  return out.join('\n').replace(/`[^`\n]*`/g, '');
+};
 
 // ---------- wikilink 目标解析 ----------
 function resolveWiki(target) {
   const t = noExt(target.replace(/^\.\//, '')).trim();
-  // 1) 库根精确路径优先（解决根 README 与 Web_Gomoku3D/README 重名）
-  for (const cand of [path.join(ROOT, t), path.join(ROOT, t + '.md')]) {
-    if (fs.existsSync(cand) && fs.statSync(cand).isFile()) return { ok: true, file: cand };
-  }
+  const rootHits = [path.join(ROOT, t), path.join(ROOT, t + '.md')]
+    .filter((p) => fs.existsSync(p) && fs.statSync(p).isFile());
   if (t.includes('/')) {
-    const hits = vaultFiles.filter((p) => {
+    // 路径式：「库根精确路径」与「路径后缀」一起算——命中两个不同文件就是歧义。
+    // （曾经让库根命中短路返回，结果知识库里混进同名文件时静默漏报。）
+    const suffixHits = vaultFiles.filter((p) => {
       const r = noExt(rel(p));
       return r === t || r.endsWith('/' + t);
     });
+    const hits = [...new Set([...rootHits, ...suffixHits])];
     if (hits.length === 1) return { ok: true, file: hits[0] };
     return { ok: false, kind: hits.length === 0 ? '悬空' : '歧义', hits };
   }
+  // 裸名：库根精确命中优先——知识库的笔记都在 知识库/ 下，与 Obsidian"离引用者最近"的落点一致
+  if (rootHits.length === 1) return { ok: true, file: rootHits[0] };
   const hits = vaultFiles.filter((p) => {
     const b = path.basename(p);
     return b === t || b === t + '.md';
@@ -111,16 +131,33 @@ for (const note of kbNotes) {
     }
   }
 
-  for (const m of text.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
-    let href = m[1];
+  for (const m of text.matchAll(/\[[^\]]*\]\(([^)\n]+)\)/g)) {
+    // markdown 链接：允许含空格的目标（尖括号形式 <路径 带 空格> 与裸空格都试），
+    // 也校验 #锚点（按目标文件标题文本精确匹配，含 URL 编码解码尝试）。
+    let href = m[1].trim();
+    if (href.startsWith('<') && href.endsWith('>')) href = href.slice(1, -1).trim();
     if (/^(https?:|mailto:|#|\/\/)/.test(href)) continue;
     linkCount++;
+    let anchor = null;
     const hash = href.indexOf('#');
-    if (hash !== -1) href = href.slice(0, hash);
+    if (hash !== -1) {
+      anchor = href.slice(hash + 1).trim();
+      href = href.slice(0, hash);
+    }
     if (href === '') continue;
-    const abs = path.resolve(path.dirname(note), href);
-    if (!fs.existsSync(abs)) dangling.push({ raw: href, source: note });
-    else if (isKbNote(abs) && abs !== note) linkedTo.add(abs);
+    const dir = path.dirname(note);
+    let abs = path.resolve(dir, href);
+    if (!fs.existsSync(abs)) {
+      try { abs = path.resolve(dir, decodeURIComponent(href)); } catch { /* 保持原样 */ }
+    }
+    if (!fs.existsSync(abs)) { dangling.push({ raw: m[1], source: note }); continue; }
+    if (isKbNote(abs) && abs !== note) linkedTo.add(abs);
+    if (anchor && abs.endsWith('.md')) {
+      let a = anchor;
+      try { a = decodeURIComponent(anchor); } catch { /* 保持原样 */ }
+      const heads = headingTexts(abs);
+      if (!heads.includes(a) && !heads.includes(anchor)) anchorBad.push({ raw: m[1], source: note });
+    }
   }
 }
 
