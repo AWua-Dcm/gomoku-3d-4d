@@ -1,6 +1,6 @@
 # browser-check 解剖
 
-**结论**：`_verify/browser-check.mjs` 是整套验证里最贵也最硬的一环——在真实无头 Chrome/Edge 里跑 431 项断言：GLSL 编译、控制台零输出、布局几何、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局，顺带截图到 `_verify/shots/`。
+**结论**：`_verify/browser-check.mjs` 是整套验证里最贵也最硬的一环——在真实无头 Chrome/Edge 里跑 438 项断言：GLSL 编译、控制台零输出、布局几何、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局、对局记录一条龙，顺带截图到 `_verify/shots/`。
 
 **它查什么**（挑几样最有代表性的）：
 
