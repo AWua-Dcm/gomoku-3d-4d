@@ -321,6 +321,27 @@ const pressKey = (key) => {
 };
 
 // ---------------------------------------------------------------------------
+// 假 localStorage
+//
+// 页面里 storeGet/storeSet 引用的是自由变量 localStorage —— new Function 的参数表
+// 里没有它，所以每次调用都去全局找。在脚本执行【之前】把全局装成这份 Map 背书的
+// 假货，脚本读写的就都是它，断言才能从外面看见"到底写了什么"。
+// （Node 24 默认没有 localStorage，直接赋值即得一个普通属性。）
+// ---------------------------------------------------------------------------
+function makeFakeStorage() {
+  const map = new Map();
+  return {
+    _map: map,
+    getItem(k) { k = String(k); return map.has(k) ? map.get(k) : null; },
+    setItem(k, v) { map.set(String(k), String(v)); },
+    removeItem(k) { map.delete(String(k)); },
+    clear() { map.clear(); },
+  };
+}
+const localStorageStub = makeFakeStorage();
+globalThis.localStorage = localStorageStub;
+
+// ---------------------------------------------------------------------------
 // 提取整个 script 并在桩环境里执行
 // ---------------------------------------------------------------------------
 const scriptStart = html.indexOf("<script>");
@@ -338,6 +359,7 @@ let TEXT_EN = null, STATIC_EN = null, t = null;
 let clampPan2d = null, OrbitCameraNS = null, GESTURE = null;
 let CORE_TEXT = null, LANG_INFO = null, pluralFormNS = null, PLURAL_FORMS = null;
 let TEXT_ALL = null, STATIC_ALL = null, LANGS_LIST = null;
+let GameRecords = null, RECORDS_KEY = null, RECORD_LIMIT = 0;
 // 教学可解性断言要用的两个核心类（从桩里取，不在测试里另抄一份）
 let RotationMoveNS = null, MoveStatusNS = null;
 let RendererNS = null;
@@ -370,6 +392,11 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
       " CORE_TEXT: CORE_TEXT, LANG_INFO: LANG_INFO, pluralForm: pluralForm," +
       " TEXT_ALL: TEXT, STATIC_ALL: STATIC_TEXT, LANGS_LIST: LANGS," +
       " PLURAL_FORMS: PLURAL_FORMS," +
+      // 对局记录的读写模块与存储键/上限。键和上限要从源码里问（不在这里抄一份）——
+      // 抄了就会各自漂移，而"键改了个名字"在玩家那里的表现是"记录全没了"。
+      " GameRecords: (typeof GameRecords !== 'undefined') ? GameRecords : null," +
+      " RECORDS_KEY: (typeof RECORDS_KEY !== 'undefined') ? RECORDS_KEY : null," +
+      " RECORD_LIMIT: (typeof RECORD_LIMIT !== 'undefined') ? RECORD_LIMIT : 0," +
       " clampPan2d: clampPan2d, OrbitCamera: OrbitCamera," +
       " GESTURE: { ZOOM2D_MAX: ZOOM2D_MAX, TAP_WINDOW_MS: TAP_WINDOW_MS," +
       "            TAP_NEAR_PX: TAP_NEAR_PX, PINCH_TAIL_MS: PINCH_TAIL_MS }," +
@@ -396,6 +423,7 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   clampPan2d = NS.clampPan2d; OrbitCameraNS = NS.OrbitCamera; GESTURE = NS.GESTURE;
   CORE_TEXT = NS.CORE_TEXT; LANG_INFO = NS.LANG_INFO; pluralFormNS = NS.pluralForm;
   TEXT_ALL = NS.TEXT_ALL; STATIC_ALL = NS.STATIC_ALL; LANGS_LIST = NS.LANGS_LIST;
+  GameRecords = NS.GameRecords; RECORDS_KEY = NS.RECORDS_KEY; RECORD_LIMIT = NS.RECORD_LIMIT;
   RotationMoveNS = NS.RotationMoveNS; MoveStatusNS = NS.MoveStatusNS;
   if (!TEXT_ALL || !STATIC_ALL || !LANGS_LIST) throw new Error('六语言的表没有暴露出来');
   PLURAL_FORMS = NS.PLURAL_FORMS;
@@ -3987,6 +4015,281 @@ step("v3.1.7：撤销「转出来的胜局」要把终局横幅一起收掉", ()
     throw new Error("悔掉胜局之后横幅还挂着 —— 它会被重渲染成「空棋胜 0 连」压在活棋上");
   Game.setSetupSpin(false);
   Game.setSetupMode(true);
+});
+
+// ---------------------------------------------------------------------------
+// 对局记录（本地存储）
+//
+// 【为什么连"坏数据"和"访问抛异常"都要测】记录是页面上唯一【会长大】的持久化
+// 数据，而它的两条真实故障路径——用户手改 localStorage 把 JSON 写坏、某些环境
+// 访问 localStorage 直接抛 SecurityError——在真实浏览器里都会表现成"开记录面板
+// 白屏"或"页面一片红字"。storeGet/storeSet 的两层保险就是为这个写的，
+// 记录的读写必须真的走在保险里面，而不是绕过去直接摸 localStorage。
+// ---------------------------------------------------------------------------
+
+/** 开一局干净的三维人人对局 + 清掉已存记录。记录那几条 step 的公共前置。 */
+function recFreshGame(dims, first) {
+  Game.cancelAiTimer();
+  Game.setSetupAi("human");
+  Game.setSetupMode(false);
+  Game.setSetupSpin(false);
+  Game.setSetupWrap(false);
+  Game.closeSetup();
+  localStorageStub.removeItem(RECORDS_KEY);
+  Game.newGame(dims || 15, first || 1);
+}
+
+/** 黑成五、终局。返回终局时的那条落子返回对象。 */
+function recWinBlack() {
+  for (let x = 0; x < 4; x++) { Game.tryPlace(x, 0); Game.tryPlace(x, 5); }
+  return Game.tryPlace(4, 0);
+}
+
+step("对局记录：模块与存储键就位", () => {
+  if (!GameRecords) throw new Error("源码里没有 GameRecords（对局记录的读写模块）");
+  if (RECORDS_KEY !== "gomoku.records.v1")
+    throw new Error("存储键被改成了 " + RECORDS_KEY + " —— 改了它，玩家已有的记录就全丢了");
+  if (RECORD_LIMIT !== 50) throw new Error("上限应为 50，实际 " + RECORD_LIMIT);
+});
+
+step("对局记录：一局下完自动记一条，字段齐全", () => {
+  recFreshGame(15, 1);
+  const o = recWinBlack();
+  if (Game.session.status !== "Decided") throw new Error("前置：这一步应当终局");
+  const list = GameRecords.load();
+  if (list.length !== 1) throw new Error("应当记下 1 条，实际 " + list.length);
+  const r = list[0];
+  if (r.m !== 3) throw new Error("维数应为 3，实际 " + r.m);
+  if (JSON.stringify(r.d) !== "[15,15,15]") throw new Error("尺寸不对：" + JSON.stringify(r.d));
+  if (r.o !== 0) throw new Error("纯三维不该有选项位，实际 " + r.o);
+  if (r.ai !== null || r.me !== null) throw new Error("人人局不该有对手/我执色：" + JSON.stringify(r));
+  if (r.w !== 1) throw new Error("黑棋胜 → w 应为 1，实际 " + r.w);
+  if (r.ol !== 0) throw new Error("普通获胜不该带长连标记");
+  if (r.n !== 9) throw new Error("落子数应为 9，实际 " + r.n);
+  if (r.r !== 0) throw new Error("三维没有转动，r 应为 0，实际 " + r.r);
+  if (!(typeof r.t === "number" && r.t > 0)) throw new Error("时间戳不对：" + r.t);
+  const row = Game.recordRowText(r);
+  for (const want of ["三维", "15³", "黑棋胜", "9 手"])
+    if (row.indexOf(want) < 0) throw new Error("行文案缺少「" + want + "」：" + row);
+});
+
+step("对局记录：悔棋救回这一局 → 记录同步撤回；再定胜负重新记一条", () => {
+  recFreshGame(15, 1);
+  recWinBlack();
+  const first = GameRecords.load()[0];
+  if (!first || GameRecords.load().length !== 1) throw new Error("前置：应当已经记下一条");
+  Game.undo();
+  if (Game.session.status !== "Playing") throw new Error("前置：悔棋应回到进行中");
+  if (GameRecords.load().length !== 0)
+    throw new Error("悔棋救回之后那条记录应当同步撤掉 —— 这局还没结束");
+  Game.tryPlace(4, 0);                       // 把这一手补回去，再次终局
+  const list = GameRecords.load();
+  if (list.length !== 1) throw new Error("再次终局应当重新记下 1 条，实际 " + list.length);
+  if (list[0].id === first.id) throw new Error("重记的应当是新的 id（旧的那条已经被撤掉）");
+});
+
+step("对局记录：人机局的档位与我执色入账", () => {
+  localStorageStub.removeItem(RECORDS_KEY);
+  startAiGame("high", "me", 1);
+  const s = Game.session;                     // 我执黑，电脑执白
+  for (let i = 0; i < 4; i++) { s.place(i, 0, 0); s.place(i, 5, 5); }
+  s.place(4, 0, 0);                           // 黑（我）成五
+  Game.cancelAiTimer();
+  const list = GameRecords.load();
+  if (list.length !== 1) throw new Error("应当记下 1 条，实际 " + list.length);
+  const r = list[0];
+  if (r.ai !== 2) throw new Error("档位应为 high（下标 2），实际 " + r.ai);
+  if (r.me !== 1) throw new Error("我执黑应为 1，实际 " + r.me);
+  if (r.w !== 1) throw new Error("我胜 → w=1，实际 " + r.w);
+  const row = Game.recordRowText(r);
+  for (const want of ["人机", "高", "我执黑", "胜"])
+    if (row.indexOf(want) < 0) throw new Error("行文案缺少「" + want + "」：" + row);
+  Game.setSetupAi("human");
+});
+
+step("对局记录：长连犯规入账（w 记对手色，ol=1）", () => {
+  recFreshGame(15, 1);
+  const s = Game.session;
+  const blackX = [0, 1, 2, 4, 5], whiteX = [0, 2, 4, 6, 8];
+  for (let i = 0; i < blackX.length; i++) { s.place(blackX[i], 0, 0); s.place(whiteX[i], 5, 5); }
+  s.place(3, 0, 0);                           // 黑连成 6 → 长连负
+  const list = GameRecords.load();
+  if (list.length !== 1) throw new Error("应当记下 1 条，实际 " + list.length);
+  const r = list[0];
+  if (r.w !== 2) throw new Error("长连犯规 → 胜者是白，w 应为 2，实际 " + r.w);
+  if (r.ol !== 1) throw new Error("应当带长连标记");
+  if (Game.recordRowText(r).indexOf("长连") < 0)
+    throw new Error("行文案应有长连标记：" + Game.recordRowText(r));
+});
+
+step("对局记录：教学关不记", () => {
+  localStorageStub.removeItem(RECORDS_KEY);
+  Game.closeSetup();
+  Game.setSetupAi("human");
+  Game.setSetupMode(true);
+  Game.startTutorial();
+  Game.tutorialBuild(1);                      // 第 2 关：目标 = 赢
+  Game.activeLayer = 7;                       // 缺口在 z=7（照抄上面教学那几条）
+  Game.tryPlace(2, 7);
+  if (Game.session.status !== "Decided") throw new Error("前置：这一手应当终局");
+  if (GameRecords.load().length !== 0) throw new Error("教学关不该进对局记录");
+  Game.tutorialExit();
+  Game.setSetupMode(false);
+  if (GameRecords.load().length !== 0) throw new Error("退出教学之后也应当一条都没有");
+});
+
+step("对局记录：最多留 50 条，新的挤掉最旧的", () => {
+  localStorageStub.removeItem(RECORDS_KEY);
+  for (let i = 0; i < RECORD_LIMIT + 3; i++) {
+    GameRecords.add({ t: 1000 + i, m: 3, d: [15, 15, 15], o: 0, ai: null, me: null,
+                      w: 1, ol: 0, n: 9, r: 0, mk: i });
+  }
+  const list = GameRecords.load();
+  if (list.length !== RECORD_LIMIT)
+    throw new Error("上限应为 " + RECORD_LIMIT + "，实际 " + list.length);
+  if (list[0].mk !== RECORD_LIMIT + 2) throw new Error("最新一条应在最前，实际 mk=" + list[0].mk);
+  if (list[list.length - 1].mk !== 3)
+    throw new Error("最旧的应被挤掉（剩到 mk=3），实际 mk=" + list[list.length - 1].mk);
+});
+
+step("对局记录：存储被写坏 → 当空处理、面板显示空态；下一局覆盖它", () => {
+  localStorageStub.setItem(RECORDS_KEY, "{这不是 JSON");
+  if (GameRecords.load().length !== 0) throw new Error("坏 JSON 应当被当成空列表");
+  localStorageStub.setItem(RECORDS_KEY, JSON.stringify({ not: "an array" }));
+  if (GameRecords.load().length !== 0) throw new Error("不是数组也应当被当成空列表");
+  Game.openHistory();
+  if (!Game.historyOpen) throw new Error("面板应当能开");
+  if (Game.el.historyBody.innerHTML.indexOf("还没有") < 0)
+    throw new Error("坏数据下应当显示空态文案：" + Game.el.historyBody.innerHTML);
+  Game.closeHistory();
+  recFreshGame(15, 1);
+  recWinBlack();
+  if (GameRecords.load().length !== 1)
+    throw new Error("坏数据之后重新记的一条应当覆盖它，实际 " + GameRecords.load().length);
+});
+
+step("对局记录：localStorage 访问直接抛异常时静默降级", () => {
+  const real = globalThis.localStorage;
+  let setCalls = 0, getCalls = 0;
+  globalThis.localStorage = {
+    getItem() { getCalls++; throw new Error("SecurityError"); },
+    setItem() { setCalls++; throw new Error("SecurityError"); },
+  };
+  try {
+    recFreshGame(15, 1);
+    recWinBlack();
+    if (Game.session.status !== "Decided") throw new Error("棋局本身仍应正常终局");
+    if (GameRecords.load().length !== 0) throw new Error("读不到就该是空列表");
+    if (getCalls === 0) throw new Error("应当至少尝试过一次读取（被吞掉是另一回事）");
+    if (setCalls === 0) throw new Error("终局时应当至少尝试过一次写入（被吞掉是另一回事）");
+  } finally {
+    globalThis.localStorage = real;
+  }
+});
+
+step("对局记录：面板开合、与规则页互斥、Esc 只关它、开着不吃快捷键", () => {
+  recFreshGame(15, 1);
+  recWinBlack();                              // 列表里有一条（终局横幅此刻开着）
+  const movesBefore = Game.session.moveCount;
+
+  Game.openHistory();
+  if (!Game.historyOpen) throw new Error("openHistory 之后应为打开");
+  if (Game.el.historyPanel.classList.contains("off")) throw new Error("面板不该带 off");
+  if (Game.el.historyBody.innerHTML.indexOf("15³") < 0)
+    throw new Error("列表里应当有一行带尺寸的记录：" + Game.el.historyBody.innerHTML);
+
+  // 互斥：开一个，另一个必须关 —— 两个浮层叠着的话，Esc 和层级立刻变成两套逻辑
+  Game.openRules();
+  if (Game.historyOpen) throw new Error("打开规则浮层时记录面板应当关掉");
+  if (!Game.rulesOpen) throw new Error("规则浮层应当开着");
+  Game.openHistory();
+  if (Game.rulesOpen) throw new Error("打开记录面板时规则浮层应当关掉");
+  if (!Game.historyOpen) throw new Error("记录面板应当开着");
+
+  if (!Game.bannerOpen) throw new Error("前置：终局横幅应当还挂着");
+  pressKey("Escape");
+  if (Game.historyOpen) throw new Error("Esc 应当关掉记录面板");
+  if (!Game.bannerOpen) throw new Error("Esc 只该关记录面板，不该顺手把横幅也关了");
+
+  Game.openHistory();
+  pressKey("r");
+  if (Game.session.moveCount !== movesBefore)
+    throw new Error("记录面板开着时 R 不该重开棋局（看记录时手滑重开）");
+  Game.closeHistory();
+  if (Game.historyOpen) throw new Error("closeHistory 之后应为关闭");
+});
+
+step("对局记录：清空要两段确认；切语言行文案跟着换", () => {
+  Game.openHistory();                         // 承接上一步：列表里还有一条
+  Game.el.historyClear.dispatch("click");
+  if (GameRecords.load().length !== 1) throw new Error("第一下不该真清 —— 那是个两段确认");
+  if (Game.el.historyClear.textContent.indexOf("确认") < 0)
+    throw new Error("第一下之后应当进入待确认状态：" + Game.el.historyClear.textContent);
+  Game.el.historyClear.dispatch("click");
+  if (GameRecords.load().length !== 0) throw new Error("第二下应当真的清掉");
+  if (Game.el.historyBody.innerHTML.indexOf("还没有") < 0)
+    throw new Error("清空后应当显示空态");
+
+  GameRecords.add({ t: Date.now(), m: 3, d: [15, 15, 15], o: 0, ai: null, me: null,
+                    w: 1, ol: 0, n: 9, r: 0 });
+  Game.closeHistory();
+  Game.openHistory();
+  if (Game.el.historyBody.innerHTML.indexOf("黑棋胜") < 0)
+    throw new Error("中文行应当有「黑棋胜」：" + Game.el.historyBody.innerHTML);
+  Game.setLang("en");
+  if (Game.el.historyBody.innerHTML.indexOf("Black") < 0)
+    throw new Error("切英文之后行文案应当跟着换：" + Game.el.historyBody.innerHTML);
+  Game.setLang("zh");
+  if (Game.el.historyBody.innerHTML.indexOf("黑棋胜") < 0)
+    throw new Error("切回中文应当还原：" + Game.el.historyBody.innerHTML);
+  Game.closeHistory();
+});
+
+step("对局记录：四维局的维数、常开选项与转动数入账", () => {
+  Game.cancelAiTimer();
+  localStorageStub.removeItem(RECORDS_KEY);
+  Game.setSetupAi("human");
+  Game.setSetupCool(5);
+  Game.setSetupMode(true);                    // 四维：旋转 / 贯通 / 晨昏常开
+  // 【相位周期拉到 30】四维下晨昏常开，而默认周期是 12 —— 这一局要落 14 手，
+  // 第 12 手会把相位翻过去，黑棋那条五连线就横跨"黎明落的子 + 永夜落的子"，
+  // 后半截不在当前相位里，成五判不了（第一次就是这么红的）。
+  Game.setupPhase = 30;
+  Game.closeSetup();
+  Game.newGame([8, 8, 8], 1);
+  const s = Game.session;
+  // 先在 z=1 层落满 5 手（转动解锁），两个颜色都放这一层，转起来才不是空层
+  Game.setActiveLayer(1);
+  Game.tryPlace(0, 1); Game.tryPlace(0, 6);
+  Game.tryPlace(1, 1); Game.tryPlace(1, 6);
+  Game.tryPlace(2, 1);
+  if (s.moveCount !== 5) throw new Error("前置：应当已落 5 手");
+  Game.rotLayer = 1;
+  Game.doRotate();
+  if (!Game.rotPreview) throw new Error("前置：应当进入转动预览");
+  Game.confirmRotation();
+  if (s.rotationCount !== 1) throw new Error("前置：转动应当落地");
+  // 换到 z=0 层把黑棋的胜线走完
+  Game.setActiveLayer(0);
+  Game.tryPlace(0, 0); Game.tryPlace(7, 7);
+  Game.tryPlace(1, 0); Game.tryPlace(7, 6);
+  Game.tryPlace(2, 0); Game.tryPlace(7, 5);
+  Game.tryPlace(3, 0); Game.tryPlace(7, 4);
+  Game.tryPlace(4, 0);                        // 黑成五 → 终局
+  const list = GameRecords.load();
+  if (list.length !== 1) throw new Error("应当记下 1 条，实际 " + list.length);
+  const r = list[0];
+  if (r.m !== 4) throw new Error("维数应为 4，实际 " + r.m);
+  if (JSON.stringify(r.d) !== "[8,8,8]") throw new Error("尺寸不对：" + JSON.stringify(r.d));
+  if (r.o !== 3) throw new Error("四维下旋转/贯通常开，选项位应为 3，实际 " + r.o);
+  if (r.r !== 1) throw new Error("转动数应为 1，实际 " + r.r);
+  if (r.n !== 14) throw new Error("落子数应为 14，实际 " + r.n);
+  const row = Game.recordRowText(r);
+  for (const want of ["四维", "8³", "转动"])
+    if (row.indexOf(want) < 0) throw new Error("行文案缺少「" + want + "」：" + row);
+  Game.setSetupMode(false);
+  Game.setSetupAi("human");
+  localStorageStub.removeItem(RECORDS_KEY);
 });
 
 // ---------------------------------------------------------------------------

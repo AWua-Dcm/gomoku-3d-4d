@@ -733,9 +733,10 @@ try {
   const rules = await ev(`(() => {
     const btn = document.getElementById("rulesBtn");
     const st  = document.getElementById("status");
+    const hb  = document.getElementById("historyBtn");
     const r = (el) => { const b = el.getBoundingClientRect();
       return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
-    const before = { btn: r(btn), status: r(st), vw: document.documentElement.clientWidth };
+    const before = { btn: r(btn), hist: r(hb), status: r(st), vw: document.documentElement.clientWidth };
     btn.click();
     const body = document.getElementById("rulesBody");
     return {
@@ -749,16 +750,23 @@ try {
   })()`);
 
   check(rules.open === true, "点了「具体规则」之后浮层打开");
-  // 右上角：贴着视口右边，且不压住状态文字
-  check(Math.abs((rules.before.vw - rules.before.btn.r) - 14) <= 2,
-    "按钮贴在视口右边 14px 处", "实际右边距 " + (rules.before.vw - rules.before.btn.r));
-  check(rules.before.btn.t <= 20, "按钮在顶部", "top=" + rules.before.btn.t);
-  const overlap = !(rules.before.btn.l >= rules.before.status.r ||
-                    rules.before.btn.r <= rules.before.status.l ||
-                    rules.before.btn.b <= rules.before.status.t ||
-                    rules.before.btn.t >= rules.before.status.b);
-  check(!overlap, "按钮不能和状态文字重叠（对局时它压着「黑棋落子」）",
-    JSON.stringify(rules.before.btn) + " vs " + JSON.stringify(rules.before.status));
+  // 右上角：整簇贴着视口右边 14px，且不压住状态文字。
+  // 【量的是最右那颗键】v3.1.8 加「记录」之前，最右那颗是「具体规则」，这条量的是它；
+  // 记录键加在它右边之后，"贴右 14px"这条不变量换到整簇的右边缘上 ——
+  // 再量 rulesBtn 的话它天然差着"记录键宽 + 间距"，而那不是回归，是布局换了。
+  check(Math.abs((rules.before.vw - rules.before.hist.r) - 14) <= 2,
+    "右上角最右那颗键（记录）贴在视口右边 14px 处",
+    "实际右边距 " + (rules.before.vw - rules.before.hist.r));
+  check(rules.before.btn.t <= 20 && rules.before.hist.t <= 20,
+    "两颗键都在顶部", "top=" + rules.before.btn.t + " / " + rules.before.hist.t);
+  const overlap = (a) => !(a.l >= rules.before.status.r ||
+                           a.r <= rules.before.status.l ||
+                           a.b <= rules.before.status.t ||
+                           a.t >= rules.before.status.b);
+  check(!overlap(rules.before.btn) && !overlap(rules.before.hist),
+    "两颗键都不能和状态文字重叠（对局时它们会压着「黑棋落子」）",
+    JSON.stringify(rules.before.btn) + " / " + JSON.stringify(rules.before.hist) +
+    " vs " + JSON.stringify(rules.before.status));
 
   // 正文必须真的渲染出来了 —— 只判"浮层打开"是不够的：
   // 内容空着、或者渲染成一堆空标签，浮层照样能打开
@@ -1229,6 +1237,103 @@ try {
   // 切回中文再收尾：后面没有别的断言了，但让页面停在默认状态，
   // 免得下次有人在这段后面接着写断言时，捡到一个英文界面。
   await ev(`Game.setLang("zh")`);
+
+  // ---- 6c. 对局记录：真排版下的一条龙（下完一局 → 入账 → 开面板 → 读到那一行）
+  //
+  // 桩里（第 7 步）验的是状态机与存储；这里验的是只有真浏览器答得了的问题：
+  // 面板卡片的几何、行文案在真排版里的样子、以及【右上角多了第三颗键之后
+  // 会不会压住状态行】—— 顶栏那一片的留白是实测出来的（layoutTopRight），
+  // 桩里的 getBoundingClientRect 是写死的 {0,0,800,600}，量不出任何东西。
+  const hist = await ev(`(() => {
+    const R = (el) => { const b = el.getBoundingClientRect();
+      return { l: Math.round(b.left), t: Math.round(b.top), r: Math.round(b.right),
+               b: Math.round(b.bottom), w: Math.round(b.width), h: Math.round(b.height) }; };
+    // 从零开始：清掉这个档案里可能残留的记录，再真下一局短的
+    GameRecords.clear();
+    Game.closeSetup();
+    Game.setSetupAi("human");
+    Game.newGame([15, 15, 15], 1);
+    for (let x = 0; x < 4; x++) { Game.tryPlace(x, 0); Game.tryPlace(x, 5); }
+    Game.tryPlace(4, 0);
+    const list = GameRecords.load();
+    const first = list[0] || null;
+    Game.openHistory();
+    const panelEl = document.getElementById("historyPanel");
+    const card = R(document.getElementById("historyCard"));
+    const rowEl = document.querySelector("#historyBody .histRow");
+    const btn = R(document.getElementById("historyBtn"));
+    const st = R(document.getElementById("status"));
+    const rulesB = R(document.getElementById("rulesBtn"));
+    const lang = R(document.getElementById("langBtn"));
+    const overlap = (a, b) => !(a.r <= b.l || b.r <= a.l || a.b <= b.t || b.b <= a.t);
+    // 语言列表的锚：它必须仍对着【语言键】展开 —— 记录键插在最右，
+    // 没有动到"第一个孩子"这个前提（#langList 的 left:0 锚的就是它）
+    Game.toggleLangList(true);
+    const ll = R(document.getElementById("langList"));
+    Game.toggleLangList(false);
+    return {
+      rows: list.length,
+      first: first ? { m: first.m, n: first.n, w: first.w, ai: first.ai, r: first.r } : null,
+      rowText: rowEl ? rowEl.textContent : "",
+      open: !panelEl.classList.contains("off"),
+      card: card,
+      cardInView: card.l >= 0 && card.t >= 0 &&
+                  card.r <= innerWidth + 0.5 && card.b <= innerHeight + 0.5,
+      btnHitsStatus: overlap(btn, st),
+      btnHitsRules: overlap(btn, rulesB),
+      btnInView: btn.r <= innerWidth && btn.t >= 0,
+      langListLeft: ll.l, langBtnLeft: lang.l,
+    };
+  })()`);
+  check(hist.rows === 1 && hist.first && hist.first.m === 3 && hist.first.n === 9 && hist.first.w === 1,
+    "真浏览器里下完一局：记录入账（三维 / 9 手 / 黑胜）", JSON.stringify(hist.first));
+  check(hist.rowText.indexOf("15³") >= 0 && hist.rowText.indexOf("黑棋胜") >= 0,
+    "面板里那一行是完整的（尺寸 + 结果都在）", JSON.stringify(hist.rowText));
+  check(hist.open && hist.cardInView && hist.card.w >= 320,
+    "记录面板打开，卡片整个在视口里", JSON.stringify(hist.card));
+  check(!hist.btnHitsStatus && !hist.btnHitsRules && hist.btnInView,
+    "右上角第三颗键不压状态行、也不和另外两颗叠",
+    JSON.stringify({ 状态行: hist.btnHitsStatus, 具体规则: hist.btnHitsRules }));
+  check(Math.abs(hist.langListLeft - hist.langBtnLeft) <= 2,
+    "语言列表仍然对着语言键展开（记录键插在最右，没有动到第一个孩子）",
+    "langList.l=" + hist.langListLeft + " vs langBtn.l=" + hist.langBtnLeft);
+
+  // Esc 关面板，且不顺手把终局横幅也关了
+  const histEsc = await ev(`(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    return { panelOff: document.getElementById("historyPanel").classList.contains("off"),
+             bannerOn: document.getElementById("banner").classList.contains("on") };
+  })()`);
+  check(histEsc.panelOff === true && histEsc.bannerOn === true,
+    "Esc 只关记录面板，终局横幅还挂着", JSON.stringify(histEsc));
+
+  // 规则浮层与记录面板互斥（开一个关另一个，两个方向各验一遍）
+  const histMutual = await ev(`(() => {
+    Game.openHistory(); Game.openRules();
+    const a = { h: Game.historyOpen, r: Game.rulesOpen };
+    Game.openRules(); Game.openHistory();
+    const b = { h: Game.historyOpen, r: Game.rulesOpen };
+    Game.closeHistory();
+    return { a: a, b: b };
+  })()`);
+  check(histMutual.a.h === false && histMutual.a.r === true &&
+        histMutual.b.h === true && histMutual.b.r === false,
+    "规则浮层与记录面板互斥（开一个关另一个，两个方向都对）", JSON.stringify(histMutual));
+
+  // 截图基线。背景是"刚落完的一局"，静止不动；终局横幅留在屏幕上（确定性内容）。
+  // 【拍照前把那条记录的时间钉死】行首的 "YYYY-MM-DD HH:MM" 是真实时刻 ——
+  // 不钉住的话这张基线图每次跑都和上一张差七十来个像素（实测 bc2 vs bc3：72px），
+  // 而那几个像素会混进"这张图到底变没变"的判断里。见「截图对拍先钉住会动的东西」。
+  await ev(`(() => {
+    const l = GameRecords.load();
+    if (l[0]) { l[0].t = new Date(2026, 9, 14, 21, 3).getTime(); GameRecords.save(l); }
+    Game.openHistory();
+    return 1;
+  })()`);
+  await sleep(150);
+  await shot("15-对局记录");
+  // 收尾：把记录清掉、面板关掉，后面的章节拿到的还是一个干净页面
+  await ev(`GameRecords.clear(); Game.renderHistory(); Game.closeHistory(); 1`);
 
   // ---- 7. 游玩界面：格线开关 / 终局横幅的关闭与拖动 / 相机夹取
   //

@@ -932,7 +932,10 @@
     position: fixed; top: 14px; right: 14px; z-index: 60;
     display: flex; align-items: center; gap: 8px;
   }
-  #rulesBtn {
+  /* #historyBtn（对局记录）和「具体规则」同一套砖头样式，排在它右边。
+     它刻意放在最后而不是最前：#langList 的 left:0 锚的是"第一个孩子"（语言键）——
+     新键插到最前，语言列表就会对着它展开，而那个错位只有肉眼能看见。 */
+  #rulesBtn, #historyBtn {
     font-size: 13px; padding: 7px 13px;
     background: var(--panel-hi); color: var(--text);
     border: 1px solid var(--border); border-radius: 4px;
@@ -1007,6 +1010,31 @@
   #rulesSrcName { color: var(--dim); font-size: 12.5px; flex: 1 1 auto; }
   #rulesBody { flex: 1 1 auto; overflow-y: auto; padding: 6px 26px 30px;
                line-height: 1.85; font-size: 14px; }
+
+  /* 对局记录浮层。和规则浮层同一套（遮罩 + 卡片 + Esc），只是窄一些 ——
+     它是"一串一句话"，铺到 940px 只会让眼睛横着跑。 */
+  #historyPanel {
+    position: fixed; inset: 0; z-index: 70;
+    background: rgba(60,50,34,.42);
+    display: flex; align-items: center; justify-content: center; padding: 28px;
+  }
+  #historyPanel.off { display: none; }
+  #historyCard {
+    display: flex; flex-direction: column; width: min(620px, 100%); max-height: 100%;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 20px 60px rgba(60,44,22,.30); overflow: hidden;
+  }
+  #historyHead {
+    display: flex; align-items: baseline; gap: 12px; flex: 0 0 auto;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    background: var(--panel-hi);
+  }
+  #historyTitle { font-size: 19px; font-weight: 600; letter-spacing: 2px; flex: 1 1 auto; }
+  #historyBody { flex: 1 1 auto; overflow-y: auto; padding: 8px 18px 18px;
+                 font-size: 13.5px; line-height: 1.9; }
+  #historyBody .histRow { padding: 6px 2px; border-bottom: 1px solid var(--border); }
+  #historyBody .histRow:last-child { border-bottom: 0; }
+  #historyBody .histEmpty { color: var(--dim); padding: 16px 2px; }
   /* 渲染出来的正文。字号偏小、行距偏大：这份文档是要"读"的，
      而且里面大量用行内 code，密排会糊。 */
   #rulesBody h2 { font-size: 20px; margin: 26px 0 10px; padding-bottom: 6px;
@@ -3980,6 +4008,11 @@ ramène à l'écran de départ.
   <!-- title 用双语写死：整个文件只有这一个 title 属性，
        为它单独搭一套 i18n 不值当，而双语反而是两种语言下都对的信息。 -->
   <button id="rulesBtn" title="查看完整规则 / Full rules" data-i18n="rulesBtn">具体规则</button>
+
+  <!-- 对局记录。**排在最后（最右）**，语言键仍是第一个孩子：
+       #langList 的 left:0 锚的就是第一个孩子，插到前面会让语言列表对着别处展开。
+       点开是一个浮层（与规则浮层互斥），里面是最近 50 局的一句话摘要。 -->
+  <button id="historyBtn" data-i18n="historyBtn">记录</button>
 </div>
 
 <!-- 规则浮层。内容由 openRules() 从 #rulesSrc 现场渲染 —— 页面上没有第二份规则文本。 -->
@@ -3995,6 +4028,23 @@ ramène à l'écran de départ.
       <button id="rulesClose" class="mini" data-i18n="rulesClose">关闭 Esc</button>
     </div>
     <div id="rulesBody"></div>
+  </div>
+</div>
+
+<!-- 对局记录浮层。内容由 renderHistory() 从存档里现场渲染（和规则浮层同一条路：
+     页面上没有第二份数据）。列表行是 JS 拼的（走 say/sayN 的六语言通路），
+     所以这里一个 data-i18n 都不挂 —— 挂了反而会被 applyStatic 覆写。
+     #historyClear 是【两态按钮】（清空 / 确认清空？），和 #hintToggle 同一个先例：
+     带 data-i18n 的元素会被 applyStatic 按静态表覆写，写不了两态，所以它不进表，
+     由 syncHistoryClear() 单独写。 -->
+<div id="historyPanel" class="off">
+  <div id="historyCard">
+    <div id="historyHead">
+      <div id="historyTitle" data-i18n="historyTitle">对局记录</div>
+      <button id="historyClear" class="mini">清空</button>
+      <button id="historyClose" class="mini" data-i18n="historyClose">关闭 Esc</button>
+    </div>
+    <div id="historyBody"></div>
   </div>
 </div>
 
@@ -8214,6 +8264,54 @@ function storeSet(key, value) {
   } catch (e) { /* 存不了就算了，语言当次仍然有效 */ }
 }
 
+/* --------------------------------------------------------------------------
+   对局记录 —— 本地存一份"这局下成了什么"的摘要。
+
+   【只存摘要，不存棋谱】一条记录就是时间 / 维数 / 尺寸 / 选项 / 对手 /
+   结果 / 手数这几个数，几十字节；棋谱（每一步）要另做回放界面，是另一个版本的事。
+   上限 50 条：新的一条挤掉最旧的。上限存在的理由是 localStorage 通常只有几 MB，
+   而这个数组是页面上唯一【会长大】的持久化数据。
+
+   【为什么不叫"存档"】记录是事后的账本，读它不能恢复那盘棋。README 的已知限制里
+   那句"没有存档"说的不是它 —— 中途关掉页面仍然回不到对局。
+
+   【读写全走 storeGet/storeSet 那两层保险】用户在 devtools 里把这份 JSON 改坏、
+   或某些环境访问 localStorage 直接抛 SecurityError 时，症状必须是"记录当空"
+   而不是"开记录面板白屏"。坏数据不主动清（下一次写入自然会覆盖它），
+   因为"删数据"这件事不该由一次读取顺手做掉。 */
+const RECORDS_KEY = "gomoku.records.v1";
+const RECORD_LIMIT = 50;
+/** 记录 id 的序号。同一毫秒里下完两局的概率不为零（脚本/测试里几乎必然），
+ *  光用时间戳当 id 会撞 —— 撞了的后果是"悔棋撤回"撤掉的是别人那条。 */
+let recSeq = 0;
+
+const GameRecords = {
+  /** 读出全部记录（新在前）。坏数据 / 非数组 / 非对象项一律当空处理。 */
+  load() {
+    const raw = storeGet(RECORDS_KEY);
+    if (!raw) return [];
+    let arr = null;
+    try { arr = JSON.parse(raw); } catch (e) { return []; }
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((r) => r && typeof r === "object");
+  },
+  save(list) { storeSet(RECORDS_KEY, JSON.stringify(list)); return list; },
+  /** 记一条（新在前），顺手裁到上限。id 由 buildRecord 生成，缺了这里补一个。 */
+  add(rec) {
+    if (!rec.id) rec.id = Date.now().toString(36) + "-" + (recSeq++);
+    const list = this.load();
+    list.unshift(rec);
+    if (list.length > RECORD_LIMIT) list.length = RECORD_LIMIT;
+    return this.save(list);
+  },
+  /** 按 id 撤一条 —— 只给"终局后又被悔棋救回来"那条路用。 */
+  remove(id) {
+    const list = this.load().filter((r) => r.id !== id);
+    return this.save(list);
+  },
+  clear() { return this.save([]); },
+};
+
 /**
  * 静态文案的英文。键 = 元素 id（见 collectStatic）。中文在 HTML 里，一个字都没搬。
  *
@@ -8250,6 +8348,11 @@ const STATIC_TEXT = { en: {
   "rulesBtn": "Full rules",
   "rulesTitle": "Full rules",
   "rulesClose": "Close Esc",
+
+  // ---- 对局记录（右上角第三颗键 + 它的浮层）
+  "historyBtn": "History",
+  "historyTitle": "Game records",
+  "historyClose": "Close Esc",
 
   // ---- 右侧面板
   "topLayer": "Top layer",
@@ -8419,6 +8522,31 @@ const TEXT = { en: {
   "setup.mid": "\nNote: {n}³ = {cells} cells. Ghost layers mode is recommended.",
   "setup.small": "\nNote: the smaller the board, the easier it is to make 5 in a row — and the bigger the first player's advantage.",
 
+  // ---- 对局记录。一行的成分由 recordRowText 依次拼出（时间 → 模式 → 对手 → 我执色 →
+  //      结果 → 手数 → 转动数），各段之间用 " · " 连接。时间那段是纯数字
+  //      （YYYY-MM-DD HH:MM），不进表 —— 数字格式跨语言不用翻译。
+  "rec.mode3": "3D {size}",
+  "rec.mode4": "4D {size}",
+  "rec.optSpin": "Rubik rotation",
+  "rec.optWrap": "Space wrapping",
+  "rec.vsHuman": "2 players",
+  "rec.vsCpu": "computer · {level}",
+  "rec.meBlack": "you are Black",
+  "rec.meWhite": "you are White",
+  "rec.win": "Win",
+  "rec.lose": "Loss",
+  "rec.draw": "Draw",
+  "rec.winBlack": "Black wins",
+  "rec.winWhite": "White wins",
+  "rec.overline": " (overline)",
+  "rec.moves.one": "{n} move",
+  "rec.moves.many": "{n} moves",
+  "rec.rot.one": "{n} rotation",
+  "rec.rot.many": "{n} rotations",
+  "rec.empty": "No finished games yet. Finish one and it appears here.",
+  "rec.clear": "Clear",
+  "rec.clearConfirm": "Clear all?",
+
   // ---- WebGL2 起不来时的故障文案（替掉 #hint 的静态内容）
   "hint.noWebgl2": "<b style='color:#c0392b'>This browser doesn't support WebGL2, so the 3D board can't be shown.</b><br>" +
     "The layer panel on the right still works.",
@@ -8450,6 +8578,9 @@ STATIC_TEXT.ja = {
   "rulesBtn": "ルール全文",
   "rulesTitle": "ルール全文",
   "rulesClose": "閉じる Esc",
+  "historyBtn": "記録",
+  "historyTitle": "対局記録",
+  "historyClose": "閉じる Esc",
   "topLayer": "最上層",
   "rotTitle": "レイヤーを回転",
   "rotLabelAxis": "軸",
@@ -8494,6 +8625,26 @@ STATIC_TEXT.ja = {
   "ruleNote": "ルール：空いているマスならどこにでも着手できます（重力はありません）。先手は<b>ちょうど5連</b>を作らなければならず、6連以上は長連で負けです。後手は5連以上で勝ちです。<br>勝ちの方向は13通り：3軸 + 面対角線6本 + 体対角線4本。右のパネルでレイヤーを切り替えて石を置きます。",
 };
 TEXT.ja = {
+  // ---- 対局記録（recordRowText が組み立てる一行の断片）
+  "rec.mode3": "3D {size}",
+  "rec.mode4": "4D {size}",
+  "rec.optSpin": "ルービック回転",
+  "rec.optWrap": "空間貫通",
+  "rec.vsHuman": "2人対戦",
+  "rec.vsCpu": "コンピュータ・{level}",
+  "rec.meBlack": "自分は黒",
+  "rec.meWhite": "自分は白",
+  "rec.win": "勝ち",
+  "rec.lose": "負け",
+  "rec.draw": "引き分け",
+  "rec.winBlack": "黒の勝ち",
+  "rec.winWhite": "白の勝ち",
+  "rec.overline": "（長連）",
+  "rec.moves.many": "{n}手",
+  "rec.rot.many": "回転{n}",
+  "rec.empty": "まだ終わった対局がありません。一本終えると、ここに並びます。",
+  "rec.clear": "消去",
+  "rec.clearConfirm": "全部消去？",
   "info.moves.many": "{n}手経過",
   "info.rotations.many": " · {n}回転",
   "info.board": " · 盤 {x}×{y}×{z} · レイヤー {layer}/{n}",
@@ -8583,6 +8734,9 @@ STATIC_TEXT.ko = {
   "rulesBtn": "전체 규칙",
   "rulesTitle": "전체 규칙",
   "rulesClose": "닫기 Esc",
+  "historyBtn": "기록",
+  "historyTitle": "대국 기록",
+  "historyClose": "닫기 Esc",
   "topLayer": "최상위 레이어",
   "rotTitle": "레이어 회전",
   "rotLabelAxis": "축",
@@ -8627,6 +8781,26 @@ STATIC_TEXT.ko = {
   "ruleNote": "규칙: 빈칸이면 어디든 착수할 수 있습니다 — 중력은 없습니다. 선수는 <b>정확히 다섯</b>을 이어야 하며, 여섯 이상은 장련(長連) 반칙으로 패배합니다. 후수는 다섯 이상이면 승리합니다.<br>승리 방향은 13개입니다: 축 3 + 면 대각선 6 + 공간 대각선 4. 오른쪽 패널에서 레이어를 넘기며 돌을 놓으세요.",
 };
 TEXT.ko = {
+  // ---- 대국 기록（recordRowText가 조립하는 한 줄의 조각）
+  "rec.mode3": "3D {size}",
+  "rec.mode4": "4D {size}",
+  "rec.optSpin": "루빅 회전",
+  "rec.optWrap": "공간 관통",
+  "rec.vsHuman": "2인 대국",
+  "rec.vsCpu": "컴퓨터·{level}",
+  "rec.meBlack": "나는 흑",
+  "rec.meWhite": "나는 백",
+  "rec.win": "승",
+  "rec.lose": "패",
+  "rec.draw": "무승부",
+  "rec.winBlack": "흑 승",
+  "rec.winWhite": "백 승",
+  "rec.overline": " (장련)",
+  "rec.moves.many": "{n}수",
+  "rec.rot.many": "회전 {n}",
+  "rec.empty": "아직 끝난 대국이 없습니다. 한 판을 마치면 여기에 남습니다.",
+  "rec.clear": "지우기",
+  "rec.clearConfirm": "모두 지울까요?",
   "info.moves.many": "{n}수 착수",
   "info.rotations.many": " · {n}회 회전",
   "info.board": " · 판 {x}×{y}×{z} · 레이어 {layer}/{n}",
@@ -8716,6 +8890,9 @@ STATIC_TEXT.ru = {
   "rulesBtn": "Полные правила",
   "rulesTitle": "Полные правила",
   "rulesClose": "Закрыть (Esc)",
+  "historyBtn": "История",
+  "historyTitle": "История партий",
+  "historyClose": "Закрыть (Esc)",
   "topLayer": "Верхний слой",
   "rotTitle": "Поворот слоя",
   "rotLabelAxis": "Ось",
@@ -8763,6 +8940,30 @@ STATIC_TEXT.ru = {
   "ruleNote": "Правила: ходить можно в любую пустую клетку — гравитации нет. Первый игрок должен собрать <b>ровно пять</b> в ряд; шесть и более — перебор и поражение. Второй игрок побеждает при пяти и более.<br>Победных направлений 13: 3 оси + 6 диагоналей граней + 4 диагонали куба. Переключайте слои на панели справа и ставьте камни.",
 };
 TEXT.ru = {
+  // ---- История партий (фрагменты строки, которую собирает recordRowText)
+  "rec.mode3": "3D {size}",
+  "rec.mode4": "4D {size}",
+  "rec.optSpin": "Вращение слоя",
+  "rec.optWrap": "Склейка граней",
+  "rec.vsHuman": "вдвоём",
+  "rec.vsCpu": "с компьютером · {level}",
+  "rec.meBlack": "вы — чёрные",
+  "rec.meWhite": "вы — белые",
+  "rec.win": "победа",
+  "rec.lose": "поражение",
+  "rec.draw": "ничья",
+  "rec.winBlack": "победа чёрных",
+  "rec.winWhite": "победа белых",
+  "rec.overline": " (перебор)",
+  "rec.moves.one": "{n} ход",
+  "rec.moves.few": "{n} хода",
+  "rec.moves.many": "{n} ходов",
+  "rec.rot.one": "{n} поворот",
+  "rec.rot.few": "{n} поворота",
+  "rec.rot.many": "{n} поворотов",
+  "rec.empty": "Завершённых партий пока нет. Доиграйте одну — она появится здесь.",
+  "rec.clear": "Очистить",
+  "rec.clearConfirm": "Очистить всё?",
   "info.moves.one": "сделан {n} ход",
   "info.moves.few": "сделано {n} хода",
   "info.moves.many": "сделано {n} ходов",
@@ -8864,6 +9065,9 @@ STATIC_TEXT.fr = {
   "rulesBtn": "Règles complètes",
   "rulesTitle": "Règles complètes",
   "rulesClose": "Fermer Échap",
+  "historyBtn": "Historique",
+  "historyTitle": "Parties jouées",
+  "historyClose": "Fermer Échap",
   "topLayer": "Couche du haut",
   "rotTitle": "Rotation d'une couche",
   "rotLabelAxis": "Axe",
@@ -8908,6 +9112,28 @@ STATIC_TEXT.fr = {
   "ruleNote": "Règles : vous pouvez jouer sur n'importe quelle case vide — il n'y a pas de gravité. Le premier joueur doit aligner <b>exactement cinq</b> pions ; six ou plus est un alignement trop long, ce qui fait perdre. Le second joueur gagne avec cinq ou plus.<br>Il y a 13 directions gagnantes : 3 axes + 6 diagonales de face + 4 grandes diagonales. Utilisez le panneau de droite pour parcourir les couches et poser des pions.",
 };
 TEXT.fr = {
+  // ---- Parties jouées (fragments de la ligne composée par recordRowText)
+  "rec.mode3": "3D {size}",
+  "rec.mode4": "4D {size}",
+  "rec.optSpin": "Rotation type Rubik",
+  "rec.optWrap": "Pliage de l'espace",
+  "rec.vsHuman": "2 joueurs",
+  "rec.vsCpu": "ordinateur · {level}",
+  "rec.meBlack": "vous : Noirs",
+  "rec.meWhite": "vous : Blancs",
+  "rec.win": "victoire",
+  "rec.lose": "défaite",
+  "rec.draw": "nulle",
+  "rec.winBlack": "Noirs gagnent",
+  "rec.winWhite": "Blancs gagnent",
+  "rec.overline": " (alignement trop long)",
+  "rec.moves.one": "{n} coup",
+  "rec.moves.many": "{n} coups",
+  "rec.rot.one": "{n} rotation",
+  "rec.rot.many": "{n} rotations",
+  "rec.empty": "Aucune partie terminée pour l'instant. Finissez-en une et elle apparaîtra ici.",
+  "rec.clear": "Effacer",
+  "rec.clearConfirm": "Tout effacer ?",
   "info.moves.one": "{n} coup joué",
   "info.moves.many": "{n} coups joués",
   "info.rotations.one": " · {n} rotation",
@@ -9837,8 +10063,8 @@ const Game = {
   /** 三维静态格线是否可见。**只影响 draw3D 里的那次 drawLines 调用，不影响 uploadGrid** ——
    *  计数（staticGridCount）是 dom-smoke 逐位钉住的不变量，而且每次切换都重传 GPU 缓冲
    *  是白花钱。切换因此是零成本的。
-   *  刻意不持久化：全项目只有界面语言一项进 localStorage，ghostMode / activeLayer
-   *  这些同样是视图状态，都只在内存里。 */
+   *  刻意不持久化：进 localStorage 的只有界面语言和对局记录两项，
+   *  ghostMode / activeLayer 这些是视图状态，都只在内存里。 */
   gridVisible: true,
   /** 棋子过滤：0 = 双方都画，BLACK / WHITE = 只画这一方。
    *
@@ -9937,6 +10163,18 @@ const Game = {
    *  矩形会跟着漂，差值就算歪了。client 坐标是视口坐标，直接用它的差值最稳。 */
   bannerDrag: null,
   winLine: null,
+  /** 对局记录的记账状态：这一局写进存储的那条记录的 id（没记 = null），
+   *  以及它属于哪个会话对象（换了一盘棋对象就换）。
+   *  【为什么记 id 而不是布尔】终局之后悔棋救回这一局时要把它【撤掉】——
+   *  撤的是"我刚写的那一条"，不是"列表里最新的一条"，只有 id 分得清。 */
+  recId: null,
+  recSession: null,
+  /** 「清空」是不是处在待确认状态（两段确认的第一段）。和 #hintToggle 一样，
+   *  这是个两态按钮的界面状态，不进 "全项目没有视图状态持久化" 那条规矩 ——
+   *  它连会话都不该跨，面板一关就复位。 */
+  clearArmed: false,
+  /** 待确认的自动复位定时器（3 秒没再点就当没这回事）。 */
+  clearArmTimer: 0,
   /** WebGL2 起不来时置位。#hint 平时是静态文案（HTML 里那句），故障时才由
    *  refreshHint() 接管 —— 切语言要能重刷它，所以这个状态得留着。 */
   glFailed: false,
@@ -9983,6 +10221,7 @@ const Game = {
       "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","aiHint","orderMe","orderCpu",
       "phaseChip","modeBtn",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
+      "historyBtn","historyPanel","historyClear","historyClose","historyBody",
       "rulesSrc","rulesSrcEn","rulesSrcJa","rulesSrcKo","rulesSrcRu","rulesSrcFr",
       "mode3d","mode4d","dimsRow3d","dimsRow4d","coolRow","dimX","dimY","dimZ","dimN","dimCube",
       "extraRow","optSpinBtn","optWrapBtn","buttons",
@@ -10141,6 +10380,11 @@ const Game = {
     // 折叠按钮上的字也是 JS 写的（"收起"/"提示"是它的两个状态，不是一句译文），
     // applyStatic 管不到。类名也一并在这里落上，见 syncHintFold。
     this.syncHintFold();
+    // 记录浮层同理：行文案是 say/sayN 拼的（记录里存的是数字，文字是渲染时现拼的），
+    // 开着的时候切语言必须重渲染 —— 不重渲染就是"英文界面里挂着一串中文"，
+    // browser-check 的汉字扫描会当场抓住它。
+    if (this.historyOpen) this.renderHistory();
+    this.syncHistoryClear();
     // 规则浮层渲染一次就缓存。不失效的话，切语言后它仍挂着上一种语言的正文，
     // 而且因为"已经渲染过"这个标志还在，重新打开也不会修。
     this.rulesRendered = false;
@@ -10331,6 +10575,9 @@ const Game = {
   syncWinBanner() {
     if (this.session.status === "Decided" && !this.tutActive) this.showBanner();
     else this.hideBanner();
+    // 获胜状态和"这局下完了"是同一件事的两个面，同步点并在一起 ——
+    // 分开写的话，将来多一条终局路径（本轮之前就有三条）必然漏掉一边。
+    this.syncGameRecord();
   },
 
   onMoveApplied(rec, outcome) {
@@ -10342,6 +10589,10 @@ const Game = {
   },
   onMoveUndone(rec) {
     this.hideBanner(); this.onBoardChanged(false);
+    // 悔棋是唯一能"退出终局"的操作 —— 记录要跟着退（见 syncGameRecord）。
+    // **放在 hideBanner 之后**：hideBanner 只收横幅，状态看的是 session，顺序无所谓；
+    // 但放这里能让"撤销 → 撤记录"读起来是同一件事。
+    this.syncGameRecord();
     this.toast(say(() => "已悔棋：" + rec.toString(), "toast.undone", { move: rec.toString("en") }), true);
     this.maybeScheduleAi();
   },
@@ -10352,6 +10603,10 @@ const Game = {
     this.bannerDX = 0; this.bannerDY = 0; this.bannerDrag = null;
     this.applyBannerOffset();
     this.activeLayer = 0;
+    // 对局记录的记账重置：上一局【已经结束过】的记录留在存储里（重开不等于没下过），
+    // 只是"当前这局"不再背着它 —— 记的是 recId，不是"列表里最新一条"。
+    this.recId = null;
+    this.recSession = null;
     this.onBoardChanged(true);
     this.maybeScheduleAi();
   },
@@ -10376,6 +10631,8 @@ const Game = {
     // "空棋胜 · 0 连"，活棋上盖着一张胡说八道的胜局横幅（实测截图里就压在棋盘中间）。
     this.hideBanner();
     this.onBoardChanged(false);
+    // 和 onMoveUndone 同一条：转出来的胜局被恢复回去，记录也要跟着撤
+    this.syncGameRecord();
     this.toast(say(() => "已恢复转动前的样子（" + describeRotationMove(rec.move) + " 已撤销）",
                    "toast.rotUndone", { move: describeRotationMove(rec.move, "en") }), true);
     this.maybeScheduleAi();
@@ -10984,6 +11241,9 @@ const Game = {
    */
   openRules() {
     if (!this.el.rulesPanel) return;
+    // 【两个浮层互斥】叠着放的话，"Esc 先关谁"和 z-index 顺序就成了两套各自为政的规则；
+    // 开一个关另一个之后，两层里永远只有一层开着，两个问题一起消失。
+    this.closeHistory();
     if (!this.rulesRendered) {
       // 六种语言各一份正文，按 LANG_INFO 里的 rulesId 取 —— 加一种语言只改那张表，
       // 这里不用动。取不到就退回中文那份（总比空白强，而且齐全性有断言盯着）。
@@ -10999,6 +11259,188 @@ const Game = {
 
   closeRules() {
     if (this.el.rulesPanel) this.el.rulesPanel.classList.add("off");
+  },
+
+  // ------------------------------------------------------------------ 对局记录
+
+  /** 记录浮层开着没有。和 setupOpen / rulesOpen 一样【从 DOM 派生】，
+   *  不另存布尔值 —— 存了就会出现"标志说开着、类已经去掉"的对不上。 */
+  get historyOpen() {
+    return !!(this.el.historyPanel && this.el.historyPanel.classList &&
+              !this.el.historyPanel.classList.contains("off"));
+  },
+
+  openHistory() {
+    if (!this.el.historyPanel) return;
+    this.closeRules();                    // 互斥，理由见 openRules
+    this.renderHistory();
+    this.el.historyPanel.classList.remove("off");
+    this.el.historyBody.scrollTop = 0;
+    this.setHover(null);                  // 浮层盖住了三维视图，悬停红线留在后面没有意义
+  },
+  closeHistory() {
+    if (this.el.historyPanel) this.el.historyPanel.classList.add("off");
+    this.disarmHistoryClear();
+  },
+  toggleHistory() { if (this.historyOpen) this.closeHistory(); else this.openHistory(); },
+
+  /**
+   * 把存储里的记录渲染成一段 HTML。**每行一句话**（见 recordRowText），
+   * 空列表给一句空态说明 —— 面板打开看见"什么都没有"和"面板坏了"是同一件事。
+   *
+   * 【为什么整段拼 innerHTML 而不是 createElement】node 桩里的 createElement
+   * 造出来的元素不连 DOM，逐节点构建在桩里是测不到的；而拼字符串这条路
+   * 两条测试通路（桩 / 真浏览器）走的是同一份代码。文本全部经 escapeHtml ——
+   * 记录虽是自己写的数，但存储是用户可改的，别给 user-edited JSON 留一个注入口子。
+   */
+  renderHistory() {
+    if (!this.el.historyBody) return;
+    const list = GameRecords.load();
+    if (!list.length) {
+      this.el.historyBody.innerHTML =
+        '<div class="histEmpty">' +
+        escapeHtml(say(() => "还没有下完的对局。下完一局，这里就会出现一条。", "rec.empty")) +
+        "</div>";
+      return;
+    }
+    let out = "";
+    for (let i = 0; i < list.length; i++) {
+      out += '<div class="histRow">' + escapeHtml(this.recordRowText(list[i])) + "</div>";
+    }
+    this.el.historyBody.innerHTML = out;
+  },
+
+  /** 结束时刻 → "YYYY-MM-DD HH:MM"。**纯数字格式，不进文案表** ——
+   *  它是六种语言下都一样的，翻译它反而会引入格式漂移。 */
+  fmtRecordTime(t) {
+    const d = new Date(t);
+    const p = (n) => (n < 10 ? "0" : "") + n;
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) +
+           " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  },
+  /** 尺寸的紧凑写法：立方 "15³"，长方体 "8×12×30"。 */
+  recordSizeText(rec) {
+    const d = (rec && rec.d) || [];
+    const x = d[0] | 0, y = d[1] | 0, z = d[2] | 0;
+    return (x === y && y === z) ? x + "³" : x + "×" + y + "×" + z;
+  },
+
+  /**
+   * 一条记录 → 一句话。各段之间用 " · " 连接（和 #info 那条状态行同一套标点）。
+   * 每段的文案都走 say/sayN 的六语言通路；**每个键都写成字面量**——
+   * 源码扫描认不出拼出来的键，会把它们当成漏翻。
+   */
+  recordRowText(rec) {
+    const size = this.recordSizeText(rec);
+    const parts = [this.fmtRecordTime(rec.t)];
+    if (rec.m === 4) parts.push(say(() => "四维 " + size, "rec.mode4", { size: size }));
+    else parts.push(say(() => "三维 " + size, "rec.mode3", { size: size }));
+    // 三维的两个可选项只有勾过才出现（四维恒开，不必再念一遍）
+    if (rec.m === 3 && rec.o) {
+      const opts = [];
+      if (rec.o & 1) opts.push(say(() => "魔方旋转", "rec.optSpin"));
+      if (rec.o & 2) opts.push(say(() => "空间贯通", "rec.optWrap"));
+      if (opts.length) parts.push(opts.join("+"));
+    }
+    if (rec.ai === null || rec.ai === undefined) {
+      parts.push(say(() => "双人", "rec.vsHuman"));
+    } else {
+      // 夹一下：存储是用户可改的，档位下标超出 0..4 时按最低档读，
+      // 不能让一个手改出来的 9 在界面上"读出"一个不存在的档位
+      const lv = this.aiLevelNameText(Math.max(0, Math.min(4, rec.ai | 0)));
+      parts.push(say(() => "人机·" + lv, "rec.vsCpu", { level: lv }));
+    }
+    if (rec.me === 1) parts.push(say(() => "我执黑", "rec.meBlack"));
+    else if (rec.me === 2) parts.push(say(() => "我执白", "rec.meWhite"));
+    let res;
+    if (rec.w === 0) {
+      res = say(() => "和棋", "rec.draw");
+    } else if (rec.ai === null || rec.ai === undefined) {
+      // 人人局没有"我"这个视角，只说哪一色赢了
+      res = rec.w === 1 ? say(() => "黑棋胜", "rec.winBlack")
+                        : say(() => "白棋胜", "rec.winWhite");
+    } else {
+      res = rec.w === rec.me ? say(() => "胜", "rec.win") : say(() => "负", "rec.lose");
+    }
+    if (rec.ol) res += say(() => "（长连犯规）", "rec.overline");
+    parts.push(res);
+    parts.push(sayN(() => rec.n + " 手", "rec.moves", rec.n));
+    if (rec.r > 0) parts.push(sayN(() => "转动 " + rec.r, "rec.rot", rec.r));
+    return parts.join(" · ");
+  },
+
+  /**
+   * 把"当前这局下完了没有"同步进存储。**只在两条路上被叫**（都在下面的对局回调里）：
+   *   ① 落子 / 转动落地之后（syncWinBanner → 这里）：终局就记一条；
+   *   ② 悔棋之后（onMoveUndone / onRotationUndone）：从终局退回进行中就把刚记的撤掉
+   *      —— "这局还没结束"这件事，记录也得同意。
+   * 重开（onReset）不删记录：那一局确实下完了，只是玩家不接着研究它。
+   *
+   * 【幂等】同一个终局状态被同步两次（测试里手动补调 onMoveApplied 就会这样）
+   * 只记一次 —— recId 是那把闸。 */
+  syncGameRecord() {
+    const s = this.session;
+    if (!s) return;
+    if (this.recSession && this.recSession !== s) { this.recId = null; this.recSession = null; }
+    const decided = s.status === "Decided" && !this.tutActive;
+    if (decided && !this.recId) {
+      const rec = this.buildRecord();
+      GameRecords.add(rec);
+      this.recId = rec.id;
+      this.recSession = s;
+    } else if (!decided && this.recId) {
+      GameRecords.remove(this.recId);
+      this.recId = null;
+      this.recSession = null;
+    }
+  },
+
+  /** 从当前会话拍一份摘要。字段全是数 / 枚举 —— 渲染时才拼成文字，
+   *  于是"旧语言写的记录"在切语言后照样按新语言读出来。 */
+  buildRecord() {
+    const s = this.session;
+    const d = s.dims;
+    // 档位下标而不是名字：名字是会随语言走的东西，存档里只该放事实
+    const lvIdx = this.aiMode ? AI_LEVELS.indexOf(this.aiLevel) : -1;
+    return {
+      id: Date.now().toString(36) + "-" + (recSeq++),
+      t: Date.now(),
+      m: this.fourD ? 4 : 3,
+      d: [d[0] | 0, d[1] | 0, d[2] | 0],
+      o: this.fourD ? 3 : ((s.rules.allowRotation ? 1 : 0) | (s.rules.wrapEdges ? 2 : 0)),
+      ai: lvIdx >= 0 ? lvIdx : null,
+      me: lvIdx >= 0 ? (this.aiMyColor | 0) : null,
+      w: s.isDraw ? 0 : (s.winner | 0),
+      ol: (s.lastOutcome && s.lastOutcome.isOverlineFoul) ? 1 : 0,
+      n: s.moveCount | 0,
+      r: s.rotationCount | 0,
+    };
+  },
+
+  /** 「清空」的第一下：只是进入待确认（3 秒没有第二下就自己退回去）。 */
+  onHistoryClear() {
+    if (!this.clearArmed) {
+      this.clearArmed = true;
+      this.syncHistoryClear();
+      this.clearArmTimer = setTimeout(() => { this.clearArmTimer = 0; this.disarmHistoryClear(); }, 3000);
+      return;
+    }
+    GameRecords.clear();
+    this.disarmHistoryClear();
+    this.renderHistory();
+  },
+  disarmHistoryClear() {
+    if (this.clearArmTimer) { clearTimeout(this.clearArmTimer); this.clearArmTimer = 0; }
+    if (!this.clearArmed) return;
+    this.clearArmed = false;
+    this.syncHistoryClear();
+  },
+  /** 两态按钮的标签。#historyClear 刻意【没有 data-i18n】—— 见 HTML 里那段注释。 */
+  syncHistoryClear() {
+    if (!this.el.historyClear) return;
+    this.el.historyClear.textContent = this.clearArmed
+      ? say(() => "确认清空？", "rec.clearConfirm")
+      : say(() => "清空", "rec.clear");
   },
 
   // ------------------------------------------------------------------ 拾取
@@ -11800,6 +12242,15 @@ const Game = {
         if (e.target === this.el.rulesPanel) this.closeRules();
       });
     }
+    // 对局记录：右上角那颗键是开/关切换（和语言键同一个手感），关法与规则浮层同构
+    on("historyBtn", () => this.toggleHistory());
+    on("historyClose", () => this.closeHistory());
+    on("historyClear", () => this.onHistoryClear());
+    if (this.el.historyPanel) {
+      this.el.historyPanel.addEventListener("click", (e) => {
+        if (e.target === this.el.historyPanel) this.closeHistory();
+      });
+    }
     on("hintToggle", () => this.toggleHint());
     on("bannerUndo", () => this.undo());
     on("bannerRestart", () => this.restart());
@@ -11917,6 +12368,8 @@ const Game = {
     window.addEventListener("keydown", (e) => {
       // Esc 必须放在前面：浮层开着时它是唯一还有意义的键
       if (e.key === "Escape" && this.rulesOpen) { this.closeRules(); return; }
+      // 记录浮层和规则浮层互斥（开一个关另一个），所以这里谁先判都一样。
+      if (e.key === "Escape" && this.historyOpen) { this.closeHistory(); return; }
       // 规则的浮层在最上面，所以它先吃 Esc。关掉之后再按一次 Esc 才轮到终局横幅。
       if (e.key === "Escape" && this.bannerOpen) { this.hideBanner(); return; }
       // 语言列表排在规则浮层和横幅【之后】：z-index 也是那个顺序（70 / 50 / 61 里
@@ -11925,6 +12378,8 @@ const Game = {
       // 规则浮层开着时不吃任何快捷键 —— 否则"看规则时按了下 R 把棋局重开了"，
       // 而屏幕上唯一可见的东西是规则，玩家根本不会想到是自己按的
       if (this.rulesOpen) return;
+      // 记录浮层同理：翻记录时按 R 把棋局重开，是同一类事故
+      if (this.historyOpen) return;
       if (this.setupOpen) return;
       const k = e.key.toLowerCase();
       if (k === "z") this.undo();
@@ -13906,11 +14361,12 @@ const Game = {
   },
 
   /**
-   * 当前档位的名字。**五个 say 各写各的字面量键** ——
+   * 档位的名字。**五个 say 各写各的字面量键** ——
    * 源码扫描要求键是字面量（拼出来的键它认不出，会当成漏翻），所以不能写成下标查表。
+   * 默认参数：不传就是当前设置里的那一档（界面上的名字）；传下标取那一档
+   * （对局记录渲染旧记录时用 —— 那条记录存的是下标，不是当场的界面状态）。
    */
-  aiLevelNameText() {
-    const i = this.setupLevel;
+  aiLevelNameText(i = this.setupLevel) {
     if (i === 0) return say(() => "低", "aiLv.low");
     if (i === 1) return say(() => "中", "aiLv.medium");
     if (i === 2) return say(() => "高", "aiLv.high");

@@ -7,7 +7,7 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-41050_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-41069_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
@@ -70,6 +70,7 @@ To confirm nothing is broken: press `F12` → Console and look for red text.
 | Touch: pinch in / out | Zoom the board. **Works on both the 3D board and the single-layer board** (on a phone a cell of the layer board is only about 10px across, so zooming is the only way to aim) |
 | Touch: two-finger drag | Pan the board — it follows your fingers |
 | Language button, top-right | Opens a list of the six languages (中文 / English / 日本語 / 한국어 / Русский / Français); the current one is highlighted |
+| **History** button, top-right | The last 50 finished games, one line each (time / mode / opponent / result / move count); a **Clear** button sits inside |
 | Touch: double-tap a board | Reset — the 3D board returns to its start framing, the layer board to 1×, pan cleared. **The angle you rotated to is left alone** |
 
 > While zoomed in, a single tap places its stone after a ~300ms double-tap window.
@@ -88,7 +89,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
 
 ```
-11733 + 19449 + 98 + 230 + 130 + 8845 + 134 + 431 = 41050 assertions, all green
+11733 + 19449 + 98 + 230 + 142 + 8845 + 134 + 438 = 41069 assertions, all green
 ```
 
 Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -102,10 +103,10 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19449 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 130 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 142 | UI against a DOM stub (includes the language switch, game records, gesture and reset edge cases, drag-direction convention) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
 | `node Web_Gomoku3D/tests/online-http.test.mjs` | 134 | Networking HTTP layer (loopback) |
-| `node _verify/browser-check.mjs` | 431 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
+| `node _verify/browser-check.mjs` | 438 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer, game records) |
 
 The two networking tests run inside step 8 and **cannot be skipped**.
 
@@ -243,7 +244,8 @@ and it is stated here rather than papered over.
   — `Web_Gomoku3D/server.js`, 8960 assertions in step 8 — but the page is not wired to it,
   so you cannot actually play across machines yet. Design and trade-offs:
   [ONLINE.md](Web_Gomoku3D/ONLINE.md))
-- **No saved games.**
+- **No saved games.** There is a "Game records" list, but that is a post-hoc summary
+  (result, move count…) — **it cannot bring a game back**: closing the page mid-game still ends it.
 - The 3D grid lines have **no sense of depth**: looking through the cube stacks n parallel
   grid lines at exactly the same screen position, and since they are alpha-blended the inside
   reads as a gray mesh. This is inherent to drawing coincident primitives — adjusting alpha only
@@ -278,6 +280,9 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.10.14
 
+- ✨ **v3.1.8** New "Game records": every finished game leaves one line (mode / size / opponent /
+  result / move count), stored locally; the **History** button top-right lists the last 50 games
+  and can clear them. Undoing back into a game removes its line again.
 - 🔧 **v3.1.8** Gameplay audit: two 4D-vs-computer bugs fixed; the rules text now matches the
   implementation (day/night no longer promises a "time bomb").
   - **4D vs computer**: during night the engine's whole search was broken (simulated stones missing
@@ -291,43 +296,12 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.10.09
 
-- 🔧 **v3.1.7** Fixed a batch of issues found by testing. Grouped by whether a player can feel it:
-  - **UI state**: the start screen's character-particle layer left a permanent ghost of displaced
-    glyphs (it accumulated on every mouse click on "Start game", and nothing ever rebuilt or reset it);
-    pressing `R` while a 4D rotation preview was up, then "Cancel", **blindly rotated the layer on the
-    new board** — the stone the computer had just placed moved, and undo could never repair it;
-    `R` in a tutorial level wiped its preset position (leaving the instructions describing a line that
-    was no longer there); a tap made on a zoomed/panned board is held for 300 ms, and restart / undo /
-    swap inside that window dropped the stone onto the *new* board; after "swap first player" the
-    start screen still highlighted the old colour; undoing a rotation that *won* left the victory
-    banner up, re-rendered as "no stones won on 0 in a row"
-  - **Interaction**: with the computer going first, pressing `Z` cancelled its pending move without
-    rescheduling it — the game deadlocked (only `R` recovered); dragging the end-of-game banner twice
-    made it jump back to the centre (clamp and offset were computed in two different coordinate
-    spaces), and after a resize it could be dragged off-screen; two quick taps on adjacent points
-    had the second stone silently swallowed as a "double-tap reset"
-  - **Layout**: the in-game status line was squeezed and printed over the rules text (six lines in
-    French portrait); in phone landscape the 4D panel could not scroll and six buttons sat outside the
-    viewport; on narrow portrait screens the button row overflowed and the last key left the screen;
-    the start screen overflowed by a few pixels (the whole column could be dragged sideways); the
-    Japanese title wrapped onto two lines; the 4D summary box clipped its last line
-  - **Type**: the title now shrinks to fit its column (it was only capped by viewport width); the
-    Japanese and Korean title block no longer falls back to a Simplified-Chinese brush face; the
-    browser tab title follows the interface language
-  - **Copy**: English showed "0 move played" and "1 stone in it" for an empty layer (plurals treated
-    zero as singular); the rotation panel pointed at a **"Restore" button that no longer exists**;
-    four statements in the rules text contradicted the implementation (cooldown 3/5/8/10, rotation
-    valued with the same search, every tier deeper in 4D, easy tier skipping nine turns out of ten)
-  - **Rules core**: a rotation creating both a five and an overline was judged a win instead of an
-    overline loss, depending only on which line was scanned first; on a wrapping board one boundary
-    line was counted twice (the truncated fragment fed the verdict, so a first player's six was judged
-    a win), and the winning line's coordinates were not wrapped, lighting up the wrong stones
-  - **Online server**: a single malformed `Host` header killed the whole process (every room with it);
-    `applied` events echoed the entire request body to the opponent (seat token included); non-integer
-    coordinates were accepted (the record said one cell, the stone landed on another); rooms with live
-    connections were still reaped after 30 idle minutes
-  - **Docs**: assertion counts re-synced with what the suite actually prints; rules text aligned with
-    the implementation; several hard-coded numbers in comments corrected
+- 🔧 **v3.1.7** Fixed a batch of issues found by testing, ordered by whether a player can
+  feel them: UI state (particle ghosts, the rotation-preview/restart fork, `R` in a tutorial,
+  an unbanner that would not go away), an interaction deadlock, layout overflow on narrow and
+  phone-landscape screens, English plurals and four copy statements that contradicted the
+  implementation, three rules-kernel verdicts (overline scan order, wrap double-counting,
+  winning-line coordinates), and four robustness fixes in the online server; details in the commits.
 
 ### 2026.10.06
 
