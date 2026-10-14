@@ -105,7 +105,7 @@ const { RuleSet, RuleEngine, GameSession, FourDSession, MoveStatus, EMPTY, BLACK
         TT_EXACT, TT_LOWER, TT_UPPER,
         aiVct, aiVcfBudgetReset, AI_VCT_DEPTH, AI_VCT_M, AI_VCT_D,
         aiOutcomeAt, aiRotationCandidates, aiRotationValue, aiSearchMove, aiEvalLeaf,
-        AI_POINT_BUDGET_MAX, phaseOf } = Core;
+        AI_POINT_BUDGET_MAX, cellOf, phaseOf } = Core;
 
 console.log("五档：" + AI_LEVELS.join(" / ") + "；方向数 " + Core.DIRS13.length);
 
@@ -622,7 +622,7 @@ for (const wl of [4, 6]) {
 // 2b. 第三条硬规则：**只有转动能赢时，电脑必须转那一手**（3.0.1 起转动可以为自己成五）
 //
 // 【为什么单独有一条】转动会不会被选中，走的是和落子不同的那条路（候选枚举 + 探针 +
-// 竞价），落子那一侧的"能赢必赢"根本管不到它。规则改了却忘了这一侧，
+// 档位启发式），落子那一侧的"能赢必赢"根本管不到它。规则改了却忘了这一侧，
 // 症状是"电脑明明能一转就赢，却去别处落子"—— 而它看起来像电脑变笨了，
 // 不会指向规则改动。
 //
@@ -667,6 +667,37 @@ for (const wl of [4, 6]) {
     check(a && a.kind === "rotate" && a.axis === AXIS_Z && a.layer === 3 && a.turns === 1,
           "只有转动能赢时，[" + level + "] 必须转那一手",
           "选了 " + JSON.stringify(a));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2b2. 同一硬规则的另一侧：**受限方转出自家长连是自尽，不许当胜手返回**
+//
+// 【为什么单列】第 1b 步"转动也能立刻赢"原来只认 accepted && lines>0，而受限方（先手）
+// 转出 6+ 连会按 decideByRotation 当场判负 —— 转的是自己，输的也是自己。
+// 实测：8³ 上黑两段 z 向三连（z=1..3 与 z=5..7，都在 x=0,y=0）＋散子 (7,0,4)，
+// 绕 z 轴转第 4 层一次把两段接成 7 连；修复前 medium/seed=8 正好返回这一转，执行后黑输。
+// ---------------------------------------------------------------------------
+{
+  const r = new RuleSet();
+  r.allowRotation = true;
+  r.rotationCooldownPlacements = 0;
+  const s = FourDSession.create(8, BLACK, r);
+  for (const z of [1, 2, 3, 5, 6, 7]) s.board.set(0, 0, z, BLACK);
+  s.board.set(7, 0, 4, BLACK);
+  // 前提一：这一转引擎照旧接受（规则没改 —— 玩家想这么输随他），而且确实造出黑的长连
+  const probe = s.probeRotate(RotationMove.fromClockwiseTurns(AXIS_Z, 4, 1));
+  check(probe.accepted && probe.lines > 0, "前提：那一转引擎接受、造出黑的长连");
+  // 修复前：aiChooseMove 把这一转当胜手返回（硬规则只看 lines>0）
+  const act = aiChooseMove(s, { level: "medium", seed: 8 });
+  check(!(act.kind === "rotate" && act.axis === AXIS_Z && act.layer === 4 && act.turns === 1),
+        "先手电脑不许把自家长连的转动当胜手返回", JSON.stringify(act));
+  if (act.kind === "rotate") {
+    const o = s.rotate(RotationMove.fromClockwiseTurns(act.axis, act.layer, act.turns));
+    check(!(o.accepted && s.status === "Decided" && s.winner !== BLACK),
+          "这里选出来的转动不许是自尽（转完黑不该当场输）");
+  } else if (act.kind === "place") {
+    check(s.place(act.x, act.y, act.z).status !== MoveStatus.Rejected, "改走落子时引擎照常接受");
   }
 }
 
@@ -874,6 +905,12 @@ function selfPlayRotAudit(n, firstPlayer, lvBlack, lvWhite, seed, maxPlies, cool
       bad.push("第 " + plies + " 手被引擎拒了");
       break;
     }
+    // 【不变量：进行中的盘面不得存在 ≥5 极大连线】"翻转清算够不到"与"转动扫描可以直接
+    // 当判据"共同的地基（落子只带当前相位、转动造出异相位整线会整体回滚）。破了就在这里报。
+    if (s.status === "Playing" && RuleEngine.fullScan(s.board, winLength).length > 0) {
+      bad.push("第 " + plies + " 手后：进行中的盘面出现 ≥5 极大连线");
+      break;
+    }
     if (act.kind === "rotate") {
       rotations++;
       const foeAfter = threat(you), mineAfter = threat(me);
@@ -892,11 +929,13 @@ function selfPlayRotAudit(n, firstPlayer, lvBlack, lvWhite, seed, maxPlies, cool
         }
       } else if (!AI_PARAMS[me === BLACK ? lvBlack : lvWhite].rotSearch &&
                  !(aiTier(mineAfter) > aiTier(mineBefore))) {
-        // 【为什么这一条只对走启发式的档位生效】rotSearch 的档位（极高 / 极限）
-        // 是拿**真搜索**给转动估值的：它认为"转一下让整个阵型变好"值一整手，
-        // 哪怕威胁档位没跨。那不是"白转"，是另一套判据 —— 用旧尺子量新机制，量出来的
-        // 是尺子不对，不是机制不对。**上面那两条安全绳（不留活三、拆形真拆掉）对
-        // 所有档位一律生效，没有例外。**
+        // 【现状：没有任何档位开着 rotSearch，所以这条对所有档位都生效】该字段已从
+        // 参数表整体移除（v2.10.15 实验实测负收益后退回，见 index.html「v2.10.15 量过、
+        // 没留下的一条」）。条件里那半个 !AI_PARAMS[...].rotSearch 是留给"万一将来
+        // 恢复该机制"的：真恢复时它只对走启发式的档位生效 —— rotSearch 的档位拿
+        // **真搜索**给转动估值，认为"转一下让整个阵型变好"值一整手，哪怕威胁档位没跨；
+        // 那不是"白转"，是另一套判据，用旧尺子量新机制，量出来的是尺子不对。
+        // **上面那两条安全绳（不留活三、拆形真拆掉）对所有档位一律生效，没有例外。**
         bad.push("第 " + plies + " 手：既没拆对方的形、自己也没跨档，白转一手");
       }
     }
@@ -1108,15 +1147,17 @@ function replay(n, firstPlayer, moves, fourD, cooldown) {
   const st = {};
   aiChooseMove(s, { level: "ultra", seed: 8, stats: st });
   check(st.rotProbes > 0, "四维下强档会去探转动", "rotProbes=" + st.rotProbes);
-  // 【上限改成看 rotSearch】v2.10.15 起转动的比价方式分两套：
+  // 【上限公式兼容两种比价方式，现状走的是 rotProbe 那一支】
   //   · 走启发式探针的档位 → 上限就是 rotProbe（它自己截断）
-  //   · rotSearch 的档位     → 上限是 rotMax（全枚举时 rotProbe 是 0 = 不截断）
-  // 原来这条断言只看 rotProbe，而极限档的 rotProbe 现在是 0，会误报。
-  // 8³ 全枚举上限 3 轴 × 8 层 × 3 次 = 72；rotMax=24 就是拿它截出来的。
+  //   · rotSearch 的档位     → 上限是 rotMax（全枚举时 rotProbe 是 0 = 不截断）；
+  //     rotMax 没配时退回 8³ 全枚举上限 3 轴 × 8 层 × 3 次 = 72
+  // 现状没有任何档位开 rotSearch（v2.10.15 实验实测负收益后退回，见 index.html
+  // 的「v2.10.15 量过、没留下的一条」）：ultra 的 rotProbe 是 14、rotSearch 未定义，
+  // cap 算出来就是 14 + AI_ROT_WIN_PROBE —— 公式对两种情形都成立，别按现状改窄。
   const p = AI_PARAMS.ultra;
   // 【3.0.1 起上限要加上"一转就赢"那一段】那一段在所有档位之前跑，
   // 独立于参数表、自己带 AI_ROT_WIN_PROBE 这个上限（见那条常量的注释）。
-  // 不加的话这条会误报：它量的是"这一手总共探了几次"，而赢棋检查永远排在竞价之前。
+  // 不加的话这条会误报：它量的是"这一手总共探了几次"，而赢棋检查永远排在转动的采用之前。
   const cap = (p.rotSearch ? (p.rotMax || 3 * 8 * 3) : p.rotProbe) + Core.AI_ROT_WIN_PROBE;
   check(st.rotProbes <= cap, "探针数受参数表上限约束",
         "rotProbes=" + st.rotProbes + " 上限=" + cap +
@@ -1627,6 +1668,82 @@ function aiThreatAtRef(board, x, y, z, player, winLength, restricted) {
         "（悔之前那一刻手数 " + flipped.mc + "）");
   check(off === 0, "悔棋之后盘上没有一颗子处于异相位",
         off + " 颗对不上（当前相位 " + s1.phase + "）");
+}
+
+// ---------------------------------------------------------------------------
+// 13d. 夜间搜索的相位一致性
+//
+// 【夜间搜索的相位一致性】模拟落子必须带上当前相位（cellOf(mover, aiPhase)），
+// 否则永夜下：模拟子对不上"黑·夜"的值 —— 评估看不见自己的进攻，judge 还会把黎明线当活线。
+// ---------------------------------------------------------------------------
+{
+  // (1) 幻影胜局：黎明四连在 (3..6,7,7)、会话置于永夜 —— (7,7,7) 不是胜手，
+  // 搜索的返回值不许是"胜"的量级（修复前实测 1e9）。
+  const r = new RuleSet(); r.phasePeriod = 12;
+  const s = GameSession.create(15, BLACK, r);
+  for (let x = 3; x <= 6; x++) s.board.set(x, 7, 7, BLACK);
+  s.phase = 1;
+  aiChooseMove(s, { level: "medium", seed: 7 });   // 让内核的相位上下文跟着会话走（aiPhase 由它设置）
+  const mv = aiSearchMove(s, aiCandidates(s.board, 20000), AI_PARAMS.medium, null, BLACK);
+  check(mv && !(mv.v >= 1e8), "永夜下搜索不许把黎明四连当胜手（原来报 1e9）", "v=" + (mv && mv.v));
+
+  // (2) 昼/夜对称：同一局面同一个种子，黎明与永夜的决策必须一致，而且那一手是真的强制胜。
+  const stones = [[2,5,5],[3,5,5],[4,5,5],[5,2,5],[5,3,5],[5,4,5]];
+  const r2 = new RuleSet(); r2.phasePeriod = 12;
+  const sd = GameSession.create(15, BLACK, r2);
+  for (const p of stones) sd.board.set(p[0], p[1], p[2], BLACK);
+  const mvD = aiChooseMove(sd, { level: "ultra", seed: 11 });
+  const sn = GameSession.create(15, BLACK, r2);
+  for (const p of stones) sn.board.set(p[0], p[1], p[2], cellOf(BLACK, 1));
+  sn.phase = 1;
+  const mvN = aiChooseMove(sn, { level: "ultra", seed: 11 });
+  eq(JSON.stringify(mvN), JSON.stringify(mvD), "同一局面同一种子：永夜与黎明的决策一致（原来永夜去下 (5,6,5)）");
+  // 把这一手走成强制胜：黑落 mv → 白随便在远处应一手 → 黑必须已有一步成五的点
+  sn.place(mvN.x, mvN.y, mvN.z);
+  sn.place(7, 7, 7);
+  let canWin = false;
+  const cands2 = aiCandidates(sn.board, 20000);
+  for (let i = 0; i < cands2.length && !canWin; i += 3) {
+    const o = aiOutcomeAt(sn, cands2[i], cands2[i + 1], cands2[i + 2], BLACK, null);
+    if (o && o.status === MoveStatus.Win) canWin = true;
+  }
+  check(canWin, "夜里选的那一手是真的强制胜（双四/活四的后半已到手）");
+}
+
+// ---------------------------------------------------------------------------
+// 13e. 不变量：**进行中的盘面不得存在 ≥5 极大连线**
+//
+// 【为什么单钉】它是两条结论共同的地基："翻转清算够不到"（RULES_SPEC 10.5 照实现改写）
+// 与"转动判定可以直接拿全盘扫描当判据"。四维全开（转 / 贯通 / 晨昏）自对局逐手抽查 ——
+// 它同时把"晨昏不做定时炸弹"这个决定钉住：谁要放开异相位线，这条会先红。
+// ---------------------------------------------------------------------------
+{
+  let plies = 0, nights = 0, violations = 0, decided = 0;
+  for (let seed = 0; seed < 4; seed++) {
+    const r = new RuleSet();
+    r.allowRotation = true; r.rotationCooldownPlacements = 3;
+    r.wrapEdges = true; r.phasePeriod = 12;
+    const s = FourDSession.create(8, BLACK, r);
+    for (let i = 0; i < 200 && s.status === "Playing"; i++) {
+      const act = aiChooseMove(s, { level: "medium", seed: (seed * 7919 + i * 2654435761) >>> 0 });
+      if (act.kind === "none") break;
+      if (act.kind === "rotate") {
+        if (!s.rotate(RotationMove.fromClockwiseTurns(act.axis, act.layer, act.turns)).accepted) break;
+      } else {
+        if (s.place(act.x, act.y, act.z).status === MoveStatus.Rejected) break;
+      }
+      plies++;
+      if (s.phase === 1) nights++;
+      if (s.status === "Playing" && RuleEngine.fullScan(s.board, 5).length > 0) violations++;
+    }
+    if (s.status !== "Playing") decided++;
+  }
+  // 阈值按实测钉（固定种子 → 确定，不会抖）：前置不达标说明抽样空转，断言就失去了意义
+  console.log("不变量抽样：" + plies + " 手（永夜 " + nights + "），分出胜负 " + decided + " 局");
+  check(plies > 120, "前置：不变量抽样跑足了手数", "plies=" + plies);
+  check(nights > 40, "前置：抽样真的走到过永夜", "nights=" + nights);
+  check(violations === 0, "进行中的盘面不存在 ≥5 极大连线（翻转清算够不到的前提）",
+        "violations=" + violations);
 }
 
 // ---------------------------------------------------------------------------

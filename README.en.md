@@ -7,7 +7,7 @@
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-41036_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-41050_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The online demo serves the very same `index.html` that is in this repository, hosted on
@@ -88,7 +88,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
 
 ```
-11733 + 19444 + 98 + 221 + 130 + 8845 + 134 + 431 = 41036 assertions, all green
+11733 + 19449 + 98 + 230 + 130 + 8845 + 134 + 431 = 41050 assertions, all green
 ```
 
 Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -99,12 +99,12 @@ To run one piece on its own:
 | Command | Count | What it covers |
 |---|---|---|
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
-| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19444 | 4D rotation consistency |
+| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19449 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
-| `node Web_Gomoku3D/tests/ai.test.mjs` | 221 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 130 | UI against a DOM stub (includes the language switch, gesture and reset edge cases, drag-direction convention) |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
-| `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | Networking HTTP layer (loopback) |
+| `node Web_Gomoku3D/tests/online-http.test.mjs` | 134 | Networking HTTP layer (loopback) |
 | `node _verify/browser-check.mjs` | 431 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer) |
 
 The two networking tests run inside step 8 and **cannot be skipped**.
@@ -275,6 +275,19 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 ## 📝 Changelog
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
+
+### 2026.10.14
+
+- 🔧 **v3.1.8** Gameplay audit: two 4D-vs-computer bugs fixed; the rules text now matches the
+  implementation (day/night no longer promises a "time bomb").
+  - **4D vs computer**: during night the engine's whole search was broken (simulated stones missing
+    their phase) — it "saw" wins that did not exist and missed real forced wins, and played
+    differently by day and night in the same position; now consistent
+  - **4D vs computer**: the first player (overline-restricted) returned its own overline rotation as
+    a winning move — playing it lost the game on the spot; it no longer picks it
+  - **Rules text**: removed the impossible "a night five already exists and settles when the phase
+    turns" description; settling now happens on the move that completes the line, and "a rotation
+    may make five for you" now reads "current phase only" (all six languages)
 
 ### 2026.10.09
 

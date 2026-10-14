@@ -1861,7 +1861,9 @@
 这两种情况界面会分别告诉你原因，不然按钮看起来就像是坏的。
 
 最后一条只拦**别人**的线。转动**可以给自己成五** —— 那就是赢，
-和落子成五完全一样，棋局当场结束。转完之后如果盘上是**对方**的五连
+和落子成五完全一样，棋局当场结束。（"给自己"只在**当前相位**下成立；
+自己颜色但**异相位**的线不算自己的——它会在相位轮回来时自己成五，留下它就等于埋雷，
+所以同样整件事回滚。）转完之后如果盘上是**对方**的五连
 （把对方的子转到位了），那一手仍然整件事回滚：转一下白送对方一个五，不是这一手的意思。
 
 所以 **转动是可以当进攻手段用的**：它既能拆掉对手的线、调整自己的结构，
@@ -1888,8 +1890,10 @@
 
 棋盘在两个相位之间轮转：**黎明**和**永夜**。每颗子记下它落下时的相位。
 
-- **只有当前相位的连线会被结算。** 黎明时，永夜那条五连已经存在、但不算数；
-  切到永夜那一刻它还在，才立刻结算。
+- **只有当前相位的连线会被结算**，而且结算就发生在**把它连成的那一手**（落子或转动）：
+  相位轮转不会让哪条线"自己活过来"。异相位的整线也留不在盘上——转动造出它会整体回滚
+  （见 10.3）。上一轮相位留下的形状不会作废：相位转回来时它们重新算数，
+  但**补最后一颗仍然得走落子或转动**——想赢，最后一手得在当前相位下完成。
 - **异相位的子照样占位，而且会打断连线**（它是实体，不是空的）。
 - 盘面上每颗子外面套着一圈**薄光**，颜色就是它的相位：**淡红是黎明，淡蓝是永夜**。
   两种相位的子一样清楚（不再靠浓淡区分），一眼就看得出哪几颗属于哪一边。
@@ -2203,7 +2207,9 @@ empty, or a pattern that happens to rotate back onto itself, both count as "noth
 of the two it was, because otherwise the button just looks broken.
 
 The last check only stops **the opponent's** lines. A rotation **may make five for you** — that is a win, exactly like
-making five by placing, and the game ends there and then. If the rotation hands the **opponent** five in a row (you swung
+making five by placing, and the game ends there and then. ("For you" only holds for lines of the **current phase**; a
+line of your own colour in the **other** phase does not count as yours — it would come alive on its own the next time its
+phase comes around, a landmine you planted, so it is rolled back too.) If the rotation hands the **opponent** five in a row (you swung
 their stones into place), it is still rolled back: gifting the opponent a five is not what that move meant.
 
 So **a rotation can be an attack**: it breaks up the opponent's lines, rearranges your own stones, or swings the last
@@ -2232,8 +2238,11 @@ three on the left" really is one run of five in the stacked space.
 
 The board alternates between two phases: **day** and **night**. Each stone remembers the phase it was placed in.
 
-- **Only lines of the current phase are settled.** A night five that exists during the day is there, but does not count;
-  the moment the phase turns to night and it is still there, it settles at once.
+- **Only lines of the current phase are settled**, and settling happens on **the move that completes the line** (a
+  placement or a rotation): the phase turning never wakes anything up by itself. A full line of the other phase cannot
+  stay on the board anyway — a rotation that forms one is rolled back whole (see 10.3). Shapes left over from an earlier
+  phase are not lost: they count again when that phase returns, but **the last stone still has to be placed or rotated
+  into position** — waiting alone wins nothing.
 - **Stones of the other phase still occupy their cell and break lines** (they are solid, not empty).
 - Every stone on the board wears a thin **halo** whose colour is its phase: **pale red is day, pale blue is night**. Stones
   of both phases are drawn equally clearly (no more fading by opacity), so you can see at a glance which stones belong to
@@ -2562,7 +2571,9 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 この 2 つは画面がそれぞれ理由を伝えます。そうしないと、ボタンが壊れているように見えてしまいます。
 
 最後の条件が止めるのは**相手の**線だけです。回転で**自分の 5 連ができれば、それは勝ち** ——
-着手で 5 連を作るのとまったく同じで、そこで対局は終わります。回した結果**相手**の 5 連ができた場合は
+着手で 5 連を作るのとまったく同じで、そこで対局は終わります（「自分」が成り立つのは**現在の位相**の線だけです。
+自分の色でも**異なる位相**の線は自分のものとは数えられません —— 位相が巡ってきたときにひとりでに 5 連になる、
+つまり地雷を置くことになるので、こちらもまるごと巻き戻します）。回した結果**相手**の 5 連ができた場合は
 これまでどおりまるごと巻き戻します（相手に 5 連を差し出すのは、その一手の意味ではありません）。
 
 つまり **回転は攻めの手段になります**：相手の線を崩し、自分の形を整え、
@@ -2591,8 +2602,10 @@ N×N×N の立体盤で五目並べを打つ：**先に一本の直線上へ同�
 
 盤は二つの位相の間で巡ります：**昼**と**夜**。各石は打たれたときの位相を覚えています。
 
-- **現在の位相の線だけが精算されます。** 昼のあいだ、夜の五連は存在していますが数えられません。
-  夜に切り替わった瞬間にそれがまだそこにあれば、その場で精算されます。
+- **現在の位相の線だけが精算され**、しかも精算は**その線を完成させた一手**（着手か回転）で起きます：
+  位相が巡っても、線がひとりでに目を覚ますことはありません。異なる位相の完全な線はそもそも盤に残れません ——
+  回転で作るとまるごと巻き戻されます（10.3 参照）。前の位相で作った形は無駄になりません：位相が戻れば
+  もう一度数えられますが、**最後の一石はやはり着手か回転で置く必要があります** —— 待つだけでは勝てません。
 - **異なる位相の石もマスを占め、線を分断します**（実体であって、空ではありません）。
 - 盤上の石にはそれぞれ薄い**輪**が付き、その色が位相です：**淡い赤が昼、淡い青が夜**。
   どちらの位相の石も同じ濃さで描かれる（濃淡で区別しません）ので、どちら側の石かが一目で分かります。
@@ -2912,7 +2925,9 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 이 두 가지는 화면이 각각 이유를 알려 줍니다. 그러지 않으면 버튼이 고장 난 것처럼 보입니다.
 
 마지막 조건이 막는 것은 **상대의** 줄뿐입니다. 회전으로 **내 오목이 만들어지면 그것은 승리** ——
-착수로 오목을 잇는 것과 똑같고, 거기서 대국이 끝납니다. 회전 결과 **상대**의 오목이 만들어졌다면
+착수로 오목을 잇는 것과 똑같고, 거기서 대국이 끝납니다("내"가 성립하는 것은 **현재 위상**의 줄뿐입니다.
+내 색이어도 **다른 위상**의 줄은 내 것으로 세지 않습니다 —— 위상이 돌아오면 혼자서 오목이 되는,
+곧 지뢰를 묻는 셈이므로 이것도 일 전체를 되돌립니다). 회전 결과 **상대**의 오목이 만들어졌다면
 예전처럼 일 전체를 되돌립니다(상대에게 오목을 바쳐 주는 것은 그 한 수의 뜻이 아닙니다).
 
 즉 **회전은 공격 수단이 됩니다**: 상대의 줄을 부수고, 자기 구조를 조정하고,
@@ -2940,8 +2955,10 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 판은 두 위상 사이를 돕니다: **낮**과 **밤**. 각 돌은 놓일 때의 위상을 기억합니다.
 
-- **현재 위상의 줄만 정산됩니다.** 낮 동안 밤의 오목은 존재하지만 세지 않습니다.
-  밤으로 바뀌는 순간 그것이 아직 거기 있으면 곧바로 정산됩니다.
+- **현재 위상의 줄만 정산되고**, 정산은 **그 줄을 완성한 그 한 수**(착수 또는 회전)에서 일어납니다:
+  위상이 돌아도 줄이 혼자서 깨어나는 일은 없습니다. 다른 위상의 완성된 줄은 애초에 판에 남을 수 없습니다 ——
+  회전으로 만들면 일 전체가 되돌려집니다(10.3 참조). 지난 위상에서 만든 모양은 사라지지 않습니다: 위상이
+  돌아오면 다시 세어지지만, **마지막 한 알은 여전히 착수나 회전으로 놓아야 합니다** —— 기다리기만 해서는 이길 수 없습니다.
 - **다른 위상의 돌도 칸을 차지하고 줄을 끊습니다**(실체이며 빈칸이 아닙니다).
 - 판 위의 돌마다 얇은 **고리**가 붙고, 그 색이 위상입니다: **옅은 빨강이 낮, 옅은 파랑이 밤**.
   두 위상의 돌은 같은 진하기로 그려지므로(더 이상 농담으로 구분하지 않습니다) 어느 쪽 돌인지 한눈에 압니다.
@@ -3264,7 +3281,9 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 просто сломанной.
 
 Последний пункт останавливает только линии **соперника**. Поворот **может собрать пять для вас** — это победа,
-ровно такая же, как пять, поставленные ходом, и партия на этом заканчивается. Если же в результате поворота пять
+ровно такая же, как пять, поставленные ходом, и партия на этом заканчивается. («Для вас» верно только для линий
+**текущей фазы**; своя по цвету, но **не той фазы** линия вам не принадлежит — при возврате фазы она ожила бы сама,
+то есть вы заложили бы мину, поэтому она тоже откатывается целиком.) Если же в результате поворота пять
 в ряд получается у **соперника** (вы подставили его камни), действие по-прежнему откатывается: дарить сопернику
 пять — не то, что означал этот ход.
 
@@ -3294,8 +3313,11 @@ N×N×N 입체 판 위에서 오목을 둡니다: **하나의 직선 위에 같�
 
 Доска чередует две фазы: **день** и **ночь**. Каждый камень помнит фазу, в которую он поставлен.
 
-- **Считаются только линии текущей фазы.** Ночная пятёрка днём существует, но не считается; в момент перехода в
-  ночь, если она всё ещё на месте, она рассчитывается сразу.
+- **Считаются только линии текущей фазы**, и расчёт происходит **на том ходу, который завершает линию** (постановка
+  камня или поворот): смена фазы сама по себе ничего не «будит». Полная линия не той фазы и не может остаться на
+  доске — поворот, создающий её, откатывается целиком (см. 10.3). Формы, оставшиеся с прошлой фазы, не пропадают:
+  когда фаза вернётся, они снова считаются, но **последний камень всё равно нужно поставить или повернуть на
+  место** — ожиданием победу не взять.
 - **Камни другой фазы всё равно занимают клетку и разрывают линии** (это тела, а не пустота).
 - Каждый камень на доске носит тонкое **гало**, цвет которого и есть его фаза: **бледно-красный — день,
   бледно-синий — ночь**. Камни обеих фаз рисуются одинаково ясно (больше не различаются по прозрачности), так что
@@ -3625,9 +3647,11 @@ retombe exactement sur lui-même, sont tous deux jugés « aucun changement ». 
 sinon le bouton semblerait cassé.
 
 Le dernier contrôle n'arrête que les lignes de **l'adversaire**. Une rotation **peut faire cinq pour vous** : c'est une
-victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. Si la rotation donne cinq en ligne à
-**l'adversaire** (vous avez poussé ses pierres en place), tout est toujours remis en arrière : offrir un cinq à
-l'adversaire n'est pas ce que ce coup voulait dire.
+victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. (« Pour vous » ne vaut que pour les lignes
+de la **phase courante** ; une ligne de votre couleur mais de **l'autre phase** ne vous appartient pas — elle ferait
+cinq toute seule au retour de cette phase, autrement dit vous poseriez une mine, donc tout est, là aussi, remis en
+arrière.) Si la rotation donne cinq en ligne à **l'adversaire** (vous avez poussé ses pierres en place), tout est toujours
+remis en arrière : offrir un cinq à l'adversaire n'est pas ce que ce coup voulait dire.
 
 Donc **une rotation peut être une arme offensive** : elle casse les lignes adverses, réajuste vos pierres, et peut amener
 la dernière pierre manquante à sa place pour gagner.
@@ -3655,8 +3679,11 @@ droite plus trois à gauche » forment bel et bien une suite de cinq dans cet es
 
 Le plateau alterne entre deux phases : **le jour** et **la nuit**. Chaque pierre retient la phase où elle a été posée.
 
-- **Seules les lignes de la phase courante sont réglées.** Un cinq de nuit qui existe le jour est bien là, mais ne compte
-  pas ; à l'instant où la phase bascule vers la nuit et qu'il est toujours là, il est réglé aussitôt.
+- **Seules les lignes de la phase courante sont réglées**, et cela se produit **sur le coup qui complète la ligne**
+  (pose ou rotation) : le basculement de phase ne réveille jamais rien tout seul. Une ligne complète de l'autre phase ne
+  peut de toute façon pas rester sur le plateau — une rotation qui la formerait est annulée en bloc (voir 10.3). Les formes
+  laissées par une phase précédente ne sont pas perdues : elles recomptent au retour de cette phase, mais **la dernière
+  pierre doit quand même être posée ou tournée en place** — attendre ne fait pas gagner.
 - **Les pierres de l'autre phase occupent quand même leur case et coupent les lignes** (ce sont des corps, pas du vide).
 - Chaque pierre du plateau porte un mince **halo** dont la couleur est sa phase : **rouge pâle pour le jour, bleu pâle pour
   la nuit**. Les pierres des deux phases sont dessinées avec la même netteté (plus de distinction par l'opacité), donc on
@@ -5369,7 +5396,12 @@ class GameSession {
    *
    * 翻转之后要**立刻整盘清算一次**：新相位下已经存在的线要当场结算。
    * 注意这**不是**某一手的 judge —— 是"时间自己走出来的终局"，所以要单独一条路径。
-   * 没有它的话，"我连成了、就等相位对上"这件事永远不会发生，晨昏就只剩个名字。
+   *
+   * 【现状：这段清算够不到，是防御性代码】整线在现规则下活不到翻转那一刻 ——
+   * 落子只带当前相位（整线一形成就当场判）、转动造出异相位整线会被整体回滚
+   * （见 _tryRotate 里那两段注释）。2026-10-14 审计抽样自对局 324 手（含永夜 148 手），
+   * 进行中盘面 ≥5 极大连线出现 0 次，这段扫描因此永远扫不到东西。保留它是因为：
+   * 将来若放开异相位线，这里是唯一的防线；RULES_SPEC 10.5 已按现状改写（不再承诺"自己活过来"）。
    */
   _advancePhase(mode) {
     const P = this.rules.phasePeriod | 0;
@@ -5458,7 +5490,18 @@ class GameSession {
       this._settleLine(over);
       return true;
     }
-    this._settleLine(mine[0]);
+    // 【恰好 5 连优先的另一半：开关为 false 时】precedence=false 的语义是"同手同时有 5 和 6
+    // 就连 5 判胜"，落子那条路（judge）就是这么判的。但这里原来直接结算 mine[0]，
+    // 而 mine[] 的顺序来自 fullScan（z→y→x + 方向表）—— 5 连扫在前是胜、6 连扫在前是负，
+    // 同一个局面换个摆位结论就反。和 4.5 修的是同一类"看扫描顺序"的 bug，只是换了半边。
+    let settle = mine[0];
+    if (over && exact && this.rules.isRestricted(player, this.firstPlayer) &&
+        !this.rules.overlineTakesPrecedence) {
+      for (let i = 0; i < mine.length; i++) {
+        if (mine[i].length === wl) { settle = mine[i]; break; }
+      }
+    }
+    this._settleLine(settle);
     return true;
   }
 
@@ -5687,7 +5730,7 @@ function describeRotationMove(m, lang = "zh") {
 
 /** 一次转动的判定结果。 */
 class RotateOutcome {
-  constructor(status, move, layerStones, reason, lines) {
+  constructor(status, move, layerStones, reason, lines, lineLengths) {
     this.status = status;
     this.move = move;
     /** 转动前该层有几颗子。UI 靠它告诉玩家"转这一层到底会不会动"。 */
@@ -5696,7 +5739,7 @@ class RotateOutcome {
     /**
      * 转完之后盘上的连线条数。**只有 Rotated 且 >0 时才有意义**，
      * 而且那时候它必定全是**转动方自己**的线（别人的线会让这次转动被判成
-     * CreatesLine 整条撤销）—— 也就是说 `accepted && lines > 0` ⟺ **这一转赢了**。
+     * CreatesLine 整条撤销）。
      *
      * 【为什么要单独带出来】AI 判断"这一转是不是直接赢了"必须用这个数：
      * aiThreatBest 量的是"再落一手能做出多大的形"，候选点全是空格子 ——
@@ -5705,6 +5748,18 @@ class RotateOutcome {
      * 顺带它也省掉了 AI 每个候选再扫一遍全盘。
      */
     this.lines = lines | 0;
+    /**
+     * 每条线的长度，和 lines 来自**同一次**全盘扫描（只在 Rotated 时非空）。
+     *
+     * 【为什么不能只看 lines>0】"转出了线"和"赢了"不是一回事：受限方（先手）转出自家的
+     * 长连（> winLength）会当场判负（decideByRotation 的语义）。长度足以把两者分开 ——
+     * == winLength 是赢，> winLength 对受限方是自尽。AI 第 1b 步靠这个字段排除自尽那一种。
+     *
+     * 【为什么由判定带出来而不是 AI 自己扫】_tryRotate 为了查"有没有转出别人的线"本来就要
+     * 扫一遍全盘，顺手留下长度是零代价；AI 再扫一遍既多付一次 O(N³×13)，又违反 AI 段
+     * "全盘扫描只许出现在转动判定里"那条源码级红线（见 ai.test.mjs）。
+     */
+    this.lineLengths = lineLengths || null;
   }
   get accepted() { return this.status === RotateStatus.Rotated; }
   describe(lang = "zh") {
@@ -5940,9 +5995,12 @@ class FourDSession {
                  { len: this.inner.rules.winLength, lines: runs.length }));
     }
 
-    // lines 就是上面那次扫描的结果：走到这里说明它要么是空的，要么全是转动方自己的线。
-    // 两种情况的差别是"转不转得赢"—— 见 RotateOutcome.lines 的注释。
-    return new RotateOutcome(RotateStatus.Rotated, move, layerStones, null, runs.length);
+    // lines / lineLengths 都是上面那次扫描的结果：走到这里说明每条线要么不存在，
+    // 要么全是转动方自己的线。长度是给 AI 第 1b 步分"赢 / 自家长连判负"用的，
+    // 见 RotateOutcome.lineLengths —— 判定口径与 decideByRotation 逐条对齐。
+    const lineLengths = new Array(runs.length);
+    for (let i = 0; i < runs.length; i++) lineLengths[i] = runs[i].length;
+    return new RotateOutcome(RotateStatus.Rotated, move, layerStones, null, runs.length, lineLengths);
   }
 
   /**
@@ -6162,13 +6220,17 @@ const AI_LEVELS = ["low", "medium", "high", "xhigh", "ultra"];
  *   高        5 /   14 /   19ms               56 /  106 /  147ms
  *   极高     48 /  199 /  231ms               56 /  111 /  157ms
  *   极限    132 / 2060 / 2094ms              105 / 1945 / 2681ms
- * **极限档和其它四档之间有一道十几倍的坎**，这是 v2.10.15 刻意造成的：
- *   · 它会**逐个转动候选跑一整遍搜索**（8³ 全枚举，rotMax=24 封顶）
- *   · 它会**对排序前 K 个落点各跑一遍对手的算杀**（对手强制胜过滤）
+ * **极限档和其它四档之间有一道十几倍的坎**，来源是它比极高多开的两件事：
+ *   · **算杀**：VCF 连续冲四 + VCT 活三强制胜（VCF 见上面 vcf 一条，VCT 见下面「算杀扩展：VCT」那一节）
+ *   · **迭代加深**：idMax（见上面 idMax 那条）
  * 两件事都是"用时间换棋力"，而用户对极限档的口径是**不为省时间让步**。
  * 所以起始界面拉到极限时，拉条下方会写一行小字提醒玩家。
  * **极高及以下不许被这个坎带进去** —— 它们保持中位几十毫秒。
- * 哪一档觉得慢，改这张表里的 searchDepth / idMax / rotMax / foeFilter，别去改别处。
+ * 哪一档觉得慢，改这张表里的 searchDepth / depth4d / idMax / rotProbe，别去改别处。
+ * 注意："全枚举转动估值（rotSearch / rotMax）"和"对手强制胜过滤（foeFilter）"都属于下面
+ * 「v2.10.15 量过、没留下的一条」那轮实验：参数表里 rotSearch / rotMax 已不存在、
+ * foeFilter 恒为 0，相关分支是死代码。
+ * **这张表与当前参数表的"版本身份"没有记录**（v2.10.15 期间这套参数来回改过一轮），引用前先重跑 _verify/ai-bench.mjs。
  *
  * 【这张表的来源】`_verify/ai-bench.mjs`（或等价的整局逐手计时脚本）。
  * **不要手写这张表** —— 手写的数会在某次改动之后变成假证据，而没有任何东西会报警。
@@ -6217,6 +6279,9 @@ const AI_PARAMS = {
  * 转动要造出线，那一层里必须先有能搬动的子，所以子多的层排在前面正是命中的那一端。
  * 30 层以上的棋盘上，排不进前 30 的层平均一颗子都不到 —— 那里还藏着一条待补的五连，
  * 本身就极不可能。真嫌漏，调大这个数即可，代价只是低档变慢。
+ *
+ * 【"赢"还要和"自尽"分开】受限方转出自家长连（6+ 连）会当场判负，这一条必须把那种
+ * 转动排除掉再往下找 —— 见第 1b 步的 rotLoses（判定与 decideByRotation 逐条对齐）。
  */
 const AI_ROT_WIN_PROBE = 30;
 
@@ -6268,7 +6333,7 @@ const AI_AXES = [AXIS_X, AXIS_Y, AXIS_Z];
      · tune 参数（winLength / branch）—— 本表【每手重置】，而一次 aiChooseMove 里
        tune 是固定的，所以不必进键；将来若要跨手复用，这里必须先补上。
    【冷却是怎么处理的】四维下 canRotate 由 placementsSinceLastRotation 决定，
-   它【不在盘面上】。但转动不进搜索（转动只在根节点比价），搜索里棋盘只经 board.set
+   它【不在盘面上】。但转动不进搜索（转动只在根节点处理），搜索里棋盘只经 board.set
    变化，所以搜索内部不需要冷却进键。根节点每个转动候选都重新算一次整盘哈希。
 
    【生命周期：代数戳，每手重置】和 aiSeenBits 同一套写法。这样确定性契约零风险 ——
@@ -6744,7 +6809,7 @@ function aiTier(v) {
  * 转动候选：3 轴 × n 层 × 3 个顺时次数，剔掉空层，按「层里子多」降序、
  * 同分按 axis/layer/turns 升序 —— **全序，同一种子在不同引擎上必须排出同样的顺序**。
  *
- * `limit <= 0` 表示**不截断**（极限档要全枚举之后逐个真估值）。
+ * `limit <= 0` 表示**不截断**（这个用法属于已退回的 rotSearch 路径，现状没有调用点这么传）。
  * 空层必须剔掉：`rotateLayer` 对空层必定返回 false，探它纯属白花钱。
  */
 function aiRotationCandidates(session, limit) {
@@ -6827,6 +6892,9 @@ function aiRotationProbe(session, params, winLength, mover, foe, cand, stats, be
 /**
  * 一次转动值多少 —— **用和落子完全相同的搜索引擎估值**。这就是"同台竞价"的全部含义。
  *
+ * 【现状：死代码】两个调用点（第 6 步）都在已退回的 rotSearch 分支里，运行时不会执行 ——
+ * 见 AI_PARAMS 表头那段。留着它是为了留住决策史，也是将来重测"同台竞价"的入口。
+ *
  * 【为什么必须走 probeRotate 而不是自己转】转动判定只此一份（_tryRotate），
  * 挑了一手引擎会拒的动作会让电脑【卡住不动】（回合不消耗，表现就是它再不动了）。
  * probeRotate 无论成不成都会还原、不记账、不占回合，而且求值夹在中间、还原走 finally。
@@ -6840,7 +6908,7 @@ function aiRotationProbe(session, params, winLength, mover, foe, cand, stats, be
  * 转不成 / 没搜出东西都返回 -Infinity —— 调用方只在它更大时才采用。
  */
 function aiRotationValue(session, params, rot, mover, stats) {
-  // 【闸】转动估值是这一手最贵的部分（极限档要枚举几十个候选、每个跑一整遍搜索）。
+  // 【闸】转动估值是这一手最贵的部分（rotSearch 若全枚举：几十个候选、每个跑一整遍搜索）。
   // 预算见 AI_POINT_BUDGET_MAX —— 超了就不再估新的候选，返回 -Infinity（=这一手不考虑）。
   // **这一条以前只累加不比较，等于没有**，单测那条上界断言于是什么都没证明。
   if (aiPointsUsed >= AI_POINT_BUDGET_MAX) return -Infinity;
@@ -7074,7 +7142,8 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats, hash) 
   // 上一手分出了胜负就到此为止。**这是唯一可靠的终局判据**：恰好 5 连赢、长连判负，
   // 全在 judge 里；自己数连子的写法在这里必然数错。
   if (last) {
-    const o = RuleEngine.judge(board, last, last.p, fp, rules);
+    // judge 的 matchValue 必须和落子值同一套编码，否则夜里按朴素值把黎明线当活线。
+    const o = RuleEngine.judge(board, last, last.p, fp, rules, cellOf(last.p, aiPhase));
     if (o.status === MoveStatus.Win) return -(AI_SEARCH_WIN - depth);
     if (o.status === MoveStatus.LoseByOverline) return AI_SEARCH_WIN - depth;
   }
@@ -7101,7 +7170,7 @@ function aiNegamax(session, depth, alpha, beta, mover, last, tune, stats, hash) 
   const k = tune.branch < sc.length ? tune.branch : sc.length;
   for (let i = 0; i < k; i++) {
     const m = sc[i];
-    board.set(m.x, m.y, m.z, mover);
+    board.set(m.x, m.y, m.z, cellOf(mover, aiPhase));   // 模拟落子带当前相位，见 aiPhase
     const nh = aiZobristMove(hash, mover, board.index(m.x, m.y, m.z));
     const v = -aiNegamax(session, depth - 1, -beta, -alpha, foe,
                          { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats, nh);
@@ -7184,6 +7253,12 @@ let aiPointsUsed = 0;
  * 而它们本来就已经有 6~8 个参数了。这和 AI_PT / aiSeenBits / aiPointsUsed 是同一类
  * "热循环里的隐式上下文"，且它**不参与决策时序**（一次 aiChooseMove 内恒定）。
  * 默认 0 = 相位关闭，此时 aiTag 是恒等函数，行为逐位不变。
+ *
+ * 【写侧也要用】读棋盘走 aiTag（= cellOf 编码），**模拟落子也必须写同一套编码**：
+ * 一律 cellOf(colour, aiPhase)，judge 的 matchValue 传同样的值。只改读不改写时，
+ * 永夜下模拟子对不上"黑·夜"的值 —— 评估看不见自己的进攻，judge 还会按朴素值
+ * 把黎明线当活线（实测报出过 1e9 的幻影胜手、算杀/VCT 整条链在夜里断掉）。
+ * 【刻意不模拟的一件事】搜索不模拟"落子推进相位、线可能翻转"（一条搜索线内相位恒定）。
  */
 let aiPhase = 0;
 
@@ -7290,7 +7365,7 @@ function aiVcf(session, attacker, depth, stats) {
 
   for (let i = 0; i < mine.fours.length; i += 3) {
     const x = mine.fours[i], y = mine.fours[i + 1], z = mine.fours[i + 2];
-    board.set(x, y, z, attacker);
+    board.set(x, y, z, cellOf(attacker, aiPhase));
     const afterCands = aiCandidates(board, AI_CANDIDATE_CAP);
     if (aiVcfLeft < afterCands.length) { board.set(x, y, z, EMPTY); return null; }
     aiVcfLeft -= afterCands.length;
@@ -7303,7 +7378,7 @@ function aiVcf(session, attacker, depth, stats) {
     if (after.wins.length === 3) {
       // 恰好一个成五点 → 对方的应手是唯一的，堵上去
       const bx = after.wins[0], by = after.wins[1], bz = after.wins[2];
-      board.set(bx, by, bz, foe);
+      board.set(bx, by, bz, cellOf(foe, aiPhase));
       const sub = aiVcf(session, attacker, depth - 1, stats);
       board.set(bx, by, bz, EMPTY);
       if (sub) {
@@ -7452,7 +7527,7 @@ function aiVct(session, attacker, depth, stats) {
 function aiVctAfter(session, attacker, foe, x, y, z, depth, stats) {
   const board = session.board;
   if (aiPointsUsed >= AI_POINT_BUDGET_MAX) return null;
-  board.set(x, y, z, attacker);
+  board.set(x, y, z, cellOf(attacker, aiPhase));
   const afterCands = aiCandidates(board, AI_CANDIDATE_CAP);
   aiPointsUsed += afterCands.length;
   if (aiVcfLeft < afterCands.length) { board.set(x, y, z, EMPTY); return null; }
@@ -7495,7 +7570,7 @@ function aiVctAfter(session, attacker, foe, x, y, z, depth, stats) {
   for (let f = 0; f < defs.length; f += 3) {
     const fx = defs[f], fy = defs[f + 1], fz = defs[f + 2];
     if (!board.inBounds(fx, fy, fz) || board.get(fx, fy, fz) !== EMPTY) continue;
-    board.set(fx, fy, fz, foe);
+    board.set(fx, fy, fz, cellOf(foe, aiPhase));
     const sub = aiVct(session, attacker, depth - 1, stats);
     board.set(fx, fy, fz, EMPTY);
     if (!sub) { board.set(x, y, z, EMPTY); return null; }   // 他防住了 → 这一支作废
@@ -7559,7 +7634,7 @@ function aiSearchMove(session, safe, params, stats, moverOverride) {
   const rootHash = aiZobristBoard(board);
   const k = params.branch < sc.length ? params.branch : sc.length;
   if (k === 0) return null;
-  // 【返回值必须永远带 v】调用方（四维的转动比价）要拿它和转动候选的估值比大小。
+  // 【返回值必须永远带 v】已退回的转动比价路径（rotSearch）要拿它和转动候选的估值比大小。
   // 拿不到 v 就没法比，所以先按排序首位给一个兜底，搜完再覆盖。
   let best = { x: sc[0].x, y: sc[0].y, z: sc[0].z, v: -Infinity };
 
@@ -7574,7 +7649,7 @@ function aiSearchMove(session, safe, params, stats, moverOverride) {
     let iterBest = null, alpha = -Infinity;
     for (let i = 0; i < k; i++) {
       const m = order[i];
-      board.set(m.x, m.y, m.z, mover);
+      board.set(m.x, m.y, m.z, cellOf(mover, aiPhase));
       const v = -aiNegamax(session, d - 1, -Infinity, -alpha, foe,
                            { x: m.x, y: m.y, z: m.z, p: mover }, tune, stats,
                            aiZobristMove(rootHash, mover, board.index(m.x, m.y, m.z)));
@@ -7597,9 +7672,9 @@ function aiSearchMove(session, safe, params, stats, moverOverride) {
   }
   if (best.v === -Infinity) {
     // 一层都没搜完（预算一开始就不够）。**不能把 -Infinity 交出去** ——
-    // 调用方要拿这个数和转动候选比大小，-Infinity 会让"随便转一下"赢过任何落子。
+    // 已退回的比价路径要拿这个数和转动候选比大小，-Infinity 会让"随便转一下"赢过任何落子。
     // 用叶子评估补一个值，量级和搜索值同源，比大小才有意义。
-    board.set(best.x, best.y, best.z, mover);
+    board.set(best.x, best.y, best.z, cellOf(mover, aiPhase));
     best.v = aiEvalLeaf(board, aiCandidates(board, AI_CANDIDATE_CAP), mover, foe,
                         winLength, moverRes, foeRes);
     board.set(best.x, best.y, best.z, EMPTY);
@@ -7728,7 +7803,7 @@ function aiChooseMoveInner(session, opts) {
   // 【转动也排在它后面】3.0.1 起转动**能**为自己成五，所以"先转就是把胜手让掉"
   // 这句已经不成立；这里仍然先试落子，理由换成了更朴素的一条：落子的胜手是现成的
   // （判一遍就够），而转动要先枚举候选再逐个探针，贵得多。真只能靠转才能赢时，
-  // 第 4 步的竞价 / 档位启发式会把它挑出来 —— 见 ai.test 里那条"转动取胜"的断言。
+  // 第 4 步的档位启发式会把它挑出来 —— 见 ai.test 里那条"转动取胜"的断言。
   for (let i = 0; i < cand.length; i += 3) {
     const r = aiOutcomeAt(session, cand[i], cand[i + 1], cand[i + 2], mover, stats);
     if (r && r.status === MoveStatus.Win) {
@@ -7742,19 +7817,38 @@ function aiChooseMoveInner(session, opts) {
   // 档位启发式，而那条启发式量的是 aiThreatBest —— "再落一手能做出多大的形"。
   // 转动**已经**转出来的五连在它眼里等于不存在（候选点全是空格子，五连里没有空格）。
   // 实测过：不加这一段，low 档看着能赢的转动跑去别处落子。
-  // 这里认的是 RotateOutcome.lines（见那个字段的注释）：accepted 且 lines>0 就是赢了。
+  // 这里认的是 RotateOutcome.lines（见那个字段的注释）：accepted 且 lines>0 只是"转出了线"；
+  // 是赢还是自家长连判负，还要按 decideByRotation 的优先级再分一次（见下面的 rotLoses）。
   //
   // 顺序：排在"落子取胜"之后 —— 落子的胜手一遍 judge 就找出来了，比逐个探针便宜；
   // 排在"堵对方"之前 —— 我自己能赢的棋，没有先防守的道理。
+  const rotLoses = new Set();                        // 会当场判负的转动（自家长连）
+  const rotKey = (c2) => c2.axis + ":" + c2.layer + ":" + c2.turns;
   if (session.rotationEnabled && session.canRotate && typeof session.probeRotate === "function") {
     const list = aiRotationCandidates(session, AI_ROT_WIN_PROBE);
+    const wlRot = session.rules.winLength;
+    const moverRestricted = session.rules.isRestricted(mover, session.firstPlayer);
     for (let i = 0; i < list.length; i++) {
       const rc = list[i];
       const o = session.probeRotate(RotationMove.fromClockwiseTurns(rc.axis, rc.layer, rc.turns));
       if (stats) stats.rotProbes++;
-      if (o.accepted && o.lines > 0) {
-        return { kind: "rotate", axis: rc.axis, layer: rc.layer, turns: rc.turns };
+      if (!o.accepted || o.lines === 0) continue;
+      // 【"转出线"不等于"赢"】受限方转出自家长连是当场判负（decideByRotation 的语义）——
+      // 这一转必须被排除，而不是当胜手返回。判定与 decideByRotation 的优先级逐条对齐；
+      // 长度取自 _tryRotate 那次扫描（见 RotateOutcome.lineLengths），这里不自己再扫全盘
+      // —— 全盘扫描只许出现在转动判定里，AI 段不许有任何一处（见 ai.test.mjs 的源码断言）。
+      const lens = o.lineLengths || [];
+      let hasOver = false, hasExact = false;
+      for (let k = 0; k < lens.length; k++) {
+        if (lens[k] === wlRot) hasExact = true;
+        else if (lens[k] > wlRot) hasOver = true;
       }
+      if (hasOver && moverRestricted &&
+          (session.rules.overlineTakesPrecedence || !hasExact)) {
+        rotLoses.add(rotKey(rc));
+        continue;
+      }
+      return { kind: "rotate", axis: rc.axis, layer: rc.layer, turns: rc.turns };
     }
   }
 
@@ -7787,22 +7881,22 @@ function aiChooseMoveInner(session, opts) {
   // 填满，而那种局面早就终局了），但真为空时也只能认输 —— 返回 none 会变成"电脑不动了"。
   if (safe.length === 0) return { kind: "place", x: cand[0], y: cand[1], z: cand[2] };
 
-  // ---- 4. 四维：转动候选。**这里不返回，只收集** —— 比价在第 6 步。
+  // ---- 4. 四维：转动候选。**这里不返回，只收集** —— 采用在第 6 步。
   //
-  // 【为什么从"抢跑"改成"竞价"】老逻辑是：对方有活三以上的时候，转动只要能把对方
-  // 压回去就【无条件返回】，从不问"老实去堵是不是更好"；调形则只在落子做不出活三时才试。
-  // 慢镜头里那句"对方一点威胁都没有时它照样转、转完对方原地点了同一格"就是这个结构。
-  // 现在转动和落子进同一个候选池，各自跑同一段搜索估值，谁高走谁。
+  // 【"和落子同台竞价"是量过没留下的一条路】v2.10.15 试过把转动和落子放进同一个候选池、
+  // 各自跑同一段搜索估值、谁高走谁（rotSearch，实测 31.3% 后退回 —— 见 AI_PARAMS 表头那段）。
+  // 现在走的是**档位启发式**：brk（对方有活三以上、转完真拆得掉）第 6 步直接采用；
+  // build（自己跨档、对手没威胁）只在落子本身做不出活三以上时才试。
   //
   // 【硬规则的顺序一个字没动】上面能赢的已经赢了、必堵的已经堵了，
   // 转动绝不许插到那两步前面。
   //
   // 【低/中/高保留廉价路径】它们本来就该快，"转得好不好"不是那几档的定义；
-  // 但四维每一档都要提升，所以 rotChance 一律给 1.0（不再按概率跳过候选生成），
-  // 只是低/中/高仍然走 aiRotationProbe 的档位启发式。
+  // 但四维每一档都要提升，所以 rotChance 一律给 1.0（不再按概率跳过候选生成）——
+  // 竞价退回之后，五档都走 aiRotationProbe 的档位启发式。
   let rotCand = null;         // 启发式路径挑出来的**唯一**一个候选
   let rotBefore = null;       // 它要用到的"转之前的威胁"，第 6 步接着用
-  let rotAll = null;          // 极限档：全枚举出来的候选表，第 6 步逐个真估值
+  let rotAll = null;          // 已退回的 rotSearch 路径的候选表（死变量：没有任何档位会填它）
   if (!o.noRotation && params.rotChance > 0 && params.rotProbe >= 0 &&
       typeof session.probeRotate === "function" &&
       session.rotationEnabled && session.canRotate && rng() < params.rotChance) {
@@ -7813,7 +7907,8 @@ function aiChooseMoveInner(session, opts) {
       foe: aiThreatBest(board, cand, foe, winLength, foeRes0),
     };
     if (params.rotSearch && params.rotProbe === 0) {
-      // 极限档：全枚举，每个候选各自真估值（第 6 步）。rotProbe=0 就是"不截断"，
+      // 【死分支：rotSearch 已退回（实测 31.3%），参数表里没有任何档位会走进来】
+      // 原口径：全枚举、每个候选各自真估值（第 6 步）；rotProbe=0 就是"不截断"，
       // 所以上面那个条件必须是 >= 0 而不是 > 0。
       rotAll = aiRotationCandidates(session, params.rotMax || 0);
     } else {
@@ -7839,7 +7934,7 @@ function aiChooseMoveInner(session, opts) {
     const alive = [];
     for (let i = 0; i < scF.length && i < params.foeFilter; i++) {
       const m = scF[i];
-      board.set(m.x, m.y, m.z, mover);
+      board.set(m.x, m.y, m.z, cellOf(mover, aiPhase));
       aiVcfBudgetReset();          // 每个候选独立预算，不然前几个把后面的吃光
       const loses = aiFoeCanWin(session, foe, AI_VCT_DEPTH, stats);
       board.set(m.x, m.y, m.z, EMPTY);
@@ -7864,20 +7959,20 @@ function aiChooseMoveInner(session, opts) {
   if (!move) move = aiGreedyMove(session, safe, params, rng, winLength, mover);
   if (!move) return { kind: "none" };
 
-  // ---- 6. 转动 vs 落子：**在同一个尺度上比大小**。
-  //
-  // 【平手时保持落子】用的是 `>` 不是 `>=`。转动要花掉整整一手、还会消耗冷却，
-  // 落子能拿到同样的估值时没有理由去转。
+  // ---- 6. 转动的采用：rotCand 的 brk / build 两支（谁先谁后是第 1b 步管的）。
+  // 【rotAll 一支是死代码】"转动和落子同台比大小"只属于已退回的 rotSearch 路径 ——
+  // 它那支里的【平手时保持落子】（`>` 不是 `>=`）等口径留在这里是决策史，不是现状。
   if (rotAll) {
     let bestRot = null, bestRotV = move.v;
     for (let i = 0; i < rotAll.length; i++) {
+      if (rotLoses.has(rotKey(rotAll[i]))) continue;   // 自家长连的转动（见第 1b 步）
       const rv = aiRotationValue(session, params, rotAll[i], mover, stats);
       if (rv > bestRotV) { bestRotV = rv; bestRot = rotAll[i]; }
     }
     if (bestRot) return { kind: "rotate", axis: bestRot.axis, layer: bestRot.layer,
                           turns: bestRot.turns };
-  } else if (rotCand) {
-    if (params.rotSearch) {
+  } else if (rotCand && !rotLoses.has(rotKey(rotCand))) {
+    if (params.rotSearch) {          // 死分支：rotSearch 已退回（见 AI_PARAMS 表头）
       const rv = aiRotationValue(session, params, rotCand, mover, stats);
       if (rv > move.v) {
         return { kind: "rotate", axis: rotCand.axis, layer: rotCand.layer, turns: rotCand.turns };
@@ -7894,7 +7989,7 @@ function aiChooseMoveInner(session, opts) {
                                                         aiTag(mover), winLength, myRes), myRes));
       if (placeTier < 1) {
         const b = aiRotationProbe(session, params, winLength, mover, foe, cand, stats, rotBefore, "build");
-        if (b) return b;
+        if (b && !rotLoses.has(rotKey(b))) return b;
       }
     }
   }

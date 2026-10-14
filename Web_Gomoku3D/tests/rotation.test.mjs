@@ -514,6 +514,32 @@ for (const axis of [M.AXIS_X, M.AXIS_Y, M.AXIS_Z]) {
     eq(whole.length, 1, "4.6 整圈同色（8 连）只报一条");
     eq(whole[0].length, 8, "4.6 整圈同色的长度是环长 8");
   }
+
+  // 4.7 【恰好 5 连优先的另一半】开关为 false 时（"同手命中恰好 5 连也判胜"），
+  // 转动同手造出 5 连和 6 连时，结论不许取决于两条线谁先被 fullScan 扫到。
+  // 原来这种情况直接结算 mine[0]（扫描顺序）—— 5 连扫在前是胜、6 连扫在前是负，
+  // 和 4.5 修掉的是同一类 bug，只是换到了开关的另一半。
+  {
+    const mk = (fiveY, sixY) => {
+      const s = FourDSession.create(8, BLACK, mkRules((r) => { r.overlineTakesPrecedence = false; }));
+      for (const x of [0, 1, 2, 3, 4]) s.board.set(x, fiveY, 0, BLACK);
+      for (const x of [0, 1, 2, 3, 4, 5]) s.board.set(x, sixY, 0, BLACK);
+      return s;
+    };
+    const a = mk(6, 7);   // 五连在下、先被扫到
+    a.inner.decideByRotation(BLACK);
+    eq(a.inner.lastOutcome.status, "Win", "4.7 开关为 false：同时有 5 和 6 → 判恰好 5 连胜");
+    eq(a.winner, BLACK, "4.7 赢的是做线的人");
+    const b = mk(7, 6);   // 六连在下、先被扫到 —— 结论必须一样（修复前这条红）
+    b.inner.decideByRotation(BLACK);
+    eq(b.inner.lastOutcome.status, "Win", "4.7 两条线的位置对调，结论不变");
+    eq(b.winner, BLACK, "4.7 赢的还是做线的人");
+    // 对照组：只有长连（没有恰好 5）→ 照旧判负，不能修成"开关一开就不判长连"
+    const c = FourDSession.create(8, BLACK, mkRules((r) => { r.overlineTakesPrecedence = false; }));
+    for (const x of [0, 1, 2, 3, 4, 5]) c.board.set(x, 6, 0, BLACK);
+    c.inner.decideByRotation(BLACK);
+    eq(c.inner.lastOutcome.status, "LoseByOverline", "4.7 只有长连时照旧判负");
+  }
 }
 
 // ---------------------------------------------------------------------------

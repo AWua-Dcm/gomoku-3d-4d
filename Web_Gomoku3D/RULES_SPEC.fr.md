@@ -187,9 +187,11 @@ retombe exactement sur lui-même, sont tous deux jugés « aucun changement ». 
 sinon le bouton semblerait cassé.
 
 Le dernier contrôle n'arrête que les lignes de **l'adversaire**. Une rotation **peut faire cinq pour vous** : c'est une
-victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. Si la rotation donne cinq en ligne à
-**l'adversaire** (vous avez poussé ses pierres en place), tout est toujours remis en arrière : offrir un cinq à
-l'adversaire n'est pas ce que ce coup voulait dire.
+victoire, exactement comme un cinq posé par un coup, et la partie s'arrête là. (« Pour vous » ne vaut que pour les lignes
+de la **phase courante** ; une ligne de votre couleur mais de **l'autre phase** ne vous appartient pas — elle ferait
+cinq toute seule au retour de cette phase, autrement dit vous poseriez une mine, donc tout est, là aussi, remis en
+arrière.) Si la rotation donne cinq en ligne à **l'adversaire** (vous avez poussé ses pierres en place), tout est toujours
+remis en arrière : offrir un cinq à l'adversaire n'est pas ce que ce coup voulait dire.
 
 Donc **une rotation peut être une arme offensive** : elle casse les lignes adverses, réajuste vos pierres, et peut amener
 la dernière pierre manquante à sa place pour gagner.
@@ -217,8 +219,11 @@ droite plus trois à gauche » forment bel et bien une suite de cinq dans cet es
 
 Le plateau alterne entre deux phases : **le jour** et **la nuit**. Chaque pierre retient la phase où elle a été posée.
 
-- **Seules les lignes de la phase courante sont réglées.** Un cinq de nuit qui existe le jour est bien là, mais ne compte
-  pas ; à l'instant où la phase bascule vers la nuit et qu'il est toujours là, il est réglé aussitôt.
+- **Seules les lignes de la phase courante sont réglées**, et cela se produit **sur le coup qui complète la ligne**
+  (pose ou rotation) : le basculement de phase ne réveille jamais rien tout seul. Une ligne complète de l'autre phase ne
+  peut de toute façon pas rester sur le plateau — une rotation qui la formerait est annulée en bloc (voir 10.3). Les formes
+  laissées par une phase précédente ne sont pas perdues : elles recomptent au retour de cette phase, mais **la dernière
+  pierre doit quand même être posée ou tournée en place** — attendre ne fait pas gagner.
 - **Les pierres de l'autre phase occupent quand même leur case et coupent les lignes** (ce sont des corps, pas du vide).
 - Chaque pierre du plateau porte un mince **halo** dont la couleur est sa phase : **rouge pâle pour le jour, bleu pâle pour
   la nuit**. Les pierres des deux phases sont dessinées avec la même netteté (plus de distinction par l'opacité), donc on

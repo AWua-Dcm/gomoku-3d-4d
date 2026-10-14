@@ -185,7 +185,9 @@ empty, or a pattern that happens to rotate back onto itself, both count as "noth
 of the two it was, because otherwise the button just looks broken.
 
 The last check only stops **the opponent's** lines. A rotation **may make five for you** — that is a win, exactly like
-making five by placing, and the game ends there and then. If the rotation hands the **opponent** five in a row (you swung
+making five by placing, and the game ends there and then. ("For you" only holds for lines of the **current phase**; a
+line of your own colour in the **other** phase does not count as yours — it would come alive on its own the next time its
+phase comes around, a landmine you planted, so it is rolled back too.) If the rotation hands the **opponent** five in a row (you swung
 their stones into place), it is still rolled back: gifting the opponent a five is not what that move meant.
 
 So **a rotation can be an attack**: it breaks up the opponent's lines, rearranges your own stones, or swings the last
@@ -214,8 +216,11 @@ three on the left" really is one run of five in the stacked space.
 
 The board alternates between two phases: **day** and **night**. Each stone remembers the phase it was placed in.
 
-- **Only lines of the current phase are settled.** A night five that exists during the day is there, but does not count;
-  the moment the phase turns to night and it is still there, it settles at once.
+- **Only lines of the current phase are settled**, and settling happens on **the move that completes the line** (a
+  placement or a rotation): the phase turning never wakes anything up by itself. A full line of the other phase cannot
+  stay on the board anyway — a rotation that forms one is rolled back whole (see 10.3). Shapes left over from an earlier
+  phase are not lost: they count again when that phase returns, but **the last stone still has to be placed or rotated
+  into position** — waiting alone wins nothing.
 - **Stones of the other phase still occupy their cell and break lines** (they are solid, not empty).
 - Every stone on the board wears a thin **halo** whose colour is its phase: **pale red is day, pale blue is night**. Stones
   of both phases are drawn equally clearly (no more fading by opacity), so you can see at a glance which stones belong to

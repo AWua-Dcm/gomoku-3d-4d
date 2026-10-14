@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-41036_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-41050_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -85,7 +85,7 @@ bash _verify/run-all.sh
 九步，期望结果：
 
 ```
-11733 + 19444 + 98 + 221 + 130 + 8845 + 134 + 431 = 41036 项断言全绿
+11733 + 19449 + 98 + 230 + 130 + 8845 + 134 + 431 = 41050 项断言全绿
 ```
 
 第 9 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -96,12 +96,12 @@ bash _verify/run-all.sh
 | 命令 | 项数 | 覆盖 |
 |---|---|---|
 | `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 三维规则基线（回放冻结向量） |
-| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19444 | 四维转动一致性 |
+| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19449 | 四维转动一致性 |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
-| `node Web_Gomoku3D/tests/ai.test.mjs` | 221 | 电脑对手（两条硬规则、五档强弱关系、自对局逐手喂给引擎、四维转动只在必要时发生、计算量上界） |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | 电脑对手（两条硬规则、五档强弱关系、自对局逐手喂给引擎、四维转动只在必要时发生、计算量上界） |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 130 | 界面桩环境（含六语言文案齐全性、手势与复位的边界值、拖拽方向约定） |
 | `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | 联机内核：和网页版逐格对拍 1156 组 |
-| `node Web_Gomoku3D/tests/online-http.test.mjs` | 115 | 联机 HTTP 层（本机 loopback） |
+| `node Web_Gomoku3D/tests/online-http.test.mjs` | 134 | 联机 HTTP 层（本机 loopback） |
 | `node _verify/browser-check.mjs` | 431 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局） |
 
 后两项联机测试在第 8 步里跑，**不可跳过**（端口是随机挑的空闲端口）。
@@ -236,6 +236,15 @@ bash _verify/run-all.sh
 ## 📝 更新日志
 
 > 最新的在最上面。每条一行，动词开头（新增 / 修复 / 调整 / 完成）；实现细节写在 commit 里，不写在这里。
+
+### 2026.10.14
+
+- 🔧 **v3.1.8** 玩法审计：修两处四维人机缺陷；规则正文照实现（晨昏不再有"定时炸弹"承诺）。
+  - **四维 · 人机**：轮到「永夜」时电脑的整段搜索失效（模拟落子漏带相位）——它会"看见"不存在的
+    胜手、也会漏掉真的强制胜，同一局面昼夜出招不一致；修后昼夜一致
+  - **四维 · 人机**：先手（长连受限方）会把自己转出的长连当胜手返回——一转下去当场判负；修后不再选它
+  - **规则正文**：删掉"永夜那条五连已经存在、切到永夜才结算"这类凑不出来的局面，改成
+    "结算只发生在把它连成的那一手"；"转动可以给自己成五"补上"仅限当前相位"（六语言）
 
 ### 2026.10.09
 
