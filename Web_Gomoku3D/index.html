@@ -4432,7 +4432,7 @@ const EMPTY = 0, BLACK = 1, WHITE = 2;
      · countRun 只要把"颜色相同"换成"**值**相同"，"异相位的子打断连线"这条规则
        就自动成立 —— 规则原句直接落成代码，不用额外分支
      · 关掉相位时值只可能是 0/1/2，现有行为逐位不变
-     · fingerprint 混的就是 cells，相位自动进联机分叉检测
+     · fingerprint 混的就是 cells，相位自动进盘面指纹
 
    另开一张数组的话，"转动时两张数组必须同步置换"会成为最容易写错的地方，
    而且它是**静默**的：转一次错开一格，只有残局才看得出来。
@@ -4484,9 +4484,9 @@ function cnOf(s) { return s === BLACK ? "黑" : (s === WHITE ? "白" : "空"); }
 
 /* --------------------------------------------------------------------------
    内核的英文文案。
-   【为什么英文要在内核里】内核被四个消费者**单独抽出去执行**（三个 node 测试 +
-   server.js 的 new Function），它引用不到外面的任何表。所以拼句子要用到的词
-   必须放在这条 BEGIN/END 之间，否则 server.js 一加载就 ReferenceError。
+   【为什么英文要在内核里】内核被测试**单独抽出去执行**（`new Function`），
+   它引用不到外面的任何表。所以拼句子要用到的词必须放在这条 BEGIN/END 之间，
+   否则抽出来就 ReferenceError。
 
    【中文那侧一条都没动】。每个函数里都是 "if (lang === 'en') 走英文" 顶在最前面，
    底下的原句逐字节还是原来那句 —— 保证"默认语言下输出不变"是结构性的，
@@ -4494,13 +4494,13 @@ function cnOf(s) { return s === BLACK ? "黑" : (s === WHITE ? "白" : "空"); }
 
    代价：内核现在装着两种语言的界面文案，CORE_HASH 因此会变。这不是新性质
    （内核本来就在产文案：cnOf 返回"黑/白"、describeStatus 返回整句话），
-   只是从一种语言变成两种。server.js 和 index.html 同仓同 commit，自洽。
+   只是从一种语言变成两种。内核和界面在同一份 index.html 里，自洽。
 
    【翻译得对不对，这里一个字都保证不了】断言能证明"是英文"，证明不了"是好英文"。
    中英若有出入，以中文为准。见 打开流程.md 的"还没验证过的部分"。
 
    【lang 一律带默认值 "zh"，不是写成光秃秃的 lang】：默认值会让 Function.length
-   停在它【之前】。online.test.mjs:515 断言的 rotate.length === 1 抓的是
+   停在它【之前】。测试断言的 rotate.length === 1 抓的是
    "rotate 只收一个 RotationMove，四参数版叫 rotateBy" 这件事 —— 写成 rotate(move, lang)
    会让 .length 变成 2，那条断言当场红，而它想守的东西其实没坏。带默认值两头都成立：
    不传 lang 时行为逐字节等于从前，.length 也还是 1。
@@ -4509,7 +4509,7 @@ function cnOf(s) { return s === BLACK ? "黑" : (s === WHITE ? "白" : "空"); }
  * 单复数的形体：语言 + 数字 → 该用哪一形。
  *
  * 【为什么这条规则住在内核里】两处都要用它：内核拼句子（"每落 N 子可转动一层"）
- * 和界面查文案表（sayN）。内核那块区间会被原样抽出去给三个 node 测试和 server.js 跑，
+ * 和界面查文案表（sayN）。内核那块区间会被原样抽出去给测试跑，
  * 它【调用不到】界面里的任何东西；反过来可以 —— 界面在同一个作用域里，调内核的函数没问题。
  * 所以规则放在内核，两边共用这一份。复制一份到界面去的话，法语把 0 算单数、
  * 俄语 11–19 归 many 这些细节就会从两处各漂一次，而漂了没有任何症状。
@@ -4551,8 +4551,7 @@ function pluralForm(lang, n) {
  * 占位符写 {n} {who} {len} 这种，由 ct() 替换；缺参数时原样留着（{n} 挂在界面上好查）。
  *
  * 【中文那侧是原句搬进来的，一个字没改】—— "默认语言下输出逐字节不变"因此是结构性的，
- * 不需要谁相信我抄对了。server.js 不传 lang，走的就是这条中文路径，
- * 联机协议和 online.test.mjs 里的中文子串断言因此一条都没动。
+ * 不需要谁相信我抄对了。不传 lang 时走的就是这条中文路径，中文子串断言因此一条都没动。
  *
  * 【翻译得对不对，这里一个字都保证不了】断言能证明"是那种文字"，证明不了"是好文字"。
  * 六种语言若有出入，以中文为准。
@@ -4742,7 +4741,7 @@ const CORE_TEXT = {
 };
 
 /**
- * 取内核文案。键不存在或该语言没写 → 退到中文（内核的默认语言，也是联机协议那一种），
+ * 取内核文案。键不存在或该语言没写 → 退到中文（内核的默认语言），
  * 中文也没有才返回键名（界面上挂着 "rot.cant" 一眼就能看出漏了）。
  */
 function ct(key, lang, params) {
@@ -5377,8 +5376,7 @@ class GameSession {
 
   place(x, y, z, lang = "zh", mode = MoveMode.Normal) {
     // lang 只影响【被拒时那句原因】。默认("zh")下每个字都和以前一样 ——
-    // server.js 调 place 时不传 lang，线上协议因此仍然是中文，联机测试里的
-    // 中文子串断言一条都不动。
+    // 不传 lang 时走中文路径，中文子串断言一条都不动。
     if (this.status !== "Playing") {
       return this._reject(ct("reject.over", lang));
     }
@@ -8492,7 +8490,7 @@ const TEXT = { en: {
   "toast.swapped": "Restarted with {who} first",
 
   // ---- 起始界面：可填范围与冷却行。{range} 是 "8 – 30"，两种语言共用
-  //      （数字和那个 EN DASH 不翻译，online-http.test.mjs 按它断言）
+  //      （数字和那个 EN DASH 不翻译，测试按它断言）
   "range.allowed": "{range} allowed",
   "range.cubicOnly": "{range} · must be cubic (rotating a layer needs the other two axes equal)",
   "cool.fourDOnly": "4D mode only",
@@ -12129,7 +12127,7 @@ const Game = {
                 "info.board", { x: d[0], y: d[1], z: d[2], layer: this.activeLayer + 1, n: nz });
     // 人机对战：报一句"电脑执哪一方"，轮到时再说一句"它在想"。
     // 【为什么不写进 #status】那一条在内核里（describeStatus）、被 dom-smoke 和
-    // online.test.mjs 断言着；而且它是 22px 塞在 34px 高的行里，中文基线已经是两行、
+    // 测试断言着；而且它是 22px 塞在 34px 高的行里，中文基线已经是两行、
     // browser-check 钉着"不超过两行"，一点余量都没有。它也已经把该说的说了
     // （"某某棋落子（第 n 手）"）。#info 是 12.5px、本来就按 ` · ` 拼，追加最省事。
     if (this.aiMode) {
@@ -13355,7 +13353,7 @@ const Game = {
     // 连"第二份"都不存在，所以它不可能和实际会被夹取的范围不一致。
     //
     // 【数字和那个 – 两种语言共用，只有前缀换】：范围分隔符是 EN DASH（不是连字符），
-    // online-http.test.mjs 的 /8 – 30/ 就是靠这个字符断言的，英文侧也不能换。
+    // 测试里的 /8 – 30/ 就是靠这个字符断言的，英文侧也不能换。
     const range = BoardLimits.Min + " – " + BoardLimits.Max;
     if (this.el.dimRange) this.el.dimRange.textContent =
       say(() => "可填 " + range, "range.allowed", { range: range });

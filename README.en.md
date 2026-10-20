@@ -5,12 +5,12 @@
 **3D & 4D Gomoku** — one HTML file, double-click to play, zero dependencies.
 *三维与四维五子棋 —— 单文件网页版，双击即玩，零依赖。*
 
-[![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
+[![Play in browser](https://img.shields.io/badge/Play_in_browser-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-41069_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-32090_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
-The online demo serves the very same `index.html` that is in this repository, hosted on
+The web demo serves the very same `index.html` that is in this repository, hosted on
 GitHub Pages — there is no build step, and the deployed file is the file you can double-click.
 
 ## ☕ Tip the author
@@ -100,13 +100,13 @@ The **Full rules** button in the top-right corner opens the complete rule text.
 bash _verify/run-all.sh
 ```
 
-**All you need is node** — no Unity, no .NET, no npm packages. Nine steps; expected result:
+**All you need is node** — no Unity, no .NET, no npm packages. Eight steps; expected result:
 
 ```
-11733 + 19449 + 98 + 230 + 142 + 8845 + 134 + 438 = 41069 assertions, all green
+11733 + 19449 + 98 + 230 + 142 + 438 = 32090 assertions, all green
 ```
 
-Step 9 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
+Step 8 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
 skipped rather than failed. It also writes screenshots to `_verify/shots/`.
 
 To run one piece on its own:
@@ -118,22 +118,17 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 142 | UI against a DOM stub (includes the language switch, game records, gesture and reset edge cases, drag-direction convention) |
-| `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | Networking kernel, cell-by-cell against the web build (1156 cases) |
-| `node Web_Gomoku3D/tests/online-http.test.mjs` | 134 | Networking HTTP layer (loopback) |
 | `node _verify/browser-check.mjs` | 438 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer, game records) |
 
-The two networking tests run inside step 8 and **cannot be skipped**.
-
-Three more scripts exist to prove the checks above actually fail when they should —
+Two more scripts exist to prove the checks above actually fail when they should —
 each deliberately breaks the code and requires that the tests catch every case:
 
 | Command | What it does |
 |---|---|
 | `python _verify/inject-rulenote.py` | Breaks the on-screen rule summary 3 ways; both suites must catch 3/3 |
 | `python _verify/inject-i18n.py` | Breaks the language handling 8 ways (a missing translation in each of the three tables, a broken switch-back to Chinese, an unhighlighted list, a plural form that never changes…) and names, per case, which suite has to catch it |
-| `node _verify/inject-online.mjs` | Breaks the networking code 25 ways; every case must turn a test red (slow, not part of `run-all.sh`) |
 
-> The first two temporarily break `index.html` and restore it in a `finally` block.
+> These two temporarily break `index.html` and restore it in a `finally` block.
 > They run `browser-check` against a scratch directory, so the baseline PNGs in
 > `_verify/shots/` are never overwritten: screenshots are taken *before* the failures are
 > reported, so writing to the default directory would put captures of a deliberately broken
@@ -165,7 +160,6 @@ See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
 ├── README.md                   ← the Chinese README (this file is README.en.md)
 ├── Web_Gomoku3D/
 │   ├── index.html              ← all the code. 3D/4D rendering + rule kernel + UI, one file, no dependencies
-│   ├── server.js               ← the networking server (zero dependencies). Protocol and tests are in place; the page is not wired to it yet
 │   ├── README.md               ← engineering notes: architecture, evidence boundaries, known limits (Chinese only — much deeper than this file)
 │   ├── RULES_SPEC.md           ← full rules, for players (Chinese). This is what "Full rules" shows
 │   ├── RULES_SPEC.en.md        ← the rules in English / Japanese / Korean / Russian / French:
@@ -173,7 +167,6 @@ See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
 │   ├── RULES_SPEC.ko.md
 │   ├── RULES_SPEC.ru.md
 │   ├── RULES_SPEC.fr.md
-│   ├── ONLINE.md               ← design for two-player networking (Chinese only)
 │   └── tests/                  ← offline tests + the two frozen vector files
 ├── _verify/
 │   ├── run-all.sh              ← one command runs every offline check
@@ -181,7 +174,6 @@ See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
 │   ├── embed-rules.mjs         ← generator that embeds all six RULES_SPEC files into index.html
 │   ├── inject-rulenote.py      ← injection check: proves the rule-summary assertions can fail
 │   ├── inject-i18n.py          ← injection check: proves the language-switch assertions can fail
-│   ├── inject-online.mjs       ← injection check: proves the networking assertions can fail (slow, 25 cases)
 │   └── shots/                  ← screenshots written by browser-check
 ├── 打开流程.md                  ← setup walkthrough + acceptance checklist (Chinese only)
 └── LICENSE
@@ -191,14 +183,12 @@ See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
 
 The section of `index.html` between `/* GOMOKU-CORE-BEGIN */` and `/* GOMOKU-CORE-END */`
 is a **pure rule kernel** — it touches no DOM, no WebGL, no browser API. So the same source
-runs in three places:
+runs in two places:
 
 1. The browser (normal play)
 2. Node (`tests/rules.test.mjs` extracts it with `new Function` and replays the vectors)
-3. A server, when networking lands (as the referee)
 
-**One implementation**, so there is no way for "the web build changed but the server didn't"
-to happen.
+**One implementation**, so the web build and the tests cannot drift apart.
 
 ---
 
@@ -220,9 +210,9 @@ Four things worth knowing:
   Chinese — the languages can't quietly drift apart
 - **The rule kernel carries six languages too.** The kernel was already building Chinese
   sentences (`黑`/`白`, status descriptions), and there was no way around translating it: it has
-  to be extractable verbatim by `server.js` and three test files, so it cannot reference an
-  outside string table — it keeps its own (`CORE_TEXT`). Called without `lang`, the output is
-  byte-for-byte what it always was; the networking protocol is therefore still Chinese
+  to be extractable verbatim by the tests, so it cannot reference an outside string table —
+  it keeps its own (`CORE_TEXT`). Called without `lang`, the output is byte-for-byte what it
+  always was
 - **Plurals are chosen per language.** Chinese, Japanese and Korean have none; English and
   French have two forms (French counts 0 as singular); Russian has three (1 / 2–4 / 5+, with
   11–19 falling into the third). The rule lives in exactly one place — inside the kernel,
@@ -242,8 +232,8 @@ Four things worth knowing:
 The player-facing material is bilingual: this README, the full rules (`RULES_SPEC.en.md`),
 and the whole interface. The **deep engineering documentation is Chinese only** —
 `Web_Gomoku3D/README.md` (architecture, evidence boundaries, the reasoning behind each design
-decision), `打开流程.md`, and `ONLINE.md`. That is a real gap for English-speaking contributors,
-and it is stated here rather than papered over.
+decision) and `打开流程.md`. That is a real gap for English-speaking contributors, and it is
+stated here rather than papered over.
 
 ---
 
@@ -254,10 +244,6 @@ and it is stated here rather than papered over.
   of open threes), and how they decide whether to rotate in 4D. Threat counting uses a sliding window,
   so **it does recognise gapped shapes and double threats**; but it has no opening book, no joseki and
   no quiescence search — good enough as a sparring partner; for a serious game, use a dedicated engine.
-  (Cross-machine networking: the **server and protocol are implemented and tested**
-  — `Web_Gomoku3D/server.js`, 8960 assertions in step 8 — but the page is not wired to it,
-  so you cannot actually play across machines yet. Design and trade-offs:
-  [ONLINE.md](Web_Gomoku3D/ONLINE.md))
 - **No saved games.** There is a "Game records" list, but that is a post-hoc summary
   (result, move count…) — **it cannot bring a game back**: closing the page mid-game still ends it.
 - The 3D grid lines have **no sense of depth**: looking through the cube stacks n parallel
@@ -292,6 +278,12 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
+### 2026.10.21
+
+- ✨ **v3.1.9** Public release cleanup: the repository keeps single-player features only, and the
+  public distribution contains only the single-player page; the README now has voluntary tip QR
+  codes (they unlock nothing). The suite is eight steps, 32090 assertions, all green.
+
 ### 2026.10.14
 
 - ✨ **v3.1.8** New "Game records": every finished game leaves one line (mode / size / opponent /
@@ -315,7 +307,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
   an unbanner that would not go away), an interaction deadlock, layout overflow on narrow and
   phone-landscape screens, English plurals and four copy statements that contradicted the
   implementation, three rules-kernel verdicts (overline scan order, wrap double-counting,
-  winning-line coordinates), and four robustness fixes in the online server; details in the commits.
+  winning-line coordinates); details in the commits.
 
 ### 2026.10.06
 
@@ -407,7 +399,6 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 - ✨ **v2.5.0** Added the grid-lines switch, which hides the 3D lattice
 - 🌐 **v2.4.0** Added the English / Chinese switch
 - 🐛 **v2.3.3** Various fixes; published the project on GitHub
-- 📝 **v2.3.2** Planned online multiplayer (not finished yet)
 - 🎨 **v2.3.1** Moved the buttons on the setup screen
 - 🎨 **v2.3.0** Reworked the setup screen so it no longer feels split in two
 - 📝 **v2.2.1** Revised the rule text

@@ -32,7 +32,7 @@ jobs:
       - uses: actions/configure-pages@v5
 
       # 站点就是这一个文件。只拷 index.html ——
-      # tests/（含冻结的 vectors.json）、server.js、_verify/ 都不推上台。
+      # tests/（含冻结的 vectors.json）和 _verify/ 都不推上台。
       - name: 只挑出网页本体
         run: |
           mkdir -p _site

@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-41069_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-32090_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -97,13 +97,13 @@ bash _verify/run-all.sh
 ```
 
 **只要装了 node 就能跑**（不需要 Unity、不需要 .NET、不需要任何 npm 包）。
-九步，期望结果：
+八步，期望结果：
 
 ```
-11733 + 19449 + 98 + 230 + 142 + 8845 + 134 + 438 = 41069 项断言全绿
+11733 + 19449 + 98 + 230 + 142 + 438 = 32090 项断言全绿
 ```
 
-第 9 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
+第 8 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
 它会顺带截图到 `_verify/shots/`。
 
 单跑某一项：
@@ -115,20 +115,16 @@ bash _verify/run-all.sh
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | 电脑对手（两条硬规则、五档强弱关系、自对局逐手喂给引擎、四维转动只在必要时发生、计算量上界） |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 142 | 界面桩环境（含六语言文案齐全性、对局记录、手势与复位的边界值、拖拽方向约定） |
-| `node Web_Gomoku3D/tests/online.test.mjs` | 8845 | 联机内核：和网页版逐格对拍 1156 组 |
-| `node Web_Gomoku3D/tests/online-http.test.mjs` | 134 | 联机 HTTP 层（本机 loopback） |
 | `node _verify/browser-check.mjs` | 438 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局、对局记录） |
 
-后两项联机测试在第 8 步里跑，**不可跳过**（端口是随机挑的空闲端口）。
 另有三个注入验证脚本，专门证明上面那些检查**真的会红**：
 
 | 命令 | 覆盖 |
 |---|---|
 | `python _verify/inject-rulenote.py` | 把起始界面的规则摘要改坏 3 处，两套检查必须 3/3 抓到 |
 | `python _verify/inject-i18n.py` | 把语言切换的几条通路各弄坏一处（8 处：漏翻静态/动态/内核文案、切回中文失效、列表不高亮、复数不选形…），逐条写明该由哪套检查抓到 |
-| `node _verify/inject-online.mjs` | 把联机代码改坏 25 处，逐条确认测试会变红（很慢，不在 `run-all.sh` 里） |
 
-> 前两个脚本会临时改坏 `index.html` 再还原（`finally` 里恢复）。
+> 这两个脚本会临时改坏 `index.html` 再还原（`finally` 里恢复）。
 > 它们跑 `browser-check` 时写到临时目录，不会碰 `_verify/shots/` 里那批基线图 ——
 > 截图是在报告失败**之前**拍的，走默认目录的话，每注入一次就会把故意弄坏的页面
 > 写进版本库，而 `git status` 从此分不清"图被弄脏了"和"界面真的改了"。
@@ -153,7 +149,6 @@ bash _verify/run-all.sh
 ├── README.en.md                ← 这份 README 的英文版
 ├── Web_Gomoku3D/
 │   ├── index.html              ← 全部代码。三维/四维渲染 + 规则内核 + 界面，单文件零依赖
-│   ├── server.js               ← 联机服务器（零依赖）。协议实现与测试都在，页面还没接上它
 │   ├── README.md               ← 工程细节：架构、证据边界、已知限制（比这份深入得多，只有中文）
 │   ├── RULES_SPEC.md           ← 玩家向的规则全文（中文）。页面上「具体规则」显示的就是它
 │   ├── RULES_SPEC.en.md        ← 规则全文的英 / 日 / 韩 / 俄 / 法版：切到哪种语言，
@@ -161,7 +156,6 @@ bash _verify/run-all.sh
 │   ├── RULES_SPEC.ko.md
 │   ├── RULES_SPEC.ru.md
 │   ├── RULES_SPEC.fr.md
-│   ├── ONLINE.md               ← 双人联机的方案设计（只有中文）
 │   └── tests/                  ← 离线测试 + 两份冻结的向量
 ├── _verify/
 │   ├── run-all.sh              ← 一条命令跑完全部离线验证
@@ -169,7 +163,6 @@ bash _verify/run-all.sh
 │   ├── embed-rules.mjs         ← 把两份 RULES_SPEC 嵌进 index.html 的生成器
 │   ├── inject-rulenote.py      ← 注入验证：证明规则摘要那几条检查真的会红
 │   ├── inject-i18n.py          ← 注入验证：证明中英切换那几条检查真的会红
-│   ├── inject-online.mjs       ← 注入验证：证明联机那几条检查真的会红（很慢，25 处）
 │   └── shots/                  ← browser-check 的截图
 ├── 打开流程.md                  ← 上手流程 + 验收清单
 └── LICENSE
@@ -178,13 +171,12 @@ bash _verify/run-all.sh
 ### 🧩 一个刻意的设计：单文件
 
 `index.html` 里被 `/* GOMOKU-CORE-BEGIN */` 和 `/* GOMOKU-CORE-END */` 夹住的那一段是
-**纯规则内核**——不引用任何 DOM / WebGL / 浏览器 API。所以同一份源码可以在三种地方跑：
+**纯规则内核**——不引用任何 DOM / WebGL / 浏览器 API。所以同一份源码可以在两种地方跑：
 
 1. 浏览器里（正常玩）
 2. Node 里（`tests/rules.test.mjs` 用 `new Function` 抽出来，回放向量）
-3. 将来做联机时的服务器（当裁判）
 
-**只有一份实现**，不存在"网页版改了、服务器忘了改"这种分叉。
+**只有一份实现**，网页版和测试不会各跑一份规则。
 
 ---
 
@@ -202,8 +194,8 @@ bash _verify/run-all.sh
 - **中文原文留在 HTML 里，外语进字符串表。** 切回中文是把 HTML 里那份原文写回去，
   所以中文只有一份，不会出现"HTML 一份、表里一份"各自漂移
 - **规则内核里也有六种语言的文案。** 内核本来就在拼中文句子（`黑`/`白`/状态描述），
-  翻译它没有绕开的办法 —— 它得能被 `server.js` 和三个测试原样抽出去跑，不能引用外部的文案表，
-  所以它自带一张表（`CORE_TEXT`）。不传 `lang` 时逐字节等于从前，联机协议因此仍是中文
+  翻译它没有绕开的办法 —— 它得能被测试用 `new Function` 原样抽出去跑，不能引用外部的文案表，
+  所以它自带一张表（`CORE_TEXT`）。不传 `lang` 时逐字节等于从前
 - **单复数按语言选形**：中文日文韩文没有复数，英法两形（法语把 0 也算单数），俄语三形
   （1 / 2–4 / 5+，而且 11–19 归第三形）。规则只有一份，住在内核里（界面也要用，而内核叫不到界面）
 - **外语界面里的中文是有断言盯着的**：`browser-check` 会把渲染树逐屏扫一遍 ——
@@ -224,8 +216,6 @@ bash _verify/run-all.sh
   会不会**算杀**（强制取胜路线的搜索：连续冲四，以及连续活三），以及四维下怎么判断
   该不该转动。威胁计数用的是滑窗，所以**跳子形状和双威胁它是认得的**；但它没有开局库、
   没有定式、也不做静止搜索 —— 当陪练够用，想认真下棋请找专门的引擎。
-  （跨机联机的**服务器与协议已经实现并有测试覆盖**（`Web_Gomoku3D/server.js`，第 8 步 8960 项断言），
-  但页面还没接上它 —— 所以现在还不能真的跨机对局。方案与取舍见 [ONLINE.md](Web_Gomoku3D/ONLINE.md)）
 - **没有存档**：有「对局记录」，但那是事后的摘要（结果 / 手数这些），**读它回不到那盘棋** ——
   中途关掉页面仍然不能续下。
 - 三维格线**没有深度感**：视线穿过立方体会叠上 n 层屏幕位置完全重合的平行格线，
@@ -253,6 +243,11 @@ bash _verify/run-all.sh
 
 > 最新的在最上面。每条一行，动词开头（新增 / 修复 / 调整 / 完成）；实现细节写在 commit 里，不写在这里。
 
+### 2026.10.21
+
+- ✨ **v3.1.9** 公开版收口：仓库只保留单机功能，公开分发包只含单机网页；README 增加自愿打赏入口
+  （不绑定任何权益）。测试收成八步，32090 项断言全绿。
+
 ### 2026.10.14
 
 - ✨ **v3.1.8** 新增「对局记录」：每局下完自动记一条摘要（模式 / 尺寸 / 对手 / 结果 / 手数），
@@ -269,7 +264,7 @@ bash _verify/run-all.sh
 - 🔧 **v3.1.7** 修改若干问题。测试官挖出的一整批，按"玩家能不能感觉到"排：界面状态（粒子残影、
   转动预览与重开后的分叉、教学关按 `R`、终局横幅收不掉）、交互死锁、窄屏与手机横屏的布局溢出、
   英文单复数与几处与实现矛盾的文案、规则内核的三处判定（长连负扫描顺序、贯通重复计数、
-  获胜金线坐标）、联机服务器的四处健壮性；细节在 commit 里。
+  获胜金线坐标）；细节在 commit 里。
 
 ### 2026.10.06
 
@@ -353,7 +348,6 @@ bash _verify/run-all.sh
 - ✨ **v2.5.0** 新增「格线」开关，可隐藏立体棋盘的格线
 - 🌐 **v2.4.0** 新增中英文切换
 - 🐛 **v2.3.3** 修改若干问题；项目上传到 GitHub
-- 📝 **v2.3.2** 计划实现联机功能（尚未完成）
 - 🎨 **v2.3.1** 调整起始界面的按钮位置
 - 🎨 **v2.3.0** 调整起始界面，消除左右割裂感
 - 📝 **v2.2.1** 修订规则说明
