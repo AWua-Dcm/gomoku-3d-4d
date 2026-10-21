@@ -284,11 +284,8 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.10.21
 
-- ✨ **v3.1.9** Public release cleanup: the repository keeps single-player features only, and the
-  public distribution contains only the single-player page; the README now has voluntary tip QR
-  codes (they unlock nothing). The suite is eight steps, 32091 assertions, all green.
-- ✨ **v3.1.9** The public page now has a **Tip** button top-right: two inline QR codes
-  (uniform 320×320) plus an Afdian link, visible offline; tips unlock nothing.
+- ✨ **v3.1.10** Added a web app icon and a **Tip** entry top-right (Alipay/WeChat QR codes + Afdian); tipping changes nothing.
+- ✨ **v3.1.9** Public release cleanup: the repository and the public distribution contain the single-player game only.
 
 ### 2026.10.14
 
