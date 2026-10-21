@@ -734,9 +734,14 @@ try {
     const btn = document.getElementById("rulesBtn");
     const st  = document.getElementById("status");
     const hb  = document.getElementById("historyBtn");
+    const tb  = document.getElementById("tipBtn");
+    // 打赏键在记录右边，是当前最右；剥离 PAY 的构建里没有它，退回记录键。
+    const visible = [hb, tb].filter((el) => el && !el.classList.contains("off") &&
+      getComputedStyle(el).display !== "none");
+    const rightmost = visible[visible.length - 1] || hb;
     const r = (el) => { const b = el.getBoundingClientRect();
       return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
-    const before = { btn: r(btn), hist: r(hb), status: r(st), vw: document.documentElement.clientWidth };
+    const before = { btn: r(btn), hist: r(hb), rightmost: r(rightmost), status: r(st), vw: document.documentElement.clientWidth };
     btn.click();
     const body = document.getElementById("rulesBody");
     return {
@@ -751,12 +756,11 @@ try {
 
   check(rules.open === true, "点了「具体规则」之后浮层打开");
   // 右上角：整簇贴着视口右边 14px，且不压住状态文字。
-  // 【量的是最右那颗键】v3.1.8 加「记录」之前，最右那颗是「具体规则」，这条量的是它；
-  // 记录键加在它右边之后，"贴右 14px"这条不变量换到整簇的右边缘上 ——
-  // 再量 rulesBtn 的话它天然差着"记录键宽 + 间距"，而那不是回归，是布局换了。
-  check(Math.abs((rules.before.vw - rules.before.hist.r) - 14) <= 2,
-    "右上角最右那颗键（记录）贴在视口右边 14px 处",
-    "实际右边距 " + (rules.before.vw - rules.before.hist.r));
+  // 【量的是最右那颗键】v3.1.8 加「记录」之前最右是「具体规则」；记录键加在它右边
+  // 之后换到记录键；再加「打赏」之后换到打赏键。这条不变量量的一直是整簇右边缘。
+  check(Math.abs((rules.before.vw - rules.before.rightmost.r) - 14) <= 2,
+    "右上角最右那颗键贴在视口右边 14px 处",
+    "实际右边距 " + (rules.before.vw - rules.before.rightmost.r));
   check(rules.before.btn.t <= 20 && rules.before.hist.t <= 20,
     "两颗键都在顶部", "top=" + rules.before.btn.t + " / " + rules.before.hist.t);
   const overlap = (a) => !(a.l >= rules.before.status.r ||
@@ -767,6 +771,27 @@ try {
     "两颗键都不能和状态文字重叠（对局时它们会压着「黑棋落子」）",
     JSON.stringify(rules.before.btn) + " / " + JSON.stringify(rules.before.hist) +
     " vs " + JSON.stringify(rules.before.status));
+
+  // 打赏浮层：点击右上角打赏 → 规则浮层让位 → 两张内联二维码 + 爱发电链接 →
+  // 关闭按钮收起。二维码必须是 data URI，离线打开也能显示。
+  const tip = await ev(`(() => {
+    document.getElementById("tipBtn").click();
+    const p = document.getElementById("tipPanel");
+    const imgs = [...document.querySelectorAll("#tipQrs img")];
+    const out = {
+      open: !p.classList.contains("off"),
+      rulesClosed: document.getElementById("rulesPanel").classList.contains("off"),
+      href: document.getElementById("tipAfdian").getAttribute("href"),
+      count: imgs.length,
+      data: imgs.every((i) => i.src.startsWith("data:image/jpeg;base64,")),
+    };
+    document.getElementById("tipClose").click();
+    out.closed = p.classList.contains("off");
+    return out;
+  })()`);
+  check(tip.open && tip.rulesClosed && tip.closed && tip.count === 2 && tip.data &&
+        tip.href === "https://afdian.com/a/awuadcm666",
+    "打赏浮层：两张内联二维码 + 爱发电链接，开/关正常", JSON.stringify(tip));
 
   // 正文必须真的渲染出来了 —— 只判"浮层打开"是不够的：
   // 内容空着、或者渲染成一堆空标签，浮层照样能打开

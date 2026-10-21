@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-32090_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-32091_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -86,7 +86,7 @@ bash _verify/run-all.sh
 八步，期望结果：
 
 ```
-11733 + 19449 + 98 + 230 + 142 + 438 = 32090 项断言全绿
+11733 + 19449 + 98 + 230 + 142 + 439 = 32091 项断言全绿
 ```
 
 第 8 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -101,7 +101,7 @@ bash _verify/run-all.sh
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | 电脑对手（两条硬规则、五档强弱关系、自对局逐手喂给引擎、四维转动只在必要时发生、计算量上界） |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 142 | 界面桩环境（含六语言文案齐全性、对局记录、手势与复位的边界值、拖拽方向约定） |
-| `node _verify/browser-check.mjs` | 438 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局、对局记录） |
+| `node _verify/browser-check.mjs` | 439 | 真实浏览器（GLSL 编译、布局几何、控制台报错、六语言逐屏扫描、合成多点触摸、真定时器下的人机对局、对局记录） |
 
 另有三个注入验证脚本，专门证明上面那些检查**真的会红**：
 
@@ -250,7 +250,9 @@ bash _verify/run-all.sh
 ### 2026.10.21
 
 - ✨ **v3.1.9** 公开版收口：仓库只保留单机功能，公开分发包只含单机网页；README 增加自愿打赏入口
-  （不绑定任何权益）。测试收成八步，32090 项断言全绿。
+  （不绑定任何权益）。测试收成八步，32091 项断言全绿。
+- ✨ **v3.1.9** 公开版右上角新增「打赏」：两张内联二维码（统一 320×320）+ 爱发电链接，
+  离线打开也能显示；打赏不绑定任何权益。
 
 ### 2026.10.14
 
@@ -351,7 +353,7 @@ bash _verify/run-all.sh
 
 - ✨ **v2.5.0** 新增「格线」开关，可隐藏立体棋盘的格线
 - 🌐 **v2.4.0** 新增中英文切换
-- 🐛 **v2.3.3** 修改若干问题；项目上传到 GitHub
+- 🐛 **v2.3.2** 修改若干问题；项目上传到 GitHub
 - 🎨 **v2.3.1** 调整起始界面的按钮位置
 - 🎨 **v2.3.0** 调整起始界面，消除左右割裂感
 - 📝 **v2.2.1** 修订规则说明

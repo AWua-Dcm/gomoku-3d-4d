@@ -7,7 +7,7 @@
 
 [![Play in browser](https://img.shields.io/badge/Play_in_browser-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-32090_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-32091_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The web demo serves the very same `index.html` that is in this repository, hosted on
@@ -89,7 +89,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Eight steps; expected result:
 
 ```
-11733 + 19449 + 98 + 230 + 142 + 438 = 32090 assertions, all green
+11733 + 19449 + 98 + 230 + 142 + 439 = 32091 assertions, all green
 ```
 
 Step 8 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -104,7 +104,7 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 142 | UI against a DOM stub (includes the language switch, game records, gesture and reset edge cases, drag-direction convention) |
-| `node _verify/browser-check.mjs` | 438 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer, game records) |
+| `node _verify/browser-check.mjs` | 439 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer, game records) |
 
 Two more scripts exist to prove the checks above actually fail when they should —
 each deliberately breaks the code and requires that the tests catch every case:
@@ -286,7 +286,9 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 - ✨ **v3.1.9** Public release cleanup: the repository keeps single-player features only, and the
   public distribution contains only the single-player page; the README now has voluntary tip QR
-  codes (they unlock nothing). The suite is eight steps, 32090 assertions, all green.
+  codes (they unlock nothing). The suite is eight steps, 32091 assertions, all green.
+- ✨ **v3.1.9** The public page now has a **Tip** button top-right: two inline QR codes
+  (uniform 320×320) plus an Afdian link, visible offline; tips unlock nothing.
 
 ### 2026.10.14
 
@@ -402,7 +404,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 - ✨ **v2.5.0** Added the grid-lines switch, which hides the 3D lattice
 - 🌐 **v2.4.0** Added the English / Chinese switch
-- 🐛 **v2.3.3** Various fixes; published the project on GitHub
+- 🐛 **v2.3.2** Various fixes; published the project on GitHub
 - 🎨 **v2.3.1** Moved the buttons on the setup screen
 - 🎨 **v2.3.0** Reworked the setup screen so it no longer feels split in two
 - 📝 **v2.2.1** Revised the rule text
