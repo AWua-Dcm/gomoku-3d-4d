@@ -201,6 +201,8 @@ bash _verify/run-all.sh
 游戏本体永久免费，没有会员、没有付费解锁。如果它陪你度过了一段愉快的时间，可以自愿打赏；
 不打赏也能完整游玩。
 
+也可以直接在爱发电赞助：[afdian.com/a/awuadcm666](https://afdian.com/a/awuadcm666)
+
 <table>
   <tr>
     <td align="center">支付宝<br><img src="assets/donate-alipay.jpg" width="240" alt="支付宝打赏二维码"></td>

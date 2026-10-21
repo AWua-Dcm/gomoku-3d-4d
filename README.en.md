@@ -228,6 +228,8 @@ stated here rather than papered over.
 The game is free forever — no membership, no paywalled features. If it gave you a good time,
 you can leave a voluntary tip; everything works without it.
 
+You can also support on Afdian: [afdian.com/a/awuadcm666](https://afdian.com/a/awuadcm666)
+
 <table>
   <tr>
     <td align="center">Alipay<br><img src="assets/donate-alipay.jpg" width="240" alt="Alipay donation QR"></td>
