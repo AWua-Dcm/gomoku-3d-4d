@@ -13,20 +13,6 @@
 The web demo serves the very same `index.html` that is in this repository, hosted on
 GitHub Pages — there is no build step, and the deployed file is the file you can double-click.
 
-## ☕ Tip the author
-
-The game is free forever — no membership, no paywalled features. If it gave you a good time,
-you can leave a voluntary tip; everything works without it.
-
-<table>
-  <tr>
-    <td align="center">Alipay<br><img src="assets/donate-alipay.jpg" width="240" alt="Alipay donation QR"></td>
-    <td align="center">WeChat<br><img src="assets/donate-wechat.jpg" width="240" alt="WeChat donation QR"></td>
-  </tr>
-</table>
-
-> Tips are voluntary and unlock nothing. Minors should ask a guardian first.
-
 The game's interface switches between six languages too — the button in the top-right corner
 opens the list. It starts in Chinese.
 
@@ -234,6 +220,22 @@ and the whole interface. The **deep engineering documentation is Chinese only** 
 `Web_Gomoku3D/README.md` (architecture, evidence boundaries, the reasoning behind each design
 decision) and `打开流程.md`. That is a real gap for English-speaking contributors, and it is
 stated here rather than papered over.
+
+---
+
+## ☕ Tip the author
+
+The game is free forever — no membership, no paywalled features. If it gave you a good time,
+you can leave a voluntary tip; everything works without it.
+
+<table>
+  <tr>
+    <td align="center">Alipay<br><img src="assets/donate-alipay.jpg" width="240" alt="Alipay donation QR"></td>
+    <td align="center">WeChat<br><img src="assets/donate-wechat.jpg" width="240" alt="WeChat donation QR"></td>
+  </tr>
+</table>
+
+> Tips are voluntary and unlock nothing. Minors should ask a guardian first.
 
 ---
 

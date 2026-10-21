@@ -13,20 +13,6 @@
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
 线上那份和本地双击打开的那份是同一个文件。
 
-## ☕ 打赏
-
-游戏本体永久免费，没有会员、没有付费解锁。如果它陪你度过了一段愉快的时间，可以自愿打赏；
-不打赏也能完整游玩。
-
-<table>
-  <tr>
-    <td align="center">支付宝<br><img src="assets/donate-alipay.jpg" width="240" alt="支付宝打赏二维码"></td>
-    <td align="center">微信<br><img src="assets/donate-wechat.jpg" width="240" alt="微信打赏二维码"></td>
-  </tr>
-</table>
-
-> 打赏完全自愿，不影响任何功能；未成年人请在监护人知情下操作。
-
 网页界面本身也能切中英文：右上角的按钮，默认中文。
 
 ![起始界面](_verify/shots/1-起始界面.png)
@@ -207,6 +193,22 @@ bash _verify/run-all.sh
 
 （顺带说一句：这份文档里写死的那个断言总数需要手改，所以它总是慢半拍。
 真正的总数以 `bash _verify/run-all.sh` 的输出为准。）
+
+---
+
+## ☕ 打赏
+
+游戏本体永久免费，没有会员、没有付费解锁。如果它陪你度过了一段愉快的时间，可以自愿打赏；
+不打赏也能完整游玩。
+
+<table>
+  <tr>
+    <td align="center">支付宝<br><img src="assets/donate-alipay.jpg" width="240" alt="支付宝打赏二维码"></td>
+    <td align="center">微信<br><img src="assets/donate-wechat.jpg" width="240" alt="微信打赏二维码"></td>
+  </tr>
+</table>
+
+> 打赏完全自愿，不影响任何功能；未成年人请在监护人知情下操作。
 
 ---
 
