@@ -556,6 +556,13 @@ try {
   check(Math.abs(shift - Math.round(stable.tutW / 2)) <= 1,
     "「开始游戏」在「没勾」和「勾了」之间正好平移半个键位（居中 → 整组居中）",
     "实测平移 " + shift + "px，期望 " + Math.round(stable.tutW / 2) + "px（教学键 " + stable.tutW + "px 含间距）");
+  const trSetup = JSON.parse(await ev(`JSON.stringify((() => ({
+    hist: getComputedStyle(document.getElementById("historyBtn")).display,
+    tip: getComputedStyle(document.getElementById("tipBtn")).display,
+    rules: getComputedStyle(document.getElementById("rulesBtn")).display,
+  }))())`));
+  check(trSetup.hist !== "none" && trSetup.tip !== "none" && trSetup.rules !== "none",
+    "起始界面右上角保留规则/记录/打赏（记录只在对局中隐藏）", JSON.stringify(trSetup));
   // 留一张四维状态的截图。上面那几条只说"没动"，看不出四维到底长什么样 ——
   // 而"四维那一版有没有多出一行、有没有留空槽位"正是这一版最容易出错的地方。
   await ev(`Game.setSetupMode(true)`);
@@ -735,13 +742,13 @@ try {
     const st  = document.getElementById("status");
     const hb  = document.getElementById("historyBtn");
     const tb  = document.getElementById("tipBtn");
-    // 打赏键在记录右边，是当前最右；剥离 PAY 的构建里没有它，退回记录键。
-    const visible = [hb, tb].filter((el) => el && !el.classList.contains("off") &&
-      getComputedStyle(el).display !== "none");
-    const rightmost = visible[visible.length - 1] || hb;
+    // 游玩界面右上角 = 语言 / 规则 / 打赏；记录只在起始界面可见（CSS 隐藏）。
     const r = (el) => { const b = el.getBoundingClientRect();
       return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
-    const before = { btn: r(btn), hist: r(hb), rightmost: r(rightmost), status: r(st), vw: document.documentElement.clientWidth };
+    const before = {
+      btn: r(btn), tip: r(tb), histDisplay: getComputedStyle(hb).display,
+      rightmost: r(tb), status: r(st), vw: document.documentElement.clientWidth,
+    };
     btn.click();
     const body = document.getElementById("rulesBody");
     return {
@@ -756,42 +763,24 @@ try {
 
   check(rules.open === true, "点了「具体规则」之后浮层打开");
   // 右上角：整簇贴着视口右边 14px，且不压住状态文字。
-  // 【量的是最右那颗键】v3.1.8 加「记录」之前最右是「具体规则」；记录键加在它右边
-  // 之后换到记录键；再加「打赏」之后换到打赏键。这条不变量量的一直是整簇右边缘。
+  // 【量的是最右那颗键】v3.1.8 加「记录」之前，最右那颗是「具体规则」；记录键加在
+  // 它右边之后换到记录键；再后来「会员」又加在记录右边。这条不变量量的一直是
+  // 整簇的右边缘，所以取当前构建里最右的那颗（会员键被剥掉时退回记录键）。
   check(Math.abs((rules.before.vw - rules.before.rightmost.r) - 14) <= 2,
-    "右上角最右那颗键贴在视口右边 14px 处",
+    "右上角最右那颗键（打赏）贴着视口右边 14px 处",
     "实际右边距 " + (rules.before.vw - rules.before.rightmost.r));
-  check(rules.before.btn.t <= 20 && rules.before.hist.t <= 20,
-    "两颗键都在顶部", "top=" + rules.before.btn.t + " / " + rules.before.hist.t);
+  check(rules.before.btn.t <= 20 && rules.before.tip.t <= 20,
+    "规则/打赏两颗键都在顶部", "top=" + rules.before.btn.t + " / " + rules.before.tip.t);
   const overlap = (a) => !(a.l >= rules.before.status.r ||
                            a.r <= rules.before.status.l ||
                            a.b <= rules.before.status.t ||
                            a.t >= rules.before.status.b);
-  check(!overlap(rules.before.btn) && !overlap(rules.before.hist),
-    "两颗键都不能和状态文字重叠（对局时它们会压着「黑棋落子」）",
-    JSON.stringify(rules.before.btn) + " / " + JSON.stringify(rules.before.hist) +
+  check(!overlap(rules.before.btn) && !overlap(rules.before.tip),
+    "规则/打赏都不能和状态文字重叠（对局时它们会压着「黑棋落子」）",
+    JSON.stringify(rules.before.btn) + " / " + JSON.stringify(rules.before.tip) +
     " vs " + JSON.stringify(rules.before.status));
-
-  // 打赏浮层：点击右上角打赏 → 规则浮层让位 → 两张内联二维码 + 爱发电链接 →
-  // 关闭按钮收起。二维码必须是 data URI，离线打开也能显示。
-  const tip = await ev(`(() => {
-    document.getElementById("tipBtn").click();
-    const p = document.getElementById("tipPanel");
-    const imgs = [...document.querySelectorAll("#tipQrs img")];
-    const out = {
-      open: !p.classList.contains("off"),
-      rulesClosed: document.getElementById("rulesPanel").classList.contains("off"),
-      href: document.getElementById("tipAfdian").getAttribute("href"),
-      count: imgs.length,
-      data: imgs.every((i) => i.src.startsWith("data:image/jpeg;base64,")),
-    };
-    document.getElementById("tipClose").click();
-    out.closed = p.classList.contains("off");
-    return out;
-  })()`);
-  check(tip.open && tip.rulesClosed && tip.closed && tip.count === 2 && tip.data &&
-        tip.href === "https://afdian.com/a/awuadcm666",
-    "打赏浮层：两张内联二维码 + 爱发电链接，开/关正常", JSON.stringify(tip));
+  check(rules.before.histDisplay === "none",
+    "游玩界面右上角不再显示「记录」", "display=" + rules.before.histDisplay);
 
   // 正文必须真的渲染出来了 —— 只判"浮层打开"是不够的：
   // 内容空着、或者渲染成一堆空标签，浮层照样能打开
@@ -1286,12 +1275,8 @@ try {
     const panelEl = document.getElementById("historyPanel");
     const card = R(document.getElementById("historyCard"));
     const rowEl = document.querySelector("#historyBody .histRow");
-    const btn = R(document.getElementById("historyBtn"));
-    const st = R(document.getElementById("status"));
-    const rulesB = R(document.getElementById("rulesBtn"));
     const lang = R(document.getElementById("langBtn"));
-    const overlap = (a, b) => !(a.r <= b.l || b.r <= a.l || a.b <= b.t || b.b <= a.t);
-    // 语言列表的锚：它必须仍对着【语言键】展开 —— 记录键插在最右，
+    // 语言列表的锚：它必须仍对着【语言键】展开 —— 打赏键插在记录后面，
     // 没有动到"第一个孩子"这个前提（#langList 的 left:0 锚的就是它）
     Game.toggleLangList(true);
     const ll = R(document.getElementById("langList"));
@@ -1304,9 +1289,7 @@ try {
       card: card,
       cardInView: card.l >= 0 && card.t >= 0 &&
                   card.r <= innerWidth + 0.5 && card.b <= innerHeight + 0.5,
-      btnHitsStatus: overlap(btn, st),
-      btnHitsRules: overlap(btn, rulesB),
-      btnInView: btn.r <= innerWidth && btn.t >= 0,
+      histDisplay: getComputedStyle(document.getElementById("historyBtn")).display,
       langListLeft: ll.l, langBtnLeft: lang.l,
     };
   })()`);
@@ -1316,11 +1299,10 @@ try {
     "面板里那一行是完整的（尺寸 + 结果都在）", JSON.stringify(hist.rowText));
   check(hist.open && hist.cardInView && hist.card.w >= 320,
     "记录面板打开，卡片整个在视口里", JSON.stringify(hist.card));
-  check(!hist.btnHitsStatus && !hist.btnHitsRules && hist.btnInView,
-    "右上角第三颗键不压状态行、也不和另外两颗叠",
-    JSON.stringify({ 状态行: hist.btnHitsStatus, 具体规则: hist.btnHitsRules }));
+  check(hist.histDisplay === "none",
+    "游玩界面不显示「记录」键（面板仍可由起始界面打开）", "display=" + hist.histDisplay);
   check(Math.abs(hist.langListLeft - hist.langBtnLeft) <= 2,
-    "语言列表仍然对着语言键展开（记录键插在最右，没有动到第一个孩子）",
+    "语言列表仍然对着语言键展开（打赏键插在记录后面，没有动到第一个孩子）",
     "langList.l=" + hist.langListLeft + " vs langBtn.l=" + hist.langBtnLeft);
 
   // Esc 关面板，且不顺手把终局横幅也关了
@@ -1345,6 +1327,96 @@ try {
         histMutual.b.h === true && histMutual.b.r === false,
     "规则浮层与记录面板互斥（开一个关另一个，两个方向都对）", JSON.stringify(histMutual));
 
+  // ---- 6d. 完整棋谱 + 导出图片（回放指纹 / 取图 / 海报 / 长图 / 昵称）
+  const exp = JSON.parse(await ev(`(() => {
+    const rec = GameRecords.load()[0];
+    const sess = Game.replayRecord(rec);
+    const fpOk = !!sess && fingerprint(sess) === rec.fp;
+    const board = sess ? Game.captureBoardCanvas(sess) : null;
+    let nonBlank = false;
+    if (board) {
+      const ctx = board.getContext("2d");
+      const d = ctx.getImageData(0, 0, board.width, board.height).data;
+      let diff = 0;
+      for (let i = 4; i < d.length; i += 4) {
+        if (Math.abs(d[i] - d[0]) + Math.abs(d[i + 1] - d[1]) + Math.abs(d[i + 2] - d[2]) > 24) diff++;
+      }
+      nonBlank = diff > 500;
+    }
+    const aiRec = Object.assign({}, rec, { ai: 1, me: 1, w: 1 });
+    // 样张用均匀的 15 秒/手，时间列才有东西看（真实对局本来就有时间）。
+    const sample = Object.assign({}, rec, {
+      dur: Math.max(0, (rec.mv.length - 1) * 15000),
+      mv: rec.mv.map((m, i) => [m[0], m[1], m[2], m[3], m[4], m[5], i * 15000]),
+    });
+    const poster = board ? Game.composePosterCanvas(aiRec, board, "阿甲") : null;
+    const long = board ? Game.composeLongImageCanvas(sample, board, "阿甲") : null;
+    return JSON.stringify({
+      fpOk: fpOk, board: !!board, size: board && board.width, nonBlank: nonBlank,
+      poster: poster && [poster.width, poster.height],
+      long: long && [long.width, long.height],
+      posterUrl: poster ? poster.toDataURL("image/jpeg") : "",
+      longUrl: long ? long.toDataURL("image/png") : "",
+    });
+  })()`));
+  check(exp.fpOk && exp.board && exp.nonBlank,
+    "棋谱能回放到最终盘面，取图不是空白", JSON.stringify(exp));
+  check(exp.poster && exp.poster[0] === 1080 && exp.poster[1] === 1440 &&
+        exp.posterUrl.indexOf("data:image/jpeg") === 0,
+    "胜利海报是 1080×1440 JPEG", JSON.stringify(exp.poster));
+  check(exp.long && exp.long[0] === 1080 && exp.long[1] >= 900 &&
+        exp.longUrl.indexOf("data:image/png") === 0,
+    "对局长图是 1080 宽 PNG", JSON.stringify(exp.long));
+  // 把样张落盘，人眼检查排版/书法/印章；它们不参与断言。
+  for (const [url, name] of [[exp.posterUrl, "16-导出海报.jpg"], [exp.longUrl, "16-导出长图.png"]]) {
+    try {
+      if (url && url.indexOf("base64,") > 0) {
+        fs.writeFileSync(path.join(OUT_DIR, name), Buffer.from(url.split("base64,")[1], "base64"));
+      }
+    } catch (e) { /* 样张写不出不影响断言 */ }
+  }
+
+  const expUi = JSON.parse(await ev(`(() => {
+    const rec = GameRecords.load()[0];
+    const oldDl = Game.downloadDataUrl;
+    let dl = null;
+    Game.downloadDataUrl = (u, f) => { dl = { u: u.slice(0, 22), f: f }; return true; };
+    Game.openExport(rec, "long");
+    const opened = Game.exportOpen;
+    const def = Game.el.exportName.value;
+    Game.el.exportName.value = "阿甲";
+    Game.confirmExport();
+    const out = {
+      opened: opened, def: def, name: Game._lastExportName,
+      stored: localStorage.getItem("gomoku.nickname.v1"),
+      closed: !Game.exportOpen, dl: dl,
+    };
+    Game.downloadDataUrl = oldDl;
+    return JSON.stringify(out);
+  })()`));
+  check(expUi.opened && expUi.closed && expUi.name === "阿甲" &&
+        expUi.stored === "阿甲" && expUi.dl && expUi.dl.f === "gomoku-record.png",
+    "导出前能改昵称，昵称落库并用于下载", JSON.stringify(expUi));
+
+  const histDetail = JSON.parse(await ev(`(() => {
+    Game.openHistory();
+    const d = document.querySelector("#historyBody .histDetail");
+    if (d) {
+      d.open = true;
+      const box = d.querySelector(".histMoveBox");
+      if (box && !box.innerHTML) Game.renderMoveListInto(box, d.getAttribute("data-id"));
+    }
+    return JSON.stringify({
+      details: !!d,
+      longBtn: !!document.querySelector('#historyBody [data-export="long"]'),
+      posterBtn: !!document.querySelector('#historyBody [data-export="poster"]'),
+      rows: document.querySelectorAll("#historyBody .histMove").length,
+    });
+  })()`));
+  check(histDetail.details && histDetail.longBtn && !histDetail.posterBtn && histDetail.rows > 0,
+    "记录详情里有棋谱折叠与长图按钮（人类局没有海报）", JSON.stringify(histDetail));
+  await ev("Game.closeHistory(); 1");
+
   // 截图基线。背景是"刚落完的一局"，静止不动；终局横幅留在屏幕上（确定性内容）。
   // 【拍照前把那条记录的时间钉死】行首的 "YYYY-MM-DD HH:MM" 是真实时刻 ——
   // 不钉住的话这张基线图每次跑都和上一张差七十来个像素（实测 bc2 vs bc3：72px），
@@ -1352,6 +1424,8 @@ try {
   await ev(`(() => {
     const l = GameRecords.load();
     if (l[0]) { l[0].t = new Date(2026, 9, 14, 21, 3).getTime(); GameRecords.save(l); }
+    // 上一节导出图片会留一句「图片已生成」的 toast；别让它进基线图。
+    Game.el.toast.classList.remove("on"); Game.toastTimer = 0;
     Game.openHistory();
     return 1;
   })()`);
@@ -2594,21 +2668,46 @@ try {
     "拉条拖得动：按住滑块拖到最右，档位跟着到最高档", JSON.stringify(dragged));
   check(dragged.pct === "100.0%", "拖完之后填充比例也跟到了底", dragged.pct);
 
-  // 选「人类」时：淡显 + 不可点，**但不隐藏** —— 和 #coolRow 在三维下同一套。
-  // 隐藏（visibility）会留一条空白，摘掉（display:none）会让下面所有行上移、整屏跳一下。
+  // 选「人类」时：两行隐藏（visibility:hidden，保留槽位），拉条仍 disabled + dim。
+  // **不能用 getClientRects() 判不可见** —— visibility:hidden 仍然返回矩形。
   const humanLv = JSON.parse(await ev(`(() => {
     Game.setSetupAi("human");
     const r = document.getElementById("aiRange");
+    const row = document.getElementById("aiLevelRow");
+    const order = document.getElementById("orderRow");
     return JSON.stringify({
       disabled: r.disabled,
       dim: document.getElementById("aiLevel").classList.contains("dim"),
-      rowH: Math.round(document.getElementById("aiLevelRow").getBoundingClientRect().height),
-      vis: document.getElementById("aiLevelRow").getClientRects().length > 0,
+      rowH: Math.round(row.getBoundingClientRect().height),
+      rowVis: getComputedStyle(row).visibility,
+      orderVis: getComputedStyle(order).visibility,
+      slotH: Math.round(document.getElementById("opponentSlot").getBoundingClientRect().height),
     });
   })()`));
   check(humanLv.disabled && humanLv.dim, "选了人类时拉条淡显且不可点", JSON.stringify(humanLv));
-  check(humanLv.vis && humanLv.rowH > 0,
-    "选了人类时拉条那一行仍然占位（切回人机时不会整屏跳）", humanLv.rowH + "px");
+  check(humanLv.rowVis === "hidden" && humanLv.orderVis === "hidden",
+    "选了人类时强度/谁先下两行不可见（不再留灰键）", JSON.stringify(humanLv));
+  check(humanLv.rowH > 0 && humanLv.slotH > 0,
+    "两行仍然占着槽位（切回人机时不会整屏跳）", humanLv.rowH + "px / " + humanLv.slotH + "px");
+
+  // 人类 ↔ 人机切换：开始游戏和整个槽位一个像素都不动（同高占位的不变量）。
+  const oppStable = JSON.parse(await ev(`(() => {
+    Game.setSetupAi("cpu");
+    const a = document.getElementById("startBtn").getBoundingClientRect();
+    const oa = document.getElementById("opponentSlot").getBoundingClientRect();
+    Game.setSetupAi("human");
+    const b = document.getElementById("startBtn").getBoundingClientRect();
+    const ob = document.getElementById("opponentSlot").getBoundingClientRect();
+    Game.setSetupAi("cpu");
+    return JSON.stringify({
+      a: [a.left, a.top, a.width, a.height], b: [b.left, b.top, b.width, b.height],
+      oa: oa.height, ob: ob.height,
+    });
+  })()`));
+  check(oppStable.a.every((v, i) => Math.abs(v - oppStable.b[i]) <= 0.5) &&
+        Math.abs(oppStable.oa - oppStable.ob) <= 0.5,
+    "人类↔人机切换时「开始游戏」与槽位都不动",
+    JSON.stringify(oppStable));
   // 切回中间档：提示必须消失、拉条落回原位、行高不变
   const hintOff = JSON.parse(await ev(`(() => {
     Game.setSetupLevel(2);

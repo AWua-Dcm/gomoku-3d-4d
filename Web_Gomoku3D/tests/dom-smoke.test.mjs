@@ -2513,7 +2513,7 @@ step("语言：内核文案六种语言都齐（含复数的每一形）", () =>
  * 冒出一句中文"，而那可能是任何一次操作才触发的一句话，靠点界面碰不到几条。
  * 所以这里用和界面表一样的办法：扫描 + 两个方向都查。
  *
- * 【只查中文齐不齐是不够的】每条都得有 zh（默认语言 + 测试），
+ * 【只查中文齐不齐是不够的】每条都得有 zh（默认语言 + 联机协议），
  * 另外四种语言的齐全性由下面那条"逐语言"的检查负责（它读的是源码里的实际值）。
  */
 step("语言：内核文案表的键和源码对得上，且每条都有中文", () => {
@@ -2526,7 +2526,7 @@ step("语言：内核文案表的键和源码对得上，且每条都有中文",
   const badBase = [...core.bases].filter((b) => !baseExists(CORE_TEXT, b));
   if (badBase.length) throw new Error("内核这些复数基名在表里既没有基名也没有任何一形：" + badBase.join(", "));
   const noZh = Object.keys(CORE_TEXT).filter((k) => CORE_TEXT[k].zh === undefined);
-  if (noZh.length) throw new Error("内核文案这些键缺中文（默认语言 + 测试都要用）：" + noZh.join(", "));
+  if (noZh.length) throw new Error("内核文案这些键缺中文（默认语言 + 联机协议都要用）：" + noZh.join(", "));
   // 内核表里没人用的键：内核区间扫出来的键和基名之外，全是死的
   const deadCore = Object.keys(CORE_TEXT).filter((k) => !keyIsUsed(k, core));
   if (deadCore.length) throw new Error("内核文案里这些键没人用（改名漏改？）：" + deadCore.join(", "));

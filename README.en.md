@@ -7,7 +7,7 @@
 
 [![Play in browser](https://img.shields.io/badge/Play_in_browser-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-32091_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-32099_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The web demo serves the very same `index.html` that is in this repository, hosted on
@@ -70,7 +70,7 @@ To confirm nothing is broken: press `F12` → Console and look for red text.
 | Touch: pinch in / out | Zoom the board. **Works on both the 3D board and the single-layer board** (on a phone a cell of the layer board is only about 10px across, so zooming is the only way to aim) |
 | Touch: two-finger drag | Pan the board — it follows your fingers |
 | Language button, top-right | Opens a list of the six languages (中文 / English / 日本語 / 한국어 / Русский / Français); the current one is highlighted |
-| **History** button, top-right | The last 50 finished games, one line each (time / mode / opponent / result / move count); a **Clear** button sits inside |
+| **History** button, top-right of the setup screen | The last 50 finished games: summary + full move list (coordinates / colour / time, rotations in 4D). **Hidden during play**; export a long image or a victory poster; **Clear** sits inside |
 | Touch: double-tap a board | Reset — the 3D board returns to its start framing, the layer board to 1×, pan cleared. **The angle you rotated to is left alone** |
 
 > While zoomed in, a single tap places its stone after a ~300ms double-tap window.
@@ -89,7 +89,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Eight steps; expected result:
 
 ```
-11733 + 19449 + 98 + 230 + 142 + 439 = 32091 assertions, all green
+11733 + 19449 + 98 + 230 + 142 + 447 = 32099 assertions, all green
 ```
 
 Step 8 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -104,7 +104,7 @@ To run one piece on its own:
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
 | `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 142 | UI against a DOM stub (includes the language switch, game records, gesture and reset edge cases, drag-direction convention) |
-| `node _verify/browser-check.mjs` | 439 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer, game records) |
+| `node _verify/browser-check.mjs` | 447 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer, game records, move list / poster / long image) |
 
 Two more scripts exist to prove the checks above actually fail when they should —
 each deliberately breaks the code and requires that the tests catch every case:
@@ -248,8 +248,10 @@ You can also support on Afdian: [afdian.com/a/awuadcm666](https://afdian.com/a/a
   of open threes), and how they decide whether to rotate in 4D. Threat counting uses a sliding window,
   so **it does recognise gapped shapes and double threats**; but it has no opening book, no joseki and
   no quiescence search — good enough as a sparring partner; for a serious game, use a dedicated engine.
-- **No saved games.** There is a "Game records" list, but that is a post-hoc summary
-  (result, move count…) — **it cannot bring a game back**: closing the page mid-game still ends it.
+- **No saved games.** There is a "Game records" list, now storing a summary plus the full move
+  list (coordinates / colour / time per move, rotations in 4D); you can expand it and export a
+  long image or a victory poster. **It still cannot bring a game back**: closing the page
+  mid-game ends it.
 - The 3D grid lines have **no sense of depth**: looking through the cube stacks n parallel
   grid lines at exactly the same screen position, and since they are alpha-blended the inside
   reads as a gray mesh. This is inherent to drawing coincident primitives — adjusting alpha only
@@ -281,6 +283,11 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 ## 📝 Changelog
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
+
+### 2026.10.22
+
+- ✨ **v3.1.11** Setup screen: choosing **Human** hides "thinking level / who plays first"; the History button stays on the setup screen and is hidden during play.
+- ✨ Free features: full move record (with per-move time), a JPEG victory poster when you beat the computer, and a long-image export; a nickname dialog appears before export.
 
 ### 2026.10.21
 
