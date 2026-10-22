@@ -1343,9 +1343,10 @@ try {
       }
       nonBlank = diff > 500;
     }
-    const aiRec = Object.assign({}, rec, { ai: 1, me: 1, w: 1 });
+    const aiRec = Object.assign({}, rec, { ai: 4, me: 1, w: 1 });
     // 样张用均匀的 15 秒/手，时间列才有东西看（真实对局本来就有时间）。
-    const sample = Object.assign({}, rec, {
+    // 用极限档样张同时检查：难度梯度 + ULTRA 额外装饰。
+    const sample = Object.assign({}, aiRec, {
       dur: Math.max(0, (rec.mv.length - 1) * 15000),
       mv: rec.mv.map((m, i) => [m[0], m[1], m[2], m[3], m[4], m[5], i * 15000]),
     });
@@ -1380,7 +1381,7 @@ try {
     const rec = GameRecords.load()[0];
     const oldDl = Game.downloadDataUrl;
     let dl = null;
-    Game.downloadDataUrl = (u, f) => { dl = { u: u.slice(0, 22), f: f }; return true; };
+    Game.downloadDataUrl = (u, f) => { dl = { u: u.slice(0, 22), f: f }; return "download"; };
     Game.openExport(rec, "long");
     const opened = Game.exportOpen;
     const def = Game.el.exportName.value;

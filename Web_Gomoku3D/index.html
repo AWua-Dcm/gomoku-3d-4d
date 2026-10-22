@@ -8803,8 +8803,12 @@ const TEXT = { en: {
   "export.failReplay": "Could not replay this game — cannot export.",
   "export.failCanvas": "Could not generate the image.",
   "export.done": "Image generated",
+  "export.shareHint": "Share sheet opened — choose “Save Image” or “Save to Files”.",
+  "export.saveFail": "Image generated, but saving failed — long-press the image to save.",
   "poster.beatCpu": "I beat the computer · {level}",
   "poster.call": "Think you can beat me? Take a game.",
+  "poster.ultra": "ULTRA · Beat the strongest AI",
+  "export.difficulty": "Difficulty",
 
   // ---- WebGL2 起不来时的故障文案（替掉 #hint 的静态内容）
 
@@ -8939,8 +8943,12 @@ TEXT.ja = {
   "export.failReplay": "棋譜の再生に失敗したため書き出せません。",
   "export.failCanvas": "画像の生成に失敗しました。",
   "export.done": "画像を生成しました",
+  "export.shareHint": "共有メニューを開きました。「画像を保存」または「ファイルに保存」を選んでください。",
+  "export.saveFail": "画像は生成されましたが保存できませんでした。画像を長押しして保存してください。",
   "poster.beatCpu": "コンピュータに勝利 · {level}",
   "poster.call": "一局やってみる？勝てるかな。",
+  "poster.ultra": "極限難易度 · 最強のコンピュータを撃破",
+  "export.difficulty": "難易度",
   "info.moves.many": "{n}手経過",
   "info.rotations.many": " · {n}回転",
   "info.board": " · 盤 {x}×{y}×{z} · レイヤー {layer}/{n}",
@@ -9134,8 +9142,12 @@ TEXT.ko = {
   "export.failReplay": "기보 재생에 실패해 내보낼 수 없습니다.",
   "export.failCanvas": "이미지를 생성하지 못했습니다.",
   "export.done": "이미지를 생성했습니다",
+  "export.shareHint": "공유 메뉴가 열렸습니다. '이미지 저장' 또는 '파일에 저장'을 선택하세요.",
+  "export.saveFail": "이미지는 생성되었지만 저장하지 못했습니다. 이미지를 길게 눌러 저장하세요.",
   "poster.beatCpu": "컴퓨터를 이겼습니다 · {level}",
   "poster.call": "한 판 해볼래? 나를 이길 수 있을까?",
+  "poster.ultra": "극한 난이도 · 최강 컴퓨터 격파",
+  "export.difficulty": "난이도",
   "info.moves.many": "{n}수 착수",
   "info.rotations.many": " · {n}회 회전",
   "info.board": " · 판 {x}×{y}×{z} · 레이어 {layer}/{n}",
@@ -9336,8 +9348,12 @@ TEXT.ru = {
   "export.failReplay": "Не удалось воспроизвести партию — экспорт невозможен.",
   "export.failCanvas": "Не удалось создать изображение.",
   "export.done": "Изображение создано",
+  "export.shareHint": "Открыто меню «Поделиться» — выберите «Сохранить изображение» или «Сохранить в файлы».",
+  "export.saveFail": "Изображение создано, но сохранить не удалось — нажмите и удерживайте изображение, чтобы сохранить.",
   "poster.beatCpu": "Я победил компьютер · {level}",
   "poster.call": "Сыграем? Сможешь меня обыграть?",
+  "poster.ultra": "ПРЕДЕЛ · Победа над сильнейшим ИИ",
+  "export.difficulty": "Сложность",
   "info.moves.one": "сделан {n} ход",
   "info.moves.few": "сделано {n} хода",
   "info.moves.many": "сделано {n} ходов",
@@ -9545,8 +9561,12 @@ TEXT.fr = {
   "export.failReplay": "Impossible de rejouer cette partie — export impossible.",
   "export.failCanvas": "Impossible de générer l'image.",
   "export.done": "Image générée",
+  "export.shareHint": "Menu de partage ouvert — choisissez « Enregistrer l'image » ou « Enregistrer dans Fichiers ».",
+  "export.saveFail": "Image générée, mais l'enregistrement a échoué — appuyez longuement sur l'image pour l'enregistrer.",
   "poster.beatCpu": "J'ai battu l'ordinateur · {level}",
   "poster.call": "Une partie ? Tu penses pouvoir me battre ?",
+  "poster.ultra": "ULTIME · Vaincre l'IA la plus forte",
+  "export.difficulty": "Difficulté",
   "info.moves.one": "{n} coup joué",
   "info.moves.many": "{n} coups joués",
   "info.rotations.one": " · {n} rotation",
@@ -11891,18 +11911,62 @@ const Game = {
                               : canvas.toDataURL("image/png");
     } catch (e) { url = ""; }
     if (!url) { this.showExportError("export.failCanvas"); return; }
-    this.downloadDataUrl(url, kind === "poster" ? "gomoku-poster.jpg" : "gomoku-record.png");
+    const how = this.downloadDataUrl(url, kind === "poster" ? "gomoku-poster.jpg" : "gomoku-record.png");
     this.closeExport();
-    this.toast(say(() => "图片已生成", "export.done"), true);
+    if (how === "share") {
+      this.toast(say(() => "已打开分享菜单；选「存储图像」或「存储到文件」即可保存",
+                     "export.shareHint"), true);
+    } else if (how === "download") {
+      this.toast(say(() => "图片已生成", "export.done"), true);
+    } else {
+      this.toast(say(() => "图片已生成，但保存失败；请长按图片保存", "export.saveFail"), true);
+    }
   },
 
+  /**
+   * 保存图片。**手机 Safari 不能只靠 a[download]**：它经常只是把图片打开，
+   * 下载到 Files 的方向也不直观，玩家会说"找不到图片"。
+   * 触屏设备走 Web Share（分享菜单里可「存储图像 / 存储到文件」）；
+   * 桌面仍走 <a download>。分享 API 必须在用户手势的同一个同步段里调用，
+   * 所以这里不 await；用户取消分享的 rejection 直接忽略。
+   */
   downloadDataUrl(url, filename) {
+    const blob = this.dataUrlToBlob(url);
+    if (blob && this.shareFile(blob, filename)) return "share";
     try {
       const a = document.createElement("a");
       a.href = url; a.download = filename;
       if (document.body) document.body.appendChild(a);
       a.click();
       if (a.parentNode) a.parentNode.removeChild(a);
+      return "download";
+    } catch (e) { return false; }
+  },
+
+  dataUrlToBlob(url) {
+    try {
+      const m = /^data:([^;,]+)?(;base64)?,/.exec(url || "");
+      if (!m) return null;
+      const mime = m[1] || "application/octet-stream";
+      const body = url.slice(m[0].length);
+      if (!m[2]) return new Blob([decodeURIComponent(body)], { type: mime });
+      const bin = atob(body);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new Blob([arr], { type: mime });
+    } catch (e) { return null; }
+  },
+
+  shareFile(blob, filename) {
+    try {
+      if (typeof navigator === "undefined" || typeof File !== "function") return false;
+      if (!navigator.share || !navigator.canShare) return false;
+      const touch = (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) ||
+                    (navigator.maxTouchPoints || 0) > 0;
+      if (!touch) return false;
+      const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+      if (!navigator.canShare({ files: [file] })) return false;
+      navigator.share({ files: [file] }).catch(() => {});
       return true;
     } catch (e) { return false; }
   },
@@ -15842,6 +15906,65 @@ const GameExport = (function () {
     return say(() => "玩家：" + name, "export.playerLine", { name: name });
   }
 
+  /**
+   * 难度梯度：低 → 中 → 高 → 极高 → 极限，当前档高亮。
+   * 海报和长图共用；极限档用朱红实心 + 金色描边，其他档金色实心。
+   */
+  function difficultyStrip(ctx, cx, y, cur, game, bf, pillH, fontPx) {
+    const h = pillH || 28;
+    const px = fontPx || 17;
+    const labels = [0, 1, 2, 3, 4].map((i) => game.aiLevelNameText(i));
+    const lab = say(() => "难度", "export.difficulty");
+    const padX = 13, gap = 8;
+    ctx.font = "600 " + px + "px " + bf;
+    const widths = labels.map((t) => Math.ceil(ctx.measureText(t).width) + padX * 2);
+    const labW = Math.ceil(ctx.measureText(lab).width);
+    let total = labW + 16 + gap * 5;
+    for (let i = 0; i < widths.length; i++) total += widths[i];
+    let x = cx - total / 2;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.fillStyle = hex("--dim");
+    ctx.fillText(lab, x, y);
+    x += labW + 16;
+    for (let i = 0; i < labels.length; i++) {
+      const w = widths[i], active = i === cur;
+      if (active) {
+        ctx.fillStyle = i === 4 ? hex("--danger") : hex("--gold");
+        roundRect(ctx, x, y - h / 2, w, h, h / 2);
+        ctx.fill();
+        if (i === 4) {
+          ctx.strokeStyle = hex("--gold");
+          ctx.lineWidth = 2;
+          roundRect(ctx, x + 1, y - h / 2 + 1, w - 2, h - 2, (h - 2) / 2);
+          ctx.stroke();
+        }
+      } else {
+        ctx.strokeStyle = hex("--border");
+        ctx.lineWidth = 1;
+        roundRect(ctx, x + 0.5, y - h / 2 + 0.5, w - 1, h - 1, (h - 1) / 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = active ? "#fffaf0" : hex("--dim");
+      ctx.font = (active ? "600 " : "") + px + "px " + bf;
+      ctx.textAlign = "center";
+      ctx.fillText(labels[i], x + w / 2, y);
+      ctx.textAlign = "left";
+      if (i < labels.length - 1) {
+        ctx.strokeStyle = hex("--border");
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(x + w + 2, y);
+        ctx.lineTo(x + w + gap - 2, y);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      x += w + gap;
+    }
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+  }
+
   // ------------------------------------------------------------------ 海报
   function poster(rec, board, name, game) {
     const cv = document.createElement("canvas");
@@ -15873,29 +15996,65 @@ const GameExport = (function () {
     ctx.fillText(fmtDate(rec.t), W - 64, 232);
     ctx.textAlign = "left";
 
-    drawBoard(ctx, board, 160, 286, 760, 760);
+    const ultra = (rec.ai | 0) === 4;
+    if (ultra) {
+      // 极限档的额外装饰：金色内框 + 左上 ULTRA 徽章 + 极限宣言。
+      ctx.strokeStyle = hex("--gold");
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(38.5, 38.5, W - 77, 1440 - 77);
+      ctx.globalAlpha = 0.45;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(44.5, 44.5, W - 89, 1440 - 89);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = hex("--gold");
+      roundRect(ctx, 64, 44, 210, 34, 8);
+      ctx.fill();
+      ctx.fillStyle = "#fffaf0";
+      ctx.font = "700 18px " + bf;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("★ ULTRA", 82, 61);
+      ctx.textBaseline = "alphabetic";
+    }
+
+    drawBoard(ctx, board, 180, 260, 720, 720);
 
     const pl = playerLine(game, name);
     const ps = fitSize(ctx, pl, 920, (s) => "600 " + s + "px " + bf, 46, 22);
     ctx.fillStyle = hex("--accent");
     ctx.font = "600 " + ps + "px " + bf;
     ctx.textAlign = "center";
-    ctx.fillText(pl, W / 2, 1118);
+    ctx.fillText(pl, W / 2, 1030);
 
     const lv = game.aiLevelNameText(rec.ai);
     const beat = say(() => "我战胜了人机 · " + lv, "poster.beatCpu", { level: lv });
     const bs = fitSize(ctx, beat, 920, (s) => "600 " + s + "px " + bf, 34, 20);
-    ctx.fillStyle = hex("--gold");
+    ctx.fillStyle = ultra ? hex("--danger") : hex("--gold");
     ctx.font = "600 " + bs + "px " + bf;
-    ctx.fillText(beat, W / 2, 1176);
+    ctx.fillText(beat, W / 2, 1085);
+
+    let y = 1085;
+    if (ultra) {
+      const ul = say(() => "极限难度 · 击败最强电脑", "poster.ultra");
+      const us = fitSize(ctx, ul, 920, (s) => "600 " + s + "px " + bf, 24, 16);
+      ctx.fillStyle = hex("--gold");
+      ctx.font = "600 " + us + "px " + bf;
+      ctx.fillText(ul, W / 2, 1122);
+      y = 1122;
+    }
+
+    difficultyStrip(ctx, W / 2, y + 46, rec.ai | 0, game, bf, 28, 17);
+    ctx.textAlign = "center";
 
     const sum = game.recordRowText(rec);
     const sumFont = "24px " + bf;
     const lines = wrapLines(ctx, sum, 900, sumFont);
     ctx.fillStyle = hex("--text");
     ctx.font = sumFont;
+    const sumY = y + 96;
     for (let i = 0; i < Math.min(2, lines.length); i++) {
-      ctx.fillText(lines[i], W / 2, 1236 + i * 34);
+      ctx.fillText(lines[i], W / 2, sumY + i * 34);
     }
 
     // 宣传语：给看海报的人一个"来一局"的理由。
@@ -15903,13 +16062,13 @@ const GameExport = (function () {
     const cs = fitSize(ctx, call, 920, (s) => "600 " + s + "px " + bf, 28, 16);
     ctx.fillStyle = hex("--accent");
     ctx.font = "600 " + cs + "px " + bf;
-    ctx.fillText(call, W / 2, 1308);
+    ctx.fillText(call, W / 2, sumY + 84);
 
     ctx.fillStyle = hex("--dim");
     ctx.font = "20px " + MONO;
-    ctx.fillText(URL, W / 2, 1364);
+    ctx.fillText(URL, W / 2, sumY + 140);
     ctx.font = "18px " + bf;
-    ctx.fillText(fmtDate(rec.t), W / 2, 1396);
+    ctx.fillText(fmtDate(rec.t), W / 2, sumY + 170);
     return cv;
   }
 
@@ -15921,11 +16080,13 @@ const GameExport = (function () {
     const margin = 64;
     const innerW = W - margin * 2;
 
+    const hasAi = rec.ai !== null && rec.ai !== undefined;
     let cols = acts.length <= 24 ? 1 : (acts.length <= 160 ? 2 : 3);
     let rowH = cols === 1 ? 38 : (cols === 2 ? 34 : 30);
     let colGap = cols === 1 ? 0 : 24;
     let colW = (innerW - colGap * (cols - 1)) / cols;
-    const rowsY = 1345;
+    // 有电脑对手时多一行难度梯度；棋谱起点跟着下移，其他记录保持原布局。
+    const rowsY = hasAi ? 1382 : 1345;
     const fixed = rowsY + 110;
     let total = fixed + Math.ceil(acts.length / cols) * rowH;
     if (total > 15000 && cols < 3) {
@@ -15971,40 +16132,44 @@ const GameExport = (function () {
 
     drawBoard(ctx, board, 130, 262, 820, 820);
 
+    if (hasAi) difficultyStrip(ctx, W / 2, 1122, rec.ai | 0, game, bf, 28, 16);
+
+    const sumY = hasAi ? 1165 : 1128;
     const sumFont = "26px " + bf;
     const lines = wrapLines(ctx, game.recordRowText(rec), innerW - 40, sumFont);
     ctx.fillStyle = hex("--text");
     ctx.font = sumFont;
     for (let i = 0; i < Math.min(2, lines.length); i++) {
-      ctx.fillText(lines[i], margin, 1128 + i * 36);
+      ctx.fillText(lines[i], margin, sumY + i * 36);
     }
     const pl = playerLine(game, name);
     const ps = fitSize(ctx, pl, innerW - 40, (s) => "600 " + s + "px " + bf, 30, 18);
     ctx.fillStyle = hex("--accent");
     ctx.font = "600 " + ps + "px " + bf;
-    ctx.fillText(pl, margin, 1200);
+    ctx.fillText(pl, margin, sumY + 72);
 
     const dur = say(() => "时长 " + game.fmtElapsed(rec.dur), "export.duration",
                     { time: game.fmtElapsed(rec.dur) });
     ctx.fillStyle = hex("--dim");
     ctx.font = "22px " + bf;
-    ctx.fillText(dur, margin, 1240);
+    ctx.fillText(dur, margin, sumY + 112);
 
     // 分隔线 + 棋谱标题
+    const divY = sumY + 144;
     ctx.strokeStyle = hex("--border");
     ctx.globalAlpha = 0.6;
-    ctx.beginPath(); ctx.moveTo(margin, 1272); ctx.lineTo(W - margin, 1272); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(margin, divY); ctx.lineTo(W - margin, divY); ctx.stroke();
     ctx.globalAlpha = 1;
     ctx.fillStyle = hex("--accent");
-    ctx.fillRect(margin, 1296, 6, 34);
+    ctx.fillRect(margin, divY + 24, 6, 34);
     const mt = say(() => "棋谱", "rec.movesTitle");
     ctx.fillStyle = hex("--text");
     ctx.font = "600 32px " + bf;
-    ctx.fillText(mt, margin + 20, 1326);
+    ctx.fillText(mt, margin + 20, divY + 54);
     ctx.textAlign = "right";
     ctx.fillStyle = hex("--dim");
     ctx.font = "20px " + bf;
-    ctx.fillText(sayN(() => rec.n + " 手", "rec.moves", rec.n), W - margin, 1324);
+    ctx.fillText(sayN(() => rec.n + " 手", "rec.moves", rec.n), W - margin, divY + 52);
     ctx.textAlign = "left";
 
     // 棋谱行：左栏先半、右栏后半；时间列右对齐，黑白圆点，转动金色 ⟳。

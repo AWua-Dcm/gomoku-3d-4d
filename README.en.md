@@ -286,7 +286,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.10.22
 
-- ✨ **v3.1.11** Choosing **Human** hides "thinking level / who plays first"; History stays on the setup screen; new full move record, victory poster (with a challenge line) and long-image export, with a nickname dialog before export; the tip panel now shows Alipay/WeChat QR codes and the Afdian link.
+- ✨ **v3.1.11** Choosing **Human** hides "thinking level / who plays first"; History stays on the setup screen; new full move record, victory poster and long-image export (both show the difficulty ladder; Ultra gets an exclusive badge), with a nickname dialog before export; the tip panel now shows Alipay/WeChat QR codes and the Afdian link; mobile export uses the share sheet so the image is easy to save.
 
 ### 2026.10.21
 
