@@ -3961,6 +3961,12 @@ try {
     await sleep(300);
   }
 
+  // 打赏面板：二维码 + 爱发电链接。截图给人眼确认，不做像素断言。
+  await ev(`Game.openTip(); 1`);
+  await sleep(250);
+  await shot("17-打赏面板");
+  await ev(`Game.closeTip(); 1`);
+
   // 收尾：回到干净的起始界面，并清掉这一节留下的位移/格线状态
   await ev(`(() => {
     Game.setGridVisible(true);
