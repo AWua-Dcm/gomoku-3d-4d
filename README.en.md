@@ -299,19 +299,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.10.14
 
-- ✨ **v3.1.8** New "Game records": every finished game leaves one line (mode / size / opponent /
-  result / move count), stored locally; the **History** button top-right lists the last 50 games
-  and can clear them. Undoing back into a game removes its line again.
-- 🔧 **v3.1.8** Gameplay audit: two 4D-vs-computer bugs fixed; the rules text now matches the
-  implementation (day/night no longer promises a "time bomb").
-  - **4D vs computer**: during night the engine's whole search was broken (simulated stones missing
-    their phase) — it "saw" wins that did not exist and missed real forced wins, and played
-    differently by day and night in the same position; now consistent
-  - **4D vs computer**: the first player (overline-restricted) returned its own overline rotation as
-    a winning move — playing it lost the game on the spot; it no longer picks it
-  - **Rules text**: removed the impossible "a night five already exists and settles when the phase
-    turns" description; settling now happens on the move that completes the line, and "a rotation
-    may make five for you" now reads "current phase only" (all six languages)
+- ✨ **v3.1.8** Game records plus a gameplay audit: each finished game leaves a one-line summary (last 50; undoing back into the game removes its line), two 4D-vs-computer bugs fixed, and the rules text now matches the implementation.
 
 ### 2026.10.09
 
