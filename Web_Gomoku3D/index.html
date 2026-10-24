@@ -8984,6 +8984,10 @@ const TEXT = { en: {
   "banner.timeout": "{who} win\n{loser} timed out",
   "banner.timeoutSub": "Lost on time",
   "rec.timeout": " (timeout)",
+  "rec.aborted": "Aborted",
+  "rec.peerExit": " (opponent left)",
+  "rec.selfExit": " (you left)",
+  "rec.abortExit": " (left before start)",
   "toast.timeout": "{who} timed out",
   "timing.off": "Clock: off",
   "timing.unlimited": "Clock: on · untimed",
@@ -9300,6 +9304,10 @@ TEXT.ja = {
   "banner.timeout": "{who}の勝ち\n{loser}の時間切れ",
   "banner.timeoutSub": "時間切れで負け",
   "rec.timeout": "（時間切れ）",
+  "rec.aborted": "中止",
+  "rec.peerExit": "（相手が退出）",
+  "rec.selfExit": "（あなたが退出）",
+  "rec.abortExit": "（開始前に退出）",
   "toast.timeout": "{who}が時間切れ",
   "timing.off": "時計：オフ",
   "timing.unlimited": "時計：オン・無制限",
@@ -9530,6 +9538,10 @@ TEXT.ko = {
   "banner.timeout": "{who} 승리\n{loser} 시간 초과",
   "banner.timeoutSub": "시간 초과 패배",
   "rec.timeout": " (시간 초과)",
+  "rec.aborted": "중단",
+  "rec.peerExit": " (상대 퇴장)",
+  "rec.selfExit": " (본인 퇴장)",
+  "rec.abortExit": " (시작 전 퇴장)",
   "toast.timeout": "{who} 시간 초과",
   "timing.off": "시간: 끔",
   "timing.unlimited": "시간: 켬 · 무제한",
@@ -9771,6 +9783,10 @@ TEXT.ru = {
   "banner.timeout": "{who} побеждают\n{loser}: время вышло",
   "banner.timeoutSub": "Поражение по времени",
   "rec.timeout": " (по времени)",
+  "rec.aborted": "Прервана",
+  "rec.peerExit": " (соперник вышел)",
+  "rec.selfExit": " (вы вышли)",
+  "rec.abortExit": " (выход до начала)",
   "toast.timeout": "{who}: время вышло",
   "timing.off": "Часы: выкл.",
   "timing.unlimited": "Часы: вкл. · без лимита",
@@ -10013,6 +10029,10 @@ TEXT.fr = {
   "banner.timeout": "Les {who} gagnent\n{loser} : temps écoulé",
   "banner.timeoutSub": "Temps écoulé",
   "rec.timeout": " (temps écoulé)",
+  "rec.aborted": "Interrompue",
+  "rec.peerExit": " (adversaire a quitté)",
+  "rec.selfExit": " (vous avez quitté)",
+  "rec.abortExit": " (quitté avant le début)",
   "toast.timeout": "{who} : temps écoulé",
   "timing.off": "Horloge : désactivée",
   "timing.unlimited": "Horloge : activée · sans limite",
@@ -11065,6 +11085,9 @@ const Game = {
    *  撤的是"我刚写的那一条"，不是"列表里最新的一条"，只有 id 分得清。 */
   recId: null,
   recSession: null,
+  /** 这一局以什么方式结束的记录原因：0=正常/无，1=对方退出（我胜），2=我退出（我负），
+   *  3=未开局退出（中止）。只在 onRoomClosed 记账那一下临时置位，buildRecord 读走后清 0。 */
+  recordEndReason: 0,
   /** 联机是否可用。联机版由 initOnline() 置真；无联机构建里恒为 false。
    *  通用代码只读这个布尔量，联机专用符号只活在 ONLINE 块里 ——
    *  否则 build-public 的符号自检会把公开版判红。 */
@@ -11513,6 +11536,7 @@ const Game = {
     this.clearLocalLimitClock();
     this.recId = null;
     this.recSession = null;
+    this.recordEndReason = 0;
     const d = normalizeDims(dims);
     const rules = new RuleSet();
     // 【三维的两个附加玩法在这一行汇合】四维里两样都常开（v3.1.2 起，见 §10.8——
@@ -11617,6 +11641,7 @@ const Game = {
     this.recStart = Date.now();
     this.recLastEl = 0;
     this.recEndEl = 0;
+    this.recordEndReason = 0;
     this.clockBlack = 0;
     this.clockWhite = 0;
     this.clockDeadline = 0;
@@ -13052,7 +13077,10 @@ const Game = {
     if (rec.me === 1) parts.push(say(() => "我执黑", "rec.meBlack"));
     else if (rec.me === 2) parts.push(say(() => "我执白", "rec.meWhite"));
     let res;
-    if (rec.w === 0) {
+    if (rec.er === 3) {
+      // 未开局退出：没有胜者，不写成"和棋"（那会被读成"下满了"）。
+      res = say(() => "中止", "rec.aborted");
+    } else if (rec.w === 0) {
       res = say(() => "和棋", "rec.draw");
     } else if (rec.ai === null || rec.ai === undefined) {
       // 人人局没有"我"这个视角，只说哪一色赢了
@@ -13064,6 +13092,9 @@ const Game = {
     if (rec.ol) res += say(() => "（长连犯规）", "rec.overline");
     if (rec.rs) res += say(() => "（认输）", "rec.resign");
     if (rec.to) res += say(() => "（超时）", "rec.timeout");
+    if (rec.er === 1) res += say(() => "（对方退出）", "rec.peerExit");
+    else if (rec.er === 2) res += say(() => "（你退出）", "rec.selfExit");
+    else if (rec.er === 3) res += say(() => "（未开局退出）", "rec.abortExit");
     parts.push(res);
     parts.push(sayN(() => rec.n + " 手", "rec.moves", rec.n));
     if (rec.r > 0) parts.push(sayN(() => "转动 " + rec.r, "rec.rot", rec.r));
@@ -13152,6 +13183,7 @@ const Game = {
       w: s.isDraw ? 0 : (s.winner | 0),
       ol: (s.lastOutcome && s.lastOutcome.isOverlineFoul) ? 1 : 0,
       rs: (s.lastOutcome && s.lastOutcome.isResign) ? 1 : 0,
+      er: (this.recordEndReason | 0),
       n: s.moveCount | 0,
       r: s.rotationCount | 0,
       fp: fingerprint(s),

@@ -1087,6 +1087,83 @@ step("联机开局确认：发送失败不关弹窗，成功才改本地状态",
   }
 });
 
+step("联机退出记账：胜/负/中止三种记录都带原因", () => {
+  if (!NetNS || !Game.el.onlineStart) return;
+  const saved = { online: NetNS.online, seat: NetNS.seat, lang: Game.lang };
+  const savedLang = Game.lang;
+  const savedRecords = GameRecords.load();
+  Game.setLang("zh");
+  GameRecords.clear();
+  const setupOnlineGame = (withMove) => {
+    Game.setSetupAi("human");
+    Game.closeSetup();
+    Game.newGame(15, 1);
+    Game.isOnlineGame = true;
+    Game.gameTimed = true;
+    Game.recStart = Date.now() - 5000;
+    Game.clockStarted = true;
+    Game.recId = null;
+    Game.recSession = null;
+    if (withMove) Game.session.place(0, 0, 0);   // n=1；计时已在跑
+  };
+  try {
+    // 赢家：对方退出，记胜并注明原因；用时取服务器 elapsed。
+    NetNS.online = true; NetNS.seat = 1;
+    setupOnlineGame(true);
+    Game.onRoomClosed({ reason: "exit", by: 2, winner: 1, started: true,
+                        elapsed: 4567, moveCount: 1 });
+    let list = GameRecords.load();
+    if (list.length !== 1) throw new Error("对方退出后应记一条，实际 " + list.length);
+    const win = list[0];
+    if (win.er !== 1 || win.w !== 1 || win.dur !== 4567 || win.n !== 1)
+      throw new Error("胜方记录不对：" + JSON.stringify({ er: win.er, w: win.w, dur: win.dur, n: win.n }));
+    if (Game.recordRowText(win).indexOf("对方退出") < 0)
+      throw new Error("记录文字应注明「对方退出」：" + Game.recordRowText(win));
+
+    // 退出者：自己退出，记负；文字是「你退出」。
+    GameRecords.clear();
+    setupOnlineGame(true);
+    NetNS.seat = 2;
+    Game.onRoomClosed({ reason: "exit", by: 2, winner: 1, started: true,
+                        elapsed: 3210, moveCount: 1 });
+    list = GameRecords.load();
+    const lose = list[0];
+    if (!lose || lose.er !== 2 || lose.w !== 1 || lose.dur !== 3210 || lose.n !== 1)
+      throw new Error("负方记录不对：" + JSON.stringify(lose && { er: lose.er, w: lose.w, dur: lose.dur, n: lose.n }));
+    if (Game.recordRowText(lose).indexOf("你退出") < 0)
+      throw new Error("记录文字应注明「你退出」：" + Game.recordRowText(lose));
+
+    // 未开局退出：仍记一局，但标成中止、0 手、无用时。
+    GameRecords.clear();
+    Game.setSetupAi("human");
+    Game.closeSetup();
+    Game.newGame(15, 1);
+    Game.isOnlineGame = true;
+    Game.gameTimed = true;
+    Game.clockStarted = false;
+    Game.recId = null;
+    Game.recSession = null;
+    NetNS.seat = 1;
+    Game.onRoomClosed({ reason: "exit", by: 2, winner: 0, started: false,
+                        elapsed: 0, moveCount: 0 });
+    list = GameRecords.load();
+    const aborted = list[0];
+    if (!aborted || aborted.er !== 3 || aborted.w !== 0 || aborted.n !== 0 || aborted.dur !== 0)
+      throw new Error("中止记录不对：" + JSON.stringify(aborted && { er: aborted.er, w: aborted.w, n: aborted.n, dur: aborted.dur }));
+    const abortText = Game.recordRowText(aborted);
+    if (abortText.indexOf("中止") < 0 || abortText.indexOf("未开局退出") < 0)
+      throw new Error("中止记录文字不对：" + abortText);
+  } finally {
+    GameRecords.clear();
+    for (let i = savedRecords.length - 1; i >= 0; i--) GameRecords.add(savedRecords[i]);
+    Game.setLang(savedLang);
+    Game.isOnlineGame = false;
+    NetNS.online = saved.online; NetNS.seat = saved.seat;
+    Game.newGame(15, 1);
+    Game.openSetup();
+  }
+});
+
 step("拓扑影子：内部子没有像，面上 1 个、棱上 3 个、角上 7 个", () => {
   const d = [10, 10, 10];
   const cnt = (x, y, z) => Game.wrapShadowOffsets(d, x, y, z).length;
