@@ -23,7 +23,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const HTML_PATH = path.join(HERE, "..", "index.html");
+// 默认跑源码；给构建产物做冒烟时用 GOMOKU_HTML=dist-online-review/index.html。
+const HTML_PATH = process.env.GOMOKU_HTML
+  ? path.resolve(process.env.GOMOKU_HTML)
+  : path.join(HERE, "..", "index.html");
 // 规则正文的权威来源。index.html 里嵌的那份是【生成物】，
 // 断言的正是"生成物逐字节等于它"。
 const RULES_PATH = path.join(HERE, "..", "RULES_SPEC.md");
@@ -357,6 +360,8 @@ let NS_TOPOLOGY = null;
 let renderRulesMarkdown = null, escapeHtmlNS = null;
 let TEXT_EN = null, STATIC_EN = null, t = null;
 let clampPan2d = null, OrbitCameraNS = null, GESTURE = null;
+let sanitizeEmojiTextNS = null, emojiGraphemesNS = null;
+let NetNS = null;
 let CORE_TEXT = null, LANG_INFO = null, pluralFormNS = null, PLURAL_FORMS = null;
 let TEXT_ALL = null, STATIC_ALL = null, LANGS_LIST = null;
 let GameRecords = null, RECORDS_KEY = null, RECORD_LIMIT = 0;
@@ -374,6 +379,7 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   const runner = new Function(
     "document", "window", "requestAnimationFrame", "console", "Set", "Map",
     fullScript + "\nreturn { Game: (typeof Game !== 'undefined') ? Game : null," +
+      " Net: (typeof Net !== 'undefined') ? Net : null," +
       " Palette: Palette, FALLBACK_COLORS: FALLBACK_COLORS, cellSize: cellSize," +
       " BoardLimits: BoardLimits," +
       " renderRulesMarkdown: renderRulesMarkdown, escapeHtml: escapeHtml," +
@@ -397,6 +403,7 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
       " GameRecords: (typeof GameRecords !== 'undefined') ? GameRecords : null," +
       " RECORDS_KEY: (typeof RECORDS_KEY !== 'undefined') ? RECORDS_KEY : null," +
       " RECORD_LIMIT: (typeof RECORD_LIMIT !== 'undefined') ? RECORD_LIMIT : 0," +
+      " sanitizeEmojiText: sanitizeEmojiText, emojiGraphemes: emojiGraphemes," +
       " clampPan2d: clampPan2d, OrbitCamera: OrbitCamera," +
       " GESTURE: { ZOOM2D_MAX: ZOOM2D_MAX, TAP_WINDOW_MS: TAP_WINDOW_MS," +
       "            TAP_NEAR_PX: TAP_NEAR_PX, PINCH_TAIL_MS: PINCH_TAIL_MS }," +
@@ -421,6 +428,8 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   TEXT_EN = NS.TEXT_EN; STATIC_EN = NS.STATIC_EN; t = NS.t;
   RendererNS = NS.Renderer;
   clampPan2d = NS.clampPan2d; OrbitCameraNS = NS.OrbitCamera; GESTURE = NS.GESTURE;
+  sanitizeEmojiTextNS = NS.sanitizeEmojiText; emojiGraphemesNS = NS.emojiGraphemes;
+  NetNS = NS.Net;
   CORE_TEXT = NS.CORE_TEXT; LANG_INFO = NS.LANG_INFO; pluralFormNS = NS.pluralForm;
   TEXT_ALL = NS.TEXT_ALL; STATIC_ALL = NS.STATIC_ALL; LANGS_LIST = NS.LANGS_LIST;
   GameRecords = NS.GameRecords; RECORDS_KEY = NS.RECORDS_KEY; RECORD_LIMIT = NS.RECORD_LIMIT;
@@ -821,18 +830,166 @@ step("v3.1.5：三维勾「魔方旋转」→ 转动冷却行出现；取消勾�
   Game.newGame(15, 1);
 });
 
-step("附加玩法：四维下「设置」和「落子宣告」换了位置，三维下没换", () => {
-  // 判据是 CSS 的 order（靠 #buttons 上那个类名切换）—— 桩里量不了渲染，
-  // 所以这里钉的是"类名有没有按规则挂上"，几何由 browser-check 在真浏览器里量。
+step("底部按钮：固定五颗；落子宣告在转动面板底部，不再挤进 #buttons", () => {
+  // 静态结构：modeBtn 必须落在 #rotPanel 里面、且在 #buttons 之前
+  const rotAt = html.indexOf('<div id="rotPanel"');
+  const btnAt = html.indexOf('<div id="buttons">');
+  const modeAt = html.indexOf('id="modeBtn"');
+  if (!(rotAt >= 0 && btnAt > rotAt && modeAt > rotAt && modeAt < btnAt))
+    throw new Error("「落子：正常/缓/催」应当从底部按钮排挪进转动面板（#placeModeRow）");
+  // 四维：宣告行显示；三维：整行收掉。桩里量不了 flex 几何，所以这里钉类名，
+  // 实际位置由 browser-check 在真浏览器里量（modeBtn 必须落在 rotGo 下方）。
   Game.setSetupMode(true);
   Game.closeSetup();
   Game.newGame(8, 1);
-  if (!Game.el.buttons.classList.contains("swap4d"))
-    throw new Error("四维下 #buttons 应当挂上 swap4d（设置与落子宣告交换位置）");
+  Game.refreshPhaseTexts();
+  if (!Game.el.placeModeRow || Game.el.placeModeRow.classList.contains("off"))
+    throw new Error("四维下「落子宣告」那一行应当显示");
+  if (Game.el.buttons.classList.contains("swap4d"))
+    throw new Error("不再需要 swap4d —— 落子宣告已经不在 #buttons 里");
   Game.setSetupMode(false);
   Game.newGame(15, 1);
-  if (Game.el.buttons.classList.contains("swap4d"))
-    throw new Error("三维下不该挂 swap4d —— 那一行必须和加这一条之前一模一样");
+  Game.refreshPhaseTexts();
+  if (!Game.el.placeModeRow.classList.contains("off"))
+    throw new Error("三维下「落子宣告」那一行应当收掉（不然会留一行空位）");
+});
+
+step("格线外观：默认值、实时改色/改透明度、落盘与坏数据回退", () => {
+  const key = "gomoku.grid.v1";
+  localStorageStub.removeItem(key);
+  Game.loadGridAppearance();
+  if (Game.gridColor !== "#e9dfb7")
+    throw new Error("没有存档时格线颜色应当退回 Palette 的 --grid，实际 " + Game.gridColor);
+  if (Math.abs(Game.gridAlpha - 0.40) > 1e-9)
+    throw new Error("没有存档时透明度应当是 40%，实际 " + Game.gridAlpha);
+
+  Game.closeSetup();
+  Game.openGridSettings();
+  if (!Game.gridSettingsOpen) throw new Error("openGridSettings 之后浮窗应当打开");
+  Game.setGridColor("#2f5d7c");
+  Game.setGridAlphaPercent(55);
+  if (!Game.el.gridColorInput || Game.el.gridColorInput.value !== "#2f5d7c")
+    throw new Error("取色器没有同步到新颜色：" + (Game.el.gridColorInput && Game.el.gridColorInput.value));
+  if (!Game.el.gridOpacityVal || Game.el.gridOpacityVal.textContent !== "55%")
+    throw new Error("透明度读数没有同步到 55%：" + (Game.el.gridOpacityVal && Game.el.gridOpacityVal.textContent));
+  if (!Game.el.gridSw4.classList.contains("sel"))
+    throw new Error("当前颜色对应的预设色块应当高亮");
+  const rgba = Game.gridRgba();
+  if (Math.abs(rgba[0] - 0x2f / 255) > 1e-6 || Math.abs(rgba[3] - 0.55) > 1e-6)
+    throw new Error("gridRgba 没有反映新颜色/透明度：" + JSON.stringify(rgba));
+
+  const raw = JSON.parse(localStorageStub.getItem(key));
+  if (raw.color !== "#2f5d7c" || Math.abs(raw.alpha - 0.55) > 1e-9)
+    throw new Error("设置没有落进 localStorage：" + localStorageStub.getItem(key));
+
+  // 模拟重开页面：内存值被改脏后从存档恢复
+  Game.gridColor = "#000000"; Game.gridAlpha = 0;
+  Game.loadGridAppearance();
+  if (Game.gridColor !== "#2f5d7c" || Math.abs(Game.gridAlpha - 0.55) > 1e-9)
+    throw new Error("loadGridAppearance 没有恢复存档");
+
+  // 坏存档逐项回默认，绝不抛
+  localStorageStub.setItem(key, "{不是 JSON");
+  Game.loadGridAppearance();
+  if (Game.gridColor !== "#e9dfb7" || Math.abs(Game.gridAlpha - 0.40) > 1e-9)
+    throw new Error("坏 JSON 应当回默认，实际 " + Game.gridColor + " / " + Game.gridAlpha);
+  localStorageStub.setItem(key, JSON.stringify({ color: "red", alpha: 99 }));
+  Game.loadGridAppearance();
+  if (Game.gridColor !== "#e9dfb7" || Game.gridAlpha !== 1)
+    throw new Error("非法颜色回默认、alpha 夹到 1；实际 " + Game.gridColor + " / " + Game.gridAlpha);
+  Game.closeGridSettings();
+  if (Game.gridSettingsOpen) throw new Error("closeGridSettings 之后浮窗应当关闭");
+  localStorageStub.removeItem(key);
+  Game.gridColor = "#e9dfb7"; Game.gridAlpha = 0.40;
+});
+
+step("退出：先弹确认，否保留棋局，是清空当前局并回起始界面", () => {
+  Game.setSetupAi("human");
+  Game.closeSetup();
+  Game.newGame(15, 1);
+  Game.session.place(7, 7, 0);
+  Game.session.place(8, 8, 0);
+  if (Game.session.moveCount !== 2) throw new Error("前置：应当有两手棋");
+  Game.openQuitConfirm();
+  if (!Game.quitConfirmOpen) throw new Error("点「退出」应当先打开确认浮窗");
+  Game.el.quitNo.dispatch("click");
+  if (Game.quitConfirmOpen) throw new Error("点「否」之后确认浮窗应当关闭");
+  if (Game.setupOpen) throw new Error("点「否」不该回起始界面");
+  if (Game.session.moveCount !== 2) throw new Error("点「否」不该清空棋局");
+  Game.openQuitConfirm();
+  Game.el.quitYes.dispatch("click");
+  if (Game.quitConfirmOpen) throw new Error("点「是」之后确认浮窗应当关闭");
+  if (!Game.setupOpen) throw new Error("点「是」应当回起始界面");
+  if (Game.session.moveCount !== 0) throw new Error("点「是」应当清空当前这局");
+  Game.closeSetup();
+  Game.newGame(15, 1);
+});
+
+step("计时：ms 格式化、每手 dt、双方累计与终局冻结", () => {
+  if (Game.fmtElapsed(0) !== "00:00.000")
+    throw new Error("fmtElapsed(0) 应为 00:00.000，实际 " + Game.fmtElapsed(0));
+  if (Game.fmtElapsed(61234) !== "01:01.234")
+    throw new Error("fmtElapsed(61234) 应为 01:01.234，实际 " + Game.fmtElapsed(61234));
+  if (Game.fmtMoveMs(842) !== "0.842s")
+    throw new Error("fmtMoveMs(842) 应为 0.842s，实际 " + Game.fmtMoveMs(842));
+
+  Game.setSetupAi("human");
+  Game.closeSetup();
+  Game.newGame(15, 1);
+  Game.recStart = Date.now() - 5000;
+  Game.recLastEl = 0;
+  Game.session.place(0, 0, 0);
+  // 把起点往前拨 50ms，保证白棋那一手 dt > 0（同毫秒连下会让断言变成概率题）
+  Game.recStart -= 50;
+  Game.session.place(1, 0, 0);
+  const rec = Game.buildRecord();
+  if (rec.mv.length !== 2) throw new Error("前置：应当有两手");
+  if (!rec.mv.every((a) => Number.isInteger(a[7]) && a[7] >= 0))
+    throw new Error("记录里每手末位应当是 dt（ms）：" + JSON.stringify(rec.mv));
+  const ts = Game.recordTimeStats(rec);
+  if (!(ts.black > 0 && ts.white > 0))
+    throw new Error("双方累计都应 > 0：" + JSON.stringify(ts));
+  if (ts.black + ts.white > ts.total + 60)
+    throw new Error("双方累计不应超过总时长（允许多 60ms 的起点误差）：" + JSON.stringify(ts));
+
+  Game.recEndEl = 1234;
+  if (Game.clockElapsed() !== 1234) throw new Error("终局后时钟应冻结在 recEndEl");
+  Game.resetClock();
+  if (Game.recEndEl !== 0 || Game.recLastEl !== 0 || Game.clockBlack !== 0 || Game.clockWhite !== 0)
+    throw new Error("resetClock 没有把计时状态清零");
+  Game.newGame(15, 1);
+});
+
+step("emoji：客户端只接受 1–3 个 emoji", () => {
+  if (!sanitizeEmojiTextNS) throw new Error("sanitizeEmojiText 没有暴露出来");
+  if (sanitizeEmojiTextNS("😀") !== "😀") throw new Error("单个 emoji 应通过");
+  if (sanitizeEmojiTextNS("😀😂👍") !== "😀😂👍") throw new Error("三个 emoji 应通过");
+  if (sanitizeEmojiTextNS("😀😂👍😭") !== "") throw new Error("四个 emoji 应被拒");
+  if (sanitizeEmojiTextNS("hello") !== "") throw new Error("普通文字应被拒");
+  if (sanitizeEmojiTextNS("😀a") !== "") throw new Error("emoji 混文字应被拒");
+  if (emojiGraphemesNS("😀😂👍").length !== 3) throw new Error("字素切分应得到 3 个");
+});
+
+step("每步限时：0 或 10–600，控件状态同步", () => {
+  // 公开版（build-public 剥掉 ONLINE）没有 Net；这一组只对联机版有意义。
+  if (!NetNS) return;
+  if (Game.clampMoveLimit(5) !== 10) throw new Error("小于 10 应夹到 10");
+  if (Game.clampMoveLimit(601) !== 600) throw new Error("大于 600 应夹到 600");
+  if (Game.clampMoveLimit(0) !== 0) throw new Error("0 应保持不限时");
+  if (Game.clampMoveLimit("60") !== 60) throw new Error("字符串秒数应可用");
+  NetNS.moveLimitSec = 60;
+  Game.settingsDraft = { moveLimitSec: 30 };
+  Game.syncMoveLimitControls();
+  if (!Game.el.onlineLimitCustom.classList.contains("sel")) throw new Error("大厅自定义键应选中");
+  if (Game.el.onlineLimitSec.value !== "60") throw new Error("大厅输入框应显示 60");
+  if (Game.el.onlineLimitSec.disabled) throw new Error("自定义时输入框应可编辑");
+  if (!Game.el.onlineSetLimitCustom.classList.contains("sel")) throw new Error("下一局自定义键应选中");
+  if (Game.el.onlineSetLimitSec.value !== "30") throw new Error("下一局输入框应显示 30");
+  NetNS.moveLimitSec = 0;
+  Game.settingsDraft = null;
+  Game.syncMoveLimitControls();
+  if (!Game.el.onlineLimitOff.classList.contains("sel")) throw new Error("不限时应选中");
+  if (!Game.el.onlineLimitSec.disabled) throw new Error("不限时时输入框应禁用");
 });
 
 step("拓扑影子：内部子没有像，面上 1 个、棱上 3 个、角上 7 个", () => {
@@ -2149,7 +2306,9 @@ step("规则浮层：按钮能开、Esc 能关，开着时不吃快捷键，关�
   Game.closeRules();
 });
 step("键盘与面板事件回调都能挂上", () => {
-  for (const id of ["undoBtn", "restartBtn", "swapBtn", "prevLayer", "nextLayer",
+  for (const id of ["undoBtn", "restartBtn", "swapBtn", "setupBtn", "quitBtn",
+                    "quitYes", "quitNo", "gridClose", "gridSw1",
+                    "prevLayer", "nextLayer",
                     "topLayer", "modeGhost", "modeSlice", "sliceUp", "sliceDown",
                     "bannerUndo", "bannerRestart", "startBtn", "firstBlack", "firstWhite",
                     "mode3d", "mode4d", "rotLayerDown", "rotLayerUp", "rotCW", "rotCCW",

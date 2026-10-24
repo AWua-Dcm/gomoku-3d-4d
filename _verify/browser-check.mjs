@@ -101,9 +101,37 @@ async function ev(expr) {
   }
   return r.result && r.result.result ? r.result.result.value : undefined;
 }
+/* 【棋钟必须先钉住】它是每 50ms 刷一次的实时文本；不钉的话同一张基线图
+   每次跑都差几十个像素，`git status` 又变成"分不清真改动和噪声"。
+   做法和 freezePreview 一样：测试侧临时把 updateClockHud 换成空函数、
+   写死一组时间，拍完立刻还原 —— 产品代码里不加任何测试钩子。
+   截图和"读像素"两条路都要钉：后者会把同一块区域拍两次做逐点比较。 */
+async function pinClockForShot() {
+  await ev(`(() => {
+    if (typeof Game === "undefined" || !Game.el || !Game.el.clockHud) return 0;
+    if (!Game.__origClockHud) Game.__origClockHud = Game.updateClockHud;
+    Game.updateClockHud = function () {};
+    const fixed = { clockBlack: "00:12.345", clockWhite: "00:08.901",
+                    clockMove: "00:03.456", clockTotal: "00:21.246",
+                    clockLimit: "00:56.544" };
+    for (const k in fixed) { const el = document.getElementById(k); if (el) el.textContent = fixed[k]; }
+    return 1;
+  })()`);
+}
+async function unpinClockAfterShot() {
+  await ev(`(() => {
+    if (typeof Game !== "undefined" && Game.__origClockHud) {
+      Game.updateClockHud = Game.__origClockHud;
+      Game.__origClockHud = null;
+    }
+    return 1;
+  })()`);
+}
 async function shot(name) {
+  await pinClockForShot();
   const r = await send("Page.captureScreenshot", { format: "png" });
   fs.writeFileSync(path.join(OUT_DIR, name + ".png"), Buffer.from(r.result.data, "base64"));
+  await unpinClockAfterShot();
 }
 
 /** 派发一个真鼠标事件。原来定义在相机那一节里，挪到这里是因为"刚打开页面时拉条要拖不动"
@@ -169,8 +197,11 @@ function decodePng(buf) {
 
 /** 拍一张当前的屏幕，返回带 at(fx,fy) 的像素读取器（比例是 0..1）。 */
 async function shotPixels() {
+  await pinClockForShot();
   const r = await send("Page.captureScreenshot", { format: "png" });
-  return decodePng(Buffer.from(r.result.data, "base64"));
+  const img = decodePng(Buffer.from(r.result.data, "base64"));
+  await unpinClockAfterShot();
+  return img;
 }
 
 /**
@@ -3129,7 +3160,7 @@ try {
     JSON.stringify({ attn: committed.attn, cf: committed.cfDisabled }));
 
   // 【确定之后还能不能撤回来】面板上那个「恢复本次转动」已经让位给了这两个键，
-  // 但**能力不能跟着按钮一起消失**：最后一步恰好是转动时「悔棋 Z」撤的就是它。
+  // 但**能力不能跟着按钮一起消失**：最后一步恰好是转动时「悔棋」撤的就是它。
   // 这一条真点「悔棋」那个按钮，证明那条路是通的。
   await clickEl("undoBtn");
   const restored = JSON.parse(await ev(rotSnap));
@@ -3445,11 +3476,19 @@ try {
     await sleep(150);
     d = JSON.parse(await ev(NAV));
     check(d.passed && d.timer, "前置：这一关真的过了、倒计时真的挂上了", JSON.stringify({ timer: d.timer }));
-    await ev(`(() => { document.getElementById("setupBtn").click(); return 1; })()`);   // 教学里的「退出」
+    // v3.1.12 起教学里不再把「设置」改名成「退出」—— 底部有一颗专门的 quitBtn。
+    // 它先弹确认（和本地对局同一条路），确定之后才 tutorialExit()。
+    await ev(`(() => { document.getElementById("quitBtn").click(); return 1; })()`);
+    await sleep(100);
+    const q = JSON.parse(await ev(`JSON.stringify({ open: Game.quitConfirmOpen,
+      body: document.getElementById("quitBody").textContent })`));
+    check(q.open, "教学里点「退出」先弹确认浮窗", JSON.stringify(q));
+    check(q.body.indexOf("清空此局") >= 0, "退出确认的文案写明会清空当前这局", q.body);
+    await ev(`(() => { document.getElementById("quitYes").click(); return 1; })()`);
     await sleep(150);
     const t = JSON.parse(await ev(`JSON.stringify({ active: Game.tutActive, timer: !!Game.tutTimer,
       setupOpen: Game.setupOpen, idx: Game.tutIndex })`));
-    check(!t.active && !t.timer && t.setupOpen, "点「退出」：教学关掉、倒计时也取消（起始界面回来了）",
+    check(!t.active && !t.timer && t.setupOpen, "点「退出」并确认：教学关掉、倒计时也取消（起始界面回来了）",
       JSON.stringify(t));
     await sleep(1400);
     const after = JSON.parse(await ev(`JSON.stringify({ active: Game.tutActive, setupOpen: Game.setupOpen,
@@ -3457,11 +3496,10 @@ try {
     check(!after.active && after.setupOpen,
       "退出之后那一秒过去：不会被拽回教学（倒计时确实被 cancelTutTimer 带走了）",
       JSON.stringify(after));
-    // 【那颗键的文案要还回去】教学里它写「退出」，退出之后必须写回「设置」——
-    // 漏了的话会一直写着「退出」，而且没有任何别的断言看得见（实测踩过：
-    // 一次开始教学之前已经在教学里，那句"把原文案记下来"记到的就是「退出」）。
+    // 【设置键不再借用成退出键】v3.1.12 起它全程写「设置」，点开的是格线外观浮窗；
+    // 退出走专门的 quitBtn。这条断言防的是"教学里又把它改名/换成退出动作"的回归。
     check(await ev(`document.getElementById("setupBtn").textContent`) === "设置",
-      "退出教学之后那颗键写回「设置」（不是「退出」）",
+      "设置键全程保持「设置」（不再借它当退出）",
       await ev(`document.getElementById("setupBtn").textContent`));
 
     await ev(`(() => { Game.tutorialExit(); Game.closeSetup(); Game.setSetupMode(false); return 1; })()`);
@@ -3521,37 +3559,247 @@ try {
   }
 
   // ------------------------------------------------------------------
-  // v3.1.2：「设置」和「落子：正常/缓/催」在四维下交换位置（用户口径）
+  // v3.1.12：底部固定五颗键，四维的「落子：正常/缓/催」挪进转动面板底部
   //
-  // 【为什么在真浏览器里量】桩里只能验类名挂没挂上；"换没换成"终究是几何问题 ——
-  // flex 的 order 被别的规则盖掉、或者两个键宽度不同导致顺序看着没变，桩都看不见。
-  // 判据用【左边界】比大小，不依赖它们等宽。
+  // 【为什么在真浏览器里量】桩里只能验类名/静态位置；"到底落在哪"终究是几何问题 ——
+  // CSS 的 order 被别的规则盖掉、rotPanel 的 gap 没算对、窄屏下被挤到别处，桩都看不见。
   // ------------------------------------------------------------------
   {
     const order = JSON.parse(await ev(`(() => {
       const box = (id) => document.getElementById(id).getBoundingClientRect();
+      const visible = (id) => { const b = box(id); return b.width > 0 && b.height > 0; };
       const shot = () => {
-        const s = box("setupBtn"), m = box("modeBtn");
-        return { setupLeft: Math.round(s.left), modeLeft: Math.round(m.left),
-                 setupW: Math.round(s.width), modeW: Math.round(m.width),
-                 bothVisible: s.width > 0 && m.width > 0 };
+        const b = box("buttons"), m = box("modeBtn"), go = box("rotGo");
+        const inRot = document.getElementById("rotPanel").contains(document.getElementById("modeBtn"));
+        const inButtons = document.getElementById("buttons").contains(document.getElementById("modeBtn"));
+        const row = ["undoBtn","restartBtn","swapBtn","setupBtn","quitBtn"];
+        return {
+          inRot: inRot, inButtons: inButtons,
+          modeTop: Math.round(m.top), rotGoBottom: Math.round(go.bottom),
+          modeW: Math.round(m.width),
+          buttonsBottom: Math.round(b.bottom), buttonsVisible: b.width > 0,
+          five: row.every(visible), fiveW: row.map((id) => Math.round(box(id).width)),
+          setupLabel: document.getElementById("setupBtn").textContent,
+          quitLabel: document.getElementById("quitBtn").textContent,
+          undoLabel: document.getElementById("undoBtn").textContent,
+          restartLabel: document.getElementById("restartBtn").textContent,
+        };
       };
       Game.cancelAiTimer(); Game.setSetupAi("human");
       Game.setSetupMode(true);  Game.newGame(8, 1);  const fourD = shot();
       Game.setSetupMode(false); Game.newGame(15, 1); const threeD = shot();
       return JSON.stringify({ fourD: fourD, threeD: threeD });
     })()`));
-    check(order.fourD.bothVisible,
-      "前置：四维下「设置」和「落子宣告」都真的在屏幕上", JSON.stringify(order.fourD));
-    check(order.fourD.modeLeft < order.fourD.setupLeft,
-      "四维下「落子：正常/缓/催」排在「设置」左边（两个键换了位置）",
+    check(order.fourD.inRot && !order.fourD.inButtons,
+      "四维下「落子宣告」在转动面板里，不在底部按钮排里",
       JSON.stringify(order.fourD));
-    // 【三维下那颗键整颗不显示】晨昏是四维常开、三维恒为 0，所以声明键在三维下
-    // display:none（宽高都是 0）—— 三维那一行本来就只有四颗键，没有"换位置"可言。
-    // 这一条钉的正是"三维那一行和加交换规则之前一模一样"。
-    check(order.threeD.setupW > 0 && order.threeD.modeW === 0,
-      "三维下「设置」照旧在最后，「落子宣告」整颗不显示（那一行没被这条规则碰到）",
-      JSON.stringify(order.threeD));
+    check(order.fourD.modeTop >= order.fourD.rotGoBottom - 0.5,
+      "四维下「落子宣告」排在「执行转动/确定/取消」那一行下面",
+      JSON.stringify(order.fourD));
+    check(order.fourD.five && order.fourD.buttonsVisible,
+      "四维下底部仍是五颗键（悔棋/重开/换先手/设置/退出）都可见",
+      JSON.stringify(order.fourD.fiveW));
+    // 【三维下那颗键整颗不显示】晨昏是四维常开、三维恒为 0，所以整块 rotPanel
+    // 带 off（声明键跟着宽高都是 0）。底部那五颗必须一个不少。
+    check(order.threeD.modeW === 0 && !order.threeD.inButtons,
+      "三维下「落子宣告」整颗不显示（也不在底部那一排）", JSON.stringify(order.threeD));
+    check(order.threeD.five && order.threeD.buttonsVisible,
+      "三维下底部五颗键都可见（悔棋/重开/换先手/设置/退出）",
+      JSON.stringify(order.threeD.fiveW));
+    check(order.threeD.setupLabel === "设置" && order.threeD.quitLabel === "退出" &&
+          order.threeD.undoLabel === "悔棋" && order.threeD.restartLabel === "重开",
+      "底部按钮文案：悔棋 / 重开 / 设置 / 退出（不再带 Z/R 后缀）",
+      JSON.stringify({ undo: order.threeD.undoLabel, restart: order.threeD.restartLabel,
+                       setup: order.threeD.setupLabel, quit: order.threeD.quitLabel }));
+  }
+
+  // ------------------------------------------------------------------
+  // v3.1.12：棋子完全平涂 —— 转到任何角度白子都不能变成黑子
+  //
+  // 【为什么读像素】这是用户报的原始现象："换个角度会让白子看起来像黑子"。
+  // 以前的着色器把光源钉在世界坐标里，相机转到背光半球时白子只剩 0.34 的环境光。
+  // 这个 bug 不报错、不影响任何规则，只能靠真画面抓。做法：棋盘正中心放一颗白子，
+  // 相机绕着它转到正面/背面，读画布正中心那个像素 —— 球心正对相机，边缘描边为 0，
+  // 平涂之后两次都应该是 --white 本身（#fdfaf2）。
+  // ------------------------------------------------------------------
+  {
+    const flat = JSON.parse(await ev(`(() => {
+      Game.cancelAiTimer(); Game.setSetupAi("human");
+      Game.setSetupMode(false); Game.newGame(15, 1); Game.closeSetup();
+      Game.pan3d = [0, 0]; Game.pan2d = [0, 0];
+      // 直接摆一颗白子在棋盘正中心（不走落子，避免"最后一手光圈"盖住它）。
+      Game.session.board.set(7, 7, 7, WHITE);
+      Game.activeLayer = 7;
+      Game.uploadInstances(); Game.uploadActiveGrid();
+      const cv = document.getElementById("gl");
+      const gl = cv.getContext("webgl2");
+      // 【不能只读正中那一个像素】yaw=0/180 时视线正好和穿过盘心的那条 z 向格线
+      // 共线，近端格线会盖住正中像素 —— 那是格线，不是棋子的暗面。旧着色器
+      // 背光时整颗白子只剩 0.34 环境光，白像素会从 ~130 掉到个位数/0，
+      // 所以数"整幅画面里接近 --white 的像素"足够把这个 bug 分开。
+      const whiteCount = (yaw) => {
+        Game.camera.yaw = yaw; Game.camera.pitch = 24;
+        Game.draw3D();
+        const buf = new Uint8Array(cv.width * cv.height * 4);
+        gl.readPixels(0, 0, cv.width, cv.height, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+        let n = 0;
+        for (let i = 0; i < buf.length; i += 4) {
+          if (buf[i] >= 245 && buf[i + 1] >= 245 && buf[i + 2] >= 235) n++;
+        }
+        return n;
+      };
+      const front = whiteCount(0), back = whiteCount(180);
+      return JSON.stringify({ front: front, back: back });
+    })()`));
+    // 白子 #fdfaf2 = (253,250,242)；背景 --bg 的 B=219、格线的 B=183，都过不了。
+    // 40 是留足余量的下限：平涂时实测 ~130 个白像素，背光旧着色器只剩个位数。
+    check(flat.front > 40 && flat.back > 40,
+      "棋子完全平涂：转到正面和背面，白子都还是白的（不再有暗面）",
+      JSON.stringify(flat));
+  }
+
+  // ------------------------------------------------------------------
+  // v3.1.12：棋盘外观设置浮窗 —— 色板/取色器/1% 拉条 + 落盘
+  // ------------------------------------------------------------------
+  {
+    const g = JSON.parse(await ev(`(() => {
+      Game.cancelAiTimer(); Game.setSetupAi("human");
+      Game.setSetupMode(false); Game.newGame(15, 1); Game.closeSetup();
+      document.getElementById("setupBtn").click();
+      const open = Game.gridSettingsOpen;
+      const swatches = document.querySelectorAll(".gridSw").length;
+      const before = document.getElementById("gridColorInput").value;
+      document.getElementById("gridSw4").click();
+      const afterColor = Game.gridColor;
+      const slider = document.getElementById("gridOpacityInput");
+      slider.value = "55";
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      const liveAlpha = Game.gridAlpha;
+      const shown = document.getElementById("gridOpacityVal").textContent;
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+      const saved = JSON.parse(localStorage.getItem("gomoku.grid.v1"));
+      Game.closeGridSettings();
+      return JSON.stringify({ open: open, swatches: swatches, before: before,
+        afterColor: afterColor, liveAlpha: liveAlpha, shown: shown, saved: saved,
+        closed: !Game.gridSettingsOpen });
+    })()`));
+    check(g.open, "点「设置」打开棋盘外观浮窗（本地对局）", JSON.stringify(g));
+    check(g.swatches === 6, "浮窗里有 6 个预设色块", JSON.stringify(g));
+    check(g.before === "#e9dfb7", "浮窗打开时取色器显示当前颜色（默认纸黄）", g.before);
+    check(g.afterColor === "#2f5d7c" && g.saved && g.saved.color === "#2f5d7c",
+      "点预设色块立刻换色并落盘", JSON.stringify({ after: g.afterColor, saved: g.saved }));
+    check(Math.abs(g.liveAlpha - 0.55) < 1e-9 && g.shown === "55%",
+      "拉条实时改到 55%，读数同步（1% 精度）", JSON.stringify({ alpha: g.liveAlpha, shown: g.shown }));
+    check(g.closed, "点关闭后浮窗收起", JSON.stringify(g));
+    // 还原默认，别把后面的截图/断言染上颜色
+    await ev(`(() => {
+      localStorage.removeItem("gomoku.grid.v1");
+      Game.loadGridAppearance();
+      Game.syncGridSettings();
+      Game.openSetup();
+      return 1;
+    })()`);
+  }
+
+  // ------------------------------------------------------------------
+  // v3.1.12：棋钟 / 每手用时 / 记录里的 ms 计时
+  // ------------------------------------------------------------------
+  {
+    const tim = JSON.parse(await ev(`(() => {
+      Game.cancelAiTimer(); Game.setSetupAi("human");
+      Game.setSetupMode(false); Game.newGame(15, 1); Game.closeSetup();
+      // 模拟"已经下了 4.321 秒、上一手落在 1.000 秒"的时刻。
+      Game.recStart = Date.now() - 4321;
+      Game.recLastEl = 1000;
+      Game.updateClockHud(true);
+      const txt = (id) => document.getElementById(id).textContent;
+      const hudVisible = !document.getElementById("clockHud").classList.contains("off");
+      const at = { black: txt("clockBlack"), white: txt("clockWhite"),
+                   move: txt("clockMove"), total: txt("clockTotal") };
+      // 用 1% 的精度看格式：mm:ss.mmm
+      const okFmt = [at.black, at.white, at.move, at.total].every((s) => /^\\d+:\\d\\d\\.\\d{3}$/.test(s));
+
+      // 真下两手，看 buildRecord 是否把 dt 写进数组末位。
+      // 两手之间把 recStart 往前拨 50ms，保证白棋那一手 dt > 0（同毫秒内连下会让
+      // "双方累计都 > 0"变成一条概率性断言）。
+      Game.session.place(7, 7, 0);
+      Game.recStart -= 50;
+      Game.session.place(8, 8, 0);
+      const rec = Game.buildRecord();
+      const stats = Game.recordTimeStats(rec);
+      const mvOk = rec.mv.length === 2 &&
+        rec.mv.every((a) => Number.isInteger(a[7]) && a[7] >= 0);
+      const clockAfter = txt("clockBlack");
+      Game.newGame(15, 1); Game.closeSetup(); Game.updateClockHud(true);
+      return JSON.stringify({ hudVisible: hudVisible, okFmt: okFmt, at: at,
+        mvOk: mvOk, stats: stats, clockAfter: clockAfter,
+        recDur: rec.dur, recLim: rec.lim });
+    })()`));
+    check(tim.hudVisible, "棋钟在三维棋盘左上角显示", JSON.stringify(tim));
+    check(tim.okFmt, "棋钟四行都精确到 ms（mm:ss.mmm）", JSON.stringify(tim.at));
+    check(tim.mvOk, "记录里每一手都存了 dt（末位，ms）", JSON.stringify(tim.stats));
+    check(tim.stats.black > 0 && tim.stats.white > 0,
+      "黑白双方的累计用时都能从 dt 算出来", JSON.stringify(tim.stats));
+    check(tim.recLim === 0, "单机记录的每步限时是 0（不限时）", String(tim.recLim));
+  }
+
+  // ------------------------------------------------------------------
+  // v3.1.12：联机 emoji 的浮层（最多 4 条、新的在最下面、2 秒后消失）
+  // ------------------------------------------------------------------
+  // 公开版把整个联机块剥掉了，这里没有 emojiToasts / showEmojiToast —— 跳过。
+  if (await ev('typeof Game.showEmojiToast === "function" && !!document.getElementById("emojiToasts")')) {
+    const emo = JSON.parse(await ev(`(() => {
+      const box = document.getElementById("emojiToasts");
+      box.innerHTML = "";
+      ["😀", "😂", "😮", "😭", "👍"].forEach((e) => Game.showEmojiToast(e));
+      const kids = [...box.children];
+      const rects = kids.map((k) => k.getBoundingClientRect());
+      const fs = parseFloat(getComputedStyle(kids[0]).fontSize) || 0;
+      const res = { count: kids.length, texts: kids.map((k) => k.textContent),
+        firstTop: Math.round(rects[0].top),
+        lastTop: Math.round(rects[rects.length - 1].top), fontSize: fs };
+      box.innerHTML = "";
+      return JSON.stringify(res);
+    })()`));
+    check(emo.count === 4, "emoji 浮层最多同时显示 4 条", JSON.stringify(emo));
+    check(emo.texts.join(",") === "😂,😮,😭,👍", "连发 5 条时挤掉最旧的一条，新的在后面",
+      JSON.stringify(emo.texts));
+    check(emo.lastTop > emo.firstTop, "新发的一条排在下面", JSON.stringify(emo));
+    check(emo.fontSize >= 18, "emoji 字号随视口自适应（不会小到看不清）", String(emo.fontSize));
+  }
+
+  // ------------------------------------------------------------------
+  // v3.1.12：四维下 emoji 条和「落子：正常/缓/催」同一层，落子键小、聊天框大
+  // ------------------------------------------------------------------
+  if (await ev('typeof Net !== "undefined" && !!document.getElementById("emojiBar")')) {
+    const place = JSON.parse(await ev(`(() => {
+      Game.cancelAiTimer(); Game.setSetupAi("human");
+      Net.online = false; Net.room = "";
+      Game.setSetupMode(true); Game.newGame(8, 1); Game.closeSetup();
+      // 模拟"已在联机房里"：只动 Net 的字段，不发网络请求。
+      Net.online = true; Net.room = "123456"; Net.awaitingPeer = false;
+      Game.refreshRotPanel(); Game.syncEmojiUi();
+      const bar = document.getElementById("emojiBar");
+      const row = document.getElementById("placeModeRow");
+      const mode = document.getElementById("modeBtn");
+      const input = document.getElementById("emojiInput");
+      const res = {
+        parent: bar.parentElement && bar.parentElement.id,
+        barVisible: !bar.classList.contains("off"),
+        modeW: Math.round(mode.getBoundingClientRect().width),
+        inputW: Math.round(input.getBoundingClientRect().width),
+        rowW: Math.round(row.getBoundingClientRect().width),
+      };
+      Net.online = false; Net.room = "";
+      Game.syncEmojiUi();
+      Game.setSetupMode(false); Game.newGame(15, 1); Game.closeSetup();
+      return JSON.stringify(res);
+    })()`));
+    check(place.parent === "placeModeRow",
+      "四维下 emoji 条挪进「落子宣告」那一行", JSON.stringify(place));
+    check(place.barVisible, "四维联机下 emoji 条可见", JSON.stringify(place));
+    check(place.modeW > 0 && place.inputW > place.modeW,
+      "四维下落子键小、聊天框大（没有按 flex 均分）", JSON.stringify(place));
   }
 
   // ------------------------------------------------------------------

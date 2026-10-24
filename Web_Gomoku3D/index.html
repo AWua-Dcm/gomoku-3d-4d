@@ -218,6 +218,32 @@
   #sliceGroup.on { display: flex; }
   #sliceLabel { color: var(--dim); font-size: 13px; min-width: 128px; text-align: center; }
 
+  /* 对局棋钟。top 的 96px 只是 JS 跑起来之前的兜底（模式条高度随语言/换行变，
+     layoutClockHud 会实测覆盖）。字号用 clamp：窄屏上不挤、宽屏上不糊。 */
+  #clockHud {
+    position: absolute; left: 14px; top: 96px; z-index: 5;
+    pointer-events: none;
+    background: var(--overlay); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 9px;
+    font-family: ui-monospace, Consolas, "DejaVu Sans Mono", monospace;
+    font-size: clamp(10.5px, 1.1vw, 13px);
+    line-height: 1.55; color: var(--text);
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 1px 6px rgba(90,72,44,.10);
+  }
+  #clockHud.off { display: none; }
+  #clockHud .clockRow { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  #clockHud .clockRow + .clockRow { margin-top: 1px; }
+  #clockHud .clockRow.off { display: none; }
+  #clockHud .clockDot {
+    width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto;
+    border: 1px solid var(--stone-edge); background: var(--white);
+  }
+  #clockHud .clockDot.black { background: var(--black); }
+  #clockHud .clockLbl { color: var(--dim); font-size: .92em; }
+  #clockHud .clockVal { min-width: 6.4em; text-align: right; }
+  #clockHud #clockLimit.warn { color: var(--danger); font-weight: 700; }
+
   #hintbox {
     position: absolute; left: 14px; bottom: 14px;
     background: var(--overlay); border: 1px solid var(--border); border-radius: 6px;
@@ -403,20 +429,14 @@
                border-radius: 4px; flex: 0 0 auto; }
   #strip { display: block; width: 100%; height: 100%; cursor: pointer; }
 
-  /* 【要肯换行】四维下这一行是 5 个键（多一个「落子：正常/缓/催」），而 ru/fr 的标签
-     又是最长的：一行总宽 426~446px，窄屏竖屏只分给面板 284~357px —— 键会被压到
-     min-content 之后【横向溢出行盒】。表现是最后一颗键被切掉甚至整个跑到屏外
-     （320×568 法语实测「设置」在 x 368..444，视口只有 320 宽，得横向滚 124px 才拉得到）。
+  /* 【这一行永远五颗键】本地对局：悔棋 / 重开 / 换先手 / 设置 / 退出；
+     联机房间：悔棋 / 换先手 / 投降 / 退出房间 / 设置（重开和退出被 .off 收掉）。
+     四维那颗「落子：正常/缓/催」**不在这一行**，挪进了转动面板底部（见 #placeModeRow）——
+     用户口径是"不要六颗键挤在一起"。ru/fr 的标签又是最长的：一行总宽本来就紧，
+     窄屏竖屏只分给面板 284~357px，键会被压到 min-content 之后【横向溢出行盒】。
      flex-wrap 让装不下的键换到第二行。1280 宽下这一行本来放得下，换行规则不生效。 */
   #buttons { display: flex; gap: 8px; flex: 0 0 auto; flex-wrap: wrap; }
   #buttons button { flex: 1 1 0; }
-  /* 【四维下「设置」和「落子：正常/缓/催」交换位置】用户口径。
-     只动 flex 的排位，不动 DOM —— 两个键的 id、事件、文案一个字都不变，
-     三维下也就逐像素和原来一样（没有 .swap4d 这个类时这两条规则不生效）。
-     为什么值得换：四维下「落子宣告」是**每手都要用**的（缓/催直接改相位时钟），
-     而「设置」多半只在开局前点一次；常用的那个离手更近。 */
-  #buttons.swap4d #setupBtn { order: 2; }
-  #buttons.swap4d #modeBtn { order: 1; }
 
   button {
     background: var(--panel-hi); color: var(--text); border: 1px solid var(--border);
@@ -434,6 +454,9 @@
   #rotPanel { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto;
               border-top: 1px solid var(--border); padding-top: 10px; }
   #rotPanel.off { display: none; }
+  /* 晨昏关掉时整行收掉。只把按钮 display:none 的话，这一行仍会被 #rotPanel 的
+     gap 撑出一截空白 —— 看起来像少放了一颗键。 */
+  #placeModeRow.off { display: none; }
   #rotHead { display: flex; align-items: baseline; gap: 10px; }
   #rotTitle { font-size: 15px; font-weight: 600; }
   #rotStatus { color: var(--dim); font-size: 12.5px; flex: 1 1 auto; text-align: right; }
@@ -624,9 +647,10 @@
   #setup .row.hide { visibility: hidden; }
   /* 对手的「强度」「谁先下」两行 + 联机键共用同一个槽位。
      - 两行就是普通的网格行，隐藏时 visibility:hidden（.hide，见上一条），高度/宽度都留着；
-     - 联机键绝对定位盖满整个槽位（#onlineSlot），不参与网格行高 —— 所以人类时
-       两行看不见、联机键在同一个位置；人机时两行出现、联机键藏起来。
-     槽位高度恒等于「两行 + 一个行距」，和把它们平铺在 #setup 里时逐像素相同。 */
+     - 联机键绝对定位在槽位上、按普通按钮尺寸居中（#onlineSlot），不参与网格行高 ——
+       所以人类时两行看不见、联机键在同一个位置；人机时两行出现、联机键藏起来。
+     槽位高度恒等于「两行 + 一个行距」，和把它们平铺在 #setup 里时逐像素相同；
+     联机键不铺满槽位，但槽位高度不变，所以下面所有行都不动。 */
   #opponentSlot {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -960,16 +984,23 @@
     position: fixed; top: 14px; right: 14px; z-index: 60;
     display: flex; align-items: center; gap: 8px;
   }
-  /* #historyBtn（对局记录）、#tipBtn（打赏）和「具体规则」同一套砖头样式。
+  /* #historyBtn（对局记录）和「具体规则」同一套砖头样式。
      新键都排在语言键右边：#langList 的 left:0 锚的是"第一个孩子"（语言键）——
      新键插到最前，语言列表就会对着它展开，而那个错位只有肉眼能看见。 */
-  #rulesBtn, #historyBtn, #tipBtn {
+  #rulesBtn, #historyBtn {
     font-size: 13px; padding: 7px 13px;
     background: var(--panel-hi); color: var(--text);
     border: 1px solid var(--border); border-radius: 4px;
     box-shadow: 0 1px 6px rgba(90,72,44,.12);
   }
-  /* 记录只在起始界面可见：游玩界面右上角只留语言/规则/打赏。
+  /* 打赏键：和规则/记录同一套砖头样式；备案审核构建会整块剥掉。 */
+  #tipBtn {
+    font-size: 13px; padding: 7px 13px;
+    background: var(--panel-hi); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    box-shadow: 0 1px 6px rgba(90,72,44,.12);
+  }
+  /* 记录只在起始界面可见：游玩界面右上角只留语言/规则（完整版另有赞助键）。
      记录面板本身不变，从起始界面的「记录」或对局里的「设置」都能打开。
      用 display:none 而不是 visibility:hidden —— 顶上这一行是按实测宽度
      给状态行让位的，留一个看不见的按钮会白占宽（layoutTopRight 量的是可见宽度）。 */
@@ -1070,13 +1101,15 @@
   #historyBody .histRow { padding: 6px 2px 2px; }
   #historyBody .histEmpty { color: var(--dim); padding: 16px 2px; }
   #historyBody .histOld { color: var(--dim); font-size: 12px; padding: 0 2px 4px; }
+  #historyBody .histTimes { color: var(--dim); font-size: 12px; padding: 0 2px 5px;
+    font-variant-numeric: tabular-nums; }
   #historyBody .histDetail { margin: 2px 0 0 16px; }
   #historyBody .histDetail summary { cursor: pointer; color: var(--dim); font-size: 12.5px; }
   #historyBody .histMoveBox { max-height: 300px; overflow-y: auto; margin: 6px 0 4px;
     border-left: 2px solid var(--border); padding-left: 10px; }
   #historyBody .histMove { display: flex; align-items: center; gap: 7px; font-size: 12.5px;
     line-height: 1.75; }
-  #historyBody .histTime { color: var(--dim); min-width: 4.2em; text-align: right;
+  #historyBody .histTime { color: var(--dim); min-width: 6.4em; text-align: right;
     font-family: ui-monospace, Consolas, "DejaVu Sans Mono", monospace; }
   #historyBody .histDot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
   #historyBody .histDot.black { background: var(--black); }
@@ -1086,6 +1119,75 @@
   #historyBody .histPhase.night { background: var(--phase-night); }
   #historyBody .histActions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
   @media (max-width: 560px) { #historyBody .histDetail { margin-left: 6px; } }
+
+  /* 棋盘外观设置浮窗。和规则/记录同一套遮罩 + 卡片，宽度只够放两行控件。
+     **只改三维静态格线**（draw3D 里那一次 drawLines）：蓝框/红线/绿框/金线
+     都不是"格线"，它们是读盘必须的辅助，不跟着这里变。 */
+  #gridPanel {
+    position: fixed; inset: 0; z-index: 70;
+    background: rgba(60,50,34,.42);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  #gridPanel.off { display: none; }
+  #gridCard {
+    display: flex; flex-direction: column; width: min(430px, 100%); max-height: 100%;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 20px 60px rgba(60,44,22,.30); overflow: hidden;
+  }
+  #gridHead {
+    display: flex; align-items: baseline; gap: 12px; flex: 0 0 auto;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    background: var(--panel-hi);
+  }
+  #gridTitle { font-size: 19px; font-weight: 600; letter-spacing: 2px; flex: 1 1 auto; }
+  #gridBody { display: flex; flex-direction: column; gap: 18px; padding: 16px 20px 20px; }
+  .gridField { display: flex; flex-direction: column; gap: 9px; }
+  .gridFieldLabel { font-size: 13px; color: var(--dim); }
+  #gridSwatches { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  /* 预设色块。圆点比按钮的默认方角更像"调色盘"；选中态用外圈而不是改色 ——
+     改色会和色块本身要表达的颜色打架。 */
+  .gridSw {
+    width: 32px; height: 32px; flex: 0 0 auto; padding: 0; border-radius: 50%;
+    border: 1px solid var(--border); cursor: pointer;
+  }
+  .gridSw.sel { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #gridCustomRow { display: flex; align-items: center; gap: 10px; }
+  #gridColorInput {
+    width: 48px; height: 32px; padding: 2px; box-sizing: border-box;
+    background: var(--panel-hi); border: 1px solid var(--border); border-radius: 4px;
+    cursor: pointer;
+  }
+  #gridOpacityRow { display: flex; align-items: center; gap: 12px; }
+  /* accent-color 让滑轨/滑块跟着主题走；step=1 保证读数精确到 1%。
+     原生 range 的拖动本来就是连续的，不需要自己再造一套拖拽。 */
+  #gridOpacityInput { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); cursor: pointer; }
+  #gridOpacityVal {
+    flex: 0 0 auto; min-width: 3.2em; text-align: right;
+    font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums;
+  }
+
+  /* 退出确认。z-index 比设置/导出都高：它是一问一答的阻断层。 */
+  #quitPanel {
+    position: fixed; inset: 0; z-index: 78;
+    background: rgba(60,50,34,.42);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  #quitPanel.off { display: none; }
+  #quitCard {
+    display: flex; flex-direction: column; width: min(400px, 100%);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 20px 60px rgba(60,44,22,.30); overflow: hidden;
+  }
+  #quitHead {
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    background: var(--panel-hi);
+  }
+  #quitTitle { font-size: 18px; font-weight: 600; letter-spacing: 2px; }
+  #quitBody { padding: 18px 18px 14px; font-size: 14px; line-height: 1.7; }
+  #quitActions { display: flex; gap: 10px; padding: 0 18px 18px; }
+  #quitActions button { flex: 1 1 0; }
+  #quitYes { background: var(--danger); color: #fdfaf2; border-color: var(--danger); font-weight: 600; }
+  #quitYes:hover { background: #b03d30; }
 
   /* 打赏浮层。和规则/记录同一套遮罩 + 卡片，只是宽度按内容定。
      纯赞助，不绑定任何权益；二维码内联成 data URI，爱发电是静态链接。 */
@@ -1119,7 +1221,7 @@
   #tipNote { margin-top: 12px; font-size: 12.5px; color: var(--dim); line-height: 1.7; }
   @media (max-width: 560px) { #tipQrs img { width: 150px; } }
 
-  /* 导出图片的小弹窗。z-index 比规则/记录/打赏/联机高一层：
+  /* 导出图片的小弹窗。z-index 比规则/记录/联机高一层：
      从记录面板打开时它盖在记录列表上，取消后记录列表还在。 */
   #exportPanel {
     position: fixed; inset: 0; z-index: 74;
@@ -1921,7 +2023,7 @@
 
 - 可以一直悔到开局前。
 - 悔棋之后胜负状态一并清除，棋局回到"进行中"，轮到被撤掉那一手的一方。
-- 快捷键 `Z`，也可以点面板上的「悔棋 Z」。
+- 快捷键 `Z`，也可以点面板上的「悔棋」。
 
 ## 7. 和局
 
@@ -2261,7 +2363,7 @@ so the sixth stone is never reached. Therefore:
 
 - You can undo all the way back to before the game started.
 - Undoing clears the win/loss state too: the game returns to "in progress" and it is the turn of the player whose move was taken back.
-- Shortcut `Z`, or the "Undo Z" button on the panel.
+- Shortcut `Z`, or the "Undo" button on the panel.
 
 ## 7. Draw
 
@@ -3700,7 +3802,7 @@ il n'atteint jamais le 6e. Donc :
 
 - On peut annuler jusqu'à revenir avant le début de la partie.
 - Annuler efface aussi l'état de victoire : la partie repasse à « en cours » et c'est au tour du camp dont le coup a été retiré.
-- Raccourci `Z`, ou le bouton « Annuler Z » sur le panneau.
+- Raccourci `Z`, ou le bouton « Annuler » sur le panneau.
 
 ## 7. Match nul
 
@@ -3986,6 +4088,29 @@ ramène à l'écran de départ.
   <div id="view">
     <canvas id="gl"></canvas>
 
+    <!-- 对局棋钟：贴在三维棋盘左上角（模式条下面，见 layoutClockHud）。
+         黑白两方各自累计 + 本手用时 + 全场总用时；联机限时时多一行剩余。
+         **精确到 ms**，50ms 刷一次。pointer-events:none：它只是显示，不许吃点击。 -->
+    <div id="clockHud" class="off" aria-hidden="true">
+      <div class="clockRow">
+        <span class="clockDot black"></span>
+        <span class="clockVal" id="clockBlack">00:00.000</span>
+        <span class="clockDot white"></span>
+        <span class="clockVal" id="clockWhite">00:00.000</span>
+      </div>
+      <div class="clockRow">
+        <span class="clockLbl" id="clockMoveLabel" data-i18n="clockMoveLabel">本手</span>
+        <span class="clockVal" id="clockMove">00:00.000</span>
+        <span class="clockLbl" id="clockTotalLabel" data-i18n="clockTotalLabel">总</span>
+        <span class="clockVal" id="clockTotal">00:00.000</span>
+      </div>
+      <div class="clockRow off" id="clockLimitRow">
+        <span class="clockLbl" id="clockLimitLabel" data-i18n="clockLimitLabel">剩余</span>
+        <span class="clockVal" id="clockLimit">00:00.000</span>
+      </div>
+    </div>
+
+
     <!-- 起始界面打开时，左边这块画布就变成演示棋盘（自动缓慢旋转的 10×10×10）。
          铭牌是必须的：从对局里点「设置」进来时，左边仍然摆着一盘棋，
          不说明的话看起来像是自己的棋局还在。 -->
@@ -4177,6 +4302,64 @@ ramène à l'écran de départ.
   </div>
 </div>
 
+<!-- 棋盘外观设置浮窗。底部「设置」键在本地对局里打开它；联机房间里那颗设置键
+     走的仍是「下一局设置」（见 openOnlineSettings），两者互斥。
+     **只改三维静态格线的颜色和透明度**，其余辅助线（蓝框/红线/绿框/金线）不动。
+     标题复用 setupBtn 的文案、关闭键复用 rulesClose —— 它们是同两句界面词，
+     再立两个翻译键只会多两处漂移点。 -->
+<div id="gridPanel" class="off panelOverlay" role="dialog" aria-modal="true"
+     aria-labelledby="gridTitle">
+  <div id="gridCard">
+    <div id="gridHead">
+      <div id="gridTitle" data-i18n="setupBtn">设置</div>
+      <button id="gridClose" class="mini" data-i18n="rulesClose">关闭 Esc</button>
+    </div>
+    <div id="gridBody">
+      <div class="gridField">
+        <div class="gridFieldLabel" id="gridColorLabel" data-i18n="gridColorLabel">格线颜色</div>
+        <!-- 预设色块。颜色写在 data-grid-color 和 style 两处是有意的：
+             style 负责首帧就画出颜色（JS 还没跑），dataset 负责"点它是什么色"。
+             六个取自古风配色：纸黄（默认）/ 墨灰 / 竹青 / 靛蓝 / 朱砂 / 赭金。 -->
+        <div id="gridSwatches">
+          <button id="gridSw1" class="gridSw" data-grid-color="#e9dfb7" title="#e9dfb7" style="background:#e9dfb7"></button>
+          <button id="gridSw2" class="gridSw" data-grid-color="#6d6353" title="#6d6353" style="background:#6d6353"></button>
+          <button id="gridSw3" class="gridSw" data-grid-color="#4a6b45" title="#4a6b45" style="background:#4a6b45"></button>
+          <button id="gridSw4" class="gridSw" data-grid-color="#2f5d7c" title="#2f5d7c" style="background:#2f5d7c"></button>
+          <button id="gridSw5" class="gridSw" data-grid-color="#9c3428" title="#9c3428" style="background:#9c3428"></button>
+          <button id="gridSw6" class="gridSw" data-grid-color="#9c6b1f" title="#9c6b1f" style="background:#9c6b1f"></button>
+        </div>
+        <div id="gridCustomRow">
+          <div class="gridFieldLabel" id="gridCustomLabel" data-i18n="gridCustomLabel">自定义</div>
+          <input id="gridColorInput" type="color" value="#e9dfb7">
+        </div>
+      </div>
+      <div class="gridField">
+        <div class="gridFieldLabel" id="gridOpacityLabel" data-i18n="gridOpacityLabel">格线透明度</div>
+        <div id="gridOpacityRow">
+          <!-- step=1：精确到 1%。input 事件实时重画，change 才写 localStorage。 -->
+          <input id="gridOpacityInput" type="range" min="0" max="100" step="1" value="40">
+          <output id="gridOpacityVal">40%</output>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 退出确认。本地对局的「退出」键和教学里的退出都走这一个盒子。
+     确定之后：取消电脑着/转动预览/待落子，重置当前会话，回起始界面。
+     **不删已经存进对局记录的局** —— 那是历史账本，不属于"当前这局"。 -->
+<div id="quitPanel" class="off panelOverlay" role="dialog" aria-modal="true"
+     aria-labelledby="quitTitle">
+  <div id="quitCard">
+    <div id="quitHead"><div id="quitTitle" data-i18n="quitBtn">退出</div></div>
+    <div id="quitBody" data-i18n="quitBody">确定退出？（退出将会清空此局）</div>
+    <div id="quitActions">
+      <button id="quitYes" data-i18n="quitYes">是</button>
+      <button id="quitNo" data-i18n="quitNo">否</button>
+    </div>
+  </div>
+</div>
+
 <!-- 打赏：支付宝/微信二维码 + 爱发电链接。二维码内联成 data URI，保持单文件、离线可显示。 -->
 <div id="tipPanel" class="off">
   <div id="tipCard">
@@ -4297,19 +4480,26 @@ ramène à l'écran de départ.
         <button id="rotConfirm" disabled data-i18n="rotConfirm">确定操作</button>
         <button id="rotCancel" disabled data-i18n="rotCancel">取消操作</button>
       </div>
+      <!-- 【「落子：正常/缓/催」从底部那一排挪到这里】用户口径：底部固定五颗键
+           （悔棋/重开/换先手/设置/退出），四维这颗每手都要用的宣告键放进操作栏，
+           不要六颗键挤在一起。放在「执行转动/确定/取消」之后、提示之前。
+           晨昏关掉时整行 off（见 refreshPhaseTexts）—— 只把按钮藏起来的话，
+           #rotPanel 的 gap 仍会撑出一截空白。 -->
+      <div class="rotRow" id="placeModeRow">
+        <button id="modeBtn" disabled></button>
+      </div>
       <div id="rotHint"></div>
     </div>
 
+
     <div id="buttons">
-      <button id="undoBtn" data-i18n="undoBtn">悔棋 Z</button>
-      <button id="restartBtn" data-i18n="restartBtn">重开 R</button>
+      <button id="undoBtn" data-i18n="undoBtn">悔棋</button>
+      <button id="restartBtn" data-i18n="restartBtn">重开</button>
       <button id="swapBtn" data-i18n="swapBtn">换先手</button>
       <button id="setupBtn" data-i18n="setupBtn">设置</button>
-      <!-- v3.0.0「晨昏」的落子宣告。**一个键循环三态**，不做三个键：
-           这一行已经有四个键，再加三个会把它在窄窗口下挤折；
-           而"下一手要正常/缓/催"本来就是三选一，循环比并排更省地方。
-           晨昏关掉时它 disabled + 淡显（和冷却行在三维下同一套做法）。 -->
-      <button id="modeBtn" disabled></button>
+      <!-- 退出：本地对局才显示（联机房间里已有「退出房间」，见 syncOnlineControls）。
+           点它先弹确认，不直接走 —— 退出会清空当前这局，误触的代价太高。 -->
+      <button id="quitBtn" data-i18n="quitBtn">退出</button>
     </div>
   </aside>
 </div>
@@ -8607,10 +8797,22 @@ const STATIC_TEXT = { en: {
   "rotGo": "Rotate",
   "rotConfirm": "Confirm",
   "rotCancel": "Cancel",
-  "undoBtn": "Undo Z",
-  "restartBtn": "Restart R",
+  "undoBtn": "Undo",
+  "restartBtn": "Restart",
   "swapBtn": "Swap first player",
   "setupBtn": "Settings",
+  "quitBtn": "Exit",
+  "clockMoveLabel": "Move",
+  "clockTotalLabel": "Total",
+  "clockLimitLabel": "Left",
+
+  // ---- 棋盘外观 / 退出确认（浮窗）
+  "gridColorLabel": "Grid color",
+  "gridOpacityLabel": "Grid opacity",
+  "gridCustomLabel": "Custom",
+  "quitBody": "Exit? This will clear the current game.",
+  "quitYes": "Yes",
+  "quitNo": "No",
 
   // ---- 起始界面
   "setupTitle": "Gomokube",
@@ -8679,7 +8881,6 @@ const TEXT = { en: {
   "aiLv.xhigh": "Very high",
   "aiLv.ultra": "Ultra",
   "phase.dawn": "Dawn", "phase.night": "Long night",
-  "tutExit": "Exit",
 "tut.1.title": "Rotation: one turn, two problems solved",
 "tut.1.body": "White has an open four (four in a line, both ends free). Next move it makes five — and an open four cannot be blocked: block one end and it goes to the other.\n\nBut you move first, and this rotation does two things at once. You have a vertical line of your own: four stones in place, and the fifth cell you need is held by a white stone — you cannot fill it by placing. Turn that layer 90°: the white stone occupying your spot swings away, and your stone beside it drops into the gap — five in a row, and you win outright. In the same turn, one of the stones in White's open four is swung apart, so it drops to a three.\n\nHow: on the right, set Axis to z and Layer to 5 (the panel shows the layer number directly), Turns to 1 · 90°, then press Rotate — the board turns so you can see it (no turn used, not a move yet); when it looks right, press Confirm.",
 "tut.2.title": "Wrapping: the edges connect",
@@ -8720,7 +8921,7 @@ const TEXT = { en: {
   // 这一处【界面上够得到】：冷却选 3 时落两手，placementsUntilRotation 就是 1。
   "rot.hint.cool.one": "Cooling down: 1 more move. A rotation uses up the whole turn, so you can't place right after rotating.",
   "rot.hint.cool.many": "Cooling down: {n} more moves. A rotation uses up the whole turn, so you can't place right after rotating.",
-  "rot.hint.undo": "The last move was a rotation — Undo Z takes it back.",
+  "rot.hint.undo": "The last move was a rotation — Undo takes it back.",
   "rot.hint.ready": "Clockwise = looking from the negative end of that axis toward the origin. Making five for yourself with a rotation wins; only lining up the opponent's five is rolled back. A rotation uses up the whole turn.",
 
   // ---- 浮动提示
@@ -8799,6 +9000,9 @@ const TEXT = { en: {
   "export.defaultName": "Player",
   "export.playerLine": "Player: {name}",
   "export.duration": "Duration {time}",
+  "export.sides": "Black {black} · White {white}",
+  "rec.times": "Total {total} · Black {black} · White {white}",
+  "rec.limit": "Move limit {n}s",
   "export.failOld": "This record is too old and has no move list — cannot export.",
   "export.failReplay": "Could not replay this game — cannot export.",
   "export.failCanvas": "Could not generate the image.",
@@ -8876,10 +9080,22 @@ STATIC_TEXT.ja = {
   "rotGo": "回転",
   "rotConfirm": "確定",
   "rotCancel": "キャンセル",
-  "undoBtn": "元に戻す Z",
-  "restartBtn": "最初から R",
+  "undoBtn": "元に戻す",
+  "restartBtn": "最初から",
   "swapBtn": "先手を入れ替え",
   "setupBtn": "設定",
+  "quitBtn": "終了",
+  "clockMoveLabel": "本手",
+  "clockTotalLabel": "合計",
+  "clockLimitLabel": "残り",
+
+  // ---- 盤面の見た目 / 終了確認（浮窓）
+  "gridColorLabel": "格子線の色",
+  "gridOpacityLabel": "格子線の不透明度",
+  "gridCustomLabel": "カスタム",
+  "quitBody": "終了しますか？（現在の対局は消去されます）",
+  "quitYes": "はい",
+  "quitNo": "いいえ",
   "setupTitle": "ゴモキューブ",
   "setupTagline": "六面を貫く五目並べ",
   "setupSub": "13方向。3Dの盤では、正面を塞ぐだけでは足りません",
@@ -8939,6 +9155,9 @@ TEXT.ja = {
   "export.defaultName": "プレイヤー",
   "export.playerLine": "プレイヤー：{name}",
   "export.duration": "所要時間 {time}",
+  "export.sides": "黒 {black} · 白 {white}",
+  "rec.times": "合計 {total} · 黒 {black} · 白 {white}",
+  "rec.limit": "1手 {n} 秒",
   "export.failOld": "この記録は古く、棋譜がないため書き出せません。",
   "export.failReplay": "棋譜の再生に失敗したため書き出せません。",
   "export.failCanvas": "画像の生成に失敗しました。",
@@ -8965,7 +9184,6 @@ TEXT.ja = {
   "aiLv.xhigh": "最強",
   "aiLv.ultra": "極",
   "phase.dawn": "黎明", "phase.night": "長い夜",
-  "tutExit": "終了",
 "tut.1.title": "回転：一手で二つ片づく",
 "tut.1.body": "白に活四があります（四つ並んで両端が空き）。次の一手で白は五連を作ります —— 活四は止められません：片端を塞げばもう片端に回られます。\n\nですが先に打つのはあなたで、しかもこの回転は一度に二つのことをします。あなたにも縦の線があり、四つは揃っていますが、足りない五つ目のマスは白石に塞がれていて、打って埋めることができません。その層を 90° 回すと、場所を取っていた白石がどき、隣にあったあなたの石がちょうど空きに入ります —— 五連が成立し、そのまま勝ちです。同じ回転で、白の活四のうち一つも散り、三に落ちます。\n\n手順：右パネルで「軸」を z、「層」を第5層（パネルに何層目か直接書いてあります）、「回数」を 1 · 90° にして「回転を実行」——盤がまず回って見せます（手番を消費しません、まだ一手ではありません）；納得したら「確定」を押してください。",
 "tut.2.title": "貫通：境界をまたいでもつながる",
@@ -8996,7 +9214,7 @@ TEXT.ja = {
   "rot.hint.preview": "プレビュー中：盤面は回した後の見た目ですが、まだ確定していません。「確定」で本当に回り、「キャンセル」で元に戻ります。",
   "rot.hint.empty": "このレイヤーは空です。回転するものがありません。別のレイヤーを選ぶか、3D表示で石の位置を確認してください。",
   "rot.hint.cool.many": "クールダウン中：あと{n}手。回転はその手番を丸ごと使うため、回転した直後には着手できません。",
-  "rot.hint.undo": "直前の手は回転でした。「元に戻す Z」で取り消せます。",
+  "rot.hint.undo": "直前の手は回転でした。「元に戻す」で取り消せます。",
   "rot.hint.ready": "時計回りは、その軸の負の側から原点を見た向きです。回転で自分の5連ができれば勝ち、相手の5連を作ったときだけ取り消されます。回転はその手番を丸ごと使います。",
   "toast.undone": "取り消しました：{move}",
   "toast.rotated": "{move}",
@@ -9075,10 +9293,22 @@ STATIC_TEXT.ko = {
   "rotGo": "회전",
   "rotConfirm": "확인",
   "rotCancel": "취소",
-  "undoBtn": "되돌리기 Z",
-  "restartBtn": "다시 시작 R",
+  "undoBtn": "되돌리기",
+  "restartBtn": "다시 시작",
   "swapBtn": "선수 교체",
   "setupBtn": "설정",
+  "quitBtn": "나가기",
+  "clockMoveLabel": "이번 수",
+  "clockTotalLabel": "총",
+  "clockLimitLabel": "남음",
+
+  // ---- 판 모양 / 나가기 확인(팝업)
+  "gridColorLabel": "격자선 색상",
+  "gridOpacityLabel": "격자선 불투명도",
+  "gridCustomLabel": "사용자 지정",
+  "quitBody": "나갈까요? (현재 대국은 지워집니다)",
+  "quitYes": "예",
+  "quitNo": "아니요",
   "setupTitle": "오목큐브",
   "setupTagline": "육면을 관통하는 오목",
   "setupSub": "13개 방향 — 3D 판에서는 앞만 막아서는 부족합니다",
@@ -9138,6 +9368,9 @@ TEXT.ko = {
   "export.defaultName": "플레이어",
   "export.playerLine": "플레이어: {name}",
   "export.duration": "소요 시간 {time}",
+  "export.sides": "흑 {black} · 백 {white}",
+  "rec.times": "총 {total} · 흑 {black} · 백 {white}",
+  "rec.limit": "한 수 {n}초",
   "export.failOld": "이 기록은 오래되어 기보가 없어 내보낼 수 없습니다.",
   "export.failReplay": "기보 재생에 실패해 내보낼 수 없습니다.",
   "export.failCanvas": "이미지를 생성하지 못했습니다.",
@@ -9164,7 +9397,6 @@ TEXT.ko = {
   "aiLv.xhigh": "최상",
   "aiLv.ultra": "극",
   "phase.dawn": "여명", "phase.night": "긴 밤",
-  "tutExit": "나가기",
 "tut.1.title": "회전: 한 수로 두 가지가 해결됩니다",
 "tut.1.body": "백에게 활사가 있습니다(네 개가 나란히, 양쪽 끝이 비어 있음). 다음 수에 백이 오를 만듭니다 —— 활사는 막을 수 없습니다: 한쪽 끝을 막으면 다른 쪽으로 갑니다.\n\n하지만 먼저 두는 쪽은 당신이고, 게다가 이 회전은 한 번에 두 가지를 합니다. 당신에게도 세로줄이 있는데 네 개는 다 있고, 부족한 다섯 번째 칸은 백돌이 차지하고 있어 착수로는 채울 수 없습니다. 그 층을 90° 돌리면 자리를 차지한 백돌이 비켜나고, 옆에 있던 당신의 돌이 바로 그 빈자리에 들어갑니다 —— 오가 성립하고 그대로 승리입니다. 같은 회전에서 백의 활사 중 하나도 흩어져 삼으로 떨어집니다.\n\n방법: 오른쪽 패널에서 「축」을 z, 「층」을 5층(패널에 몇 층인지 그대로 적혀 있습니다), 「횟수」를 1 · 90°로 두고 「회전 실행」을 누르세요 —— 판이 먼저 돌아 보여 줍니다(차례를 쓰지 않고, 아직 한 수도 아닙니다); 확인되면 「확정」을 누르세요.",
 "tut.2.title": "관통: 경계를 넘어도 이어집니다",
@@ -9195,7 +9427,7 @@ TEXT.ko = {
   "rot.hint.preview": "미리보기 중: 판은 이미 돌아간 모습이지만 아직 확정되지 않았습니다. 「확인」을 누르면 실제로 돌아가고, 「취소」를 누르면 되돌아갑니다.",
   "rot.hint.empty": "이 레이어는 비어 있습니다 — 회전할 것이 없습니다. 다른 레이어를 고르거나 3D 보기에서 돌이 있는 곳을 확인하세요.",
   "rot.hint.cool.many": "쿨다운: {n}수 남음. 회전은 한 수를 전부 사용하므로 회전 직후에는 착수할 수 없습니다.",
-  "rot.hint.undo": "마지막 수는 회전이었습니다 — 「되돌리기 Z」로 되돌릴 수 있습니다.",
+  "rot.hint.undo": "마지막 수는 회전이었습니다 — 「되돌리기」로 되돌릴 수 있습니다.",
   "rot.hint.ready": "시계 방향 = 해당 축의 음수 끝에서 원점 쪽을 바라보는 방향입니다. 회전으로 내 오목이 만들어지면 승리이고, 상대의 오목을 만들었을 때만 되돌려집니다. 회전은 한 수를 전부 사용합니다.",
   "toast.undone": "되돌림: {move}",
   "toast.rotated": "{move}",
@@ -9277,10 +9509,22 @@ STATIC_TEXT.ru = {
   // "Оставить"（保留这次转动）和旁边的「Отмена」正好是一对，而且短得下。
   "rotConfirm": "Оставить",
   "rotCancel": "Отмена",
-  "undoBtn": "Отменить (Z)",
-  "restartBtn": "Заново (R)",
+  "undoBtn": "Отменить",
+  "restartBtn": "Заново",
   "swapBtn": "Сменить первого игрока",
   "setupBtn": "Настройки",
+  "quitBtn": "Выйти",
+  "clockMoveLabel": "Ход",
+  "clockTotalLabel": "Всего",
+  "clockLimitLabel": "Осталось",
+
+  // ---- вид доски / подтверждение выхода (окно)
+  "gridColorLabel": "Цвет сетки",
+  "gridOpacityLabel": "Непрозрачность сетки",
+  "gridCustomLabel": "Свой цвет",
+  "quitBody": "Выйти? Текущая партия будет очищена.",
+  "quitYes": "Да",
+  "quitNo": "Нет",
   "setupTitle": "Гомокуб",
   "setupTagline": "Пять в ряд сквозь все шесть граней",
   "setupSub": "Тринадцать направлений — на 3D-доске защиты спереди недостаточно",
@@ -9344,6 +9588,9 @@ TEXT.ru = {
   "export.defaultName": "Игрок",
   "export.playerLine": "Игрок: {name}",
   "export.duration": "Длительность {time}",
+  "export.sides": "Чёрные {black} · Белые {white}",
+  "rec.times": "Всего {total} · чёрные {black} · белые {white}",
+  "rec.limit": "Лимит на ход: {n} с",
   "export.failOld": "Эта запись слишком старая, в ней нет ходов — экспорт невозможен.",
   "export.failReplay": "Не удалось воспроизвести партию — экспорт невозможен.",
   "export.failCanvas": "Не удалось создать изображение.",
@@ -9374,7 +9621,6 @@ TEXT.ru = {
   "aiLv.xhigh": "Оч. сильн",
   "aiLv.ultra": "Ультра",
   "phase.dawn": "Рассвет", "phase.night": "Долгая ночь",
-  "tutExit": "Выйти",
 "tut.1.title": "Поворот: один ход решает две задачи",
 "tut.1.body": "У белых открытая четвёрка (четыре в ряд, оба конца свободны). Следующим ходом они соберут пять — а открытую четвёрку не закрыть: закроете один конец, они пойдут в другой.\n\nНо ход ваш, и этот поворот делает два дела сразу. У вас есть своя вертикаль: четыре камня на месте, а нужную пятую клетку держит белый камень — ходом её не занять. Поверните этот слой на 90°: белый камень, занявший ваше место, уйдёт, а ваш камень рядом встанет ровно в пробел — пять в ряд, и вы сразу побеждаете. В том же повороте один камень из открытой четвёрки белых рассыпается, и она превращается в тройку.\n\nКак: на правой панели выберите ось z и слой 5 (на панели прямо написан номер слоя), число поворотов 1 · 90°, нажмите «Выполнить поворот» — доска повернётся, чтобы вы увидели результат (ход не тратится, это ещё не ход); когда всё понятно, нажмите «Подтвердить».",
 "tut.2.title": "Склейка: края соединены",
@@ -9409,7 +9655,7 @@ TEXT.ru = {
   "rot.hint.cool.one": "Перезарядка: ещё 1 ход. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
   "rot.hint.cool.few": "Перезарядка: ещё {n} хода. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
   "rot.hint.cool.many": "Перезарядка: ещё {n} ходов. Поворот занимает весь ход, поэтому сразу после поворота ставить нельзя.",
-  "rot.hint.undo": "Последний ход — поворот; вернуть его можно кнопкой «Отменить (Z)».",
+  "rot.hint.undo": "Последний ход — поворот; вернуть его можно кнопкой «Отменить».",
   "rot.hint.ready": "По часовой — это взгляд с отрицательного конца оси к началу координат. Поворот, собирающий пять для вас, — это победа; откатывается только поворот, собирающий пять сопернику. Поворот занимает весь ход.",
   "toast.undone": "Отменено: {move}",
   "toast.rotated": "{move}",
@@ -9492,10 +9738,22 @@ STATIC_TEXT.fr = {
   "rotGo": "Tourner",
   "rotConfirm": "Confirmer",
   "rotCancel": "Annuler",
-  "undoBtn": "Annuler Z",
-  "restartBtn": "Recommencer R",
+  "undoBtn": "Annuler",
+  "restartBtn": "Recommencer",
   "swapBtn": "Échanger le premier joueur",
   "setupBtn": "Réglages",
+  "quitBtn": "Quitter",
+  "clockMoveLabel": "Coup",
+  "clockTotalLabel": "Total",
+  "clockLimitLabel": "Reste",
+
+  // ---- apparence du plateau / confirmation de sortie (fenêtre)
+  "gridColorLabel": "Couleur de la grille",
+  "gridOpacityLabel": "Opacité de la grille",
+  "gridCustomLabel": "Personnalisée",
+  "quitBody": "Quitter ? (La partie en cours sera effacée.)",
+  "quitYes": "Oui",
+  "quitNo": "Non",
   "setupTitle": "Gomocube",
   "setupTagline": "Cinq en ligne à travers les six faces",
   "setupSub": "Treize directions — sur un plateau 3D, bloquer l'avant ne suffit pas",
@@ -9557,6 +9815,9 @@ TEXT.fr = {
   "export.defaultName": "Joueur",
   "export.playerLine": "Joueur : {name}",
   "export.duration": "Durée {time}",
+  "export.sides": "Noirs {black} · Blancs {white}",
+  "rec.times": "Total {total} · noirs {black} · blancs {white}",
+  "rec.limit": "Limite par coup : {n} s",
   "export.failOld": "Cette partie est trop ancienne et n'a pas de coups — export impossible.",
   "export.failReplay": "Impossible de rejouer cette partie — export impossible.",
   "export.failCanvas": "Impossible de générer l'image.",
@@ -9584,7 +9845,6 @@ TEXT.fr = {
   "aiLv.high": "Haut",
   "aiLv.xhigh": "Très haut",
   "phase.dawn": "Aube", "phase.night": "Longue nuit",
-  "tutExit": "Quitter",
 "tut.1.title": "Rotation : un tour, deux problèmes réglés",
 "tut.1.body": "Les blancs ont un quatre ouvert (quatre alignés, les deux bouts libres). Au coup suivant ils font cinq — et un quatre ouvert ne se bloque pas : on bouche un bout, ils passent par l'autre.\n\nMais c'est vous qui jouez, et cette rotation fait deux choses d'un coup. Vous avez vous aussi une verticale : quatre pierres en place, et la cinquième case qu'il vous manque est tenue par une pierre blanche — impossible de la combler en posant. Faites tourner cette couche de 90° : la pierre blanche qui occupe votre place s'écarte, et la vôtre, à côté, tombe pile dans le trou — cinq alignés, et vous gagnez sur-le-champ. Dans la même rotation, une pierre du quatre ouvert blanc part aussi de travers : il retombe à trois.\n\nComment : à droite, réglez Axe sur z et Couche sur 5 (le panneau indique directement le numéro de couche), Tours sur 1 · 90°, puis « Exécuter la rotation » — le plateau tourne pour vous montrer le résultat (aucun tour consommé, ce n'est pas encore un coup) ; quand c'est clair, appuyez sur « Confirmer ».",
 "tut.2.title": "Pliage : les bords se rejoignent",
@@ -9620,7 +9880,7 @@ TEXT.fr = {
   "rot.hint.empty": "Cette couche est vide — rien à tourner. Choisissez une autre couche, ou regardez la vue 3D pour voir où sont les pions.",
   "rot.hint.cool.one": "Recharge : encore 1 coup. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
   "rot.hint.cool.many": "Recharge : encore {n} coups. Une rotation consomme tout le tour, on ne peut donc pas poser juste après.",
-  "rot.hint.undo": "Le dernier coup était une rotation — « Annuler Z » la retire.",
+  "rot.hint.undo": "Le dernier coup était une rotation — « Annuler » la retire.",
   "rot.hint.ready": "Sens horaire = vu depuis l'extrémité négative de cet axe, en direction de l'origine. Une rotation qui fait cinq pour vous gagne ; seule celle qui aligne cinq pour l'adversaire est annulée. Une rotation consomme tout le tour.",
   "toast.undone": "Annulé : {move}",
   "toast.rotated": "{move}",
@@ -10262,10 +10522,6 @@ precision highp float;
 in vec3 vNormal;
 in vec3 vViewDir;
 in vec4 vColor;
-uniform vec3 uKeyDir;
-uniform float uAmbient;
-uniform float uSpec;
-uniform float uRim;
 uniform float uBoost;
 uniform vec3 uEdge;      // 轮廓色
 uniform float uEdgeAmt;  // 轮廓强度
@@ -10273,22 +10529,21 @@ out vec4 fragColor;
 void main() {
   vec3 n = normalize(vNormal);
   vec3 v = normalize(vViewDir);
-  vec3 l = normalize(uKeyDir);
-  float ndl = max(dot(n, l), 0.0);
-  vec3 h = normalize(l + v);
-  float spec = pow(max(dot(n, h), 0.0), 48.0) * uSpec;
-  // 这个程序关闭了背面剔除（程序化球的环绕方向不保证），正反两面都会进片元。
-  // 背面 dot(n,v) 为负；直接 max(...,0) 会让背面菲涅尔恒为最大值，幽灵子变成一团发亮的糊块。
-  // 用 abs 让两个半球得到同样处理：同一像素上正反两面法线关于视线镜像，|dot| 相同，
-  // 总贡献变成单半球的常数倍（2 倍），由 uBoost 补偿即可 —— 而且完全不依赖环绕方向。
-  float rim = pow(1.0 - abs(dot(n, v)), 3.0) * uRim;
-  vec3 rgb = vColor.rgb * (uAmbient + ndl * 0.85) + vec3(spec) + rim * vColor.rgb * 0.9;
 
-  // 轮廓加深：浅灰底上白子（#fff）和底色的对比度只有 1.4:1，只靠填充色是看不见的，
-  // 必须有一圈深色边界才能读出来，否则"白子"和"没下子"在缩略尺度上完全一样。
+  // 【完全平涂】棋子不参与光照：没有固定光源、没有暗面、没有高光。
+  // 以前光源钉在世界坐标里（uKeyDir），相机一转，白子就转到背光半球上，
+  // 只剩 0.34 的环境光 —— 看起来就是一颗黑子。用户口径是直接去掉明暗，
+  // 任何角度都只显示棋子本来的颜色。
+  //
+  // 唯一保留的是菲涅尔轮廓：浅灰底上白子和底色的对比度只有 1.4:1，
+  // 只靠填充色看不见，必须有一圈深色边界才能读出来（见 --stone-edge）。
   // 权重用菲涅尔的倒数：正视=0、越靠边缘越接近 1，正好落在棋子的轮廓上。
+  //
+  // 这个程序关闭了背面剔除（程序化球的环绕方向不保证），正反两面都会进片元。
+  // 背面 dot(n,v) 为负；用 abs 让两个半球得到同样处理：同一像素上正反两面法线
+  // 关于视线镜像，|dot| 相同，总贡献变成单半球的常数倍（2 倍），由 uBoost 补偿。
   float edge = pow(1.0 - abs(dot(n, v)), 2.2);
-  rgb = mix(rgb, uEdge, clamp(edge * uEdgeAmt, 0.0, 1.0));
+  vec3 rgb = mix(vColor.rgb, uEdge, clamp(edge * uEdgeAmt, 0.0, 1.0));
 
   fragColor = vec4(rgb * uBoost, vColor.a);
 }`;
@@ -10491,10 +10746,43 @@ const Renderer = {
 };
 
 /* --------------------------------------------------------------------------
+   联机 emoji 的客户端校验
+   -------------------------------------------------------------------------- */
+/** 按字素簇切分；没有 Intl.Segmenter 的老浏览器退回 Array.from（服务器仍然权威）。 */
+function emojiGraphemes(s) {
+  try {
+    if (typeof Intl !== "undefined" && Intl.Segmenter) {
+      const seg = new Intl.Segmenter("en", { granularity: "grapheme" });
+      return Array.from(seg.segment(s), (x) => x.segment);
+    }
+  } catch (e) { /* 退回 Array.from */ }
+  return Array.from(s);
+}
+/** 只接受 1–3 个 emoji。和 server.js 的 sanitizeEmoji 同一套判据 ——
+ *  客户端先挡一次是为了即时提示，服务器那一遍才是安全边界。 */
+function sanitizeEmojiText(raw) {
+  if (typeof raw !== "string") return "";
+  const s = raw.replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  if (!s || s.length > 64) return "";
+  const parts = emojiGraphemes(s);
+  if (parts.length < 1 || parts.length > 3) return "";
+  const ok = parts.every((g) =>
+    /\p{Extended_Pictographic}/u.test(g) || /\p{Regional_Indicator}/u.test(g));
+  return ok ? s : "";
+}
+
+/* --------------------------------------------------------------------------
    游戏控制器
    -------------------------------------------------------------------------- */
 /** 导出图片用的昵称。只存本机；上次填过就预填，不跟联机昵称联动。 */
 const EXPORT_NAME_KEY = "gomoku.nickname.v1";
+
+/** 三维静态格线的外观偏好（颜色 + 透明度）。**跨会话记住** —— 它是玩家对
+ *  "我的棋盘长什么样"的选择，不是一次性的视图状态（对比 gridVisible/ghostMode）。
+ *  只作用于对局中的立体棋盘；起始界面的演示盘始终用 CSS 的 --grid / 40%。
+ *  值可能被玩家在 devtools 里改坏，读的时候逐项校验、坏项回默认，绝不抛。 */
+const GRID_APPEARANCE_KEY = "gomoku.grid.v1";
+const GRID_DEFAULT_ALPHA = 0.40;
 
 const Game = {
   session: null,
@@ -10504,9 +10792,14 @@ const Game = {
   /** 三维静态格线是否可见。**只影响 draw3D 里的那次 drawLines 调用，不影响 uploadGrid** ——
    *  计数（staticGridCount）是 dom-smoke 逐位钉住的不变量，而且每次切换都重传 GPU 缓冲
    *  是白花钱。切换因此是零成本的。
-   *  刻意不持久化：进 localStorage 的只有界面语言和对局记录两项，
-   *  ghostMode / activeLayer 这些是视图状态，都只在内存里。 */
+   *  刻意不持久化：进 localStorage 的是界面语言、导出昵称、对局记录和
+   *  **格线外观**（见 loadGridAppearance）；ghostMode / activeLayer 这些是视图状态，
+   *  都只在内存里。 */
   gridVisible: true,
+  /** 三维静态格线的颜色/透明度。默认值在 init 里由 loadGridAppearance 按
+   *  Palette 的 --grid 补齐；这里写一份是为了桩环境/加载失败时也有确定值。 */
+  gridColor: "#e9dfb7",
+  gridAlpha: GRID_DEFAULT_ALPHA,
   /** 棋子过滤：0 = 双方都画，BLACK / WHITE = 只画这一方。
    *
    *  **纯视图状态，一行都不碰内核** —— 被滤掉的子照样占着那一格，落子、判胜、悔棋、
@@ -10617,6 +10910,23 @@ const Game = {
   /** 本局开始的墙钟时间。棋谱里每手的 el 都相对它（ms）。
    *  只影响记录/导出，不参与任何规则判定。 */
   recStart: 0,
+  /** 上一手/上一次有效动作结束时的 elapsed（ms，相对 recStart）。
+   *  本手用时 = 现在 - recLastEl；悔棋/重开会把它推到"现在"，下一手从那里算。
+   *  只影响显示与记录，不参与任何规则判定。 */
+  recLastEl: 0,
+  /** 终局那一刻的 elapsed。非 0 时时钟冻结在它上面（横幅弹出后数字不再涨）。 */
+  recEndEl: 0,
+  /** 双方已完成动作的累计用时（ms），由 recomputeClockTotals 从 history/rotations 重算。 */
+  clockBlack: 0,
+  clockWhite: 0,
+  /** 时钟 HUD 上一次写 DOM 的时刻（节流到 50ms，不必每帧写）。 */
+  clockPaintedAt: 0,
+  /** 本局每步限时（秒，0 = 不限时）。联机建房/下一局设置写入；单机恒 0。 */
+  recLimitSec: 0,
+  /** 联机限时的服务端截止时刻（epoch ms，0 = 不限时/未开始）。 */
+  clockDeadline: 0,
+  /** 计时是否已经真正开始。联机等待对手时为 false（HUD 不显示）。 */
+  clockReady: true,
   /** 导出弹窗待处理的记录与类型（"long" | "poster"）。 */
   exportRec: null,
   exportKind: "",
@@ -10668,13 +10978,17 @@ const Game = {
       "coords","hint","hintbox","hintToggle","banner","bannerTitle","bannerSub","bannerUndo","bannerRestart","bannerClose","bannerExports","posterBtn","longImageBtn","toast",
       "tutBar","tutStep","tutTitle","tutBody","tutDone","tutNext","tutPrev","tutNav",
       "chip","status","rule","info","boardWrap","timelineWrap","timeline","layerBase","layerOverlay","prevLayer","nextLayer",
-      "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn",
+      "clockHud","clockBlack","clockWhite","clockMove","clockTotal","clockLimitRow","clockLimit",
+      "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn","quitBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","tutorialBtn","view","stage","previewTag",
       "inscription",
       "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","aiHint","orderRow","orderMe","orderCpu",
-      "phaseChip","modeBtn",
+      "phaseChip","modeBtn","placeModeRow",
       "rulesBtn","rulesPanel","rulesClose","rulesBody",
       "historyBtn","historyPanel","historyClear","historyClose","historyBody",
+      "gridPanel","gridClose","gridColorInput","gridOpacityInput","gridOpacityVal",
+      "gridSw1","gridSw2","gridSw3","gridSw4","gridSw5","gridSw6",
+      "quitPanel","quitYes","quitNo",
       "tipBtn","tipPanel","tipClose","tipAfdian","tipWechat","tipAlipay",
       "exportPanel","exportCard","exportTitle","exportClose","exportKind",
       "exportNameLabel","exportName","exportHint","exportError",
@@ -10716,6 +11030,8 @@ const Game = {
 
     // 调色板必须在任何绘制之前读一次：三维的清屏色、格线、棋子描边都从这里取。
     Palette.read();
+    // 格线外观的默认色也来自调色板，必须在 Palette.read() 之后读存档。
+    this.loadGridAppearance();
 
     this.ctxBase = this.el.layerBase.getContext("2d");
     this.ctxOverlay = this.el.layerOverlay.getContext("2d");
@@ -10841,13 +11157,9 @@ const Game = {
     if (this.el.setupTitle && typeof document !== "undefined") {
       document.title = this.el.setupTitle.textContent;
     }
-    /* 【教学里那颗键和教学条也要一起刷】applyStatic 会把 #setupBtn 写回静态表的
-       "设置 / Settings"，而教学里它写的是「退出」—— 不补这一句，切完语言标签就和
-       动作对不上了（点它仍然是退出教学）。教学条那四块（进度 / 标题 / 正文 / 过关）
-       也只有 syncTutorialUi 一处写，而它平时只在达成目标那一支被调用。
-       顺带把 setupBtnLabel（退出时用来还原的"原文案"）刷成当前语言的 —— 它原来是
-       进教学那一刻抓的，在教学里切过语言再退出，写回去的就是旧语言的标签。 */
-    if (this.el.setupBtn) this.setupBtnLabel = this.el.setupBtn.textContent;
+    /* 【教学条也要一起刷】applyStatic 管不到教学条那四块（进度 / 标题 / 正文 / 过关）——
+       它们只有 syncTutorialUi 一处写，而它平时只在达成目标那一支被调用。
+       「退出」键不再是改名来的（底部有专门的 quitBtn），所以这里不用再补文案。 */
     if (this.tutActive) this.syncTutorialUi();
     // JS 拼出来的文案：挨个重刷。refreshTexts 要求有棋局，其余几个读的是设置页状态，
     // 没有棋局时也成立（起始界面就是那种情况）。
@@ -10867,6 +11179,9 @@ const Game = {
     // 换个语言就换个标题长度（ゴモキューブ 六个全角字 / Gomokube 八个字母），
     // 放不下的要按列宽缩一档 —— 见 syncTitleFit 的注释
     this.syncTitleFit();
+    // 语言变了，模式条高度也可能变（换行/字号），棋钟的 top 要重新量。
+    this.layoutClockHud();
+    this.updateClockHud(true);
     this.refreshSetupSummary();
     // 这两个是 JS 写的、不挂 data-i18n 的元素，applyStatic 管不到它们。
     // refreshHint 只在 WebGL2 失败时动手，正常情况下它直接返回。
@@ -11016,6 +11331,8 @@ const Game = {
 
   newGame(dims, first) {
     this.recStart = Date.now();
+    this.recLimitSec = 0;          // 单机对局没有每步限时；联机由 state/reset 写入
+    this.clockReady = true;
     this.recId = null;
     this.recSession = null;
     const d = normalizeDims(dims);
@@ -11071,18 +11388,156 @@ const Game = {
    * 用户报的"第二关胜利后没关掉弹窗、还带到第三关"，根子就在这里：
    * 那一关的目标就是赢，于是每关结束都会弹一屏横幅出来。
    */
+  // ------------------------------------------------------------------ 对局计时
+
+  /** 本局已进行的毫秒数。终局后冻结在 recEndEl；没有 recStart（桩/边界）时为 0。 */
+  clockElapsed() {
+    if (this.recEndEl > 0) return this.recEndEl;
+    return this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
+  },
+
+  /** 当前这一手已经用掉的时间（终局后为 0）。 */
+  clockMoveElapsed() {
+    if (!this.session || this.session.status !== "Playing") return 0;
+    return Math.max(0, this.clockElapsed() - (this.recLastEl || 0));
+  },
+
+  /** 从会话里的 dt 重算双方累计。悔棋/回放/换会话之后都靠它，不另存一份会漂的账。 */
+  recomputeClockTotals() {
+    let b = 0, w = 0;
+    const add = (player, dt) => {
+      dt = Math.max(0, dt | 0);
+      if (player === BLACK) b += dt; else if (player === WHITE) w += dt;
+    };
+    if (this.session) {
+      const hist = this.session.history || [];
+      for (let i = 0; i < hist.length; i++) add(hist[i].player, hist[i].dt);
+      const rots = this.session.rotations || [];
+      for (let i = 0; i < rots.length; i++) add(rots[i].player, rots[i].dt);
+    }
+    this.clockBlack = b;
+    this.clockWhite = w;
+  },
+
+  /** 记一手的时间。联机传服务器给的 el/dt；单机传本地算出来的。
+   *  rec.el 是"相对开局"的累计值，rec.dt 是"这一手本身"的用时 —— 两者都存，
+   *  记录面板和导出各取所需。 */
+  markActionTime(rec, el, dt) {
+    if (!rec) return;
+    rec.el = Math.max(0, el | 0);
+    rec.dt = Math.max(0, dt | 0);
+    this.recLastEl = rec.el;
+    this.recomputeClockTotals();
+  },
+
+  resetClock() {
+    this.recStart = Date.now();
+    this.recLastEl = 0;
+    this.recEndEl = 0;
+    this.clockBlack = 0;
+    this.clockWhite = 0;
+    this.clockDeadline = 0;
+    this.clockReady = true;
+    this.clockPaintedAt = 0;
+  },
+
+  /** 用服务器时钟快照覆盖本地时钟（联机 state/reset/sync/clock/applied 共用）。
+   *  服务器是唯一权威：客户端掉线/切后台都不影响它继续走；重连时靠 elapsed/lastEl 对齐。
+   *  snap.started=false（还在等对手）时 HUD 收起，但仍在内存里记住限时。 */
+  applyOnlineClock(snap) {
+    if (!snap) return;
+    if (typeof snap.moveLimitSec === "number") this.recLimitSec = snap.moveLimitSec | 0;
+    const decided = !!(this.session && this.session.status === "Decided");
+    if (decided) {
+      // 重连到一盘已结束的棋：重放事件已经把 recEndEl 钉在胜负那一手；sync 不能
+      // 再把它清掉（服务器 snapshot 的 elapsed 会随墙钟继续涨），否则棋钟会在终局后
+      // 继续走、记录里的总时长也会变。
+      if (!this.recEndEl) this.recEndEl = Math.max(0, snap.elapsed | 0);
+    } else if (snap.startedAt) {
+      const elapsed = Math.max(0, snap.elapsed | 0);
+      this.recStart = Date.now() - elapsed;
+      this.recLastEl = Math.max(0, snap.lastEl | 0);
+      this.recEndEl = 0;
+    }
+    // state/reset 事件没有 `started` 布尔量（只有 startedAt/deadline）。它们和
+    // clock/sync 的 clockSnapshot 不同，所以不能只看 `snap.started`：
+    // 有 startedAt 且没有被明确标成"已结束"（started:false）就认 deadline。
+    this.clockDeadline = (snap.startedAt && snap.started !== false)
+      ? (Number(snap.deadline) || 0) : 0;
+    // 只要这局开始过就显示（终局冻结最终用时）；还在等对手（startedAt=0）才收起。
+    this.clockReady = !!snap.startedAt;
+    this.clockPaintedAt = 0;
+    this.updateClockHud(true);
+  },
+
+  /** 终局/悔棋/换会话后把 HUD 刷到当前状态。loop() 里每帧调一次，内部 50ms 节流。 */
+  updateClockHud(force) {
+    const hud = this.el.clockHud;
+    if (!hud) return;
+    const show = !!(this.session && !this.setupOpen && !this.tutActive && this.clockReady);
+    hud.classList.toggle("off", !show);
+    if (!show) return;
+    const now = Date.now();
+    if (!force && now - this.clockPaintedAt < 50) return;
+    this.clockPaintedAt = now;
+
+    const total = this.clockElapsed();
+    const live = this.clockMoveElapsed();
+    const playing = this.session.status === "Playing";
+    let b = this.clockBlack, w = this.clockWhite;
+    if (playing) {
+      if (this.session.currentPlayer === BLACK) b += live;
+      else w += live;
+    }
+    if (this.el.clockBlack) this.el.clockBlack.textContent = this.fmtElapsed(b);
+    if (this.el.clockWhite) this.el.clockWhite.textContent = this.fmtElapsed(w);
+    if (this.el.clockMove) this.el.clockMove.textContent = this.fmtElapsed(live);
+    if (this.el.clockTotal) this.el.clockTotal.textContent = this.fmtElapsed(total);
+
+    const limited = playing && this.recLimitSec > 0 && this.clockDeadline > 0;
+    if (this.el.clockLimitRow) this.el.clockLimitRow.classList.toggle("off", !limited);
+    if (limited && this.el.clockLimit) {
+      const remain = Math.max(0, this.clockDeadline - now);
+      this.el.clockLimit.textContent = this.fmtElapsed(remain);
+      this.el.clockLimit.classList.toggle("warn", remain <= 10000);
+    }
+  },
+
+  /** 时钟 HUD 贴在模式条下面（模式条也在左上角，直接 top:14 会压住它）。
+   *  模式条高度随语言/换行变，所以每次 resize / 切语言都实测一次。 */
+  layoutClockHud() {
+    const hud = this.el.clockHud, bar = this.el.modebar, view = this.el.view;
+    if (!hud || !bar || !view || typeof bar.getBoundingClientRect !== "function") return;
+    try {
+      const b = bar.getBoundingClientRect(), v = view.getBoundingClientRect();
+      const top = Math.max(10, Math.round(b.bottom - v.top + 8));
+      hud.style.top = top + "px";
+    } catch (e) { /* 桩环境没有真布局，保持 CSS 兜底值 */ }
+  },
+
   syncWinBanner() {
-    if (this.session.status === "Decided" && !this.tutActive) this.showBanner();
+    const decided = this.session.status === "Decided";
+    // 时钟在终局那一刻冻结：横幅弹出后数字还继续涨，记录里的总用时就和玩家看到的对不上。
+    if (decided) {
+      if (!this.recEndEl) this.recEndEl = this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
+    } else {
+      this.recEndEl = 0;
+    }
+    if (decided && !this.tutActive) this.showBanner();
     else this.hideBanner();
     // 获胜状态和"这局下完了"是同一件事的两个面，同步点并在一起 ——
     // 分开写的话，将来多一条终局路径（本轮之前就有三条）必然漏掉一边。
     this.syncGameRecord();
+    this.updateClockHud(true);
   },
 
   onMoveApplied(rec, outcome) {
     // 棋谱时间：只记在走子记录对象上，悔棋时随记录一起被 pop 掉，不用另开数组。
     // recStart 没设（测试 / 换会话的边界）时记 0，导出时显示 00:00。
+    // 【本手用时 = 这一次的累计值 - 上一次动作的累计值】turn 交替，所以这个差值
+    // 就是"这一手花了多久"；AI 的思考时间也算在它自己那一色上。
     if (rec && !(rec.el >= 0)) rec.el = this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
+    if (rec) this.markActionTime(rec, rec.el, Math.max(0, (rec.el | 0) - (this.recLastEl || 0)));
     this.onBoardChanged(false);
     this.syncWinBanner();
     // 轮到电脑就安排下一手。放在最后：先让棋局本身结算清楚（终局就不该再排了，
@@ -11091,12 +11546,18 @@ const Game = {
   },
   onMoveUndone(rec) {
     this.hideBanner(); this.onBoardChanged(false);
+    // 悔棋之后这一手连同它的用时一起从账上消失；下一手从"现在"重新起算
+    // （用户口径：联机悔棋/重开重置本步计时）。
+    this.recEndEl = 0;
+    this.recLastEl = this.clockElapsed();
+    this.recomputeClockTotals();
     // 悔棋是唯一能"退出终局"的操作 —— 记录要跟着退（见 syncGameRecord）。
     // **放在 hideBanner 之后**：hideBanner 只收横幅，状态看的是 session，顺序无所谓；
     // 但放这里能让"撤销 → 撤记录"读起来是同一件事。
     this.syncGameRecord();
     this.toast(say(() => "已悔棋：" + rec.toString(), "toast.undone", { move: rec.toString("en") }), true);
     this.maybeScheduleAi();
+    this.updateClockHud(true);
   },
   onReset() {
     this.hideBanner();
@@ -11109,14 +11570,17 @@ const Game = {
     // 只是"当前这局"不再背着它 —— 记的是 recId，不是"列表里最新一条"。
     this.recId = null;
     this.recSession = null;
-    this.recStart = Date.now();
+    // 计时从 reset 这一刻重新起算；recLimitSec 由调用方（newGame / 联机 state）决定。
+    this.resetClock();
     this.onBoardChanged(true);
     this.maybeScheduleAi();
+    this.updateClockHud(true);
   },
 
   // 转动成功时才走这里（三种"没转成"由 doRotate 自己提示，因为它们不留痕迹）
   onRotationApplied(rec, outcome) {
     if (rec && !(rec.el >= 0)) rec.el = this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
+    if (rec) this.markActionTime(rec, rec.el, Math.max(0, (rec.el | 0) - (this.recLastEl || 0)));
     this.onBoardChanged(false);
     // 【转出来的胜局也要弹横幅】和 onMoveApplied 走同一个出口（见 syncWinBanner）。
     this.syncWinBanner();
@@ -11135,11 +11599,16 @@ const Game = {
     // "空棋胜 · 0 连"，活棋上盖着一张胡说八道的胜局横幅（实测截图里就压在棋盘中间）。
     this.hideBanner();
     this.onBoardChanged(false);
-    // 和 onMoveUndone 同一条：转出来的胜局被恢复回去，记录也要跟着撤
+    // 和 onMoveUndone 同一条：转出来的胜局被恢复回去，记录也要跟着撤；
+    // 计时同样从"现在"重新起算。
+    this.recEndEl = 0;
+    this.recLastEl = this.clockElapsed();
+    this.recomputeClockTotals();
     this.syncGameRecord();
     this.toast(say(() => "已恢复转动前的样子（" + describeRotationMove(rec.move) + " 已撤销）",
                    "toast.rotUndone", { move: describeRotationMove(rec.move, "en") }), true);
     this.maybeScheduleAi();
+    this.updateClockHud(true);
   },
 
   onBoardChanged(full) {
@@ -11714,6 +12183,8 @@ const Game = {
     this.refreshSetupSummary();
     this.ensurePreview();
     this.uploadPreviewInstances();
+    this.layoutClockHud();
+    this.updateClockHud(true);
     // 背景字符场只在起始界面活着。它自己管 rAF 的启停（全静止时连循环都停），
     // 所以这里只是"允许它跑"，不是"每帧推它一把"。
     InkField.start();
@@ -11729,6 +12200,8 @@ const Game = {
     // 但看不见不等于不烧 CPU —— 不显式停掉的话，一整局棋都在后台跑物理。
     InkField.stop();
     this.layoutTopRight();
+    this.layoutClockHud();
+    this.updateClockHud(true);
   },
 
   /** 规则浮层是不是开着。和 setupOpen 一样从 DOM 派生，不另存布尔值。 */
@@ -11799,6 +12272,7 @@ const Game = {
   closePanels(except) {
     if (this.el.rulesPanel !== except) this.closeRules();
     if (this.el.historyPanel !== except) this.closeHistory();
+    if (this.el.gridPanel !== except) this.closeGridSettings();
     if (this.el.tipPanel !== except) this.closeTip();
     if (this.el.exportPanel !== except) this.closeExport();
   },
@@ -11843,9 +12317,9 @@ const Game = {
       this.el.exportError.textContent = "";
       this.el.exportError.classList.add("off");
     }
-    // 和规则/打赏互斥；**不关记录面板** —— 从记录里打开时，取消后还能回到列表。
+    // 和规则浮层互斥；**不关记录面板** —— 从记录里打开时，取消后还能回到列表。
     this.closeRules();
-    this.closeTip();
+    if (this.closeTip) this.closeTip();   // 备案审核构建里没有这个方法
     this.el.exportPanel.classList.remove("off");
     this.setHover(null);
     if (this.el.exportName && this.el.exportName.focus) {
@@ -12129,6 +12603,18 @@ const Game = {
       this.histCache[rid] = rec;
       out += '<div class="histItem">';
       out += '<div class="histRow">' + escapeHtml(this.recordRowText(rec)) + "</div>";
+      // 计时汇总：总用时 + 黑白各自累计，全部精确到 ms。
+      // 老记录没有 mv/rt 时双方累计是 0，只显示总时长，不编造一个 0。
+      const ts = this.recordTimeStats(rec);
+      if ((rec.dur | 0) > 0 || ts.black > 0 || ts.white > 0) {
+        const totalText = this.fmtElapsed(ts.total);
+        const blackText = this.fmtElapsed(ts.black);
+        const whiteText = this.fmtElapsed(ts.white);
+        out += '<div class="histTimes">' +
+               escapeHtml(say(() => "总用时 " + totalText + " · 黑 " + blackText + " · 白 " + whiteText,
+                              "rec.times", { total: totalText, black: blackText, white: whiteText })) +
+               "</div>";
+      }
       if (this.isReplayableRecord(rec)) {
         out += '<details class="histDetail" data-id="' + escapeHtml(rid) + '">';
         out += '<summary>' + escapeHtml(say(() => "棋谱", "rec.movesTitle")) + " · " +
@@ -12154,12 +12640,23 @@ const Game = {
     this.el.historyBody.innerHTML = out;
   },
 
-  /** 毫秒 → mm:ss（超过一小时才带小时）。纯数字，不进文案表。 */
+  /** 毫秒 → mm:ss.mmm（超过一小时才带小时）。**精确到 ms**，纯数字，不进文案表。 */
   fmtElapsed(ms) {
-    const total = Math.max(0, Math.floor((ms || 0) / 1000));
-    const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
-    const p = (n) => (n < 10 ? "0" : "") + n;
-    return h > 0 ? h + ":" + p(m) + ":" + p(s) : p(m) + ":" + p(s);
+    const t = Math.max(0, Math.round(ms || 0));
+    const h = Math.floor(t / 3600000);
+    const m = Math.floor((t % 3600000) / 60000);
+    const s = Math.floor((t % 60000) / 1000);
+    const milli = t % 1000;
+    const p = (n, w) => String(n).padStart(w, "0");
+    return (h > 0 ? h + ":" : "") + p(m, 2) + ":" + p(s, 2) + "." + p(milli, 3);
+  },
+
+  /** 单步用时：不到 1 分钟写成 "12.345s"（记录列比 mm:ss.mmm 省地方），
+   *  超过 1 分钟才退回完整格式。两种都保留到 ms。 */
+  fmtMoveMs(ms) {
+    const t = Math.max(0, Math.round(ms || 0));
+    if (t < 60000) return (t / 1000).toFixed(3) + "s";
+    return this.fmtElapsed(t);
   },
 
   /**
@@ -12171,12 +12668,12 @@ const Game = {
   renderMoveListInto(box, rid) {
     const rec = this.histCache && this.histCache[rid];
     if (!box || !rec) return;
-    const acts = this.recordActionRows(rec);
+    const timed = this.recordTimedActions(rec);
     let out = "";
-    for (let i = 0; i < acts.length; i++) {
-      const a = acts[i];
+    for (let i = 0; i < timed.length; i++) {
+      const a = timed[i].act, dt = timed[i].dt;
       if (a.type === "m") {
-        const [x, y, z, player, phase, , el] = a.m;
+        const [x, y, z, player, phase] = a.m;
         const ph = rec.ph > 0 && phase === 1
           ? '<span class="histPhase night" title="' + escapeHtml(say(() => "永夜", "phase.night")) + '"></span>'
           : "";
@@ -12184,15 +12681,15 @@ const Game = {
         // 不再写一份格式。
         const mr = MoveRecord(x, y, z, player, a.n, phase, null, 0);
         out += '<div class="histMove">' +
-               '<span class="histTime">' + this.fmtElapsed(el) + "</span>" +
+               '<span class="histTime">' + this.fmtMoveMs(dt) + "</span>" +
                '<span class="histDot ' + (player === BLACK ? "black" : "white") + '"></span>' +
                escapeHtml(mr.toString(LANG)) + ph + "</div>";
       } else {
-        const [axis, layer, turns, , , el] = a.r;
+        const [axis, layer, turns] = a.r;
         // 复用 RotationMove.toString：同样走内核的六语言文案。
         const rm = new RotationMove(axis, layer, turns);
         out += '<div class="histMove rot">' +
-               '<span class="histTime">' + this.fmtElapsed(el) + "</span>" +
+               '<span class="histTime">' + this.fmtMoveMs(dt) + "</span>" +
                '<span class="histRot">⟳</span>' +
                escapeHtml(rm.toString(LANG)) + "</div>";
       }
@@ -12257,6 +12754,9 @@ const Game = {
     parts.push(res);
     parts.push(sayN(() => rec.n + " 手", "rec.moves", rec.n));
     if (rec.r > 0) parts.push(sayN(() => "转动 " + rec.r, "rec.rot", rec.r));
+    if ((rec.lim | 0) > 0) {
+      parts.push(say(() => "每步限时 " + (rec.lim | 0) + " 秒", "rec.limit", { n: rec.lim | 0 }));
+    }
     return parts.join(" · ");
   },
 
@@ -12300,8 +12800,9 @@ const Game = {
     const mv = [];
     for (let i = 0; i < s.history.length; i++) {
       const m = s.history[i];
+      // 末位是"这一手本身"的用时（dt）。老记录没有这一位，渲染时退回 el 差值。
       mv.push([m.x | 0, m.y | 0, m.z | 0, m.player | 0, m.phase | 0,
-               (m.mode | 0), Math.max(0, m.el | 0)]);
+               (m.mode | 0), Math.max(0, m.el | 0), Math.max(0, m.dt | 0)]);
     }
     // 四维转动。rt 与 mv 分开存，顺序由 placementsBefore 还原：
     // 转动恰好发生在"第 placementsBefore 手之后"，同一点的多条按数组顺序。
@@ -12310,14 +12811,17 @@ const Game = {
     for (let i = 0; i < rots.length; i++) {
       const r = rots[i];
       rt.push([r.move.axis | 0, r.move.layer | 0, r.move.turns | 0,
-               r.placementsBefore | 0, r.player | 0, Math.max(0, r.el | 0)]);
+               r.placementsBefore | 0, r.player | 0, Math.max(0, r.el | 0),
+               Math.max(0, r.dt | 0)]);
     }
     return {
       v: 2,
       id: now.toString(36) + "-" + (recSeq++),
       t: now,
       t0: t0,
-      dur: Math.max(0, now - t0),
+      // 终局后时钟冻结在 recEndEl；没有它时退回墙钟差（联机断线等边界）。
+      dur: Math.max(0, this.recEndEl || (now - t0)),
+      lim: Math.max(0, this.recLimitSec | 0),
       m: this.fourD ? 4 : 3,
       d: [d[0] | 0, d[1] | 0, d[2] | 0],
       o: this.fourD ? 3 : ((s.rules.allowRotation ? 1 : 0) | (s.rules.wrapEdges ? 2 : 0)),
@@ -12365,6 +12869,34 @@ const Game = {
       if (k < rec.mv.length) out.push({ type: "m", m: rec.mv[k], n: k + 1 });
     }
     return out;
+  },
+
+  /** 给每条动作配一个 dt（这一手本身的用时）。新记录直接读末位；
+   *  老记录没有 dt，用相邻 el 的差值补 —— 于是旧存档照样能显示每手用时。 */
+  recordTimedActions(rec) {
+    const acts = this.recordActionRows(rec);
+    let prev = 0;
+    return acts.map((a) => {
+      const arr = a.type === "m" ? a.m : a.r;
+      const el = Math.max(0, arr[a.type === "m" ? 6 : 5] | 0);
+      const stored = arr[a.type === "m" ? 7 : 6];
+      const dt = Number.isFinite(stored) ? Math.max(0, stored | 0) : Math.max(0, el - prev);
+      prev = el;
+      return { act: a, dt: dt };
+    });
+  },
+
+  /** 记录的计时汇总：双方各自累计 + 全场总时长（ms）。 */
+  recordTimeStats(rec) {
+    let black = 0, white = 0;
+    const timed = this.recordTimedActions(rec);
+    for (let i = 0; i < timed.length; i++) {
+      const a = timed[i].act;
+      const player = a.type === "m" ? (a.m[3] | 0) : (a.r[4] | 0);
+      if (player === BLACK) black += timed[i].dt;
+      else if (player === WHITE) white += timed[i].dt;
+    }
+    return { black: black, white: white, total: Math.max(0, rec.dur | 0) };
   },
 
   /**
@@ -12558,7 +13090,7 @@ const Game = {
     // 1) 不透明棋子
     gl.disable(gl.BLEND);
     gl.depthMask(true);
-    this.drawInstances(Renderer.opacityBuf, Renderer.opacityCol, this.opqCount, vp, 1.0, 0.34, 0.30, 0.55, 0.95);
+    this.drawInstances(Renderer.opacityBuf, Renderer.opacityCol, this.opqCount, vp, 1.0, 0.95);
 
     // 2) 格线：alpha 混合 + 不写深度 → 被棋子挡住的线自动消失。
     //
@@ -12595,8 +13127,12 @@ const Game = {
     //   金线  = 获胜连线（关了就不知道赢在哪）
     // 这正是"只隐藏静态灰网"这个产品选择在代码里的落点，dom-smoke 有一条测试
     // 盯着关闭时 active 仍然被画。
+    // 【对局中走玩家设置的颜色/透明度；起始界面的演示盘保持 CSS 原值】
+    // 两者共用 draw3D，所以必须按 inSetup 分开：玩家在设置浮窗里调的是"我的棋盘"，
+    // 不该把起始界面那颗装饰盘也一起染了。演示盘也不读 localStorage（见 loadGridAppearance）。
     if (this.gridVisible) {
-      Renderer.drawLines("static", this.staticGridCount, vp, Palette.rgba("--grid", 0.40), 1.0);
+      Renderer.drawLines("static", this.staticGridCount, vp,
+        inSetup ? Palette.rgba("--grid", 0.40) : this.gridRgba(), 1.0);
     }
     Renderer.drawLines("active", this.activeGridCount, vp, Palette.rgba("--accent", 0.80), 1.0);
     // 待转的那一层（绿）：四维模式下才画。和蓝色的"当前层"是两个独立的东西 ——
@@ -12622,10 +13158,10 @@ const Game = {
     //    boost 取 0.8 而不是 1.6：正反两个半球都会画（Cull 关闭），亮度天然翻倍，这里把它算回去
     //    幽灵子的 alpha 从 0.16 提到 0.42：加性混合下 0.16 的"淡"是加在深色底上的加法，
     //    换成 alpha 混合后同样的数值只会变成几乎看不见的一层灰，必须重新取值。
-    this.drawInstances(Renderer.ghostBuf, Renderer.ghostCol, this.ghCount, vp, 0.8, 0.55, 0.0, 0.6, 0.85);
+    this.drawInstances(Renderer.ghostBuf, Renderer.ghostCol, this.ghCount, vp, 0.8, 0.85);
     if (this.cursorData) {
       this.pushCursorInstance();
-      this.drawInstances(Renderer.cursorBuf, Renderer.cursorCol, 1, vp, 0.8, 0.6, 0.0, 0.6, 0.0);
+      this.drawInstances(Renderer.cursorBuf, Renderer.cursorCol, 1, vp, 0.8, 0.0);
     }
 
     // 恢复 alpha 写入。**必须在 draw3D 退出前恢复**：gl.clear 同样受 colorMask 管，
@@ -12647,7 +13183,7 @@ const Game = {
     gl.bufferData(gl.ARRAY_BUFFER, this.cursorData.subarray(4, 8), gl.DYNAMIC_DRAW);
   },
 
-  drawInstances(posBuf, colBuf, count, vp, boost, ambient, spec, rim, edgeAmt) {
+  drawInstances(posBuf, colBuf, count, vp, boost, edgeAmt) {
     if (!count || !Renderer.ok) return;
     const gl = Renderer.gl;
     const p = Renderer.progStone;
@@ -12664,10 +13200,6 @@ const Game = {
 
     gl.useProgram(p);
     gl.uniformMatrix4fv(gl.getUniformLocation(p, "uViewProj"), false, vp);
-    gl.uniform3fv(gl.getUniformLocation(p, "uKeyDir"), [0.42, 0.82, -0.40]);
-    gl.uniform1f(gl.getUniformLocation(p, "uAmbient"), ambient);
-    gl.uniform1f(gl.getUniformLocation(p, "uSpec"), spec);
-    gl.uniform1f(gl.getUniformLocation(p, "uRim"), rim);
     gl.uniform1f(gl.getUniformLocation(p, "uBoost"), boost);
     gl.uniform3fv(gl.getUniformLocation(p, "uEdge"), Palette.rgb("--stone-edge"));
     gl.uniform1f(gl.getUniformLocation(p, "uEdgeAmt"), edgeAmt || 0.0);
@@ -13251,12 +13783,45 @@ const Game = {
     on("swapBtn", () => {
       this.swapFirst();
     });
-    // 【教学里这颗键是「退出」】同一颗键、同一个位置，只在教学模式下换名字和动作 ——
-    // 比另加一颗键省地方，也不用玩家到处找。
+    // 【本地对局打开格线外观浮窗；联机房间仍是「下一局设置」】
+    // 教学里不再借用这颗键当退出 —— 底部现在有专门的「退出」键（见 quitBtn）。
     on("setupBtn", () => {
-      if (this.tutActive) { this.tutorialExit(); return; }
-      this.openSetup();
+      this.openGridSettings();
     });
+    on("quitBtn", () => this.openQuitConfirm());
+    on("quitYes", () => this.confirmQuit());
+    on("quitNo", () => this.closeQuitConfirm());
+    on("gridClose", () => this.closeGridSettings());
+    for (let i = 1; i <= 6; i++) {
+      const id = "gridSw" + i;
+      if (!this.el[id]) continue;
+      on(id, () => this.setGridColor(this.el[id].dataset.gridColor || ""));
+    }
+    // 拖动过程中只重画（save=false），松手/关窗才落盘 —— 1% 一档的实时预览不能
+    // 每一步都同步写一次 localStorage。
+    if (this.el.gridColorInput) {
+      this.el.gridColorInput.addEventListener("input", () =>
+        this.setGridColor(this.el.gridColorInput.value, false));
+      this.el.gridColorInput.addEventListener("change", () =>
+        this.setGridColor(this.el.gridColorInput.value, true));
+    }
+    if (this.el.gridOpacityInput) {
+      this.el.gridOpacityInput.addEventListener("input", () =>
+        this.setGridAlphaPercent(this.el.gridOpacityInput.value, false));
+      this.el.gridOpacityInput.addEventListener("change", () =>
+        this.setGridAlphaPercent(this.el.gridOpacityInput.value, true));
+    }
+    // 点浮层空白处关掉（不是卡片本身）；和规则/记录浮层同一条路。
+    if (this.el.gridPanel) {
+      this.el.gridPanel.addEventListener("click", (e) => {
+        if (e.target === this.el.gridPanel) this.closeGridSettings();
+      });
+    }
+    if (this.el.quitPanel) {
+      this.el.quitPanel.addEventListener("click", (e) => {
+        if (e.target === this.el.quitPanel) this.closeQuitConfirm();
+      });
+    }
     // 语言按钮：点开/收起列表（列表里选一个才切语言）。
     // 老版本是"点一下 = 切到另一种"，那套只在两种语言之间成立 —— 六种语言下，
     // 循环着点要么点不到目标语言，要么根本看不出有哪些可选。
@@ -13455,8 +14020,12 @@ const Game = {
 
     window.addEventListener("keydown", (e) => {
       // Esc 必须放在前面：浮层开着时它是唯一还有意义的键
-      // 导出弹窗 z-index 最高，先吃 Esc。
+      // 退出确认在 z-index 最上面（78），先吃 Esc（等于「否」）。
+      if (e.key === "Escape" && this.quitConfirmOpen) { this.closeQuitConfirm(); return; }
+      // 导出弹窗 z-index 次高，再吃 Esc。
       if (e.key === "Escape" && this.exportOpen) { this.closeExport(); return; }
+      // 格线外观浮窗和规则/记录同一层（70）。
+      if (e.key === "Escape" && this.gridSettingsOpen) { this.closeGridSettings(); return; }
       if (e.key === "Escape" && this.tipOpen) { this.closeTip(); return; }
       if (e.key === "Escape" && this.rulesOpen) { this.closeRules(); return; }
       // 记录浮层和规则浮层互斥（开一个关另一个），所以这里谁先判都一样。
@@ -13471,6 +14040,9 @@ const Game = {
       if (this.rulesOpen) return;
       // 记录浮层同理：翻记录时按 R 把棋局重开，是同一类事故
       if (this.historyOpen) return;
+      // 调格线时按 R/Z 会在浮窗背后改棋局；退出确认同理（那是一问一答的阻断层）。
+      if (this.gridSettingsOpen) return;
+      if (this.quitConfirmOpen) return;
       if (this.tipOpen) return;
       if (this.exportOpen) return;
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
@@ -14096,6 +14668,138 @@ const Game = {
 
   toggleGrid() { this.setGridVisible(!this.gridVisible); },
 
+  // ------------------------------------------------------------------ 格线外观
+
+  /** 从 localStorage 读颜色/透明度。坏数据逐项回默认 —— 一格坏值不该让整个
+   *  设置浮窗/棋盘变样，更不该抛（隐私模式下 localStorage 会直接抛，见 storeGet）。 */
+  loadGridAppearance() {
+    const defColor = Palette.hex("--grid");
+    let saved = null;
+    try { saved = JSON.parse(storeGet(GRID_APPEARANCE_KEY) || "null"); } catch (e) { saved = null; }
+    this.gridColor = (saved && typeof saved.color === "string" &&
+                      /^#[0-9a-f]{6}$/i.test(saved.color))
+      ? saved.color.toLowerCase() : defColor;
+    this.gridAlpha = (saved && typeof saved.alpha === "number" && isFinite(saved.alpha))
+      ? Math.max(0, Math.min(1, saved.alpha)) : GRID_DEFAULT_ALPHA;
+  },
+
+  saveGridAppearance() {
+    storeSet(GRID_APPEARANCE_KEY, JSON.stringify({
+      color: this.gridColor,
+      // 存四位小数，够 1% 精度、也不把浮点尾巴写进存档
+      alpha: Math.round(this.gridAlpha * 10000) / 10000,
+    }));
+  },
+
+  /** 三维静态格线的 [r,g,b,a]。**起始界面的演示盘不调用它** —— draw3D 里按
+   *  inSetup 分开，演示盘始终用 Palette.rgba("--grid", 0.40)。 */
+  gridRgba() {
+    const m = /^#([0-9a-f]{6})$/i.exec(this.gridColor || "");
+    if (!m) return Palette.rgba("--grid", GRID_DEFAULT_ALPHA);
+    const v = parseInt(m[1], 16);
+    return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255, this.gridAlpha];
+  },
+
+  /** 设置浮窗开着没有。和其它浮层一样从 DOM 派生，不另存布尔值。 */
+  get gridSettingsOpen() {
+    return !!(this.el.gridPanel && this.el.gridPanel.classList &&
+              !this.el.gridPanel.classList.contains("off"));
+  },
+
+  openGridSettings() {
+    if (!this.el.gridPanel) return;
+    this.closePanels(this.el.gridPanel);
+    this.closeQuitConfirm();
+    this.syncGridSettings();
+    this.el.gridPanel.classList.remove("off");
+    this.setHover(null);
+  },
+
+  closeGridSettings() {
+    if (!this.gridSettingsOpen) return;
+    this.el.gridPanel.classList.add("off");
+    // 拖完拉条直接点空白关窗时，change 可能还没到 —— 关窗时补一次落盘。
+    this.saveGridAppearance();
+  },
+
+  /** 把当前颜色/透明度写回浮窗（色块选中态、取色器、拉条、百分比读数四处同源）。 */
+  syncGridSettings() {
+    const color = /^#[0-9a-f]{6}$/i.test(this.gridColor || "")
+      ? this.gridColor.toLowerCase() : Palette.hex("--grid");
+    const pct = Math.round(this.gridAlpha * 100);
+    if (this.el.gridColorInput) this.el.gridColorInput.value = color;
+    if (this.el.gridOpacityInput) this.el.gridOpacityInput.value = String(pct);
+    if (this.el.gridOpacityVal) this.el.gridOpacityVal.textContent = pct + "%";
+    for (let i = 1; i <= 6; i++) {
+      const b = this.el["gridSw" + i];
+      if (!b) continue;
+      b.classList.toggle("sel", String(b.dataset.gridColor || "").toLowerCase() === color);
+    }
+  },
+
+  /** save=false 用于拖动过程中的实时预览：只重画，不写 localStorage（写盘跟着 change）。 */
+  setGridColor(hex, save) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex == null ? "" : hex).trim());
+    if (!m) return;
+    const next = "#" + m[1].toLowerCase();
+    this.gridColor = next;
+    if (save !== false) this.saveGridAppearance();
+    this.syncGridSettings();
+    if (!this.setupOpen) this.draw3D();
+  },
+
+  /** pct 是 0..100 的整数（1% 精度）。同样 save=false 用于拖动中的实时预览。 */
+  setGridAlphaPercent(pct, save) {
+    const n = Number(pct);
+    if (!isFinite(n)) return;
+    this.gridAlpha = Math.max(0, Math.min(100, Math.round(n))) / 100;
+    if (save !== false) this.saveGridAppearance();
+    this.syncGridSettings();
+    if (!this.setupOpen) this.draw3D();
+  },
+
+  // ------------------------------------------------------------------ 退出
+
+  get quitConfirmOpen() {
+    return !!(this.el.quitPanel && this.el.quitPanel.classList &&
+              !this.el.quitPanel.classList.contains("off"));
+  },
+
+  openQuitConfirm() {
+    if (!this.el.quitPanel) return;
+    this.closePanels();
+    this.closeQuitConfirm();
+    this.el.quitPanel.classList.remove("off");
+    this.setHover(null);
+  },
+
+  closeQuitConfirm() {
+    if (this.el.quitPanel) this.el.quitPanel.classList.add("off");
+  },
+
+  /** 「是」：教学里退出教学，本地对局则清空当前这局回起始界面。
+   *  两边的共同点都是"离开当前棋盘"，但教学没有对局记录、也不需要 reset。 */
+  confirmQuit() {
+    this.closeQuitConfirm();
+    if (this.tutActive) { this.tutorialExit(); return; }
+    this.quitGame();
+  },
+
+  /** 清空当前这局并回起始界面。**已存进对局记录的局不动** —— 那是历史账本。
+   *  reset 会触发 onReset（清荣誉/记录记账/重画），它可能顺手排上电脑先手；
+   *  紧接着的 openSetup() 会 cancelAiTimer，所以顺序必须是 reset → openSetup。 */
+  quitGame() {
+    this.cancelAiTimer();
+    this.dropRotPreview();
+    this.cancelPendingTap();
+    this.hideBanner();
+    if (this.session) {
+      const s = this.session;
+      s.reset(s.board.dims, s.firstPlayer, s.rules);
+    }
+    this.openSetup();
+  },
+
   /** 只看黑 / 只看白。f 取 0（双方）、BLACK、WHITE；非法值一律当 0，
    *  免得某个调用方传进来一个 EMPTY 就把整盘棋全滤没了 —— 那看起来像"棋盘空了"。
    *  只需要重传棋子实例，格线/光标/悬停线都和它无关，所以不走 onBoardChanged。 */
@@ -14249,12 +14953,14 @@ const Game = {
   refreshRotPanel() {
     if (!this.session || !this.el.rotPanel) return;
     const on = this.session.rotationEnabled;
-    // v3.1.2：四维下把「落子宣告」和「设置」换个位置（见 #buttons 那条 CSS）。
-    // 判据用 rotationEnabled 而不是 this.fourD：教学关是四维但转动关掉了，
-    // 那时候声明键也是禁用的，没必要换。 */
-    if (this.el.buttons) this.el.buttons.classList.toggle("swap4d", !!on);
+    // v3.1.12：底部固定五颗键，「落子宣告」挪进转动面板底部（#placeModeRow）——
+    // 不再需要交换 flex order。判据仍用 rotationEnabled：教学关是四维但转动关掉了，
+    // 那时整块转动面板（含宣告键）都不该出现。
     this.el.rotPanel.classList.toggle("off", !on);
     this.el.stripWrap.classList.toggle("compact", on);
+    // 四维时把联机 emoji 条挪进转动面板底部（和落子宣告同一层）。
+    // 公开版没有这个方法（整个 ONLINE 块被剥掉），所以要判存在性。
+    if (typeof this.syncEmojiUi === "function") this.syncEmojiUi();
     if (!on) return;
 
     const n = this.session.size;
@@ -14308,7 +15014,7 @@ const Game = {
         "rot.hint.cool", this.session.placementsUntilRotation,
         { n: this.session.placementsUntilRotation });
     } else if (this.session.canUndoLastRotation) {
-      hint = say(() => "最后一步是转动，按「悔棋 Z」可以把它退回去。", "rot.hint.undo");
+      hint = say(() => "最后一步是转动，按「悔棋」可以把它退回去。", "rot.hint.undo");
     } else {
       hint = say(
         () => "顺时针 = 从该轴负方向朝原点看。转出你自己的五连就是赢；只有把对方的子转成五连才整体撤销。转动占掉一整个回合。",
@@ -14879,15 +15585,6 @@ const Game = {
     // tutorialBuild(undefined) 会兜底成 tutorialExit()（它会把设置页打开），
     // 紧接着 closeSetup() 又把它关掉 —— 玩家会莫名其妙被扔出起始界面、却什么也没进去。
     if (!plan.length) return;
-    // 进教学时把「设置」这颗键的原文案记下来 —— 退出时要原样还回去。
-    // （不能写死"设置"两个字：六种语言各不相同，而且切语言时它还会变。）
-    // 【教学里不能再抓一次】那一刻这颗键写的是「退出」（syncTutorialUi 改的），
-    // 抓下来就等于把「退出」当成了"原文案"—— 退出之后它再也回不到「设置」。
-    // 玩家碰不到这条路（教学里设置页是关着的），但脚本/测试会连着进两次；
-    // 实测踩过：一次截图里那颗键写着「退出」，而当时根本不在教学里。
-    if (!this.tutActive) {
-      this.setupBtnLabel = this.el.setupBtn ? this.el.setupBtn.textContent : "";
-    }
     this.tutCleared = new Set();               // 本趟的"过过关"记录，每趟从零开始
     this.cancelTutTimer();
     this.tutIndex = plan[0];
@@ -14994,9 +15691,6 @@ const Game = {
     this.tutActive = false;
     this.tutPassed = false;
     this.tutCleared = null;        // 本趟的记录随退出作废，下一趟在 startTutorial 里重建
-    if (this.el.setupBtn && this.setupBtnLabel !== undefined) {
-      this.el.setupBtn.textContent = this.setupBtnLabel;
-    }
     this.aiMode = this.setupAi !== "human";
     this.syncTutorialUi();
     this.openSetup();
@@ -15016,9 +15710,9 @@ const Game = {
   syncTutorialUi() {
     const on = !!this.tutActive;
     if (this.el.tutBar) this.el.tutBar.classList.toggle("off", !on);
-    // 【教学里「设置」就是「退出」】不另加一颗键 —— 多一颗键会让那一行变宽，
-    // 也让玩家多找一次。改名之后它在那儿、位置不变，语义正好。
-    if (this.el.setupBtn && on) this.el.setupBtn.textContent = say(() => "退出", "tutExit");
+    // 【退出教学走底部那颗「退出」键】它本来就是本地对局的退出键，教学里不用改名、
+    // 也不用再加一颗。点它先弹确认，确定后 tutorialExit()（见 confirmQuit）。
+    // 这颗键的文案走 STATIC_TEXT 的 quitBtn，切语言由 applyStatic 统一刷新。
     const plan = on ? this.tutorialPlan() : [];
     const pos = plan.indexOf(this.tutIndex);
     const nav = on && !this.tutTimer && pos >= 0;
@@ -15070,8 +15764,8 @@ const Game = {
 
   /**
    * 刷新相位指示与宣告键。**晨昏关掉时两者都要回到"看不见"的状态** ——
-   * 相位指示清空、宣告键禁用淡显（不是藏起来：藏起来会让 #buttons 那一行在
-   * 开关晨昏时宽度突变，而它是居中的）。
+   * 相位指示清空、宣告键那一整行收掉（它在转动面板底部单独占一行，
+   * 不是底部五键那一排；见 #placeModeRow）。
    */
   refreshPhaseTexts() {
     const on = this.dawnOn();
@@ -15093,13 +15787,11 @@ const Game = {
           name + say(() => " · 还有 " + left + " 格", "phase.left", { n: left });
       }
     }
+    // 【晨昏关着时整行收掉，不留空位】只把按钮 display:none 的话，
+    // #rotPanel 的 gap 仍会撑出一截空白，看着像少放了一颗键。
+    if (this.el.placeModeRow) this.el.placeModeRow.classList.toggle("off", !on);
     if (this.el.modeBtn) {
       this.el.modeBtn.disabled = !on;
-      // 【晨昏关着时整颗键收掉，不留空位】原来只是把文案清空、键留着 ——
-      // 于是那一行末尾永远杵着一个空按钮，看着像少放了一颗键。
-      // 用户口径：四个键就四个键填满那一行，五个就五个填满。
-      // 这里用 display 而不是 visibility：它和"切模式不许挪动别的键"无关
-      // （那一行是 flex 平分宽度，少一颗键剩下四颗自然铺满）。
       this.el.modeBtn.style.display = on ? "" : "none";
       this.el.modeBtn.textContent = on
         ? say(() => "落子：", "mode.label") + this.modeName()
@@ -15687,6 +16379,7 @@ const Game = {
     // 视口变了，起始界面那一列的可用宽度也变了 —— 行标重新量一次；
     // 顺带把 --compact 也重读（它决定按键要不要收一档，同样影响这一行的宽度）
     if (this.setupOpen) { this.syncLabelWidth(); this.syncInscription(); this.syncTitleFit(); }
+    this.layoutClockHud();
     // 平移量的边界是"半个视口"，转屏会改视口尺寸 —— 不重新夹一次的话，
     // 横屏里拖出来的平移量在竖屏下可能已经越界（棋盘贴边甚至露不出一半）
     this.pan3dBy(0, 0);
@@ -15718,6 +16411,8 @@ const Game = {
     }
     if (this.setupOpen) this.drawPreview(dt);
     else this.draw3D();
+    // 棋钟在 RAF 里刷，内部 50ms 节流；setup/教学期间自动收起（见 updateClockHud）。
+    this.updateClockHud();
     requestAnimationFrame(() => this.loop());
   },
 };
@@ -16075,6 +16770,7 @@ const GameExport = (function () {
   // ------------------------------------------------------------------ 长图
   function long(rec, board, name, game) {
     const acts = game.recordActionRows(rec);
+    const timed = game.recordTimedActions(rec);
     const bf = fontOf(game, "body", SERIF);
     const tf = fontOf(game, "title", SERIF);
     const margin = 64;
@@ -16150,9 +16846,13 @@ const GameExport = (function () {
 
     const dur = say(() => "时长 " + game.fmtElapsed(rec.dur), "export.duration",
                     { time: game.fmtElapsed(rec.dur) });
+    const tstat = game.recordTimeStats(rec);
+    const sides = say(() => "黑 " + game.fmtElapsed(tstat.black) + " · 白 " + game.fmtElapsed(tstat.white),
+                       "export.sides", { black: game.fmtElapsed(tstat.black),
+                                          white: game.fmtElapsed(tstat.white) });
     ctx.fillStyle = hex("--dim");
     ctx.font = "22px " + bf;
-    ctx.fillText(dur, margin, sumY + 112);
+    ctx.fillText(dur + " · " + sides, margin, sumY + 112);
 
     // 分隔线 + 棋谱标题
     const divY = sumY + 144;
@@ -16196,16 +16896,17 @@ const GameExport = (function () {
           ctx.globalAlpha = 1;
         }
         const a = acts[idx];
+        const dt = timed[idx] ? timed[idx].dt : 0;
         const timeFont = Math.max(13, Math.round(rowH * 0.46)) + "px " + MONO;
         const rowFont = "18px " + bf;
         let time = "", text = "", gold = false;
         if (a.type === "m") {
-          const [mx, my, mz, player, phase, , el] = a.m;
-          time = game.fmtElapsed(el);
+          const [mx, my, mz, player, phase] = a.m;
+          time = game.fmtMoveMs(dt);
           text = MoveRecord(mx, my, mz, player, a.n, phase, null, 0).toString(LANG);
           ctx.fillStyle = player === BLACK ? hex("--black") : hex("--white");
           ctx.beginPath();
-          ctx.arc(x + 67, y + rowH * 0.42, 5, 0, Math.PI * 2);
+          ctx.arc(x + 72, y + rowH * 0.42, 5, 0, Math.PI * 2);
           ctx.fill();
           if (player === WHITE) {
             ctx.strokeStyle = hex("--stone-edge");
@@ -16213,25 +16914,25 @@ const GameExport = (function () {
             ctx.stroke();
           }
         } else {
-          const [axis, layer, turns, , , el] = a.r;
-          time = game.fmtElapsed(el);
+          const [axis, layer, turns] = a.r;
+          time = game.fmtMoveMs(dt);
           text = new RotationMove(axis, layer, turns).toString(LANG);
           gold = true;
           ctx.fillStyle = hex("--gold");
           ctx.font = "600 " + Math.max(14, Math.round(rowH * 0.56)) + "px " + bf;
           ctx.textAlign = "center";
-          ctx.fillText("⟳", x + 67, y + rowH * 0.72);
+          ctx.fillText("⟳", x + 72, y + rowH * 0.72);
           ctx.textAlign = "left";
         }
         ctx.textAlign = "right";
         ctx.fillStyle = hex("--dim");
         ctx.font = timeFont;
-        ctx.fillText(time, x + 52, y + rowH * 0.72);
+        ctx.fillText(time, x + 60, y + rowH * 0.72);
         ctx.textAlign = "left";
-        const rs = fitSize(ctx, text, colW - 88, (s) => s + "px " + bf, 18, 12);
+        const rs = fitSize(ctx, text, colW - 96, (s) => s + "px " + bf, 18, 12);
         ctx.fillStyle = gold ? hex("--gold") : hex("--text");
         ctx.font = rs + "px " + bf;
-        ctx.fillText(text, x + 84, y + rowH * 0.72);
+        ctx.fillText(text, x + 88, y + rowH * 0.72);
       }
     }
 

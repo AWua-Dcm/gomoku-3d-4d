@@ -90,7 +90,7 @@ il n'atteint jamais le 6e. Donc :
 
 - On peut annuler jusqu'à revenir avant le début de la partie.
 - Annuler efface aussi l'état de victoire : la partie repasse à « en cours » et c'est au tour du camp dont le coup a été retiré.
-- Raccourci `Z`, ou le bouton « Annuler Z » sur le panneau.
+- Raccourci `Z`, ou le bouton « Annuler » sur le panneau.
 
 ## 7. Match nul
 

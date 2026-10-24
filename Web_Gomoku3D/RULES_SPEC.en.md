@@ -89,7 +89,7 @@ so the sixth stone is never reached. Therefore:
 
 - You can undo all the way back to before the game started.
 - Undoing clears the win/loss state too: the game returns to "in progress" and it is the turn of the player whose move was taken back.
-- Shortcut `Z`, or the "Undo Z" button on the panel.
+- Shortcut `Z`, or the "Undo" button on the panel.
 
 ## 7. Draw
 
