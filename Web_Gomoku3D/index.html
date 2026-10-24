@@ -773,7 +773,7 @@
     line-height: 1.3;
   }
   #setup.cool3d #coolRow { order: 2; }
-  #setup.cool3d #ruleNote { order: 3; }
+  #setup.cool3d #ruleWrap { order: 3; }
   #setup.cool3d #startRow { order: 4; }
 
   /* 冷却那四个键排成 2×2，两列各自对齐。
@@ -963,6 +963,37 @@
   :root { --cool3d-take: 48px; }
   #ruleNote { color: var(--dim); font-size: 12.5px; text-align: center; max-width: 660px;
               line-height: 1.3; border-top: 1px solid var(--border); padding-top: 12px; }
+  /* 计时按钮骑在规则那条横线上：不占布局高度，起始界面的一像素高度预算不动。
+     按钮中心压线，下半伸进 12px 的 padding-top（正文从 padding 之后才开始，压不到字）。 */
+  #ruleWrap { position: relative; display: flex; justify-content: center; width: 100%; }
+  #timingBtn {
+    position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%);
+    z-index: 3; padding: 3px 10px; font-size: 12px; font-weight: 600;
+    min-width: 0; white-space: nowrap; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--border);
+    box-shadow: 0 1px 4px rgba(90,72,44,.14);
+  }
+  #timingBtn:hover { background: var(--panel-hi); }
+  /* 小浮窗。绝对定位、向上展开；不推任何行。 */
+  #timingPanel {
+    position: absolute; bottom: calc(100% + 18px); left: 50%;
+    transform: translateX(-50%); z-index: 61;
+    width: min(360px, calc(100vw - 40px)); max-height: min(70vh, 420px);
+    overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 10px 28px rgba(60,44,22,.24);
+  }
+  #timingPanel.off { display: none; }
+  #timingHead { display: flex; align-items: baseline; gap: 10px;
+                padding: 10px 14px; border-bottom: 1px solid var(--border);
+                background: var(--panel-hi); }
+  #timingTitle { font-size: 15px; font-weight: 600; letter-spacing: 1px; flex: 1 1 auto; }
+  #timingBody { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; }
+  .timingField { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .timingField > span:first-child { flex: 0 0 auto; min-width: 4.5em; color: var(--dim); font-size: 13px; }
+  .timingField button { padding: 4px 9px; font-size: 12.5px; min-width: 0; font-weight: 600; }
+  .timingField.off { display: none; }
+  #timingRangeInput { width: 78px; padding: 5px 6px; font-size: 14px; }
   /* 开始游戏 + 游戏教学并排。两个键之间 12px，整组仍然居中。 */
   #startRow { display: flex; align-items: center; justify-content: center; gap: 12px; }
   #startBtn { font-size: 18px; font-weight: 600; padding: 13px 48px; letter-spacing: 3px; }
@@ -4763,9 +4794,39 @@ ramène à l'écran de départ.
 
   <div id="sizeSummary"></div>
 
-  <div id="ruleNote" data-i18n-html="ruleNote">
-    规则：任意空格可落子，无重力约束。先手必须【恰好 5 连】，连成 6 个及以上判长连负；后手 ≥5 连即胜。<br>
-    获胜方向为 13 个：3 轴向 + 6 面对角 + 4 体对角。右侧面板可以逐层查看与落子。
+  <!-- v3.2.0 第 7 条：对局计时。**按钮绝对定位在规则横线上**，不占布局高度 ——
+       起始界面 1280×800 法语只剩 10px 余量，任何新增内联行都会把「开始游戏」挤出视口。
+       点开的小浮窗也是绝对定位的，逐级显示：是否计时 → 是否限时 → 时间范围。 -->
+  <div id="ruleWrap">
+    <button id="timingBtn" type="button" aria-haspopup="dialog" aria-expanded="false">计时</button>
+    <div id="timingPanel" class="off" role="dialog" aria-modal="false" aria-labelledby="timingTitle">
+      <div id="timingHead">
+        <div id="timingTitle" data-i18n="timingTitle">对局计时</div>
+        <button id="timingClose" class="mini" data-i18n="timingClose">关闭</button>
+      </div>
+      <div id="timingBody">
+        <div class="timingField" id="timingOnRow">
+          <span id="timingOnLabel" data-i18n="timingOnLabel">是否计时</span>
+          <button id="timingOff" class="mini" data-i18n="timingOff">不计时</button>
+          <button id="timingOn" class="mini" data-i18n="timingOn">计时</button>
+        </div>
+        <div class="timingField off" id="timingLimitRow">
+          <span id="timingLimitLabel" data-i18n="timingLimitLabel">是否限时</span>
+          <button id="timingNoLimit" class="mini" data-i18n="timingNoLimit">不限时</button>
+          <button id="timingLimit" class="mini" data-i18n="timingLimit">限时</button>
+        </div>
+        <div class="timingField off" id="timingRangeRow">
+          <span id="timingRangeLabel" data-i18n="timingRangeLabel">每步限时</span>
+          <input id="timingRangeInput" class="dimInput" type="number" min="10" max="600"
+                 step="1" value="60" inputmode="numeric">
+          <span id="timingRangeUnit" data-i18n="timingRangeUnit">秒</span>
+        </div>
+      </div>
+    </div>
+    <div id="ruleNote" data-i18n-html="ruleNote">
+      规则：任意空格可落子，无重力约束。先手必须【恰好 5 连】，连成 6 个及以上判长连负；后手 ≥5 连即胜。<br>
+      获胜方向为 13 个：3 轴向 + 6 面对角 + 4 体对角。右侧面板可以逐层查看与落子。
+    </div>
   </div>
 
   <div id="startRow">
@@ -8838,6 +8899,16 @@ const STATIC_TEXT = { en: {
   "optSpin": "Rubik rotation",
   "optWrap": "Space wrapping",
   "startBtn": "Start game",
+  "timingTitle": "Game clock",
+  "timingClose": "Close",
+  "timingOnLabel": "Clock",
+  "timingOff": "No clock",
+  "timingOn": "Clock on",
+  "timingLimitLabel": "Per-move limit",
+  "timingNoLimit": "Untimed",
+  "timingLimit": "Limited",
+  "timingRangeLabel": "Time per move",
+  "timingRangeUnit": "sec",
   "tutNext": "Next",
   "tutPrev": "Previous",
   "tutorialBtn": "Tutorial",
@@ -8910,6 +8981,13 @@ const TEXT = { en: {
   "banner.winSub": "Move {n}",
   "banner.resign": "{who} wins\nOpponent resigned",
   "rec.resign": " (resigned)",
+  "banner.timeout": "{who} win\n{loser} timed out",
+  "banner.timeoutSub": "Lost on time",
+  "rec.timeout": " (timeout)",
+  "toast.timeout": "{who} timed out",
+  "timing.off": "Clock: off",
+  "timing.unlimited": "Clock: on · untimed",
+  "timing.limited": "Clock: on · {n}s per move",
 
   // ---- 四维面板
   "rot.layerLabel.one": "Layer {n} (1 stone in it)",
@@ -9119,6 +9197,16 @@ STATIC_TEXT.ja = {
   "optSpin": "ルービック回転",
   "optWrap": "空間貫通",
   "startBtn": "対局開始",
+  "timingTitle": "対局の時計",
+  "timingClose": "閉じる",
+  "timingOnLabel": "時計",
+  "timingOff": "使わない",
+  "timingOn": "使う",
+  "timingLimitLabel": "1手の制限",
+  "timingNoLimit": "無制限",
+  "timingLimit": "制限あり",
+  "timingRangeLabel": "1手の時間",
+  "timingRangeUnit": "秒",
   "tutNext": "次の関",
   "tutPrev": "前の関",
   "tutorialBtn": "ゲームの説明",
@@ -9209,6 +9297,13 @@ TEXT.ja = {
   "banner.winSub": "{n}手目",
   "banner.resign": "{who}の勝ち\n相手が投了しました",
   "rec.resign": "（投了）",
+  "banner.timeout": "{who}の勝ち\n{loser}の時間切れ",
+  "banner.timeoutSub": "時間切れで負け",
+  "rec.timeout": "（時間切れ）",
+  "toast.timeout": "{who}が時間切れ",
+  "timing.off": "時計：オフ",
+  "timing.unlimited": "時計：オン・無制限",
+  "timing.limited": "時計：オン・1手 {n} 秒",
   "rot.layerLabel.many": "第{n}層（この層に石{stones}個）",
   "rot.hint.over": "対局は終了しました。",
   "rot.hint.preview": "プレビュー中：盤面は回した後の見た目ですが、まだ確定していません。「確定」で本当に回り、「キャンセル」で元に戻ります。",
@@ -9332,6 +9427,16 @@ STATIC_TEXT.ko = {
   "optSpin": "루빅 회전",
   "optWrap": "공간 관통",
   "startBtn": "게임 시작",
+  "timingTitle": "대국 시계",
+  "timingClose": "닫기",
+  "timingOnLabel": "시간",
+  "timingOff": "사용 안 함",
+  "timingOn": "사용",
+  "timingLimitLabel": "한 수 제한",
+  "timingNoLimit": "무제한",
+  "timingLimit": "제한 있음",
+  "timingRangeLabel": "한 수 시간",
+  "timingRangeUnit": "초",
   "tutNext": "다음 단계",
   "tutPrev": "이전 단계",
   "tutorialBtn": "게임 안내",
@@ -9422,6 +9527,13 @@ TEXT.ko = {
   "banner.winSub": "{n}수",
   "banner.resign": "{who} 승리\n상대가 기권했습니다",
   "rec.resign": " (기권)",
+  "banner.timeout": "{who} 승리\n{loser} 시간 초과",
+  "banner.timeoutSub": "시간 초과 패배",
+  "rec.timeout": " (시간 초과)",
+  "toast.timeout": "{who} 시간 초과",
+  "timing.off": "시간: 끔",
+  "timing.unlimited": "시간: 켬 · 무제한",
+  "timing.limited": "시간: 켬 · 한 수 {n}초",
   "rot.layerLabel.many": "{n}층 (이 층에 돌 {stones}개)",
   "rot.hint.over": "게임이 끝났습니다.",
   "rot.hint.preview": "미리보기 중: 판은 이미 돌아간 모습이지만 아직 확정되지 않았습니다. 「확인」을 누르면 실제로 돌아가고, 「취소」를 누르면 되돌아갑니다.",
@@ -9548,6 +9660,16 @@ STATIC_TEXT.ru = {
   "optSpin": "Вращение слоя",
   "optWrap": "Склейка граней",
   "startBtn": "Начать игру",
+  "timingTitle": "Часы партии",
+  "timingClose": "Закрыть",
+  "timingOnLabel": "Часы",
+  "timingOff": "Без часов",
+  "timingOn": "С часами",
+  "timingLimitLabel": "Лимит на ход",
+  "timingNoLimit": "Без лимита",
+  "timingLimit": "С лимитом",
+  "timingRangeLabel": "Время на ход",
+  "timingRangeUnit": "сек",
   "tutNext": "Дальше",
   "tutPrev": "Назад",
   "tutorialBtn": "Обучение",
@@ -9646,6 +9768,13 @@ TEXT.ru = {
   "banner.winSub": "Ход {n}",
   "banner.resign": "{who} побеждают\nСоперник сдался",
   "rec.resign": " (сдача)",
+  "banner.timeout": "{who} побеждают\n{loser}: время вышло",
+  "banner.timeoutSub": "Поражение по времени",
+  "rec.timeout": " (по времени)",
+  "toast.timeout": "{who}: время вышло",
+  "timing.off": "Часы: выкл.",
+  "timing.unlimited": "Часы: вкл. · без лимита",
+  "timing.limited": "Часы: вкл. · {n} с на ход",
   "rot.layerLabel.one": "Слой {n} (1 камень в нём)",
   "rot.layerLabel.few": "Слой {n} ({stones} камня в нём)",
   "rot.layerLabel.many": "Слой {n} ({stones} камней в нём)",
@@ -9777,6 +9906,16 @@ STATIC_TEXT.fr = {
   "optSpin": "Rotation type Rubik",
   "optWrap": "Pliage de l'espace",
   "startBtn": "Commencer la partie",
+  "timingTitle": "Horloge de la partie",
+  "timingClose": "Fermer",
+  "timingOnLabel": "Horloge",
+  "timingOff": "Sans horloge",
+  "timingOn": "Avec horloge",
+  "timingLimitLabel": "Limite par coup",
+  "timingNoLimit": "Sans limite",
+  "timingLimit": "Avec limite",
+  "timingRangeLabel": "Temps par coup",
+  "timingRangeUnit": "s",
   "tutNext": "Suivant",
   "tutPrev": "Précédent",
   "tutorialBtn": "Didacticiel",
@@ -9871,6 +10010,13 @@ TEXT.fr = {
   "banner.winSub": "Coup {n}",
   "banner.resign": "Les {who} gagnent\nL'adversaire abandonne",
   "rec.resign": " (abandon)",
+  "banner.timeout": "Les {who} gagnent\n{loser} : temps écoulé",
+  "banner.timeoutSub": "Temps écoulé",
+  "rec.timeout": " (temps écoulé)",
+  "toast.timeout": "{who} : temps écoulé",
+  "timing.off": "Horloge : désactivée",
+  "timing.unlimited": "Horloge : activée · sans limite",
+  "timing.limited": "Horloge : activée · {n} s par coup",
   // 【数字必须走占位符】法语把 0 也算单数（0 pion 才是对的写法），所以这一形会被
   // n = 0 选中 —— 写死成 "1 pion" 的话，空层会显示成"有 1 颗子"。
   "rot.layerLabel.one": "Couche {n} ({stones} pion)",
@@ -10853,6 +10999,22 @@ const Game = {
   setupCool: 5,          // 设置页选的冷却（落子数），范围见 CoolLimits
   /** v3.0.0「晨昏」的相位周期。四维下常开，三维下不生效（见 newGame）。 */
   setupPhase: 12,
+
+  /** v3.2.0 第 7 条：起始界面的本地计时选项。
+   *  默认「计时 + 不限时」，保留之前"有棋钟、无每步限制"的体验。
+   *  setupLimitSec 是"限时"那一档的记忆值；切回不限时不丢。 */
+  setupTiming: true,
+  setupLimit: false,
+  setupLimitSec: 60,
+  /** 本局是否计时（newGame 从 setup* 拍下）。false = 无棋钟、不记用时。 */
+  gameTimed: true,
+  /** 本局是否联机。联机计时由服务器负责，本地 setInterval/setTimeout 一律不跑。 */
+  isOnlineGame: false,
+  /** 本地每步限时的定时器与代号（和服务器 clockGen 同一个防抢跑思路）。 */
+  localLimitTimer: 0,
+  localLimitGen: 0,
+  /** 本地计时是否已经开始。**第一颗子落下之后才开始**（联机由服务器快照决定）。 */
+  clockStarted: false,
   /** 教学状态。tutActive = 在教学里；tutIndex = 第几关；tutPassed = 这一关过了没有。
    *  v3.1.5 多了两个：
    *    tutCleared —— 这趟教学里**已经过过**的关卡下标（决定「下一关」出不出现：
@@ -10981,6 +11143,8 @@ const Game = {
       "clockHud","clockBlack","clockWhite","clockMove","clockTotal","clockLimitRow","clockLimit",
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn","quitBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","tutorialBtn","view","stage","previewTag",
+      "timingBtn","timingPanel","timingClose","timingOnRow","timingOff","timingOn",
+      "timingLimitRow","timingNoLimit","timingLimit","timingRangeRow","timingRangeInput",
       "inscription",
       "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","aiHint","orderRow","orderMe","orderCpu",
       "phaseChip","modeBtn","placeModeRow",
@@ -11166,6 +11330,7 @@ const Game = {
     if (this.session) this.refreshTexts();
     this.syncSetupInputs();
     this.syncCoolRow();
+    this.syncTimingUi();
     // 【拉条的禁用状态也要在这里落一次】它原来只在 setSetupAi 里写，而那个函数只在
     // **点击**时跑 —— 于是刚打开页面时（HTML 默认「人类」）拉条是满色、拖得动的，
     // 「谁先下」两个键也点得动。applyLang 是**启动时**和切语言时都必经的唯一收口。
@@ -11307,6 +11472,12 @@ const Game = {
   adoptSession(session) {
     this.session = session;
     this.wireSession();
+    // 教学不是正式对局：没有计时、没有记录，也不允许本地限时定时器活着。
+    this.isOnlineGame = false;
+    this.gameTimed = false;
+    this.recLimitSec = 0;
+    this.clockStarted = false;
+    this.clearLocalLimitClock();
     // 【必须关掉上一局的弹窗】不然它会跟着进下一关 —— 而且横幅上的字是**现读**新会话的
     // lastOutcome 的，一盘空盘会显示成"空棋胜 0 连"这种胡说。用户报的就是这个。
     this.hideBanner();
@@ -11331,8 +11502,15 @@ const Game = {
 
   newGame(dims, first) {
     this.recStart = Date.now();
-    this.recLimitSec = 0;          // 单机对局没有每步限时；联机由 state/reset 写入
+    // 【本地计时从设置页拍下】v3.2.0 第 7 条：计时开关、每步限时、秒数。
+    // 计时真正的起点不是这里 —— 第一颗子落下后才开始（见 onMoveApplied / clockStarted）。
+    this.isOnlineGame = false;
+    this.gameTimed = !!this.setupTiming;
+    this.recLimitSec = this.gameTimed && this.setupLimit
+      ? this.clampSetupLimitSec(this.setupLimitSec) : 0;
+    this.clockStarted = false;
     this.clockReady = true;
+    this.clearLocalLimitClock();
     this.recId = null;
     this.recSession = null;
     const d = normalizeDims(dims);
@@ -11372,6 +11550,8 @@ const Game = {
     this.aiLevel = AI_LEVELS[this.setupLevel] || "medium";
     this.aiMyColor = this.setupMyColor;
     this.onBoardChanged(true);
+    this.armLocalLimitClock();      // 还没开始计时（clockStarted=false），只是清干净
+    this.updateClockHud(true);
     // 【这一条不能省】第一次 newGame 是新建会话，不会触发 onReset，
     // 所以"电脑执先手"的开局只能靠这里排上第一手。
     this.maybeScheduleAi();
@@ -11390,14 +11570,17 @@ const Game = {
    */
   // ------------------------------------------------------------------ 对局计时
 
-  /** 本局已进行的毫秒数。终局后冻结在 recEndEl；没有 recStart（桩/边界）时为 0。 */
+  /** 本局已进行的毫秒数。**第一颗子落下前恒为 0**（本地；联机由服务器快照定）；
+   *  终局后冻结在 recEndEl。 */
   clockElapsed() {
+    if (!this.clockStarted) return 0;
     if (this.recEndEl > 0) return this.recEndEl;
     return this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
   },
 
-  /** 当前这一手已经用掉的时间（终局后为 0）。 */
+  /** 当前这一手已经用掉的时间（未开始/终局后为 0）。 */
   clockMoveElapsed() {
+    if (!this.clockStarted) return 0;
     if (!this.session || this.session.status !== "Playing") return 0;
     return Math.max(0, this.clockElapsed() - (this.recLastEl || 0));
   },
@@ -11438,7 +11621,64 @@ const Game = {
     this.clockWhite = 0;
     this.clockDeadline = 0;
     this.clockReady = true;
+    this.clockStarted = false;    // 本地要等第一颗子；联机 applyOnlineClock 会覆盖
     this.clockPaintedAt = 0;
+    this.clearLocalLimitClock();
+  },
+
+  /** 清掉本地每步限时定时器。代号 +1 让已经排队的旧回调空转 —— 和服务器 clockGen 同一条。 */
+  clearLocalLimitClock() {
+    this.localLimitGen = (this.localLimitGen | 0) + 1;
+    if (this.localLimitTimer) { clearTimeout(this.localLimitTimer); this.localLimitTimer = 0; }
+    this.clockDeadline = 0;
+  },
+
+  /** 给本地当前这一手挂/重挂限时。**未开始计时（第一颗子之前）或没开限时就直接清掉。** */
+  armLocalLimitClock() {
+    this.clearLocalLimitClock();
+    if (this.isOnlineGame || !this.gameTimed || !this.clockStarted || !this.recLimitSec) {
+      this.updateClockHud(true);
+      return;
+    }
+    if (!this.session || this.session.status !== "Playing") {
+      this.updateClockHud(true);
+      return;
+    }
+    const ms = Math.max(1, (this.recLimitSec | 0) * 1000);
+    this.clockDeadline = Date.now() + ms;
+    const gen = this.localLimitGen;
+    this.localLimitTimer = setTimeout(() => this.onLocalTimeout(gen), ms);
+    this.updateClockHud(true);
+  },
+
+  /** 本地超时：当前应走的一方判负。和服务器 onTurnTimeout 同一语义，只是不经过网络。 */
+  onLocalTimeout(gen) {
+    if (gen !== this.localLimitGen) return;
+    if (this.isOnlineGame || !this.gameTimed || !this.clockStarted || !this.recLimitSec) return;
+    if (!this.session || this.session.status !== "Playing") return;
+    const now = Date.now();
+    if (this.clockDeadline && now < this.clockDeadline - 2) {
+      this.localLimitTimer = setTimeout(() => this.onLocalTimeout(gen), Math.max(1, this.clockDeadline - now));
+      return;
+    }
+    const loser = this.session.currentPlayer;
+    // 【必须在 clear 之前抄下来】clearLocalLimitClock 会把 clockDeadline 清零。
+    // 冻结时刻要用"判负的那一刻"（deadline），不是回调真正跑起来的 now：
+    // 后台标签页节流 / 合盖休眠会让回调晚几秒甚至几分钟，用 now 会让记录里的
+    // 总用时超出限时（服务器 onTurnTimeout 用的也是 deadline - startedAt）。
+    const deadline = this.clockDeadline;
+    this.clearLocalLimitClock();
+    if (!this.session.concede(loser)) return;
+    if (this.session.lastOutcome) {
+      this.session.lastOutcome.isTimeout = true;
+      this.session.lastOutcome.isResign = false;
+    }
+    this.recEndEl = this.clockStarted ? Math.max(0, (deadline || now) - this.recStart) : 0;
+    this.onBoardChanged(false);
+    this.syncWinBanner();
+    this.toast(say(() => cnOf(loser) + "棋超时判负", "toast.timeout",
+                   { who: sideName(loser, LANG) }), false);
+    this.updateClockHud(true);
   },
 
   /** 用服务器时钟快照覆盖本地时钟（联机 state/reset/sync/clock/applied 共用）。
@@ -11446,7 +11686,12 @@ const Game = {
    *  snap.started=false（还在等对手）时 HUD 收起，但仍在内存里记住限时。 */
   applyOnlineClock(snap) {
     if (!snap) return;
+    // 这个方法只由联机事件调用；进来就说明本局由服务器管时钟。
+    this.isOnlineGame = true;
+    this.gameTimed = true;
+    this.clearLocalLimitClock();
     if (typeof snap.moveLimitSec === "number") this.recLimitSec = snap.moveLimitSec | 0;
+    this.clockStarted = !!snap.startedAt;
     const decided = !!(this.session && this.session.status === "Decided");
     if (decided) {
       // 重连到一盘已结束的棋：重放事件已经把 recEndEl 钉在胜负那一手；sync 不能
@@ -11474,7 +11719,8 @@ const Game = {
   updateClockHud(force) {
     const hud = this.el.clockHud;
     if (!hud) return;
-    const show = !!(this.session && !this.setupOpen && !this.tutActive && this.clockReady);
+    const show = !!(this.session && !this.setupOpen && !this.tutActive &&
+                    this.clockReady && this.gameTimed && this.clockStarted);
     hud.classList.toggle("off", !show);
     if (!show) return;
     const now = Date.now();
@@ -11519,7 +11765,11 @@ const Game = {
     const decided = this.session.status === "Decided";
     // 时钟在终局那一刻冻结：横幅弹出后数字还继续涨，记录里的总用时就和玩家看到的对不上。
     if (decided) {
-      if (!this.recEndEl) this.recEndEl = this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
+      if (this.clockStarted && !this.recEndEl) {
+        this.recEndEl = this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
+      }
+      if (!this.clockStarted) this.recEndEl = 0;
+      this.clearLocalLimitClock();
     } else {
       this.recEndEl = 0;
     }
@@ -11531,15 +11781,35 @@ const Game = {
     this.updateClockHud(true);
   },
 
+  /** 本地第一颗子落下时启动计时。**联机不走这里**（服务器在双方确认开局时定起点）。
+   *  返回 false = 这一手不计时（没开计时 / 还没落第一颗子）。 */
+  beginLocalClockIfNeeded() {
+    if (this.isOnlineGame) return this.clockStarted;
+    if (!this.gameTimed) return false;
+    if (this.clockStarted) return true;
+    if (!this.session || this.session.moveCount < 1) return false;
+    this.clockStarted = true;
+    this.recStart = Date.now();
+    this.recLastEl = 0;
+    this.recEndEl = 0;
+    this.clockBlack = 0;
+    this.clockWhite = 0;
+    return true;
+  },
+
   onMoveApplied(rec, outcome) {
     // 棋谱时间：只记在走子记录对象上，悔棋时随记录一起被 pop 掉，不用另开数组。
-    // recStart 没设（测试 / 换会话的边界）时记 0，导出时显示 00:00。
-    // 【本手用时 = 这一次的累计值 - 上一次动作的累计值】turn 交替，所以这个差值
-    // 就是"这一手花了多久"；AI 的思考时间也算在它自己那一色上。
-    if (rec && !(rec.el >= 0)) rec.el = this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
-    if (rec) this.markActionTime(rec, rec.el, Math.max(0, (rec.el | 0) - (this.recLastEl || 0)));
+    // 【第一颗子本身不计时】它落下之后才把 clockStarted 打开，所以第一手的 el/dt 都是 0。
+    const timed = this.beginLocalClockIfNeeded();
+    if (timed) {
+      if (rec && !(rec.el >= 0)) rec.el = this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
+      if (rec) this.markActionTime(rec, rec.el, Math.max(0, (rec.el | 0) - (this.recLastEl || 0)));
+    } else if (rec) {
+      rec.el = 0; rec.dt = 0;
+    }
     this.onBoardChanged(false);
     this.syncWinBanner();
+    this.armLocalLimitClock();
     // 轮到电脑就安排下一手。放在最后：先让棋局本身结算清楚（终局就不该再排了，
     // maybeScheduleAi 里的 isAiTurn 会看 status）。
     this.maybeScheduleAi();
@@ -11548,15 +11818,26 @@ const Game = {
     this.hideBanner(); this.onBoardChanged(false);
     // 悔棋之后这一手连同它的用时一起从账上消失；下一手从"现在"重新起算
     // （用户口径：联机悔棋/重开重置本步计时）。
-    this.recEndEl = 0;
-    this.recLastEl = this.clockElapsed();
-    this.recomputeClockTotals();
+    if (!this.isOnlineGame && this.gameTimed && this.session.moveCount === 0) {
+      // 悔到一颗子都不剩 = 计时还没开始；下一次落第一颗子时重新起算。
+      this.clockStarted = false;
+      this.recStart = Date.now();
+      this.recLastEl = 0;
+      this.recEndEl = 0;
+      this.clockBlack = 0;
+      this.clockWhite = 0;
+    } else if (this.clockStarted) {
+      this.recEndEl = 0;
+      this.recLastEl = this.clockElapsed();
+      this.recomputeClockTotals();
+    }
     // 悔棋是唯一能"退出终局"的操作 —— 记录要跟着退（见 syncGameRecord）。
     // **放在 hideBanner 之后**：hideBanner 只收横幅，状态看的是 session，顺序无所谓；
     // 但放这里能让"撤销 → 撤记录"读起来是同一件事。
     this.syncGameRecord();
     this.toast(say(() => "已悔棋：" + rec.toString(), "toast.undone", { move: rec.toString("en") }), true);
     this.maybeScheduleAi();
+    this.armLocalLimitClock();
     this.updateClockHud(true);
   },
   onReset() {
@@ -11570,18 +11851,25 @@ const Game = {
     // 只是"当前这局"不再背着它 —— 记的是 recId，不是"列表里最新一条"。
     this.recId = null;
     this.recSession = null;
-    // 计时从 reset 这一刻重新起算；recLimitSec 由调用方（newGame / 联机 state）决定。
+    // 计时从 reset 这一刻重新起算；**本地要等第一颗子**，联机由 state/reset 快照决定。
     this.resetClock();
     this.onBoardChanged(true);
     this.maybeScheduleAi();
+    this.armLocalLimitClock();
     this.updateClockHud(true);
   },
 
   // 转动成功时才走这里（三种"没转成"由 doRotate 自己提示，因为它们不留痕迹）
   onRotationApplied(rec, outcome) {
-    if (rec && !(rec.el >= 0)) rec.el = this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
-    if (rec) this.markActionTime(rec, rec.el, Math.max(0, (rec.el | 0) - (this.recLastEl || 0)));
+    const timed = this.beginLocalClockIfNeeded();
+    if (timed) {
+      if (rec && !(rec.el >= 0)) rec.el = this.recStart ? Math.max(0, Date.now() - this.recStart) : 0;
+      if (rec) this.markActionTime(rec, rec.el, Math.max(0, (rec.el | 0) - (this.recLastEl || 0)));
+    } else if (rec) {
+      rec.el = 0; rec.dt = 0;
+    }
     this.onBoardChanged(false);
+    this.armLocalLimitClock();
     // 【转出来的胜局也要弹横幅】和 onMoveApplied 走同一个出口（见 syncWinBanner）。
     this.syncWinBanner();
     // rec.toString() 就是同一件事的紧凑写法，英文侧直接复用它，不另造一套措辞 ——
@@ -11601,13 +11889,23 @@ const Game = {
     this.onBoardChanged(false);
     // 和 onMoveUndone 同一条：转出来的胜局被恢复回去，记录也要跟着撤；
     // 计时同样从"现在"重新起算。
-    this.recEndEl = 0;
-    this.recLastEl = this.clockElapsed();
-    this.recomputeClockTotals();
+    if (!this.isOnlineGame && this.gameTimed && this.session.moveCount === 0) {
+      this.clockStarted = false;
+      this.recStart = Date.now();
+      this.recLastEl = 0;
+      this.recEndEl = 0;
+      this.clockBlack = 0;
+      this.clockWhite = 0;
+    } else if (this.clockStarted) {
+      this.recEndEl = 0;
+      this.recLastEl = this.clockElapsed();
+      this.recomputeClockTotals();
+    }
     this.syncGameRecord();
     this.toast(say(() => "已恢复转动前的样子（" + describeRotationMove(rec.move) + " 已撤销）",
                    "toast.rotUndone", { move: describeRotationMove(rec.move, "en") }), true);
     this.maybeScheduleAi();
+    this.armLocalLimitClock();
     this.updateClockHud(true);
   },
 
@@ -12167,6 +12465,10 @@ const Game = {
     // 不清的话会有一颗子在浮层底下悄悄落下来，收起来的时候看着像闹鬼。
     // 出去的唯一一条路是「开始游戏」，它开新局并重新排，所以这里清掉是安全的。
     this.cancelAiTimer();
+    // 本地每步限时的定时器也一样：起始界面不是对局，不能让它继续跑。
+    this.clearLocalLimitClock();
+    this.closeTimingPanel();
+    this.updateClockHud(true);
     // 预览中的那一手没落地就得先撤掉：不然玩家在设置界面里改了尺寸再回来，
     // 棋盘还是"转过的样子"，而记账里根本没有那一手 —— 这局棋就对不上了。
     this.dropRotPreview();
@@ -12179,6 +12481,7 @@ const Game = {
     this.setHover(null);
     this.syncSetupInputs();
     this.syncCoolRow();
+    this.syncTimingUi();
     // 「对手」那一行的禁用/高亮（含「谁先下」）—— 见 syncAiRow 的注释
     this.syncAiRow();
     this.syncAiLevel();
@@ -12203,6 +12506,7 @@ const Game = {
   closeSetup() {
     this.el.setup.classList.add("off");
     this.el.stage.classList.remove("preview");
+    this.closeTimingPanel();
     // 【进去必须停干净】对局界面把 #inkfield 整个 display:none 了，
     // 但看不见不等于不烧 CPU —— 不显式停掉的话，一整局棋都在后台跑物理。
     InkField.stop();
@@ -12613,7 +12917,8 @@ const Game = {
       // 计时汇总：总用时 + 黑白各自累计，全部精确到 ms。
       // 老记录没有 mv/rt 时双方累计是 0，只显示总时长，不编造一个 0。
       const ts = this.recordTimeStats(rec);
-      if ((rec.dur | 0) > 0 || ts.black > 0 || ts.white > 0) {
+      // timed:0 是"这局没开计时/还没落第一颗子"；老记录没有这个字段，照常显示时间。
+      if (rec.timed !== 0 && ((rec.dur | 0) > 0 || ts.black > 0 || ts.white > 0)) {
         const totalText = this.fmtElapsed(ts.total);
         const blackText = this.fmtElapsed(ts.black);
         const whiteText = this.fmtElapsed(ts.white);
@@ -12676,9 +12981,11 @@ const Game = {
     const rec = this.histCache && this.histCache[rid];
     if (!box || !rec) return;
     const timed = this.recordTimedActions(rec);
+    const showTime = rec.timed !== 0;
     let out = "";
     for (let i = 0; i < timed.length; i++) {
       const a = timed[i].act, dt = timed[i].dt;
+      const timeHtml = showTime ? '<span class="histTime">' + this.fmtMoveMs(dt) + "</span>" : "";
       if (a.type === "m") {
         const [x, y, z, player, phase] = a.m;
         const ph = rec.ph > 0 && phase === 1
@@ -12687,16 +12994,14 @@ const Game = {
         // 复用内核的 MoveRecord.toString：六种语言一套；这里只补时间/圆点，
         // 不再写一份格式。
         const mr = MoveRecord(x, y, z, player, a.n, phase, null, 0);
-        out += '<div class="histMove">' +
-               '<span class="histTime">' + this.fmtMoveMs(dt) + "</span>" +
+        out += '<div class="histMove">' + timeHtml +
                '<span class="histDot ' + (player === BLACK ? "black" : "white") + '"></span>' +
                escapeHtml(mr.toString(LANG)) + ph + "</div>";
       } else {
         const [axis, layer, turns] = a.r;
         // 复用 RotationMove.toString：同样走内核的六语言文案。
         const rm = new RotationMove(axis, layer, turns);
-        out += '<div class="histMove rot">' +
-               '<span class="histTime">' + this.fmtMoveMs(dt) + "</span>" +
+        out += '<div class="histMove rot">' + timeHtml +
                '<span class="histRot">⟳</span>' +
                escapeHtml(rm.toString(LANG)) + "</div>";
       }
@@ -12758,6 +13063,7 @@ const Game = {
     }
     if (rec.ol) res += say(() => "（长连犯规）", "rec.overline");
     if (rec.rs) res += say(() => "（认输）", "rec.resign");
+    if (rec.to) res += say(() => "（超时）", "rec.timeout");
     parts.push(res);
     parts.push(sayN(() => rec.n + " 手", "rec.moves", rec.n));
     if (rec.r > 0) parts.push(sayN(() => "转动 " + rec.r, "rec.rot", rec.r));
@@ -12802,6 +13108,9 @@ const Game = {
     const lvIdx = this.aiMode ? AI_LEVELS.indexOf(this.aiLevel) : -1;
     const now = Date.now();
     const t0 = this.recStart || now;
+    // 【不计时的局：时间字段一律写 0，并打 timed:0】历史面板/导出按这个标记隐藏时间列。
+    // 计时开了但一颗子都没落就结束（认输）也算没计时 —— 第一颗子之后才开始。
+    const timed = !!(this.gameTimed && this.clockStarted);
     // 棋谱：只存事实（坐标/颜色/相位/宣告/相对时间），文字在渲染时按当前语言拼。
     // 长度以 session.history 为准；悔棋把记录 pop 掉之后这里自然就少了那一手。
     const mv = [];
@@ -12809,7 +13118,8 @@ const Game = {
       const m = s.history[i];
       // 末位是"这一手本身"的用时（dt）。老记录没有这一位，渲染时退回 el 差值。
       mv.push([m.x | 0, m.y | 0, m.z | 0, m.player | 0, m.phase | 0,
-               (m.mode | 0), Math.max(0, m.el | 0), Math.max(0, m.dt | 0)]);
+               (m.mode | 0), timed ? Math.max(0, m.el | 0) : 0,
+               timed ? Math.max(0, m.dt | 0) : 0]);
     }
     // 四维转动。rt 与 mv 分开存，顺序由 placementsBefore 还原：
     // 转动恰好发生在"第 placementsBefore 手之后"，同一点的多条按数组顺序。
@@ -12818,8 +13128,8 @@ const Game = {
     for (let i = 0; i < rots.length; i++) {
       const r = rots[i];
       rt.push([r.move.axis | 0, r.move.layer | 0, r.move.turns | 0,
-               r.placementsBefore | 0, r.player | 0, Math.max(0, r.el | 0),
-               Math.max(0, r.dt | 0)]);
+               r.placementsBefore | 0, r.player | 0, timed ? Math.max(0, r.el | 0) : 0,
+               timed ? Math.max(0, r.dt | 0) : 0]);
     }
     return {
       v: 2,
@@ -12827,8 +13137,10 @@ const Game = {
       t: now,
       t0: t0,
       // 终局后时钟冻结在 recEndEl；没有它时退回墙钟差（联机断线等边界）。
-      dur: Math.max(0, this.recEndEl || (now - t0)),
-      lim: Math.max(0, this.recLimitSec | 0),
+      dur: timed ? Math.max(0, this.recEndEl || (now - t0)) : 0,
+      lim: timed ? Math.max(0, this.recLimitSec | 0) : 0,
+      timed: timed ? 1 : 0,
+      to: (s.lastOutcome && s.lastOutcome.isTimeout) ? 1 : 0,
       m: this.fourD ? 4 : 3,
       d: [d[0] | 0, d[1] | 0, d[2] | 0],
       o: this.fourD ? 3 : ((s.rules.allowRotation ? 1 : 0) | (s.rules.wrapEdges ? 2 : 0)),
@@ -13737,6 +14049,13 @@ const Game = {
       this.el.bannerTitle.textContent = say(() => "和局\n棋盘已满", "banner.draw");
       this.el.bannerTitle.style.color = Palette.hex("--text");
       this.el.bannerSub.textContent = "";
+    } else if (s.lastOutcome.isTimeout) {
+      const loser = s.lastOutcome.resignedBy || opponentOf(s.winner);
+      this.el.bannerTitle.textContent = say(
+        () => cnOf(s.winner) + "棋胜\n" + cnOf(loser) + "棋超时",
+        "banner.timeout", { who: sideName(s.winner, LANG), loser: sideName(loser, LANG) });
+      this.el.bannerTitle.style.color = Palette.hex("--danger");
+      this.el.bannerSub.textContent = say(() => "超时判负", "banner.timeoutSub");
     } else if (s.lastOutcome.isResign) {
       this.el.bannerTitle.textContent = say(
         () => cnOf(s.winner) + "棋胜\n对方认输",
@@ -13919,6 +14238,27 @@ const Game = {
     on("firstBlack", () => this.setSetupFirst(BLACK));
     on("firstWhite", () => this.setSetupFirst(WHITE));
 
+    // ---- 本地计时浮窗（v3.2.0 第 7 条）
+    on("timingBtn", () => this.toggleTimingPanel());
+    on("timingClose", () => this.closeTimingPanel());
+    on("timingOff", () => this.setSetupTiming(false));
+    on("timingOn", () => this.setSetupTiming(true));
+    on("timingNoLimit", () => this.setSetupLimit(false));
+    on("timingLimit", () => this.setSetupLimit(true));
+    if (this.el.timingRangeInput) {
+      this.el.timingRangeInput.addEventListener("change", () =>
+        this.setSetupLimitSec(this.el.timingRangeInput.value));
+    }
+    // 点浮窗/按钮之外收起。和语言列表同一条 pointerdown 理由（click 太晚，
+    // 会让"点一下按钮先被外面这一下关掉、再被按钮自己打开"）。
+    window.addEventListener("pointerdown", (e) => {
+      if (!this.timingOpen) return;
+      const box = this.el.timingPanel, btn = this.el.timingBtn;
+      const inside = (el) => !!(el && typeof el.contains === "function" && el.contains(e.target));
+      if (inside(box) || inside(btn)) return;
+      this.closeTimingPanel();
+    });
+
     // ---- 电脑对手：「人类」一个键 + 强度拉条五格，data-ai 的取值就是 setupAi 本身。
     // 【只能走 this.el[id] + addEventListener，不能 querySelectorAll(".seg")】——
     // DOM 桩只认五个选择器，写成类选择器会在桩里静默返回空数组（见 syncOrderRow 的注释）。
@@ -14033,6 +14373,8 @@ const Game = {
       if (e.key === "Escape" && this.exportOpen) { this.closeExport(); return; }
       // 格线外观浮窗和规则/记录同一层（70）。
       if (e.key === "Escape" && this.gridSettingsOpen) { this.closeGridSettings(); return; }
+      // 起始界面的计时小浮窗（绝对定位，压在任何别的东西上面）。
+      if (e.key === "Escape" && this.timingOpen) { this.closeTimingPanel(); return; }
       if (e.key === "Escape" && this.tipOpen) { this.closeTip(); return; }
       if (e.key === "Escape" && this.rulesOpen) { this.closeRules(); return; }
       // 记录浮层和规则浮层互斥（开一个关另一个），所以这里谁先判都一样。
@@ -14960,7 +15302,7 @@ const Game = {
   refreshRotPanel() {
     if (!this.session || !this.el.rotPanel) return;
     const on = this.session.rotationEnabled;
-    // v3.1.12：底部固定五颗键，「落子宣告」挪进转动面板底部（#placeModeRow）——
+    // v3.2.0：底部固定五颗键，「落子宣告」挪进转动面板底部（#placeModeRow）——
     // 不再需要交换 flex order。判据仍用 rotationEnabled：教学关是四维但转动关掉了，
     // 那时整块转动面板（含宣告键）都不该出现。
     this.el.rotPanel.classList.toggle("off", !on);
@@ -15888,6 +16230,78 @@ const Game = {
     this.refreshSetupSummary();
   },
 
+  // ------------------------------------------------------------------ 本地计时（v3.2.0 第 7 条）
+
+  /** 每步限时的范围：10 秒 – 10 分钟，精确到秒。和联机的 sanitizeMoveLimit 同一口径。 */
+  clampSetupLimitSec(v) {
+    const n = Math.round(Number(v));
+    if (!isFinite(n)) return 60;
+    return Math.max(10, Math.min(600, n));
+  },
+
+  /** 起始界面的计时浮窗开着没有。和别的浮层一样从 DOM 派生，不另存布尔值。 */
+  get timingOpen() {
+    // 只有起始界面在的时候它才可能开着；桩里所有元素都没有 HTML 的 class，
+    // 不判 setupOpen 的话这里会永远为 true，把 keydown 的 Esc 全吃掉。
+    return !!(this.setupOpen && this.el.timingPanel && this.el.timingPanel.classList &&
+              !this.el.timingPanel.classList.contains("off"));
+  },
+
+  openTimingPanel() {
+    if (!this.el.timingPanel) return;
+    this.syncTimingUi();
+    this.el.timingPanel.classList.remove("off");
+    if (this.el.timingBtn) this.el.timingBtn.setAttribute("aria-expanded", "true");
+  },
+
+  closeTimingPanel() {
+    if (this.el.timingPanel) this.el.timingPanel.classList.add("off");
+    if (this.el.timingBtn) this.el.timingBtn.setAttribute("aria-expanded", "false");
+  },
+
+  toggleTimingPanel() { if (this.timingOpen) this.closeTimingPanel(); else this.openTimingPanel(); },
+
+  setSetupTiming(on) {
+    this.setupTiming = !!on;
+    this.syncTimingUi();
+  },
+
+  setSetupLimit(on) {
+    this.setupLimit = !!on;
+    if (this.setupLimit) this.setupLimitSec = this.clampSetupLimitSec(this.setupLimitSec);
+    this.syncTimingUi();
+  },
+
+  setSetupLimitSec(v) {
+    this.setupLimitSec = this.clampSetupLimitSec(v);
+    if (this.el.timingRangeInput) this.el.timingRangeInput.value = String(this.setupLimitSec);
+    this.syncTimingUi();
+  },
+
+  /** 按钮文案 + 两级显隐 + 选中态。动态文案走 say()，所以切语言时 applyLang 要重跑它。 */
+  syncTimingUi() {
+    const on = !!this.setupTiming;
+    const lim = on && !!this.setupLimit;
+    if (this.el.timingBtn) {
+      this.el.timingBtn.textContent = !on
+        ? say(() => "计时：关", "timing.off")
+        : lim
+          ? say(() => "计时：开 · 每步 " + this.setupLimitSec + " 秒", "timing.limited",
+                { n: this.setupLimitSec })
+          : say(() => "计时：开 · 不限时", "timing.unlimited");
+    }
+    if (this.el.timingOn) this.el.timingOn.classList.toggle("sel", on);
+    if (this.el.timingOff) this.el.timingOff.classList.toggle("sel", !on);
+    if (this.el.timingLimitRow) this.el.timingLimitRow.classList.toggle("off", !on);
+    if (this.el.timingNoLimit) this.el.timingNoLimit.classList.toggle("sel", on && !this.setupLimit);
+    if (this.el.timingLimit) this.el.timingLimit.classList.toggle("sel", lim);
+    if (this.el.timingRangeRow) this.el.timingRangeRow.classList.toggle("off", !lim);
+    if (this.el.timingRangeInput) {
+      this.el.timingRangeInput.value = String(this.setupLimitSec);
+      this.el.timingRangeInput.disabled = !lim;
+    }
+  },
+
   // ------------------------------------------------------------------ 电脑对手
 
   /** 起始界面上"我执哪个色"。**谁先手定颜色、谁先下定人**，两者合起来才定得下来。 */
@@ -16778,6 +17192,7 @@ const GameExport = (function () {
   function long(rec, board, name, game) {
     const acts = game.recordActionRows(rec);
     const timed = game.recordTimedActions(rec);
+    const timedRec = rec.timed !== 0;   // 不计时的局：不画时间列/总时长
     const bf = fontOf(game, "body", SERIF);
     const tf = fontOf(game, "title", SERIF);
     const margin = 64;
@@ -16851,15 +17266,17 @@ const GameExport = (function () {
     ctx.font = "600 " + ps + "px " + bf;
     ctx.fillText(pl, margin, sumY + 72);
 
-    const dur = say(() => "时长 " + game.fmtElapsed(rec.dur), "export.duration",
-                    { time: game.fmtElapsed(rec.dur) });
-    const tstat = game.recordTimeStats(rec);
-    const sides = say(() => "黑 " + game.fmtElapsed(tstat.black) + " · 白 " + game.fmtElapsed(tstat.white),
-                       "export.sides", { black: game.fmtElapsed(tstat.black),
-                                          white: game.fmtElapsed(tstat.white) });
-    ctx.fillStyle = hex("--dim");
-    ctx.font = "22px " + bf;
-    ctx.fillText(dur + " · " + sides, margin, sumY + 112);
+    if (timedRec) {
+      const dur = say(() => "时长 " + game.fmtElapsed(rec.dur), "export.duration",
+                      { time: game.fmtElapsed(rec.dur) });
+      const tstat = game.recordTimeStats(rec);
+      const sides = say(() => "黑 " + game.fmtElapsed(tstat.black) + " · 白 " + game.fmtElapsed(tstat.white),
+                         "export.sides", { black: game.fmtElapsed(tstat.black),
+                                            white: game.fmtElapsed(tstat.white) });
+      ctx.fillStyle = hex("--dim");
+      ctx.font = "22px " + bf;
+      ctx.fillText(dur + " · " + sides, margin, sumY + 112);
+    }
 
     // 分隔线 + 棋谱标题
     const divY = sumY + 144;
@@ -16909,7 +17326,7 @@ const GameExport = (function () {
         let time = "", text = "", gold = false;
         if (a.type === "m") {
           const [mx, my, mz, player, phase] = a.m;
-          time = game.fmtMoveMs(dt);
+          time = timedRec ? game.fmtMoveMs(dt) : "";
           text = MoveRecord(mx, my, mz, player, a.n, phase, null, 0).toString(LANG);
           ctx.fillStyle = player === BLACK ? hex("--black") : hex("--white");
           ctx.beginPath();
@@ -16922,7 +17339,7 @@ const GameExport = (function () {
           }
         } else {
           const [axis, layer, turns] = a.r;
-          time = game.fmtMoveMs(dt);
+          time = timedRec ? game.fmtMoveMs(dt) : "";
           text = new RotationMove(axis, layer, turns).toString(LANG);
           gold = true;
           ctx.fillStyle = hex("--gold");

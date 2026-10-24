@@ -3512,7 +3512,7 @@ try {
     await sleep(150);
     d = JSON.parse(await ev(NAV));
     check(d.passed && d.timer, "前置：这一关真的过了、倒计时真的挂上了", JSON.stringify({ timer: d.timer }));
-    // v3.1.12 起教学里不再把「设置」改名成「退出」—— 底部有一颗专门的 quitBtn。
+    // v3.2.0 起教学里不再把「设置」改名成「退出」—— 底部有一颗专门的 quitBtn。
     // 它先弹确认（和本地对局同一条路），确定之后才 tutorialExit()。
     await ev(`(() => { document.getElementById("quitBtn").click(); return 1; })()`);
     await sleep(100);
@@ -3532,7 +3532,7 @@ try {
     check(!after.active && after.setupOpen,
       "退出之后那一秒过去：不会被拽回教学（倒计时确实被 cancelTutTimer 带走了）",
       JSON.stringify(after));
-    // 【设置键不再借用成退出键】v3.1.12 起它全程写「设置」，点开的是格线外观浮窗；
+    // 【设置键不再借用成退出键】v3.2.0 起它全程写「设置」，点开的是格线外观浮窗；
     // 退出走专门的 quitBtn。这条断言防的是"教学里又把它改名/换成退出动作"的回归。
     check(await ev(`document.getElementById("setupBtn").textContent`) === "设置",
       "设置键全程保持「设置」（不再借它当退出）",
@@ -3595,7 +3595,7 @@ try {
   }
 
   // ------------------------------------------------------------------
-  // v3.1.12：底部固定五颗键，四维的「落子：正常/缓/催」挪进转动面板底部
+  // v3.2.0：底部固定五颗键，四维的「落子：正常/缓/催」挪进转动面板底部
   //
   // 【为什么在真浏览器里量】桩里只能验类名/静态位置；"到底落在哪"终究是几何问题 ——
   // CSS 的 order 被别的规则盖掉、rotPanel 的 gap 没算对、窄屏下被挤到别处，桩都看不见。
@@ -3650,7 +3650,7 @@ try {
   }
 
   // ------------------------------------------------------------------
-  // v3.1.12：棋子完全平涂 —— 转到任何角度白子都不能变成黑子
+  // v3.2.0：棋子完全平涂 —— 转到任何角度白子都不能变成黑子
   //
   // 【为什么读像素】这是用户报的原始现象："换个角度会让白子看起来像黑子"。
   // 以前的着色器把光源钉在世界坐标里，相机转到背光半球时白子只剩 0.34 的环境光。
@@ -3695,7 +3695,7 @@ try {
   }
 
   // ------------------------------------------------------------------
-  // v3.1.12：棋盘外观设置浮窗 —— 色板/取色器/1% 拉条 + 落盘
+  // v3.2.0：棋盘外观设置浮窗 —— 色板/取色器/1% 拉条 + 落盘
   // ------------------------------------------------------------------
   {
     const g = JSON.parse(await ev(`(() => {
@@ -3738,13 +3738,14 @@ try {
   }
 
   // ------------------------------------------------------------------
-  // v3.1.12：棋钟 / 每手用时 / 记录里的 ms 计时
+  // v3.2.0：棋钟 / 每手用时 / 记录里的 ms 计时
   // ------------------------------------------------------------------
   {
     const tim = JSON.parse(await ev(`(() => {
       Game.cancelAiTimer(); Game.setSetupAi("human");
       Game.setSetupMode(false); Game.newGame(15, 1); Game.closeSetup();
-      // 模拟"已经下了 4.321 秒、上一手落在 1.000 秒"的时刻。
+      // 模拟"第一颗子已落下、已经下了 4.321 秒、上一手落在 1.000 秒"的时刻。
+      Game.clockStarted = true;
       Game.recStart = Date.now() - 4321;
       Game.recLastEl = 1000;
       Game.updateClockHud(true);
@@ -3780,7 +3781,85 @@ try {
   }
 
   // ------------------------------------------------------------------
-  // v3.1.12：联机 emoji 的浮层（最多 4 条、新的在最下面、2 秒后消失）
+  // v3.2.0 第 7 条：起始界面的计时按钮/浮窗；第一颗子之后才开始计时
+  // ------------------------------------------------------------------
+  {
+    const tui = JSON.parse(await ev(`(() => {
+      Game.cancelAiTimer(); Game.setSetupAi("human");
+      Game.setSetupTiming(true); Game.setSetupLimit(false);
+      Game.openSetup(); Game.setSetupMode(false);
+      const btn = document.getElementById("timingBtn"), rule = document.getElementById("ruleNote");
+      const br = btn.getBoundingClientRect(), rr = rule.getBoundingClientRect();
+      const sb0 = document.getElementById("startBtn").getBoundingClientRect();
+      const snap0 = [sb0.left, sb0.top, sb0.width, sb0.height].map(Math.round).join(",");
+      btn.click();
+      const open = Game.timingOpen;
+      const panel = document.getElementById("timingPanel").getBoundingClientRect();
+      const limitVisible = !document.getElementById("timingLimitRow").classList.contains("off");
+      const rangeHidden = document.getElementById("timingRangeRow").classList.contains("off");
+      document.getElementById("timingLimit").click();
+      const rangeVisible = !document.getElementById("timingRangeRow").classList.contains("off");
+      const inp = document.getElementById("timingRangeInput");
+      inp.value = "30";
+      inp.dispatchEvent(new Event("change", { bubbles: true }));
+      const label = document.getElementById("timingBtn").textContent;
+      Game.closeTimingPanel();
+      const sb1 = document.getElementById("startBtn").getBoundingClientRect();
+      const snap1 = [sb1.left, sb1.top, sb1.width, sb1.height].map(Math.round).join(",");
+      return JSON.stringify({ open: open, panelTop: Math.round(panel.top),
+        centerOnLine: Math.abs((br.top + br.bottom) / 2 - rr.top) <= 2,
+        limitVisible: limitVisible, rangeHidden: rangeHidden, rangeVisible: rangeVisible,
+        label: label, startSame: snap0 === snap1, snap0: snap0, snap1: snap1 });
+    })()`));
+    check(tui.open, "起始界面「计时」小按钮能打开浮窗", JSON.stringify(tui));
+    check(tui.centerOnLine, "按钮骑在规则横线上（不占额外高度）", JSON.stringify(tui));
+    check(tui.panelTop >= 0, "计时浮窗在视口内", JSON.stringify(tui));
+    check(tui.limitVisible && tui.rangeHidden,
+      "默认计时开、不限时：只显示「是否限时」", JSON.stringify(tui));
+    check(tui.rangeVisible && tui.label.indexOf("30") >= 0,
+      "选「限时」后出现时间范围，按钮显示 30 秒", JSON.stringify(tui));
+    check(tui.startSame,
+      "开关计时浮窗不挪动「开始游戏」（起始界面高度预算不变）", JSON.stringify(tui));
+
+    const timed = JSON.parse(await ev(`(() => {
+      Game.setSetupTiming(true); Game.setSetupLimit(true); Game.setSetupLimitSec(30);
+      Game.closeSetup(); Game.newGame(15, 1);
+      const hudBefore = document.getElementById("clockHud").classList.contains("off");
+      Game.session.place(0, 0, 0);
+      const started = Game.clockStarted;
+      const hudAfter = !document.getElementById("clockHud").classList.contains("off");
+      const first = Game.session.history[0];
+      const rec = Game.buildRecord();
+      const limitOn = !document.getElementById("clockLimitRow").classList.contains("off");
+      return JSON.stringify({ hudBefore: hudBefore, started: started, hudAfter: hudAfter,
+        firstDt: first ? first.dt : null, timed: rec.timed, lim: rec.lim, limitOn: limitOn });
+    })()`));
+    check(timed.hudBefore && timed.started && timed.hudAfter,
+      "第一颗子落下前不显示棋钟，落下后才开始", JSON.stringify(timed));
+    check(timed.firstDt === 0, "第一颗子本身不计时（dt=0）", JSON.stringify(timed));
+    check(timed.timed === 1 && timed.lim === 30 && timed.limitOn,
+      "本局限时 30 秒进入记录并显示剩余", JSON.stringify(timed));
+
+    const untimed = JSON.parse(await ev(`(() => {
+      Game.setSetupTiming(false);
+      Game.closeSetup(); Game.newGame(15, 1);
+      Game.session.place(0, 0, 0);
+      const rec = Game.buildRecord();
+      return JSON.stringify({ gameTimed: Game.gameTimed,
+        hudOff: document.getElementById("clockHud").classList.contains("off"),
+        timed: rec.timed, dur: rec.dur, firstDt: Game.session.history[0].dt });
+    })()`));
+    check(untimed.gameTimed === false && untimed.hudOff,
+      "选「不计时」：没有棋钟", JSON.stringify(untimed));
+    check(untimed.timed === 0 && untimed.dur === 0 && untimed.firstDt === 0,
+      "选「不计时」：记录不写用时", JSON.stringify(untimed));
+
+    await ev(`(() => { Game.setSetupTiming(true); Game.setSetupLimit(false);
+      Game.newGame(15, 1); Game.closeSetup(); return 1; })()`);
+  }
+
+  // ------------------------------------------------------------------
+  // v3.2.0：联机 emoji 的浮层（最多 4 条、新的在最下面、2 秒后消失）
   // ------------------------------------------------------------------
   // 公开版把整个联机块剥掉了，这里没有 emojiToasts / showEmojiToast —— 跳过。
   if (await ev('typeof Game.showEmojiToast === "function" && !!document.getElementById("emojiToasts")')) {
@@ -3805,7 +3884,7 @@ try {
   }
 
   // ------------------------------------------------------------------
-  // v3.1.12：四维下 emoji 条和「落子：正常/缓/催」同一层，落子键小、聊天框大
+  // v3.2.0：四维下 emoji 条和「落子：正常/缓/催」同一层，落子键小、聊天框大
   // ------------------------------------------------------------------
   if (await ev('typeof Net !== "undefined" && !!document.getElementById("emojiBar")')) {
     const place = JSON.parse(await ev(`(() => {
@@ -3813,7 +3892,7 @@ try {
       Net.online = false; Net.room = "";
       Game.setSetupMode(true); Game.newGame(8, 1); Game.closeSetup();
       // 模拟"已在联机房里"：只动 Net 的字段，不发网络请求。
-      Net.online = true; Net.room = "123456"; Net.awaitingPeer = false;
+      Net.online = true; Net.room = "123456"; Net.awaitingPeer = false; Net.started = true;
       Game.refreshRotPanel(); Game.syncEmojiUi();
       const bar = document.getElementById("emojiBar");
       const row = document.getElementById("placeModeRow");
@@ -3826,7 +3905,7 @@ try {
         inputW: Math.round(input.getBoundingClientRect().width),
         rowW: Math.round(row.getBoundingClientRect().width),
       };
-      Net.online = false; Net.room = "";
+      Net.online = false; Net.room = ""; Net.started = false;
       Game.syncEmojiUi();
       Game.setSetupMode(false); Game.newGame(15, 1); Game.closeSetup();
       return JSON.stringify(res);

@@ -936,6 +936,8 @@ step("计时：ms 格式化、每手 dt、双方累计与终局冻结", () => {
   Game.setSetupAi("human");
   Game.closeSetup();
   Game.newGame(15, 1);
+  // 模拟"第一颗子已经落下"——计时从那时起算。第一颗子本身的 dt 必须是 0（下面单独验）。
+  Game.clockStarted = true;
   Game.recStart = Date.now() - 5000;
   Game.recLastEl = 0;
   Game.session.place(0, 0, 0);
@@ -957,6 +959,59 @@ step("计时：ms 格式化、每手 dt、双方累计与终局冻结", () => {
   Game.resetClock();
   if (Game.recEndEl !== 0 || Game.recLastEl !== 0 || Game.clockBlack !== 0 || Game.clockWhite !== 0)
     throw new Error("resetClock 没有把计时状态清零");
+
+  // 【第一颗子之后才开始】新局 clockStarted 必须是 false；落下第一颗才转 true，
+  // 而且第一颗自己的 dt 必须是 0（它不计时）。
+  Game.newGame(15, 1);
+  if (Game.clockStarted) throw new Error("新局还没落第一颗子，clockStarted 不该为 true");
+  Game.session.place(0, 0, 0);
+  if (!Game.clockStarted) throw new Error("第一颗子落下后 clockStarted 应转 true");
+  const first = Game.session.history[0];
+  if (!first || first.dt !== 0 || first.el !== 0)
+    throw new Error("第一颗子本身不该计时：" + JSON.stringify(first && { el: first.el, dt: first.dt }));
+  Game.newGame(15, 1);
+});
+
+step("本地限时：超时判负；不计时的记录不写用时", () => {
+  Game.setSetupAi("human");
+  Game.setSetupTiming(true);
+  Game.setSetupLimit(true);
+  Game.setSetupLimitSec(30);
+  Game.closeSetup();
+  Game.newGame(15, 1);
+  Game.session.place(0, 0, 0);        // 第一颗子：开始计时，轮到白
+  if (!Game.clockStarted) throw new Error("前置：第一颗子后应已开始计时");
+  // 不能只"手动把 deadline 改成过去再调回调" —— 那样定时器有没有真的挂上、
+  // 时长算得对不对都没验到。先钉住到期时刻和 timer，再手动快进。
+  const waitMs = Game.clockDeadline - Date.now();
+  if (!(waitMs > 25000 && waitMs <= 30000))
+    throw new Error("限时应在 30 秒后到期（实际剩余 " + waitMs + "ms）");
+  if (!Game.localLimitTimer) throw new Error("限时应当真的挂上定时器");
+  // 故意把 deadline 设成 60 秒前，模拟"回调被后台节流延迟"：冻结时刻应当用
+  // deadline，而不是回调跑起来的 now，否则记录里的总用时会被多算 60 秒。
+  const fakeDeadline = Date.now() - 60000;
+  Game.clockDeadline = fakeDeadline;
+  Game.onLocalTimeout(Game.localLimitGen);
+  if (Game.localLimitTimer) throw new Error("超时结算后应清掉定时器");
+  const wantEnd = Math.max(0, fakeDeadline - Game.recStart);
+  if (Math.abs(Game.recEndEl - wantEnd) > 5)
+    throw new Error("超时冻结应当用 deadline（期望约 " + wantEnd + "ms，实际 " + Game.recEndEl + "ms）");
+  if (Game.session.status !== "Decided") throw new Error("超时后应当终局");
+  if (!Game.session.lastOutcome || !Game.session.lastOutcome.isTimeout)
+    throw new Error("终局原因应当是超时");
+  if (Game.session.winner !== CoreNS.BLACK) throw new Error("白超时，黑应获胜");
+  const trec = Game.buildRecord();
+  if (trec.to !== 1) throw new Error("超时记录应带 to:1");
+  if (trec.timed !== 1) throw new Error("限时局记录应当 timed:1");
+
+  Game.setSetupTiming(false);
+  Game.newGame(15, 1);
+  Game.session.place(0, 0, 0);
+  const urec = Game.buildRecord();
+  if (urec.timed !== 0 || urec.dur !== 0)
+    throw new Error("不计时的记录不该写用时：" + JSON.stringify({ timed: urec.timed, dur: urec.dur }));
+  Game.setSetupTiming(true);
+  Game.setSetupLimit(false);
   Game.newGame(15, 1);
 });
 
@@ -990,6 +1045,46 @@ step("每步限时：0 或 10–600，控件状态同步", () => {
   Game.syncMoveLimitControls();
   if (!Game.el.onlineLimitOff.classList.contains("sel")) throw new Error("不限时应选中");
   if (!Game.el.onlineLimitSec.disabled) throw new Error("不限时时输入框应禁用");
+});
+
+step("联机开局确认：发送失败不关弹窗，成功才改本地状态", () => {
+  // 公开版（build-public 剥掉 ONLINE）没有这些；联机版才有。
+  if (!NetNS || !Game.el.onlineStart) return;
+  const saved = {
+    online: NetNS.online, started: NetNS.started, awaitingPeer: NetNS.awaitingPeer,
+    myReady: NetNS.myReady, ready: NetNS.ready, declineStart: NetNS.declineStart,
+  };
+  try {
+    NetNS.online = true; NetNS.started = false; NetNS.awaitingPeer = false;
+    Game.el.onlineStart.classList.remove("off");
+
+    // busy 时 send 返回 ok:false：不能把弹窗关掉，否则这一下「否」被吞了。
+    NetNS.declineStart = () => ({ ok: false, reason: "上一步还没发完" });
+    Game.answerOnlineStart(false);
+    if (Game.el.onlineStart.classList.contains("off"))
+      throw new Error("decline 发送失败时不该关闭弹窗");
+
+    let declined = 0;
+    NetNS.declineStart = () => { declined++; return { ok: true }; };
+    Game.answerOnlineStart(false);
+    if (!declined || !Game.el.onlineStart.classList.contains("off"))
+      throw new Error("decline 发送成功后应关闭弹窗");
+
+    NetNS.myReady = false;
+    NetNS.ready = () => ({ ok: false, reason: "上一步还没发完" });
+    Game.answerOnlineStart(true);
+    if (NetNS.myReady) throw new Error("ready 发送失败时不该把自己标成已确认");
+
+    NetNS.ready = () => ({ ok: true });
+    Game.answerOnlineStart(true);
+    if (!NetNS.myReady) throw new Error("ready 发送成功后应标为已确认");
+  } finally {
+    NetNS.online = saved.online; NetNS.started = saved.started;
+    NetNS.awaitingPeer = saved.awaitingPeer; NetNS.myReady = saved.myReady;
+    NetNS.ready = saved.ready; NetNS.declineStart = saved.declineStart;
+    Game.el.onlineStart.classList.add("off");
+    Game.syncOnlineStart();
+  }
 });
 
 step("拓扑影子：内部子没有像，面上 1 个、棱上 3 个、角上 7 个", () => {
