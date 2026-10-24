@@ -286,9 +286,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.10.24
 
-- ✨ **v3.2.0** Game-screen update: flat-shaded stones (a white stone no longer looks black at any angle); the bottom row is exactly five keys (Undo / Restart / Swap first / Settings / Exit), and the 4D move-mode key moves into the rotation panel; Settings opens a board-appearance dialog (6 preset swatches + custom picker + 1%-step grid-opacity slider, affects only the in-game 3D grid, remembered across sessions); Exit asks for confirmation and clears the current game.
-- ✨ **v3.2.0** Clocks: a permanent clock at the top-left of the 3D board (black/white totals / current move / overall, to the millisecond); records store every move's time, both sides' totals and the overall duration, and undo rolls the timing back with the move. The setup screen also gains a small **Clock** button on the rules line that opens a cascading popover (clock on/off → untimed/limited → 10–600 s per move); a local clock starts only **after the first stone**, with the clock off there is no HUD and records store no times, and a limited game is lost on timeout.
-- 🔧 **v3.2.0** Fixed the setup-screen demo board moving after panning the in-game 3D board: the preview now zeroes `pan3d` while drawing and restores it afterwards, so the game's pan is preserved.
+- ✨ **v3.2.0** Game-screen and clock update: flat-shaded stones, five bottom keys with board-appearance settings, millisecond clocks (including the local clock option); fixed the preview pan.
 
 ### 2026.10.22
 
