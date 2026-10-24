@@ -1455,7 +1455,19 @@ try {
   // 而那几个像素会混进"这张图到底变没变"的判断里。见「截图对拍先钉住会动的东西」。
   await ev(`(() => {
     const l = GameRecords.load();
-    if (l[0]) { l[0].t = new Date(2026, 9, 14, 21, 3).getTime(); GameRecords.save(l); }
+    if (l[0]) {
+      const r = l[0];
+      r.t = new Date(2026, 9, 14, 21, 3).getTime();
+      // 【ms 计时也是会动的东西】摘要下面那行"总用时 / 黑 / 白"和展开后的每手用时
+      // 都来自真实墙钟；不钉住的话这张基线图每次跑都差几十像素（和上面 t 同一个坑）。
+      // 固定成每手 1s；el 也按 1s 递增，展开棋谱时同样是确定值。
+      // 总时长 = 各手之和，摘要那行才不会出现"总 20s、双方加起来 9s"的怪数。
+      let sum = 0;
+      if (Array.isArray(r.mv)) r.mv.forEach((a, i) => { a[6] = 1000 * (i + 1); a[7] = 1000; sum += 1000; });
+      if (Array.isArray(r.rt)) r.rt.forEach((a, i) => { a[5] = 1000 * (i + 1); a[6] = 1000; sum += 1000; });
+      r.dur = sum;
+      GameRecords.save(l);
+    }
     // 上一节导出图片会留一句「图片已生成」的 toast；别让它进基线图。
     Game.el.toast.classList.remove("on"); Game.toastTimer = 0;
     Game.openHistory();
@@ -1739,6 +1751,30 @@ try {
         Math.abs(shiftPan.yaw - cam0.yaw) < 1e-6,
     "真 Shift + 左键拖 48×24 → 同样是平移（触控板上按不出右键拖动时的退路）",
     JSON.stringify(shiftPan));
+
+  // ---- 7d-2b. 对局平移不能漏进起始界面的演示盘 ----
+  //
+  // 用户报的现象：在对局里拖过立体棋盘，回起始界面后左边那颗演示盘的位置也跟着变了。
+  // 根因是演示盘和对局共用 OrbitCamera，而 drawPreview 只借还了相机字段，漏了
+  // Game.pan3d（它不挂在 camera 上）。这里直接量"画演示盘时传给 camera.view 的 pan"。
+  const previewPan = JSON.parse(await ev(`(() => {
+    Game.openSetup();
+    Game.pan3d = [120, 60];
+    let seen = null;
+    const c = Game.camera, orig = c.view;
+    c.view = function (pan, h) { seen = pan ? pan.slice() : pan; return orig.call(this, pan, h); };
+    Game.drawPreview(0);
+    c.view = orig;
+    const after = Game.pan3d.slice();
+    Game.closeSetup();
+    Game.pan3d = [0, 0];
+    return JSON.stringify({ seen: seen, after: after });
+  })()`));
+  check(previewPan.seen && previewPan.seen[0] === 0 && previewPan.seen[1] === 0,
+    "起始界面的演示盘不吃对局的平移（拖动对局棋盘后再进起始界面，演示盘位置不变）",
+    JSON.stringify(previewPan));
+  check(previewPan.after[0] === 120 && previewPan.after[1] === 60,
+    "画演示盘不能改掉对局的平移量（回到对局还要在原位）", JSON.stringify(previewPan));
 
   // 滚轮 / 触控板捏合：往下滚与双指合拢都是缩小
   //

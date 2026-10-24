@@ -12146,11 +12146,18 @@ const Game = {
 
     const cam = this.camera;
     const keep = [cam.yaw, cam.pitch, cam.distance, cam.minDistance, cam.maxDistance];
+    // 【平移也要一起借还】演示盘和对局共用同一个 camera，而 `pan3d` 不挂在
+    // camera 上、挂在 Game 上 —— 只存相机字段的话，玩家在对局里右键拖过棋盘，
+    // 回起始界面时演示盘会跟着平移（用户报的"拖动对局棋盘后，初始界面的棋盘
+    // 位置也变了"）。这里把 pan3d 临时置零，画完原样还回去；对局的平移一点不丢。
+    const keepPan = this.pan3d;
+    this.pan3d = [0, 0];
     const r = this.el.view.getBoundingClientRect();
     cam.yaw = this.previewYaw;
     cam.pitch = PREVIEW_PITCH;
     cam.frameBoard(r.width / Math.max(1, r.height), true);
     this.draw3D();
+    this.pan3d = keepPan;
     cam.yaw = keep[0]; cam.pitch = keep[1]; cam.distance = keep[2];
     cam.minDistance = keep[3]; cam.maxDistance = keep[4];
   },

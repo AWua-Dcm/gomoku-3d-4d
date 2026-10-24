@@ -536,7 +536,7 @@ node Web_Gomoku3D/tests/rotation.test.mjs  # 19449 项断言（四维转动一�
 node Web_Gomoku3D/tests/dims.test.mjs      #   98 项断言（长方体 + 尺寸约束）
 node Web_Gomoku3D/tests/ai.test.mjs        #  230 项断言（电脑对手：硬规则 + 五档强弱 + 自对局不卡死）
 node Web_Gomoku3D/tests/dom-smoke.test.mjs #  147 项断言（含六语言文案齐全性、对局记录）
-node _verify/browser-check.mjs             #  464 项断言（真实浏览器：GLSL 编译 + 布局几何 + 六语言 + 截图 + 棋谱/海报/长图）
+node _verify/browser-check.mjs             #  466 项断言（真实浏览器：GLSL 编译 + 布局几何 + 六语言 + 截图 + 棋谱/海报/长图）
 bash _verify/run-all.sh                    # 以上全部 + 向量冻结锁（C# 侧已删除，不再有 C# 检查）
 ```
 
