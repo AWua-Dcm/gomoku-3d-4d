@@ -81,15 +81,16 @@ const coreSource = fullScript.slice(bi + BEGIN.length, ei);
 let Core;
 try {
   Core = new Function(coreSource + `
-    return { Board3D, RuleSet, RuleEngine, GameSession, DIRS13, MoveStatus, RestrictionTarget,
-             EMPTY, BLACK, WHITE, opponentOf, cnOf };`)();
+    return { Board3D, RuleSet, RuleEngine, GameSession, DIRS13, MoveStatus, MoveMode,
+             RestrictionTarget, EMPTY, BLACK, WHITE, opponentOf, cnOf };`)();
   passed++;
 } catch (e) {
   console.error("内核求值失败：" + e.message + "\n" + (e.stack || ""));
   process.exit(2);
 }
 
-const { Board3D, RuleSet, RuleEngine, GameSession, DIRS13, MoveStatus, RestrictionTarget, EMPTY, BLACK, WHITE } = Core;
+const { Board3D, RuleSet, RuleEngine, GameSession, DIRS13, MoveStatus, MoveMode,
+        RestrictionTarget, EMPTY, BLACK, WHITE } = Core;
 
 console.log("内核：方向数 " + DIRS13.length + "，状态枚举 " + Object.keys(MoveStatus).length + " 个");
 
@@ -392,6 +393,49 @@ function makeSix(player) {
     }
   }
   console.log("随机对局交叉验证：" + checked + " 手");
+}
+
+// ---------------------------------------------------------------------------
+// 5. 晨昏：相位时钟（「催」越过翻转点时，多出来的那一格属于新相位）
+//
+// 【为什么单钉】2026-10-25 审计 BUG-01：翻转时原来把 elapsedInPhase 直接清零，
+// 于是"本相位只剩 1 格时催一手"的第二格被丢掉 —— 下一次翻转晚 1 手，完整周期
+// 变成 2P + 1 手。规则正文说的是「催：时间走两格」「完整周期总长恒为 2 × 周期」。
+// ---------------------------------------------------------------------------
+{
+  // 5.1 翻转那一刻：溢出量记进新相位，不是清零
+  {
+    const r = new RuleSet(); r.phasePeriod = 10;
+    const s = GameSession.create(15, BLACK, r);
+    for (let i = 0; i < 9; i++) s.place(i, 0, 0);          // 9 格正常，本相位只剩 1 格
+    eq(s.elapsedInPhase, 9, "5.1 前置：9 手正常之后走了 9 格");
+    eq(s.place(9, 0, 0, "zh", MoveMode.Fast).status, MoveStatus.Placed, "5.1 第 10 手用「催」");
+    eq(s.phase, 1, "5.1 「催」把相位推到永夜");
+    eq(s.elapsedInPhase, 1, "5.1 越过旧目标的那 1 格记进新相位（原来被清零）");
+    eq(s.phaseTarget, 11, "5.1 新相位长度 = P − 债，债 = −1 时为 11");
+    eq(s.phaseDebt, 0, "5.1 债已结算清零");
+    eq(s.handsUntilFlip, 10, "5.1 倒计时是新相位还剩 10 格，而不是 11 格");
+
+    // 5.2 完整周期守恒：第一个相位用了 10 手，第二个相位也只能再用 10 手
+    for (let i = 0; i < 9; i++) s.place(i, 5, 0);          // 1 → 10 格，还没到 11
+    eq(s.phase, 1, "5.2 再走 9 格还没翻（新相位一共 11 格）");
+    s.place(9, 5, 0);                                      // 第 10 格 → 翻转
+    eq(s.phase, 0, "5.2 新相位第 10 手翻转 —— 完整周期仍是 20 = 2P 手");
+    eq(s.elapsedInPhase, 0, "5.2 普通落子恰好走满，没有溢出");
+  }
+
+  // 5.3 悔棋要能退回翻转前那一刻的时钟快照
+  {
+    const r = new RuleSet(); r.phasePeriod = 10;
+    const s = GameSession.create(15, BLACK, r);
+    for (let i = 0; i < 9; i++) s.place(i, 0, 0);
+    s.place(9, 0, 0, "zh", MoveMode.Fast);
+    check(s.undo(), "5.3 悔掉「催」那一手");
+    eq(s.phase, 0, "5.3 相位回到黎明");
+    eq(s.elapsedInPhase, 9, "5.3 已走格数回到 9");
+    eq(s.phaseTarget, 10, "5.3 相位长度回到 10");
+    eq(s.phaseDebt, 0, "5.3 债回到 0");
+  }
 }
 
 // ---------------------------------------------------------------------------

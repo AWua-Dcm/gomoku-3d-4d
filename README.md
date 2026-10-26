@@ -7,7 +7,7 @@
 
 [![在线试玩](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![形态](https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E5%8D%95%E6%96%87%E4%BB%B6_%C2%B7_%E9%9B%B6%E4%BE%9D%E8%B5%96-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-32137_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![断言](https://img.shields.io/badge/%E6%96%AD%E8%A8%80-32152_%E9%A1%B9%E5%85%A8%E7%BB%BF-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![许可](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 在线试玩跑的就是仓库里这份 `index.html` 原件，托管在 GitHub Pages —— 没有构建步骤，
@@ -86,7 +86,7 @@ bash _verify/run-all.sh
 八步，期望结果：
 
 ```
-11733 + 19449 + 98 + 230 + 150 + 477 = 32137 项断言全绿
+11748 + 19449 + 98 + 230 + 150 + 477 = 32152 项断言全绿
 ```
 
 第 8 步（真实无头浏览器检查）是可选的：本机没装 Chrome/Edge 会自动跳过，不算失败。
@@ -96,7 +96,7 @@ bash _verify/run-all.sh
 
 | 命令 | 项数 | 覆盖 |
 |---|---|---|
-| `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 三维规则基线（回放冻结向量） |
+| `node Web_Gomoku3D/tests/rules.test.mjs` | 11748 | 三维规则基线（回放冻结向量）+ 晨昏相位时钟 |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19449 | 四维转动一致性 |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | 长方体棋盘 + 尺寸约束 |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | 电脑对手（两条硬规则、五档强弱关系、自对局逐手喂给引擎、四维转动只在必要时发生、计算量上界） |
@@ -246,6 +246,10 @@ bash _verify/run-all.sh
 ## 📝 更新日志
 
 > 最新的在最上面。每条一行，动词开头（新增 / 修复 / 调整 / 完成）；实现细节写在 commit 里，不写在这里。
+
+### 2026.10.26
+
+- 🔧 **v3.2.1** 修复四维晨昏「催」在相位只剩 1 格时丢掉溢出时间：翻转后完整周期不再多出 1 手（周期恒为 2 × 周期）；补 15 条相位时钟回归。
 
 ### 2026.10.24
 

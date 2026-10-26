@@ -5902,9 +5902,16 @@ class GameSession {
     else if (mode === MoveMode.Fast) { this.elapsedInPhase += 2; this.phaseDebt--; }
     else { this.elapsedInPhase += 1; }
     if (this.elapsedInPhase < this.phaseTarget) return;
-    this.elapsedInPhase = 0;
-    this.phaseTarget = P - this.phaseDebt;
+    // 【越过旧目标的那几格属于新相位，不能丢】「催」是"时间走两格"：本相位只剩 1 格时，
+    // 第一格结束当前相位，第二格必须记进新相位。原来这里直接清零，等于把那一格扔掉 ——
+    // 下一次翻转晚 1 手，一个完整周期变成 2P + 1 手，和 RULES_SPEC「完整周期总长恒为
+    // 2 × 周期」对不上（2026-10-25 审计 BUG-01：P=10、9 手正常 + 第 10 手催）。
+    // 溢出最多 1 格（只有「催」一次加 2 格），而新相位至少 MIN_PHASE_HANDS 格 ——
+    // 催要求债 > −maxDebt，翻转后的目标 ≥ 2，所以不会一次翻两个相位，不需要循环。
+    const overflow = this.elapsedInPhase - this.phaseTarget;
+    this.phaseTarget = P - this.phaseDebt;   // 债结算给新相位：借来的扣掉、还多的补上
     this.phaseDebt = 0;
+    this.elapsedInPhase = overflow;
     this.phase = 1 - this.phase;
 
     const runs = RuleEngine.fullScan(this.board, this.rules.winLength);

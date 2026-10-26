@@ -292,7 +292,7 @@ BIAS>3 时 `salts[k]` 是 `undefined`，`Math.imul(x, undefined)` 得 0，
 | | 立方路径 | 长方体路径 |
 |---|---|---|
 | 实现 | 与 C# `Board3D` 逐条对应 | 网页版独有 |
-| 证据 | `vectors.json`（C# 导出）+ `rules.test.mjs` 11733 项 | `dims.test.mjs` 98 项，仅此一份 |
+| 证据 | `vectors.json`（C# 导出）+ `rules.test.mjs` 11748 项 | `dims.test.mjs` 98 项，仅此一份 |
 | `GameSession.create(n, …)` | 一个数字，与原实现逐字节一致 | 传 `[x,y,z]` |
 
 立方路径刻意走「一个数字」这一支：向量回放全部用数字构造，所以那条路一个字节都没变，
@@ -531,7 +531,7 @@ BEGIN 和 END **中间**，生成一次就会把英文块整段删掉 —— 而
 ### ✅ 已由真实执行验证
 
 ```bash
-node Web_Gomoku3D/tests/rules.test.mjs     # 11733 项断言（三维模式基线）
+node Web_Gomoku3D/tests/rules.test.mjs     # 11748 项断言（三维模式基线）
 node Web_Gomoku3D/tests/rotation.test.mjs  # 19449 项断言（四维转动一致性）
 node Web_Gomoku3D/tests/dims.test.mjs      #   98 项断言（长方体 + 尺寸约束）
 node Web_Gomoku3D/tests/ai.test.mjs        #  230 项断言（电脑对手：硬规则 + 五档强弱 + 自对局不卡死）

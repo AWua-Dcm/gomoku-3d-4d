@@ -7,7 +7,7 @@
 
 [![Play in browser](https://img.shields.io/badge/Play_in_browser-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-32137_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-32152_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
 The web demo serves the very same `index.html` that is in this repository, hosted on
@@ -89,7 +89,7 @@ bash _verify/run-all.sh
 **All you need is node** — no Unity, no .NET, no npm packages. Eight steps; expected result:
 
 ```
-11733 + 19449 + 98 + 230 + 150 + 477 = 32137 assertions, all green
+11748 + 19449 + 98 + 230 + 150 + 477 = 32152 assertions, all green
 ```
 
 Step 8 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
@@ -99,7 +99,7 @@ To run one piece on its own:
 
 | Command | Count | What it covers |
 |---|---|---|
-| `node Web_Gomoku3D/tests/rules.test.mjs` | 11733 | 3D rule baseline (replays frozen vectors) |
+| `node Web_Gomoku3D/tests/rules.test.mjs` | 11748 | 3D rule baseline (replays frozen vectors) + dawn/dusk phase clock |
 | `node Web_Gomoku3D/tests/rotation.test.mjs` | 19449 | 4D rotation consistency |
 | `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
 | `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
@@ -283,6 +283,10 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 ## 📝 Changelog
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
+
+### 2026.10.26
+
+- 🔧 **v3.2.1** Fixed 4D day/night "Haste" losing its overflow time when only one cell was left in the phase: a full cycle is no longer one move longer (always 2 × period); 15 phase-clock regression assertions added.
 
 ### 2026.10.24
 
