@@ -2,8 +2,8 @@
 
 [中文](README.md) | **English**
 
-**2D, 3D & 4D Gomoku** — Gomokube, one HTML file, double-click to play, zero dependencies.
-*二维、三维与四维五子棋 —— 五子魔方，单文件网页版，双击即玩，零依赖。*
+**Multi-dimensional Gomoku** — Gomokube, one HTML file, double-click to play, zero dependencies.
+*多维度五子棋 —— 五子魔方，单文件网页版，双击即玩，零依赖。*
 
 [![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
@@ -16,38 +16,16 @@ online demo (GitHub Pages) publishes the very same `Web_Gomoku3D/index.html` —
 step, so the deployed file and the one you double-click are identical; the root `index.html` is
 just a redirect. The full offline check is `node _verify/check-2d.mjs`.
 
-![2D game](_verify/shots/2d-desktop.png)
-
-## 🧩 2D gameplay (new in v4.0.0)
-
-Pick **2D** on the setup screen to play on a flat board. Besides classic Gomoku, three
-mechanics can be enabled independently or in any combination — **eight modes in all**:
-
-| Mechanic | What it does |
-|---|---|
-| **Black-hole singularity (H)** | Players take turns placing holes before play; once enough moves have passed, swap two rows or two columns. Holes block placement; a swap swallows only the top stone and keeps the foundation |
-| **Floating connect (F)** | The first 8 stones build foundations; from the 9th move you may play on top. A foundation belongs to whoever placed it; an opponent's top stone starts a 10–30 move repulsion countdown, and when it reaches zero the foundation is destroyed and the top stone falls to become a new foundation |
-| **Fleeting bloom (A)** | A new stone does not age on its own move; every later action advances its life. Grey stones still occupy the point but no longer count for a line. Aging is 0.25 per move in the inner black-hole ring, 0.5 in the outer ring, and 1 elsewhere |
-
-- Boards are rectangles from 10–30 per side; classic defaults to 15×15. The first player must still make **exactly five in a row**; six or more is a loss.
-- With black holes and aging both on (H+A, H+F+A), stones near a black hole age more slowly.
-- The **2D settings** panel and **Tutorial** appear only when at least one extra mechanic is on; seven tutorial levels cover the three mechanics and four combinations.
-- Landscape shows the two boards side by side; portrait stacks them. Scroll or pinch to zoom, drag to pan, double-tap to reset.
-- 2D records store the opening layout, hole placements, and move/swap actions; replay them, or export a long image or victory poster. Old 3D/4D records remain readable.
-
-![2D settings](_verify/shots/2d-settings-combo.png)
-
-Authoritative rules and mechanic details: [section 13 of the full rules](Web_Gomoku3D/RULES_SPEC.en.md).
-This release's summary: [v4.0.0 release notes](RELEASE_NOTES_v4.0.0.md) (Chinese).
+![Setup screen](_verify/shots/1-起始界面.png)
 
 ---
 
 ## 🎯 What this is
 
-Gomoku (five-in-a-row) on an **N×M flat board** or on an **N×N×N board**. The big difference
-from the flat game is that there are far more ways to line stones up — **13 directions** in all
-(3 axes + 6 face diagonals + 4 body diagonals). Blocking the front is not enough: a line can cut
-diagonally, run straight up through the layers, or thread several layers at once.
+Gomoku (five-in-a-row) on an **N×M flat board** or on an **N×N×N board**. The 3D/4D board has
+**13 directions** (3 axes + 6 face diagonals + 4 body diagonals) — far more than the four on a
+flat board. Blocking the front is not enough: a line can cut diagonally, run straight up through
+the layers, or thread several layers at once.
 
 A few things you don't see every day:
 
@@ -67,41 +45,48 @@ A few things you don't see every day:
 No server, no network, nothing to install.
 To confirm nothing is broken: press `F12` → Console and look for red text.
 
-### 🧩 2D
+### 2D
 
-- Pick **2D** on the setup screen, choose the board size, then **Start game**; classic defaults to 15×15.
-- The three mechanic checkboxes are stacked and can be combined freely. Ticking one only toggles the mechanic; the centred **2D settings** button opens the parameter panel.
-- Landscape: two boards side by side; portrait: stacked. Scroll or pinch to zoom, drag to pan, double-tap to reset.
-- The bottom bar keeps Undo, Restart, Swap first player, Settings and Exit; clocks and per-move limits use the same entry points.
-- Keyboard: arrow keys move the cursor, `Enter` places a stone, `0` resets the zoom; keys can be changed under **Custom keybindings**.
-- After the game, open **History**, expand the move list and press **Replay** to step through it.
+Pick **2D** on the setup screen, choose the board size, then **Start game**; classic defaults to 15×15.
 
-### ⌨️ Controls (3D / 4D)
+- **Board**: a flat rectangle from 10–30 per side; stones sit on intersections; the first player must make **exactly five in a row** (six or more loses).
+- **Placing**: click an intersection; the arrow keys move the cursor, `Enter` places a stone, `0` restores the zoom.
+- **Modes**: the three extra mechanics are stacked checkboxes and can be combined freely; ticking one only toggles it — the centred **2D settings** button opens the parameter panel.
+- **Tutorial**: with any extra mechanic on, the tutorial offers seven levels covering the three mechanics and four combinations.
+- **View**: two boards side by side in landscape, stacked in portrait; scroll or pinch to zoom, drag to pan, double-tap to reset.
+- **Records**: after the game, open **History**, expand the move list and press **Replay**; export a long image or victory poster.
 
-| Action | What it does |
-|---|---|
-| Drag with the left button | Rotate the board. Left/right turns forever; dragging up/down **all the way gives you a true top-down or bottom-up view** (89.5°). **The board follows your finger**: drag down to look at the top face |
-| Drag with the **right** button (or `Shift` + left) | Pan the board: the picture follows your pointer. Same clamping as the touch two-finger pan (at most half a viewport out, at least half the board visible) |
-| Scroll wheel / trackpad two-finger | Zoom. **Scroll down = zoom out**, up = zoom in; on a trackpad, fingers apart = zoom in, together = zoom out (both use the same sign) |
-| Click | Place a stone on the current layer |
-| Hover | Red lines mark the x / y / z lines through the cell under the cursor |
-| Right-hand panel | Step through the board layer by layer; click an empty cell to play there |
-| **Grid lines** button, top-left | Hide the 3D lattice so only the stones remain. The blue current-layer frame, the red hover lines and the gold winning line all stay — hide those and you cannot aim |
-| End-of-game banner | Can be **dragged** (it cannot leave the left-hand view), and closed with **Close Esc** or the Esc key. Closing it does not let you play on: to continue the same game you must press **Undo** |
-| `Z` / `R` / `G` | Undo / Restart / Toggle the view mode (ghost layers ↔ slice) |
-| `H` | Hide / show the grid lines (same as the top-left button) |
-| `Q` `E` or `[` `]` | Change the current layer |
-| `T` / `Y` | (4D) Rotate a layer / undo that rotation |
-| Touch: pinch in / out | Zoom the board. **Works on both the 3D board and the single-layer board** (on a phone a cell of the layer board is only about 10px across, so zooming is the only way to aim) |
-| Touch: two-finger drag | Pan the board — it follows your fingers |
-| Language button, top-right | Opens a list of the six languages (中文 / English / 日本語 / 한국어 / Русский / Français); the current one is highlighted |
-| **History** button, top-right of the setup screen | The last 50 finished games: summary + full move list (coordinates / colour / time, rotations in 4D). **Hidden during play** — go back to the setup screen to open it; export a long image or a victory poster; **Clear** sits inside |
-| Touch: double-tap a board | Reset — the 3D board returns to its start framing, the layer board to 1×, pan cleared. **The angle you rotated to is left alone** |
+### 3D · Classic
 
-> While zoomed in, a single tap places its stone after a ~300ms double-tap window.
-> **At 1× with no panning there is no such delay** — placing is as immediate as it always was.
+Pick **3D · Classic** on the setup screen and set each axis; each accepts `8 – 30`, equal or different.
 
-The **Full rules** button in the top-right corner opens the complete rule text.
+- **Board**: a 3D board with 13 directions (3 axes + 6 face diagonals + 4 body diagonals); tick **Rubik rotation** / **Space wrapping** to add mechanics.
+- **Placing**: click to place on the current layer; the right-hand panel steps through layers and places on an empty cell.
+- **View**: left-drag to rotate (left/right turns forever; all the way up/down gives a true top/bottom view at 89.5°, and the board follows your finger), right-drag or `Shift` + left-drag to pan, scroll / trackpad pinch to zoom (scroll down = zoom out, up = zoom in).
+- **Aids**: hovering draws the x / y / z lines in red; the top-left **Grid lines** button hides the static lattice while keeping the current-layer frame, hover lines and gold winning line.
+- **Keyboard**: `Z` / `R` / `G` undo / restart / toggle the view mode, `H` hides the grid, `Q` `E` or `[` `]` change the layer.
+- **Touch**: pinch to zoom, two-finger drag to pan, double-tap to reset.
+- **End of game**: the banner can be dragged (it cannot leave the left-hand view) and closed with **Close Esc** or Esc; after closing you must press **Undo** to continue the same game.
+
+### 4D · Myriad
+
+Pick **4D · Myriad**; the board must be a cube, and Rubik rotation, space wrapping and day/night are all on.
+
+- **Board**: a cubic board using the same 13 directions and first-player rule as 3D.
+- **Rotating**: press **Rotate** to preview, then confirm; no placing during the preview. `T` rotates, `Y` restores this rotation.
+- **Placing**: the same as 3D — click the current layer, or use the right-hand panel to step through layers and click an empty cell.
+- **View**: the same as 3D (left-drag rotate, right-drag pan, scroll to zoom).
+- **Tutorial**: the setup screen offers three levels covering rotation, wrapping and day/night.
+- **Keyboard**: `T` / `Y` rotate / restore; the rest match 3D.
+- **Records**: the move list records every rotation, and replay restores them step by step.
+
+### Common controls
+
+- **Language**: the top-right language button opens the six languages (中文 / English / 日本語 / 한국어 / Русский / Français); Chinese is the default.
+- **Rules**: **Full rules** in the top-right opens the complete rule text in the current language.
+- **Records**: **History** on the setup screen keeps the last 50 games; it is hidden during play.
+- **Shortcuts**: the bottom bar keeps Undo / Restart / Swap first player / Settings / Exit; keyboard shortcuts can be changed under **Custom keybindings**.
+- **Touch**: while zoomed in, a single tap places after a ~300ms double-tap window; at 1× with no panning there is no delay.
 
 ---
 
