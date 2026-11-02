@@ -1,0 +1,14 @@
+{
+  "version":1,"note":"人工构造 classic 战术；rows 每项为 [y,颜色,[x...]]。终局用 RuleEngine.judge，不与 3D/4D 题集混算。",
+  "puzzles":[
+    {"id":"black-win-now","side":1,"type":"win","rows":[[7,1,[5,6,7,8]],[7,2,[4]]]},
+    {"id":"white-win-now","side":2,"type":"win","rows":[[7,2,[5,6,7,8]],[7,1,[4]]]},
+    {"id":"black-vcf-open-three","side":1,"type":"vcf","rows":[[7,1,[5,6,7]]]},
+    {"id":"white-vcf-open-three","side":2,"type":"vcf","rows":[[7,2,[5,6,7]]]},
+    {"id":"black-vcf-chain","side":1,"type":"vcf","rows":[[5,1,[5,6,7]],[5,2,[4]],[7,1,[5,6,7]],[7,2,[4]],[9,1,[5,6,7]]]},
+    {"id":"defend-white-vcf","side":1,"type":"defend","rows":[[7,2,[5,6,7]]]},
+    {"id":"defend-black-vcf","side":2,"type":"defend","rows":[[7,1,[5,6,7]]]},
+    {"id":"restricted-overline","side":1,"type":"avoid-overline","forbidden":[7,7],"rows":[[7,1,[3,4,5,6,8]]]},
+    {"id":"unrestricted-overline-win","side":2,"type":"win","rows":[[7,2,[3,4,5,6,8]]]}
+  ]
+}

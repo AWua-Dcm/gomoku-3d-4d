@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "createdAt": "2026-10-31",
+  "purpose": "P0：冻结 A/B 口径。所有 P1/P2 实验都从这里取基线，不再指向会变的 index.html。",
+  "baseline": {
+    "file": "_verify/fixtures/ultra-baseline-6203b1a0.html",
+    "sha256": "6203b1a07953f6766067d4d30913092ee2e16c614d892e2597804e1e053e9b8e",
+    "note": "冻结旧 ultra；只读使用。与 _verify/results/selfplay 的 A/C/B 数据同源。"
+  },
+  "engine": "Web_Gomoku3D/index.html",
+  "modes": {
+    "2d": {
+      "variants": ["classic", "h", "ha", "a", "f", "hf", "fa", "hfa"],
+      "sizeRanges": {
+        "classic": [12, 18], "h": [12, 18], "ha": [12, 18], "a": [12, 18],
+        "f": [14, 18], "hf": [14, 18], "fa": [14, 18], "hfa": [15, 18]
+      },
+      "sizeNote": "宽高独立随机；同一配对两局共享尺寸。",
+      "variantParams": {
+        "holes": { "randomCount": "max(3,min(7,floor(w*h/15)))", "perPlayer": 0, "cooldown": 5, "seed": "pair seed" },
+        "float": { "life": 20, "opening": 8 },
+        "age": { "turns": 30, "gray": 3, "aura": "holes && age" }
+      },
+      "openingRange": [2, 6],
+      "openingNote": "中心盒代码实际是 half−3..half+2（6×6；历史文档旧称 7×7），与 selfplay 完全一致；最多 20 次尝试；classic/H/HA/A 拒绝任何一方三连；浮空开局只铺地基直接通过。",
+      "maxPlies": 300
+    },
+    "3d": {
+      "size": 15,
+      "note": "保持旧口径（固定 15³、0–6 手、无平衡过滤），不与 4D 默认混用。",
+      "maxPlies": 300
+    },
+    "4d": {
+      "default": {
+        "sizeRange": [8, 9],
+        "openingRange": [2, 6],
+        "openingBalanced": true,
+        "allowRotation": true,
+        "wrapEdges": true,
+        "phasePeriod": 12,
+        "rotationCooldownPlacements": 5
+      },
+      "rotationOnly": {
+        "size": 8,
+        "opening": "0–6（seed % 7）",
+        "allowRotation": true,
+        "wrapEdges": false,
+        "phasePeriod": 0,
+        "rotationCooldownPlacements": 3
+      },
+      "maxPlies": 400
+    }
+  },
+  "measurement": {
+    "tool": "_verify/ai-ab.mjs",
+    "pairing": "同一 pairId 两局共享 seed/尺寸/开局，只对调颜色；两个半场把第一方优势各照顾一次。",
+    "control": "new 与 old 给同一文件、档位相同，得分率必须恰好 50.0%；否则本批数字全部作废。",
+    "output": "_verify/results/ai-ab/<tag>.json",
+    "seedBase": 40001,
+    "targetPct": 55
+  },
+  "acceptance": {
+    "screeningGames": 2000,
+    "confirmGames": 5000,
+    "targetPct": 55,
+    "p95Ms2d": 100,
+    "gamesRule": "必须是 4 的倍数；每个半场 2 局一配对，末尾不能剩单局。",
+    "validity": {
+      "pairsComplete": "pairs * 2 === total",
+      "invalid": 0,
+      "none": 0,
+      "controlExactPct": 50.0,
+      "failedBatch": "写 <tag>.invalid.json，不得当正常测量引用"
+    },
+    "requiredReport": [
+      "原始黑胜率 + 95% CI",
+      "同色胜对比例",
+      "新版真实执黑/执白分项（按 aIsBlack 累计，不是半场分）",
+      "无效/拒手/none/上限数",
+      "每手 p50/p95/p99 与每局平均用时",
+      "mode 内核 sha256（不是整份 HTML）"
+    ],
+    "note": "配对得分 50% 只当测量台自检，不当平衡或棋力证据。"
+  },
+  "stopLines": {
+    "2d": "新 ultra 对旧 ultra <52%、classic 每手 p95 >100ms、出现非法/none、战术题退步 → 停，先查 VCF 完备性或特征。"
+  }
+}

@@ -1,0 +1,31 @@
+import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const dir=fs.mkdtempSync(path.join(root,'_verify/results/checkpoint-test-'));
+const json=path.join(dir,'report.json'),checkpoint=path.join(dir,'games.jsonl');
+const fixture='_verify/fixtures/p2-pre-e1-85945d897aa9.html';
+const args=['_verify/ai-ab.mjs','--mode','2d','--games','4','--new',fixture,'--old',fixture,
+  '--json',json,'--checkpoint',checkpoint];
+const run=extra=>spawnSync(process.execPath,args.concat(extra),{cwd:root,encoding:'utf8',windowsHide:true});
+let r=run([]);assert.equal(r.status,0,r.stderr);const first=JSON.parse(fs.readFileSync(json));
+assert.equal(first.results.pct,50);assert.equal(first.results.valid,true);
+assert.equal(first.results.timing.moves,first.results.timingByEngine.new.moves+first.results.timingByEngine.old.moves);
+fs.appendFileSync(checkpoint,'{"key":"interrupted');
+r=run(['--resume']);assert.equal(r.status,0,r.stderr);
+const resumed=JSON.parse(fs.readFileSync(json));assert.deepEqual(resumed.results,first.results);
+assert.equal(fs.readFileSync(checkpoint,'utf8').trim().split('\n').length,5);
+// 实际缺失一局时必须只重算缺失局，保持结果/颜色/配对/计时手数；耗时本身允许重新测得。
+const lines=fs.readFileSync(checkpoint,'utf8').trim().split('\n');
+fs.writeFileSync(checkpoint,lines.slice(0,-1).join('\n')+'\n');
+r=run(['--resume']);assert.equal(r.status,0,r.stderr);const partial=JSON.parse(fs.readFileSync(json));
+for(const key of ['newScore','total','pct','asBlack','asWhite','rawBlackWins','sameColorPairs','pairs','valid'])assert.deepEqual(partial.results[key],first.results[key],key);
+assert.equal(partial.results.timing.moves,first.results.timing.moves);
+assert.equal(fs.readFileSync(checkpoint,'utf8').trim().split('\n').length,5);
+r=run(['--resume','--seed','999']);assert.notEqual(r.status,0);assert.match(r.stderr,/哈希不同/);
+r=run([]);assert.notEqual(r.status,0);assert.match(r.stderr,/断点已存在/);
+const bad=path.join(dir,'none.html');
+fs.writeFileSync(bad,fs.readFileSync(path.join(root,fixture),'utf8').replace('function ai2ChooseMove(session,opts={}){','function ai2ChooseMove(session,opts={}){return {kind:"none"};'));
+const rejected=spawnSync(process.execPath,['_verify/ai-ab.mjs','--mode','2d','--games','4','--new',bad,'--old',fixture,'--json',path.join(dir,'bad.json')],{cwd:root,encoding:'utf8',windowsHide:true});
+assert.equal(rejected.status,1,rejected.stderr);assert.equal(fs.existsSync(path.join(dir,'bad.json')),false);
+assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'bad.invalid.json'))).results.valid,false);
+console.log('断点续跑：控制组50%、双方耗时完整、截断恢复、复跑结果一致、版本守卫均通过；'+dir);

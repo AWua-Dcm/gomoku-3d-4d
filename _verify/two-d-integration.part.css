@@ -1,0 +1,76 @@
+/* Independent 2D mode: existing 3D/4D selectors retain their geometry. */
+#dimsRow2d { grid-area:1/1; }
+#setup #coolRow, #setup #phaseRow { height:38px; }
+#setup #extraRow { margin-bottom:var(--setup-gap); }
+#mode2d { padding-left:8px; padding-right:8px; }
+@media(max-width:600px){ #setup #mode2d, #setup #mode3d, #setup #mode4d { font-size:12px; padding:7px 6px; } }
+#dimsRow2d.hide { visibility:hidden; pointer-events:none; }
+#twoDOptions { display:none; position:relative; width:262px; max-width:100%; height:114px; flex:0 0 114px; margin:0 auto var(--setup-gap); }
+.twoDOptionRow { position:relative; height:38px; }
+.twoDOptionRow > .extraBtn { width:100%; height:38px; border-radius:0; }
+.twoDOptionRow:first-child > .extraBtn { border-radius:6px 6px 0 0; }
+.twoDOptionRow:nth-child(3) > .extraBtn { border-radius:0 0 6px 6px; }
+.twoDParams { position:absolute; left:calc(100% + 12px); top:50%; transform:translateY(-50%); width:calc((58vw - 60px - 262px)/2 - 12px); color:var(--dim); font-size:12px; line-height:1.25; white-space:pre-line; overflow-wrap:anywhere; }
+.twoDParamCompact { display:none; }
+#optSpinBtn, #optWrapBtn { position:relative; }
+.threeDParams { font-weight:400; text-align:left; pointer-events:none; }
+.twoDParams[hidden] { visibility:hidden; display:block; }
+#twoDComboNote { position:absolute; top:calc(100% + 2px); left:0; right:0; font-size:11.5px; font-weight:700; line-height:1.25; color:var(--text); }
+#twoDComboNote[hidden] { display:none; }
+#twoDSettingsAccess { position:absolute; top:calc(100% + var(--setup-gap) + var(--setup-gap)); left:0; right:0; height:calc(var(--summary-h) - 38px); display:flex; align-items:center; justify-content:center; gap:12px; }
+#twoDCurrentSummary { position:absolute; right:calc(50% + 72px); color:var(--dim); font-size:13.5px; white-space:nowrap; }
+#twoDSettingsBtn { font-weight:600; min-width:6em; white-space:nowrap; }
+#twoDSettingsBtn.off { display:none; }
+#setup.twoDSetup #extraRow, #setup.twoDSetup #coolRow, #setup.twoDSetup #phaseRow { display:none !important; }
+#setup.twoDSetup #twoDOptions { display:block; }
+#setup.twoDSetup #sizeSummary { height:calc(var(--summary-h) - 38px); visibility:hidden; }
+#twoDRuleNote { display:none; position:absolute; inset:0; color:var(--dim); font-size:12.5px; line-height:1.3; text-align:center; padding-top:12px; border-top:1px solid var(--border); pointer-events:none; }
+#setup.twoDSetup #ruleNote { visibility:hidden; }
+#setup.twoDSetup #twoDRuleNote { display:block; }
+#twoDSettings, #twoDReplay { position:fixed; inset:0; background:#2f2a2370; z-index:160; display:flex; align-items:center; justify-content:center; padding:18px; }
+#twoDSettings.off, #twoDReplay.off { display:none; }
+.twoDCard { background:var(--panel); color:var(--text); border:1px solid var(--border); width:min(580px,100%); max-height:90dvh; overflow:auto; padding:22px; box-shadow:0 12px 60px #2f2a232d; }
+.twoDCard header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+.twoDCard h2 { margin:0; font-size:22px; }
+.twoDField { display:flex; align-items:center; gap:12px; justify-content:space-between; margin:12px 0; }
+.twoDField input[type=number] { width:80px; padding:6px; color:var(--text); background:var(--cell); border:1px solid var(--border); }
+.twoDField select { max-width:200px; padding:7px; background:var(--cell); color:var(--text); border:1px solid var(--border); }
+.twoDNote { font-size:13px; color:var(--dim); line-height:1.7; white-space:pre-line; }
+.twoDField[hidden], .twoDNote[hidden] { display:none; }
+#twoDSettingsError { color:var(--danger); min-height:22px; }
+#twoDBoardHost { display:none; position:absolute; inset:64px 12px 124px; z-index:1; }
+#stage.twod:not(.preview) #view { flex:1 1 100%; width:100%; }
+#stage.twod:not(.preview) #twoDBoardHost { display:block; }
+/* 终局横幅和 #twoDBoardHost 同在 #view 里；棋盘层有 z-index:1，横幅默认 auto，
+   二维下会被棋盘层盖住 —— 看得见、拖不动、关闭也点不到。抬到棋盘之上、底栏之下。 */
+#stage.twod:not(.preview) #banner { z-index: 3; }
+#stage.twod:not(.preview) #gl, #stage.twod:not(.preview) #modebar, #stage.twod:not(.preview) #hintbox { display:none; }
+#stage.twod:not(.preview) #panel { position:absolute; left:0; right:0; bottom:0; height:auto; max-height:122px; padding:8px 16px; z-index:8; border-top:1px solid var(--border); border-left:0; overflow:visible; gap:3px; }
+#stage.twod:not(.preview) #panel > :not(#statusRow):not(#info):not(#buttons):not(#emojiSlot) { display:none !important; }
+#stage.twod:not(.preview) #statusRow { min-height:20px; margin:0; justify-content:center; font-size:15px; }
+#stage.twod:not(.preview) #info { margin:0; text-align:center; font-size:12px; min-height:18px; }
+#stage.twod:not(.preview) #buttons { width:min(660px,100%); margin:0 auto; flex-wrap:nowrap; }
+#stage.twod:not(.preview) #buttons button { min-width:0; font-size:13px; padding:8px 3px; }
+#stage.twod:not(.preview) #clockHud { top:8px !important; left:12px; }
+#stage.twod:not(.preview) #tutBar { top:62px; left:18px; right:18px; max-width:none; width:auto; max-height:145px; overflow:auto; }
+#stage.twod.twoDTutorial #twoDBoardHost { top:218px; }
+#stage.twod:not(.preview) #tutNav { bottom:132px; }
+#stage.twod:not(.preview) #emojiToasts { bottom:140px; }
+#twoDReplay .twoDCard { width:min(920px,100%); }
+#twoDReplayCanvas { width:100%; height:min(64vh,580px); display:block; }
+#twoDReplayRange { flex:1; min-width:80px; }
+@media (max-width:600px) {
+  #stage.twod:not(.preview) #topRight { top:8px; }
+  #stage.twod:not(.preview) #clockHud { font-size:10px; }
+  #stage.twod:not(.preview) #panel { padding:6px 8px; }
+  #stage.twod.twoDTutorial #twoDBoardHost { top:225px; }
+  .twoDCard { padding:14px; }
+}
+@media (max-width:1100px) {
+  .twoDParams { left:10px; right:28px; top:20px; transform:none; width:auto; font-size:10px; line-height:12px; white-space:nowrap; }
+  .twoDParamFull { display:none; }
+  .twoDParamCompact { display:inline; }
+  .twoDOptionRow.hasParams .extraLabel { transform:translateY(-7px); }
+  #extraRow .extraBtn.hasParams .extraLabel { transform:translateY(-7px); }
+  #twoDCurrentSummary { right:calc(50% + 56px); font-size:11px; }
+}

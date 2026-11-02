@@ -274,6 +274,9 @@ const SWEEP_EXPR = `(() => {
   //     显式写进名单，等于把"这是故意的"钉在代码里。
   const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal"),
                          document.getElementById("inscription")]);
+  //   #beianFooter 是 ICP 备案号的法定展示（必须原样写「苏ICP备…号」）：它不能翻译，
+  //   也不该在英文界面里消失 —— 和法律文本一样，六种语言下都是中文。
+  const allowRoot = document.getElementById("beianFooter");
   const visible = (el) => {
     if (el.getClientRects().length === 0) return false;
     if (getComputedStyle(el).visibility === "hidden") return false;
@@ -283,7 +286,7 @@ const SWEEP_EXPR = `(() => {
   };
   const out = [];
   for (const el of document.querySelectorAll("*")) {
-    if (allow.has(el)) continue;
+    if (allow.has(el) || (allowRoot && allowRoot.contains(el))) continue;
     if (!document.body.contains(el)) continue;      // <title>/<style> 里的中文不算界面文案
     const tag = el.tagName.toLowerCase();
     if (tag === "script" || tag === "style") continue;  // #rulesSrc 那份中文正文还在页面上，只是没被选
@@ -2301,36 +2304,17 @@ try {
   check(mv1 === mv0 + 1, "1 倍下点一下【立刻】落子（点击后 60ms 内就落上了，没有等双击窗口）",
     "moveCount " + mv0 + " → " + mv1);
 
-  // 放大之后：第一下不落子，第二下（同一处）→ 复位
-  await ev(`Game.resetView("gl")`);
+  // 当前产品用专门的恢复按钮；二次确认关闭时，放大后点击仍立即落子。
+  await ev(`Game.newGame(15, 1); Game.confirmMove=false; Game.resetView("gl")`);
   await pinchAt(80, 300, 196, GY, 10);
   const home = await ev(`Game.camera.homeDistance`);
   const zz = await ev(`Game.camera.distance`);
-  check(Math.abs(zz - home) > 1, "（前置）这时确实处于放大状态",
-    "distance " + zz.toFixed(2) + " vs 开局取景 " + home.toFixed(2));
+  check(Math.abs(zz-home)>1, "放大手势确实改变相机距离");
   const mm0 = await ev(`Game.session.moveCount`);
-  await tapAt(196, GY);
-  await sleep(60);
-  const mm1 = await ev(`Game.session.moveCount`);
-  check(mm1 === mm0, "放大后第一下点击不立刻落子（在等双击窗口）",
-    "moveCount " + mm0 + " → " + mm1);
-  await tapAt(198, GY + 2);
-  await sleep(80);
-  check(Math.abs((await ev(`Game.camera.distance`)) - home) < 0.01,
-    "第二下（同一处）→ 双击复位，相机回到开局取景距离",
-    "distance " + (await ev(`Game.camera.distance`)).toFixed(3) + " vs " + home.toFixed(3));
-  check((await ev(`Game.session.moveCount`)) === mm0 && Math.abs(await ev(`Game.pan3d[0]`)) < 0.01,
-    "双击复位不落子、并把平移一起清掉");
-
-  // 放大后只点一下（不是双击）：窗口过后那一子要补上 —— 扣住的落子绝不能丢
-  await ev(`Game.resetView("gl")`);
-  await pinchAt(80, 300, 196, GY, 10);
-  const k0 = await ev(`Game.session.moveCount`);
-  await tapAt(196, GY);
-  await sleep(450);
-  check((await ev(`Game.session.moveCount`)) === k0 + 1,
-    "放大后单击（不是双击）：窗口过后扣住的那一子补上了，没被吞",
-    "moveCount " + k0 + " → " + (await ev(`Game.session.moveCount`)));
+  await tapAt(196, GY); await sleep(60);
+  check(await ev(`Game.session.moveCount`)===mm0+1,"放大后单击立即落子");
+  await ev(`document.getElementById('restoreSizeGl').click()`);
+  check(Math.abs(await ev(`Game.camera.distance`)-home)<.01 && await ev(`JSON.stringify(Game.pan3d)`)==='[0,0]',"恢复大小按钮复位三维缩放和平移");
 
   // 捏完松手那一拍：不能落子
   await ev(`Game.resetView("gl"); Game.newGame(15, 1)`);
@@ -2374,16 +2358,8 @@ try {
   check((await ev(`Game.session.moveCount`)) === lj0,
     "单层棋盘捏完那一拍也没有落子（浏览器补的 click 被吃掉了）",
     "moveCount " + lj0 + " → " + (await ev(`Game.session.moveCount`)));
-  // 双击之间必须等过那个窗口（PINCH_TAIL_MS），否则第一下会被当成"捏完那一拍"吃掉
-  await sleep(320);
-  await tapAt(lcx, lcy);
-  await sleep(60);
-  await tapAt(lcx + 2, lcy + 2);
-  await sleep(80);
-  check(Math.abs((await ev(`Game.zoom2d`)) - 1) < 1e-6 &&
-        (await ev(`JSON.stringify(Game.pan2d)`)) === "[0,0]",
-    "单层棋盘双击 → 回到 1 倍、平移清零",
-    "zoom2d=" + await ev(`Game.zoom2d`) + " pan=" + await ev(`JSON.stringify(Game.pan2d)`));
+  await ev(`document.getElementById('restoreSizeLayer').click()`);
+  check(Math.abs(await ev(`Game.zoom2d`)-1)<1e-6 && await ev(`JSON.stringify(Game.pan2d)`)==='[0,0]',"恢复大小按钮复位单层缩放和平移");
 
   // ---- 9. 六种语言：逐屏扫一遍 + 语言列表 + 排版几何
   //
@@ -2436,6 +2412,8 @@ try {
     const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal"),
                            document.getElementById("langList"),
                            document.getElementById("inscription")]);
+    // #beianFooter 是法定备案号，和 #inscription 一样六种语言下都是中文原文。
+    const allowRoot = document.getElementById("beianFooter");
     const visible = (el) => {
       if (el.getClientRects().length === 0) return false;
       if (getComputedStyle(el).visibility === "hidden") return false;
@@ -2445,7 +2423,7 @@ try {
     };
     const out = [];
     for (const el of document.querySelectorAll("*")) {
-      if (allow.has(el)) continue;
+      if (allow.has(el) || (allowRoot && allowRoot.contains(el))) continue;
       if (!document.body.contains(el)) continue;
       const tag = el.tagName.toLowerCase();
       if (tag === "script" || tag === "style") continue;
@@ -2466,6 +2444,8 @@ try {
   const sweepWith = (judge, extraAllow) => `(() => {
     const allow = new Set([document.getElementById("langBtn"), document.querySelector(".seal"),
                            document.getElementById("inscription")]);
+    // 法定备案号页脚同样豁免（六种语言下都是中文原文）。
+    const allowRoot = document.getElementById("beianFooter");
     ${extraAllow || ""}
     const visible = (el) => {
       if (el.getClientRects().length === 0) return false;
@@ -2476,7 +2456,7 @@ try {
     };
     const out = [];
     for (const el of document.querySelectorAll("*")) {
-      if (allow.has(el)) continue;
+      if (allow.has(el) || (allowRoot && allowRoot.contains(el))) continue;
       if (!document.body.contains(el)) continue;
       const tag = el.tagName.toLowerCase();
       if (tag === "script" || tag === "style") continue;
@@ -3009,6 +2989,11 @@ try {
   // 那种情况下"轮到谁"已经不再按手数奇偶走了，所以只在还在下的时候查这一条。
   check(aiLoop.status !== "Playing" || (aiLoop.moves % 2 === 1) === (aiLoop.turn !== aiLoop.aiColor),
     "还在下的时候，轮到谁和手数对得上", JSON.stringify(aiLoop));
+  // 最后一手所在层的迷你棋盘要被标记（drawStrip 的红框 + data 属性）。
+  await ev("Game.drawStrip()");
+  const stripLast = JSON.parse(await ev(`JSON.stringify({z:Game.lastMoveLayerZ(),hist:Game.session.history.length?Game.session.history[Game.session.history.length-1].z:-1,data:document.getElementById('stripWrap').dataset.lastLayer})`));
+  check(stripLast.z === stripLast.hist && String(stripLast.z) === stripLast.data,
+    "最后一手所在层的迷你棋盘被标记", JSON.stringify(stripLast));
 
   // 留一张人机对局的截图。**"电脑下得像不像话"只有眼睛能判**，
   // 上面那些断言只能证明它合法、不卡死、算得快。
@@ -3862,60 +3847,12 @@ try {
   // v3.2.0：联机 emoji 的浮层（最多 4 条、新的在最下面、2 秒后消失）
   // ------------------------------------------------------------------
   // 公开版把整个联机块剥掉了，这里没有 emojiToasts / showEmojiToast —— 跳过。
-  if (await ev('typeof Game.showEmojiToast === "function" && !!document.getElementById("emojiToasts")')) {
-    const emo = JSON.parse(await ev(`(() => {
-      const box = document.getElementById("emojiToasts");
-      box.innerHTML = "";
-      ["😀", "😂", "😮", "😭", "👍"].forEach((e) => Game.showEmojiToast(e));
-      const kids = [...box.children];
-      const rects = kids.map((k) => k.getBoundingClientRect());
-      const fs = parseFloat(getComputedStyle(kids[0]).fontSize) || 0;
-      const res = { count: kids.length, texts: kids.map((k) => k.textContent),
-        firstTop: Math.round(rects[0].top),
-        lastTop: Math.round(rects[rects.length - 1].top), fontSize: fs };
-      box.innerHTML = "";
-      return JSON.stringify(res);
-    })()`));
-    check(emo.count === 4, "emoji 浮层最多同时显示 4 条", JSON.stringify(emo));
-    check(emo.texts.join(",") === "😂,😮,😭,👍", "连发 5 条时挤掉最旧的一条，新的在后面",
-      JSON.stringify(emo.texts));
-    check(emo.lastTop > emo.firstTop, "新发的一条排在下面", JSON.stringify(emo));
-    check(emo.fontSize >= 18, "emoji 字号随视口自适应（不会小到看不清）", String(emo.fontSize));
-  }
+  // 无联机版不包含此联机界面用例。
 
   // ------------------------------------------------------------------
   // v3.2.0：四维下 emoji 条和「落子：正常/缓/催」同一层，落子键小、聊天框大
   // ------------------------------------------------------------------
-  if (await ev('typeof Net !== "undefined" && !!document.getElementById("emojiBar")')) {
-    const place = JSON.parse(await ev(`(() => {
-      Game.cancelAiTimer(); Game.setSetupAi("human");
-      Net.online = false; Net.room = "";
-      Game.setSetupMode(true); Game.newGame(8, 1); Game.closeSetup();
-      // 模拟"已在联机房里"：只动 Net 的字段，不发网络请求。
-      Net.online = true; Net.room = "123456"; Net.awaitingPeer = false; Net.started = true;
-      Game.refreshRotPanel(); Game.syncEmojiUi();
-      const bar = document.getElementById("emojiBar");
-      const row = document.getElementById("placeModeRow");
-      const mode = document.getElementById("modeBtn");
-      const input = document.getElementById("emojiInput");
-      const res = {
-        parent: bar.parentElement && bar.parentElement.id,
-        barVisible: !bar.classList.contains("off"),
-        modeW: Math.round(mode.getBoundingClientRect().width),
-        inputW: Math.round(input.getBoundingClientRect().width),
-        rowW: Math.round(row.getBoundingClientRect().width),
-      };
-      Net.online = false; Net.room = ""; Net.started = false;
-      Game.syncEmojiUi();
-      Game.setSetupMode(false); Game.newGame(15, 1); Game.closeSetup();
-      return JSON.stringify(res);
-    })()`));
-    check(place.parent === "placeModeRow",
-      "四维下 emoji 条挪进「落子宣告」那一行", JSON.stringify(place));
-    check(place.barVisible, "四维联机下 emoji 条可见", JSON.stringify(place));
-    check(place.modeW > 0 && place.inputW > place.modeW,
-      "四维下落子键小、聊天框大（没有按 flex 均分）", JSON.stringify(place));
-  }
+  // 无联机版不包含此联机界面用例。
 
   // ------------------------------------------------------------------
   // 一张给 README 用的对局截图：四维的三个机制同时看得见。

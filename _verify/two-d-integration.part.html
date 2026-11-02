@@ -1,0 +1,24 @@
+<!-- 2D dialogs are independent of the tightly budgeted setup column. -->
+<div id="twoDSettings" class="off" role="dialog" aria-modal="true" aria-labelledby="twoDSettingsTitle">
+  <div class="twoDCard">
+    <header><h2 id="twoDSettingsTitle"></h2><button id="twoDSettingsClose" class="mini"></button></header>
+    <p class="twoDNote" id="twoDFixedRule"></p>
+    <label class="twoDField"><span id="twoDRandomLabel"></span><input id="twoDRandom" type="number" min="3" max="15" value="7"></label>
+    <label class="twoDField"><span id="twoDPerPlayerLabel"></span><input id="twoDPerPlayer" type="number" min="0" max="5" value="0"></label>
+    <label class="twoDField"><span id="twoDCoolLabel"></span><input id="twoDCool" type="number" min="3" max="10" value="5"></label>
+    <label class="twoDField"><span id="twoDAgeModeLabel"></span><select id="twoDAgeMode"><option value="30" id="twoDAgeLong"></option><option value="5" id="twoDAgeShort"></option></select></label>
+    <label class="twoDField"><span id="twoDTurnsLabel"></span><input id="twoDTurns" type="number" min="24" max="42" value="30"></label>
+    <label class="twoDField"><span id="twoDFloatLifeLabel"></span><input id="twoDFloatLife" type="number" min="10" max="30" value="20"></label>
+    <p class="twoDNote" id="twoDFloatNote"></p><p class="twoDNote" id="twoDHoleNote"></p>
+    <p class="twoDNote" id="twoDAuraNote"></p><p class="twoDNote" id="twoDShortNote"></p>
+    <div id="twoDSettingsError" role="status"></div>
+    <button id="twoDSettingsSave" class="sel"></button>
+  </div>
+</div>
+<div id="twoDReplay" class="off" role="dialog" aria-modal="true" aria-labelledby="twoDReplayTitle">
+  <div class="twoDCard">
+    <header><h2 id="twoDReplayTitle"></h2><button id="twoDReplayClose" class="mini"></button></header>
+    <canvas id="twoDReplayCanvas"></canvas>
+    <div class="twoDField"><button id="twoDReplayPrev">←</button><input id="twoDReplayRange" type="range" min="0" max="0" value="0"><span id="twoDReplayStep"></span><button id="twoDReplayNext">→</button></div>
+  </div>
+</div>

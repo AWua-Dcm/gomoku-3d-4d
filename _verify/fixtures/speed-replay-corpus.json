@@ -1,0 +1,3349 @@
+[
+  {
+    "mode": "4d",
+    "gameId": 0,
+    "pairId": 0,
+    "aIsBlack": true,
+    "level": "ultra",
+    "size": [
+      8,
+      8,
+      8
+    ],
+    "rules": {
+      "allowRotation": true,
+      "wrapEdges": true,
+      "rotationCooldownPlacements": 5,
+      "phasePeriod": 12
+    },
+    "seed": 20591030,
+    "openLength": 2,
+    "openingPlies": 2,
+    "openingAttempts": 1,
+    "openingBalanced": true,
+    "aiPlies": 28,
+    "totalPlies": 30,
+    "opening": [
+      {
+        "x": 6,
+        "y": 4,
+        "z": 6,
+        "player": 1
+      },
+      {
+        "x": 5,
+        "y": 1,
+        "z": 2,
+        "player": 2
+      }
+    ],
+    "moves": [
+      {
+        "ply": 3,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 5,
+          "z": 6
+        },
+        "ms": 289.969,
+        "stats": {
+          "points": 373215,
+          "candidates": 52,
+          "judgeCalls": 156,
+          "rotProbes": 0,
+          "searchNodes": 1119,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 4,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 4,
+          "z": 7
+        },
+        "ms": 425.859,
+        "stats": {
+          "points": 585051,
+          "candidates": 66,
+          "judgeCalls": 198,
+          "rotProbes": 0,
+          "searchNodes": 1621,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 5,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 0,
+          "z": 3
+        },
+        "ms": 300.772,
+        "stats": {
+          "points": 396591,
+          "candidates": 76,
+          "judgeCalls": 228,
+          "rotProbes": 0,
+          "searchNodes": 1060,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 6,
+        "player": 2,
+        "kind": "rotate",
+        "action": {
+          "axis": 0,
+          "layer": 5,
+          "turns": 2
+        },
+        "ms": 372.262,
+        "stats": {
+          "points": 508179,
+          "candidates": 90,
+          "judgeCalls": 270,
+          "rotProbes": 44,
+          "searchNodes": 1276,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 7,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 6,
+          "z": 4
+        },
+        "ms": 355.015,
+        "stats": {
+          "points": 472962,
+          "candidates": 98,
+          "judgeCalls": 294,
+          "rotProbes": 0,
+          "searchNodes": 1173,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 8,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 3,
+          "z": 7
+        },
+        "ms": 409.848,
+        "stats": {
+          "points": 553470,
+          "candidates": 107,
+          "judgeCalls": 321,
+          "rotProbes": 0,
+          "searchNodes": 1303,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 9,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 3,
+          "z": 6
+        },
+        "ms": 448.712,
+        "stats": {
+          "points": 596400,
+          "candidates": 113,
+          "judgeCalls": 339,
+          "rotProbes": 0,
+          "searchNodes": 1287,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 10,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 3,
+          "z": 1
+        },
+        "ms": 525.773,
+        "stats": {
+          "points": 670176,
+          "candidates": 123,
+          "judgeCalls": 369,
+          "rotProbes": 0,
+          "searchNodes": 1358,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 11,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 7,
+          "z": 3
+        },
+        "ms": 304.234,
+        "stats": {
+          "points": 387564,
+          "candidates": 133,
+          "judgeCalls": 399,
+          "rotProbes": 0,
+          "searchNodes": 735,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 12,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 5,
+          "z": 5
+        },
+        "ms": 439.363,
+        "stats": {
+          "points": 498030,
+          "candidates": 143,
+          "judgeCalls": 429,
+          "rotProbes": 44,
+          "searchNodes": 914,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 13,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 7,
+          "z": 5
+        },
+        "ms": 381.551,
+        "stats": {
+          "points": 473469,
+          "candidates": 146,
+          "judgeCalls": 438,
+          "rotProbes": 44,
+          "searchNodes": 848,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 14,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 2,
+          "z": 2
+        },
+        "ms": 515.229,
+        "stats": {
+          "points": 661785,
+          "candidates": 156,
+          "judgeCalls": 468,
+          "rotProbes": 44,
+          "searchNodes": 1019,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 15,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 6,
+          "z": 6
+        },
+        "ms": 495.985,
+        "stats": {
+          "points": 626331,
+          "candidates": 172,
+          "judgeCalls": 516,
+          "rotProbes": 44,
+          "searchNodes": 902,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 16,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 2,
+          "z": 6
+        },
+        "ms": 385.699,
+        "stats": {
+          "points": 467175,
+          "candidates": 185,
+          "judgeCalls": 555,
+          "rotProbes": 44,
+          "searchNodes": 669,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 17,
+        "player": 1,
+        "kind": "rotate",
+        "action": {
+          "axis": 2,
+          "layer": 6,
+          "turns": 3
+        },
+        "ms": 474.023,
+        "stats": {
+          "points": 601212,
+          "candidates": 193,
+          "judgeCalls": 579,
+          "rotProbes": 44,
+          "searchNodes": 901,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 18,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 3,
+          "z": 2
+        },
+        "ms": 683.393,
+        "stats": {
+          "points": 874185,
+          "candidates": 200,
+          "judgeCalls": 600,
+          "rotProbes": 0,
+          "searchNodes": 1224,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 19,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 2,
+          "z": 3
+        },
+        "ms": 939.405,
+        "stats": {
+          "points": 1115100,
+          "candidates": 207,
+          "judgeCalls": 621,
+          "rotProbes": 0,
+          "searchNodes": 1542,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 20,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 6,
+          "z": 6
+        },
+        "ms": 627.118,
+        "stats": {
+          "points": 804168,
+          "candidates": 217,
+          "judgeCalls": 651,
+          "rotProbes": 0,
+          "searchNodes": 1069,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 21,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 0,
+          "y": 7,
+          "z": 7
+        },
+        "ms": 576.57,
+        "stats": {
+          "points": 683073,
+          "candidates": 224,
+          "judgeCalls": 672,
+          "rotProbes": 0,
+          "searchNodes": 893,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 22,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 7,
+          "z": 7
+        },
+        "ms": 793.291,
+        "stats": {
+          "points": 1001667,
+          "candidates": 234,
+          "judgeCalls": 702,
+          "rotProbes": 0,
+          "searchNodes": 1258,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 23,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 7,
+          "z": 0
+        },
+        "ms": 550.14,
+        "stats": {
+          "points": 671511,
+          "candidates": 239,
+          "judgeCalls": 717,
+          "rotProbes": 44,
+          "searchNodes": 852,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 24,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 7,
+          "z": 1
+        },
+        "ms": 425.946,
+        "stats": {
+          "points": 497391,
+          "candidates": 247,
+          "judgeCalls": 741,
+          "rotProbes": 44,
+          "searchNodes": 649,
+          "vcfNodes": 8
+        }
+      },
+      {
+        "ply": 25,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 1,
+          "z": 1
+        },
+        "ms": 544.848,
+        "stats": {
+          "points": 682680,
+          "candidates": 249,
+          "judgeCalls": 747,
+          "rotProbes": 44,
+          "searchNodes": 855,
+          "vcfNodes": 7
+        }
+      },
+      {
+        "ply": 26,
+        "player": 2,
+        "kind": "rotate",
+        "action": {
+          "axis": 2,
+          "layer": 6,
+          "turns": 3
+        },
+        "ms": 707.709,
+        "stats": {
+          "points": 797100,
+          "candidates": 255,
+          "judgeCalls": 765,
+          "rotProbes": 44,
+          "searchNodes": 957,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 27,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 7,
+          "z": 0
+        },
+        "ms": 888.665,
+        "stats": {
+          "points": 1012230,
+          "candidates": 283,
+          "judgeCalls": 849,
+          "rotProbes": 0,
+          "searchNodes": 1123,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 28,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 3,
+          "z": 2
+        },
+        "ms": 1.193,
+        "stats": {
+          "points": 1692,
+          "candidates": 282,
+          "judgeCalls": 846,
+          "rotProbes": 0,
+          "searchNodes": 0,
+          "vcfNodes": 1
+        }
+      },
+      {
+        "ply": 29,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 0.268,
+        "stats": {
+          "points": 855,
+          "candidates": 285,
+          "judgeCalls": 855,
+          "rotProbes": 0,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 30,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 3,
+          "z": 6
+        },
+        "ms": 0.08,
+        "stats": {
+          "points": 897,
+          "candidates": 299,
+          "judgeCalls": 263,
+          "rotProbes": 0,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      }
+    ],
+    "winner": 2,
+    "winnerColor": 2,
+    "aScore": 0,
+    "status": "Decided",
+    "endedReason": "decided",
+    "rotations": 3,
+    "swaps": 0,
+    "durationMs": 12865.523,
+    "runId": "fair-4d-default-10000",
+    "engine": "6203b1a07953",
+    "finishedAt": "2026-10-30T20:29:35.225Z"
+  },
+  {
+    "mode": "4d",
+    "gameId": 4,
+    "pairId": 2,
+    "aIsBlack": true,
+    "level": "ultra",
+    "size": [
+      9,
+      9,
+      9
+    ],
+    "rules": {
+      "allowRotation": true,
+      "wrapEdges": true,
+      "rotationCooldownPlacements": 5,
+      "phasePeriod": 12
+    },
+    "seed": 20606868,
+    "openLength": 4,
+    "openingPlies": 4,
+    "openingAttempts": 1,
+    "openingBalanced": true,
+    "aiPlies": 46,
+    "totalPlies": 50,
+    "opening": [
+      {
+        "x": 5,
+        "y": 4,
+        "z": 4,
+        "player": 1
+      },
+      {
+        "x": 3,
+        "y": 6,
+        "z": 3,
+        "player": 2
+      },
+      {
+        "x": 5,
+        "y": 1,
+        "z": 3,
+        "player": 1
+      },
+      {
+        "x": 5,
+        "y": 4,
+        "z": 6,
+        "player": 2
+      }
+    ],
+    "moves": [
+      {
+        "ply": 5,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 2,
+          "z": 4
+        },
+        "ms": 235.044,
+        "stats": {
+          "points": 329181,
+          "candidates": 93,
+          "judgeCalls": 279,
+          "rotProbes": 0,
+          "searchNodes": 927,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 6,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 3,
+          "z": 4
+        },
+        "ms": 322.237,
+        "stats": {
+          "points": 382266,
+          "candidates": 98,
+          "judgeCalls": 294,
+          "rotProbes": 41,
+          "searchNodes": 1069,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 7,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 3,
+          "z": 5
+        },
+        "ms": 428.186,
+        "stats": {
+          "points": 535125,
+          "candidates": 97,
+          "judgeCalls": 291,
+          "rotProbes": 44,
+          "searchNodes": 1343,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 8,
+        "player": 2,
+        "kind": "rotate",
+        "action": {
+          "axis": 2,
+          "layer": 4,
+          "turns": 3
+        },
+        "ms": 384.204,
+        "stats": {
+          "points": 512922,
+          "candidates": 107,
+          "judgeCalls": 321,
+          "rotProbes": 44,
+          "searchNodes": 1202,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 9,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 4,
+          "z": 5
+        },
+        "ms": 378.288,
+        "stats": {
+          "points": 475419,
+          "candidates": 118,
+          "judgeCalls": 354,
+          "rotProbes": 0,
+          "searchNodes": 1013,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 10,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 6,
+          "z": 3
+        },
+        "ms": 393.019,
+        "stats": {
+          "points": 452496,
+          "candidates": 118,
+          "judgeCalls": 354,
+          "rotProbes": 0,
+          "searchNodes": 992,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 11,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 6,
+          "z": 3
+        },
+        "ms": 340.586,
+        "stats": {
+          "points": 434847,
+          "candidates": 136,
+          "judgeCalls": 408,
+          "rotProbes": 0,
+          "searchNodes": 867,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 12,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 5
+        },
+        "ms": 448.875,
+        "stats": {
+          "points": 564780,
+          "candidates": 140,
+          "judgeCalls": 420,
+          "rotProbes": 0,
+          "searchNodes": 1134,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 13,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 6,
+          "z": 5
+        },
+        "ms": 446.848,
+        "stats": {
+          "points": 532398,
+          "candidates": 148,
+          "judgeCalls": 444,
+          "rotProbes": 0,
+          "searchNodes": 984,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 14,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 282.49,
+        "stats": {
+          "points": 386022,
+          "candidates": 160,
+          "judgeCalls": 480,
+          "rotProbes": 44,
+          "searchNodes": 695,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 15,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 420.857,
+        "stats": {
+          "points": 564249,
+          "candidates": 162,
+          "judgeCalls": 486,
+          "rotProbes": 44,
+          "searchNodes": 964,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 16,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 3,
+          "z": 5
+        },
+        "ms": 483.759,
+        "stats": {
+          "points": 644400,
+          "candidates": 174,
+          "judgeCalls": 522,
+          "rotProbes": 44,
+          "searchNodes": 1064,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 17,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 5,
+          "z": 3
+        },
+        "ms": 589.052,
+        "stats": {
+          "points": 644349,
+          "candidates": 175,
+          "judgeCalls": 525,
+          "rotProbes": 44,
+          "searchNodes": 1053,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 18,
+        "player": 2,
+        "kind": "rotate",
+        "action": {
+          "axis": 0,
+          "layer": 5,
+          "turns": 3
+        },
+        "ms": 620.003,
+        "stats": {
+          "points": 733647,
+          "candidates": 176,
+          "judgeCalls": 528,
+          "rotProbes": 44,
+          "searchNodes": 1194,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 19,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 609.368,
+        "stats": {
+          "points": 728010,
+          "candidates": 184,
+          "judgeCalls": 552,
+          "rotProbes": 0,
+          "searchNodes": 1174,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 20,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 425.452,
+        "stats": {
+          "points": 558480,
+          "candidates": 187,
+          "judgeCalls": 561,
+          "rotProbes": 0,
+          "searchNodes": 934,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 21,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 5,
+          "z": 3
+        },
+        "ms": 375.463,
+        "stats": {
+          "points": 480729,
+          "candidates": 186,
+          "judgeCalls": 558,
+          "rotProbes": 0,
+          "searchNodes": 859,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 22,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 194.413,
+        "stats": {
+          "points": 248799,
+          "candidates": 185,
+          "judgeCalls": 555,
+          "rotProbes": 0,
+          "searchNodes": 467,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 23,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 231.917,
+        "stats": {
+          "points": 280887,
+          "candidates": 184,
+          "judgeCalls": 552,
+          "rotProbes": 0,
+          "searchNodes": 496,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 24,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 5,
+          "z": 3
+        },
+        "ms": 1377.849,
+        "stats": {
+          "points": 1989078,
+          "candidates": 186,
+          "judgeCalls": 558,
+          "rotProbes": 44,
+          "searchNodes": 570,
+          "vcfNodes": 437
+        }
+      },
+      {
+        "ply": 25,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 6,
+          "z": 2
+        },
+        "ms": 248.942,
+        "stats": {
+          "points": 311754,
+          "candidates": 185,
+          "judgeCalls": 555,
+          "rotProbes": 44,
+          "searchNodes": 508,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 26,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 2,
+          "z": 6
+        },
+        "ms": 1452.317,
+        "stats": {
+          "points": 2013471,
+          "candidates": 191,
+          "judgeCalls": 573,
+          "rotProbes": 44,
+          "searchNodes": 600,
+          "vcfNodes": 446
+        }
+      },
+      {
+        "ply": 27,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 3,
+          "z": 6
+        },
+        "ms": 416.046,
+        "stats": {
+          "points": 457863,
+          "candidates": 204,
+          "judgeCalls": 612,
+          "rotProbes": 44,
+          "searchNodes": 727,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 28,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 454.63,
+        "stats": {
+          "points": 559101,
+          "candidates": 205,
+          "judgeCalls": 615,
+          "rotProbes": 44,
+          "searchNodes": 902,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 29,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 4,
+          "z": 5
+        },
+        "ms": 434.255,
+        "stats": {
+          "points": 525303,
+          "candidates": 209,
+          "judgeCalls": 627,
+          "rotProbes": 44,
+          "searchNodes": 781,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 30,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 5,
+          "z": 4
+        },
+        "ms": 628.635,
+        "stats": {
+          "points": 667032,
+          "candidates": 208,
+          "judgeCalls": 624,
+          "rotProbes": 44,
+          "searchNodes": 1032,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 31,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 4,
+          "z": 3
+        },
+        "ms": 477.901,
+        "stats": {
+          "points": 564348,
+          "candidates": 207,
+          "judgeCalls": 621,
+          "rotProbes": 44,
+          "searchNodes": 834,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 32,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 3,
+          "z": 2
+        },
+        "ms": 318.957,
+        "stats": {
+          "points": 387180,
+          "candidates": 206,
+          "judgeCalls": 618,
+          "rotProbes": 44,
+          "searchNodes": 579,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 33,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 3,
+          "z": 7
+        },
+        "ms": 427.897,
+        "stats": {
+          "points": 524493,
+          "candidates": 212,
+          "judgeCalls": 636,
+          "rotProbes": 44,
+          "searchNodes": 693,
+          "vcfNodes": 10
+        }
+      },
+      {
+        "ply": 34,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 3,
+          "z": 8
+        },
+        "ms": 0.438,
+        "stats": {
+          "points": 678,
+          "candidates": 226,
+          "judgeCalls": 678,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 35,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 1,
+          "z": 5
+        },
+        "ms": 538.169,
+        "stats": {
+          "points": 665505,
+          "candidates": 240,
+          "judgeCalls": 720,
+          "rotProbes": 44,
+          "searchNodes": 851,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 36,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 2,
+          "z": 5
+        },
+        "ms": 659.836,
+        "stats": {
+          "points": 752226,
+          "candidates": 250,
+          "judgeCalls": 750,
+          "rotProbes": 44,
+          "searchNodes": 951,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 37,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 8,
+          "y": 7,
+          "z": 6
+        },
+        "ms": 481.422,
+        "stats": {
+          "points": 520008,
+          "candidates": 249,
+          "judgeCalls": 747,
+          "rotProbes": 44,
+          "searchNodes": 610,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 38,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 0,
+          "y": 8,
+          "z": 7
+        },
+        "ms": 0.499,
+        "stats": {
+          "points": 801,
+          "candidates": 267,
+          "judgeCalls": 801,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 39,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 1,
+          "z": 7
+        },
+        "ms": 0.441,
+        "stats": {
+          "points": 855,
+          "candidates": 285,
+          "judgeCalls": 855,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 40,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 3,
+          "z": 5
+        },
+        "ms": 1578.076,
+        "stats": {
+          "points": 2015787,
+          "candidates": 295,
+          "judgeCalls": 885,
+          "rotProbes": 44,
+          "searchNodes": 463,
+          "vcfNodes": 383
+        }
+      },
+      {
+        "ply": 41,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 6,
+          "z": 2
+        },
+        "ms": 239.181,
+        "stats": {
+          "points": 269337,
+          "candidates": 295,
+          "judgeCalls": 885,
+          "rotProbes": 44,
+          "searchNodes": 304,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 42,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 2,
+          "z": 6
+        },
+        "ms": 34.334,
+        "stats": {
+          "points": 39141,
+          "candidates": 303,
+          "judgeCalls": 909,
+          "rotProbes": 44,
+          "searchNodes": 0,
+          "vcfNodes": 20
+        }
+      },
+      {
+        "ply": 43,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 1,
+          "z": 7
+        },
+        "ms": 0.497,
+        "stats": {
+          "points": 951,
+          "candidates": 317,
+          "judgeCalls": 951,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 44,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 1,
+          "z": 7
+        },
+        "ms": 29.765,
+        "stats": {
+          "points": 30543,
+          "candidates": 332,
+          "judgeCalls": 996,
+          "rotProbes": 44,
+          "searchNodes": 0,
+          "vcfNodes": 14
+        }
+      },
+      {
+        "ply": 45,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 6,
+          "z": 2
+        },
+        "ms": 264.281,
+        "stats": {
+          "points": 293268,
+          "candidates": 335,
+          "judgeCalls": 1005,
+          "rotProbes": 44,
+          "searchNodes": 336,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 46,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 24.445,
+        "stats": {
+          "points": 12225,
+          "candidates": 337,
+          "judgeCalls": 1011,
+          "rotProbes": 44,
+          "searchNodes": 0,
+          "vcfNodes": 10
+        }
+      },
+      {
+        "ply": 47,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 0.555,
+        "stats": {
+          "points": 1032,
+          "candidates": 344,
+          "judgeCalls": 1032,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 48,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 2,
+          "z": 6
+        },
+        "ms": 23.813,
+        "stats": {
+          "points": 11259,
+          "candidates": 352,
+          "judgeCalls": 1056,
+          "rotProbes": 44,
+          "searchNodes": 0,
+          "vcfNodes": 9
+        }
+      },
+      {
+        "ply": 49,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 5,
+          "z": 3
+        },
+        "ms": 0.568,
+        "stats": {
+          "points": 1053,
+          "candidates": 351,
+          "judgeCalls": 1053,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 50,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 0,
+          "z": 8
+        },
+        "ms": 0.106,
+        "stats": {
+          "points": 1071,
+          "candidates": 357,
+          "judgeCalls": 296,
+          "rotProbes": 0,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      }
+    ],
+    "winner": 2,
+    "winnerColor": 2,
+    "aScore": 0,
+    "status": "Decided",
+    "endedReason": "decided",
+    "rotations": 2,
+    "swaps": 0,
+    "durationMs": 17725.401,
+    "runId": "fair-4d-default-10000",
+    "engine": "6203b1a07953",
+    "finishedAt": "2026-10-30T20:29:52.951Z"
+  },
+  {
+    "mode": "4d",
+    "gameId": 8,
+    "pairId": 4,
+    "aIsBlack": true,
+    "level": "ultra",
+    "size": [
+      8,
+      8,
+      8
+    ],
+    "rules": {
+      "allowRotation": true,
+      "wrapEdges": true,
+      "rotationCooldownPlacements": 5,
+      "phasePeriod": 12
+    },
+    "seed": 20622706,
+    "openLength": 6,
+    "openingPlies": 6,
+    "openingAttempts": 1,
+    "openingBalanced": true,
+    "aiPlies": 57,
+    "totalPlies": 63,
+    "opening": [
+      {
+        "x": 5,
+        "y": 1,
+        "z": 3,
+        "player": 1
+      },
+      {
+        "x": 2,
+        "y": 3,
+        "z": 5,
+        "player": 2
+      },
+      {
+        "x": 4,
+        "y": 1,
+        "z": 5,
+        "player": 1
+      },
+      {
+        "x": 3,
+        "y": 1,
+        "z": 4,
+        "player": 2
+      },
+      {
+        "x": 4,
+        "y": 4,
+        "z": 2,
+        "player": 1
+      },
+      {
+        "x": 5,
+        "y": 5,
+        "z": 4,
+        "player": 2
+      }
+    ],
+    "moves": [
+      {
+        "ply": 7,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 217.252,
+        "stats": {
+          "points": 274092,
+          "candidates": 126,
+          "judgeCalls": 378,
+          "rotProbes": 44,
+          "searchNodes": 613,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 8,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 2,
+          "z": 4
+        },
+        "ms": 143.145,
+        "stats": {
+          "points": 181830,
+          "candidates": 128,
+          "judgeCalls": 384,
+          "rotProbes": 44,
+          "searchNodes": 396,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 9,
+        "player": 1,
+        "kind": "rotate",
+        "action": {
+          "axis": 0,
+          "layer": 4,
+          "turns": 3
+        },
+        "ms": 342.218,
+        "stats": {
+          "points": 432210,
+          "candidates": 129,
+          "judgeCalls": 387,
+          "rotProbes": 44,
+          "searchNodes": 881,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 10,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 3,
+          "z": 2
+        },
+        "ms": 365.061,
+        "stats": {
+          "points": 431241,
+          "candidates": 134,
+          "judgeCalls": 402,
+          "rotProbes": 0,
+          "searchNodes": 878,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 11,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 2,
+          "z": 3
+        },
+        "ms": 445.883,
+        "stats": {
+          "points": 543285,
+          "candidates": 139,
+          "judgeCalls": 417,
+          "rotProbes": 0,
+          "searchNodes": 1152,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 12,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 177.055,
+        "stats": {
+          "points": 229134,
+          "candidates": 138,
+          "judgeCalls": 414,
+          "rotProbes": 0,
+          "searchNodes": 520,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 13,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 3,
+          "z": 4
+        },
+        "ms": 227.913,
+        "stats": {
+          "points": 291228,
+          "candidates": 137,
+          "judgeCalls": 411,
+          "rotProbes": 0,
+          "searchNodes": 647,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 14,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 464.982,
+        "stats": {
+          "points": 625302,
+          "candidates": 139,
+          "judgeCalls": 417,
+          "rotProbes": 0,
+          "searchNodes": 1316,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 15,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 595.497,
+        "stats": {
+          "points": 789063,
+          "candidates": 141,
+          "judgeCalls": 423,
+          "rotProbes": 44,
+          "searchNodes": 1615,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 16,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 3
+        },
+        "ms": 442.933,
+        "stats": {
+          "points": 562398,
+          "candidates": 141,
+          "judgeCalls": 423,
+          "rotProbes": 44,
+          "searchNodes": 1095,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 17,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 1,
+          "z": 3
+        },
+        "ms": 618.575,
+        "stats": {
+          "points": 785703,
+          "candidates": 143,
+          "judgeCalls": 429,
+          "rotProbes": 44,
+          "searchNodes": 1619,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 18,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 303.163,
+        "stats": {
+          "points": 392070,
+          "candidates": 145,
+          "judgeCalls": 435,
+          "rotProbes": 44,
+          "searchNodes": 793,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 19,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 5
+        },
+        "ms": 325.415,
+        "stats": {
+          "points": 413892,
+          "candidates": 145,
+          "judgeCalls": 435,
+          "rotProbes": 44,
+          "searchNodes": 874,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 20,
+        "player": 2,
+        "kind": "rotate",
+        "action": {
+          "axis": 0,
+          "layer": 3,
+          "turns": 2
+        },
+        "ms": 243.199,
+        "stats": {
+          "points": 297807,
+          "candidates": 149,
+          "judgeCalls": 447,
+          "rotProbes": 44,
+          "searchNodes": 612,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 21,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 1,
+          "z": 4
+        },
+        "ms": 399.395,
+        "stats": {
+          "points": 499551,
+          "candidates": 150,
+          "judgeCalls": 450,
+          "rotProbes": 0,
+          "searchNodes": 1000,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 22,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 5,
+          "z": 5
+        },
+        "ms": 468.977,
+        "stats": {
+          "points": 571854,
+          "candidates": 161,
+          "judgeCalls": 483,
+          "rotProbes": 0,
+          "searchNodes": 1077,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 23,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 2,
+          "z": 2
+        },
+        "ms": 259.925,
+        "stats": {
+          "points": 329274,
+          "candidates": 167,
+          "judgeCalls": 501,
+          "rotProbes": 0,
+          "searchNodes": 619,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 24,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 6,
+          "z": 6
+        },
+        "ms": 425.815,
+        "stats": {
+          "points": 533373,
+          "candidates": 168,
+          "judgeCalls": 504,
+          "rotProbes": 0,
+          "searchNodes": 941,
+          "vcfNodes": 8
+        }
+      },
+      {
+        "ply": 25,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 7,
+          "z": 7
+        },
+        "ms": 0.212,
+        "stats": {
+          "points": 537,
+          "candidates": 179,
+          "judgeCalls": 537,
+          "rotProbes": 0,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 26,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 3,
+          "z": 6
+        },
+        "ms": 381.294,
+        "stats": {
+          "points": 437118,
+          "candidates": 193,
+          "judgeCalls": 579,
+          "rotProbes": 44,
+          "searchNodes": 756,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 27,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 4,
+          "z": 3
+        },
+        "ms": 243.756,
+        "stats": {
+          "points": 285579,
+          "candidates": 203,
+          "judgeCalls": 609,
+          "rotProbes": 44,
+          "searchNodes": 452,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 28,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 4,
+          "z": 3
+        },
+        "ms": 315.074,
+        "stats": {
+          "points": 353340,
+          "candidates": 204,
+          "judgeCalls": 612,
+          "rotProbes": 44,
+          "searchNodes": 554,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 29,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 3,
+          "z": 2
+        },
+        "ms": 683.486,
+        "stats": {
+          "points": 796701,
+          "candidates": 212,
+          "judgeCalls": 636,
+          "rotProbes": 44,
+          "searchNodes": 1141,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 30,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 6,
+          "z": 5
+        },
+        "ms": 901.31,
+        "stats": {
+          "points": 1048788,
+          "candidates": 225,
+          "judgeCalls": 675,
+          "rotProbes": 44,
+          "searchNodes": 1495,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 31,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 7,
+          "z": 6
+        },
+        "ms": 378.661,
+        "stats": {
+          "points": 439599,
+          "candidates": 229,
+          "judgeCalls": 687,
+          "rotProbes": 44,
+          "searchNodes": 606,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 32,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 6,
+          "z": 5
+        },
+        "ms": 443.497,
+        "stats": {
+          "points": 495615,
+          "candidates": 228,
+          "judgeCalls": 684,
+          "rotProbes": 44,
+          "searchNodes": 740,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 33,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 4,
+          "z": 3
+        },
+        "ms": 330.569,
+        "stats": {
+          "points": 363630,
+          "candidates": 227,
+          "judgeCalls": 681,
+          "rotProbes": 44,
+          "searchNodes": 502,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 34,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 4,
+          "z": 3
+        },
+        "ms": 1.284,
+        "stats": {
+          "points": 699,
+          "candidates": 233,
+          "judgeCalls": 699,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 35,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 2,
+          "z": 1
+        },
+        "ms": 769.072,
+        "stats": {
+          "points": 874554,
+          "candidates": 237,
+          "judgeCalls": 711,
+          "rotProbes": 44,
+          "searchNodes": 1106,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 36,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 3,
+          "z": 2
+        },
+        "ms": 407.973,
+        "stats": {
+          "points": 463359,
+          "candidates": 250,
+          "judgeCalls": 750,
+          "rotProbes": 44,
+          "searchNodes": 603,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 37,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 2,
+          "z": 1
+        },
+        "ms": 305.971,
+        "stats": {
+          "points": 342342,
+          "candidates": 249,
+          "judgeCalls": 747,
+          "rotProbes": 44,
+          "searchNodes": 455,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 38,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 0,
+          "y": 2,
+          "z": 1
+        },
+        "ms": 237.659,
+        "stats": {
+          "points": 230631,
+          "candidates": 248,
+          "judgeCalls": 744,
+          "rotProbes": 44,
+          "searchNodes": 315,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 39,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 3,
+          "z": 5
+        },
+        "ms": 483.7,
+        "stats": {
+          "points": 545991,
+          "candidates": 255,
+          "judgeCalls": 765,
+          "rotProbes": 44,
+          "searchNodes": 703,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 40,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 6
+        },
+        "ms": 659.974,
+        "stats": {
+          "points": 764064,
+          "candidates": 254,
+          "judgeCalls": 762,
+          "rotProbes": 44,
+          "searchNodes": 1015,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 41,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 5,
+          "z": 6
+        },
+        "ms": 728.154,
+        "stats": {
+          "points": 832263,
+          "candidates": 253,
+          "judgeCalls": 759,
+          "rotProbes": 44,
+          "searchNodes": 1074,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 42,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 2
+        },
+        "ms": 732.452,
+        "stats": {
+          "points": 788040,
+          "candidates": 252,
+          "judgeCalls": 756,
+          "rotProbes": 44,
+          "searchNodes": 1023,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 43,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 2,
+          "z": 4
+        },
+        "ms": 437.728,
+        "stats": {
+          "points": 490350,
+          "candidates": 254,
+          "judgeCalls": 762,
+          "rotProbes": 44,
+          "searchNodes": 643,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 44,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 2,
+          "z": 0
+        },
+        "ms": 557.405,
+        "stats": {
+          "points": 630846,
+          "candidates": 253,
+          "judgeCalls": 759,
+          "rotProbes": 44,
+          "searchNodes": 866,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 45,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 0,
+          "z": 4
+        },
+        "ms": 635.719,
+        "stats": {
+          "points": 699168,
+          "candidates": 258,
+          "judgeCalls": 774,
+          "rotProbes": 44,
+          "searchNodes": 913,
+          "vcfNodes": 6
+        }
+      },
+      {
+        "ply": 46,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 7,
+          "z": 4
+        },
+        "ms": 0.455,
+        "stats": {
+          "points": 771,
+          "candidates": 257,
+          "judgeCalls": 771,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 47,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 2,
+          "z": 3
+        },
+        "ms": 441.518,
+        "stats": {
+          "points": 456549,
+          "candidates": 256,
+          "judgeCalls": 768,
+          "rotProbes": 44,
+          "searchNodes": 626,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 48,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 1
+        },
+        "ms": 227.065,
+        "stats": {
+          "points": 234636,
+          "candidates": 255,
+          "judgeCalls": 765,
+          "rotProbes": 44,
+          "searchNodes": 340,
+          "vcfNodes": 6
+        }
+      },
+      {
+        "ply": 49,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 2,
+          "z": 5
+        },
+        "ms": 12.091,
+        "stats": {
+          "points": 2343,
+          "candidates": 260,
+          "judgeCalls": 780,
+          "rotProbes": 44,
+          "searchNodes": 0,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 50,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 2,
+          "z": 1
+        },
+        "ms": 0.407,
+        "stats": {
+          "points": 786,
+          "candidates": 262,
+          "judgeCalls": 786,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 51,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 1,
+          "z": 0
+        },
+        "ms": 258.278,
+        "stats": {
+          "points": 277746,
+          "candidates": 261,
+          "judgeCalls": 783,
+          "rotProbes": 44,
+          "searchNodes": 316,
+          "vcfNodes": 10
+        }
+      },
+      {
+        "ply": 52,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 0,
+          "z": 7
+        },
+        "ms": 0.444,
+        "stats": {
+          "points": 813,
+          "candidates": 271,
+          "judgeCalls": 813,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 53,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 0,
+          "y": 4,
+          "z": 3
+        },
+        "ms": 421.533,
+        "stats": {
+          "points": 418449,
+          "candidates": 274,
+          "judgeCalls": 822,
+          "rotProbes": 44,
+          "searchNodes": 466,
+          "vcfNodes": 6
+        }
+      },
+      {
+        "ply": 54,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 5,
+          "z": 4
+        },
+        "ms": 0.469,
+        "stats": {
+          "points": 819,
+          "candidates": 273,
+          "judgeCalls": 819,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 55,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 6,
+          "y": 2,
+          "z": 3
+        },
+        "ms": 666.425,
+        "stats": {
+          "points": 692382,
+          "candidates": 281,
+          "judgeCalls": 843,
+          "rotProbes": 44,
+          "searchNodes": 816,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 56,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 5,
+          "z": 3
+        },
+        "ms": 376.449,
+        "stats": {
+          "points": 372165,
+          "candidates": 283,
+          "judgeCalls": 849,
+          "rotProbes": 44,
+          "searchNodes": 464,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 57,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 7,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 25.231,
+        "stats": {
+          "points": 11757,
+          "candidates": 284,
+          "judgeCalls": 852,
+          "rotProbes": 44,
+          "searchNodes": 0,
+          "vcfNodes": 12
+        }
+      },
+      {
+        "ply": 58,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 0,
+          "z": 3
+        },
+        "ms": 0.5,
+        "stats": {
+          "points": 852,
+          "candidates": 284,
+          "judgeCalls": 852,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 59,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 1,
+          "z": 4
+        },
+        "ms": 23.776,
+        "stats": {
+          "points": 10911,
+          "candidates": 286,
+          "judgeCalls": 858,
+          "rotProbes": 44,
+          "searchNodes": 0,
+          "vcfNodes": 11
+        }
+      },
+      {
+        "ply": 60,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 0,
+          "z": 5
+        },
+        "ms": 0.599,
+        "stats": {
+          "points": 873,
+          "candidates": 291,
+          "judgeCalls": 873,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 61,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 1,
+          "z": 1
+        },
+        "ms": 23.2,
+        "stats": {
+          "points": 10065,
+          "candidates": 290,
+          "judgeCalls": 870,
+          "rotProbes": 44,
+          "searchNodes": 0,
+          "vcfNodes": 10
+        }
+      },
+      {
+        "ply": 62,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 1,
+          "z": 2
+        },
+        "ms": 0.524,
+        "stats": {
+          "points": 867,
+          "candidates": 289,
+          "judgeCalls": 867,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 63,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 2,
+          "z": 6
+        },
+        "ms": 0.081,
+        "stats": {
+          "points": 864,
+          "candidates": 288,
+          "judgeCalls": 246,
+          "rotProbes": 0,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      }
+    ],
+    "winner": 1,
+    "winnerColor": 1,
+    "aScore": 1,
+    "status": "Decided",
+    "endedReason": "decided",
+    "rotations": 2,
+    "swaps": 0,
+    "durationMs": 18582.085,
+    "runId": "fair-4d-default-10000",
+    "engine": "6203b1a07953",
+    "finishedAt": "2026-10-30T20:30:11.534Z"
+  },
+  {
+    "mode": "4d",
+    "gameId": 12,
+    "pairId": 6,
+    "aIsBlack": true,
+    "level": "ultra",
+    "size": [
+      9,
+      9,
+      9
+    ],
+    "rules": {
+      "allowRotation": true,
+      "wrapEdges": true,
+      "rotationCooldownPlacements": 5,
+      "phasePeriod": 12
+    },
+    "seed": 20638544,
+    "openLength": 3,
+    "openingPlies": 3,
+    "openingAttempts": 1,
+    "openingBalanced": true,
+    "aiPlies": 32,
+    "totalPlies": 35,
+    "opening": [
+      {
+        "x": 2,
+        "y": 5,
+        "z": 2,
+        "player": 1
+      },
+      {
+        "x": 1,
+        "y": 2,
+        "z": 4,
+        "player": 2
+      },
+      {
+        "x": 6,
+        "y": 6,
+        "z": 2,
+        "player": 1
+      }
+    ],
+    "moves": [
+      {
+        "ply": 4,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 3,
+          "z": 4
+        },
+        "ms": 372.457,
+        "stats": {
+          "points": 530793,
+          "candidates": 78,
+          "judgeCalls": 234,
+          "rotProbes": 0,
+          "searchNodes": 1340,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 5,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 6,
+          "z": 2
+        },
+        "ms": 340.235,
+        "stats": {
+          "points": 472818,
+          "candidates": 89,
+          "judgeCalls": 267,
+          "rotProbes": 0,
+          "searchNodes": 1190,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 6,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 233.458,
+        "stats": {
+          "points": 307548,
+          "candidates": 97,
+          "judgeCalls": 291,
+          "rotProbes": 41,
+          "searchNodes": 772,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 7,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 5,
+          "z": 4
+        },
+        "ms": 260.308,
+        "stats": {
+          "points": 348672,
+          "candidates": 109,
+          "judgeCalls": 327,
+          "rotProbes": 44,
+          "searchNodes": 809,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 8,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 5,
+          "z": 1
+        },
+        "ms": 458.322,
+        "stats": {
+          "points": 599532,
+          "candidates": 120,
+          "judgeCalls": 360,
+          "rotProbes": 44,
+          "searchNodes": 1287,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 9,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 4,
+          "z": 2
+        },
+        "ms": 317.691,
+        "stats": {
+          "points": 421140,
+          "candidates": 134,
+          "judgeCalls": 402,
+          "rotProbes": 44,
+          "searchNodes": 860,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 10,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 6,
+          "z": 2
+        },
+        "ms": 356.3,
+        "stats": {
+          "points": 477432,
+          "candidates": 141,
+          "judgeCalls": 423,
+          "rotProbes": 44,
+          "searchNodes": 932,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 11,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 5,
+          "z": 3
+        },
+        "ms": 382.191,
+        "stats": {
+          "points": 499695,
+          "candidates": 147,
+          "judgeCalls": 441,
+          "rotProbes": 44,
+          "searchNodes": 960,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 12,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 5,
+          "y": 5,
+          "z": 5
+        },
+        "ms": 466.171,
+        "stats": {
+          "points": 622365,
+          "candidates": 148,
+          "judgeCalls": 444,
+          "rotProbes": 44,
+          "searchNodes": 1133,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 13,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 3,
+          "z": 4
+        },
+        "ms": 567.488,
+        "stats": {
+          "points": 787371,
+          "candidates": 162,
+          "judgeCalls": 486,
+          "rotProbes": 44,
+          "searchNodes": 1424,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 14,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 4,
+          "z": 3
+        },
+        "ms": 666.877,
+        "stats": {
+          "points": 890178,
+          "candidates": 164,
+          "judgeCalls": 492,
+          "rotProbes": 44,
+          "searchNodes": 1573,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 15,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 479.447,
+        "stats": {
+          "points": 649005,
+          "candidates": 165,
+          "judgeCalls": 495,
+          "rotProbes": 44,
+          "searchNodes": 1126,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 16,
+        "player": 2,
+        "kind": "rotate",
+        "action": {
+          "axis": 0,
+          "layer": 3,
+          "turns": 1
+        },
+        "ms": 631.494,
+        "stats": {
+          "points": 787188,
+          "candidates": 173,
+          "judgeCalls": 519,
+          "rotProbes": 44,
+          "searchNodes": 1323,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 17,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 308.984,
+        "stats": {
+          "points": 380688,
+          "candidates": 186,
+          "judgeCalls": 558,
+          "rotProbes": 0,
+          "searchNodes": 599,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 18,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 4,
+          "z": 6
+        },
+        "ms": 358.81,
+        "stats": {
+          "points": 463947,
+          "candidates": 186,
+          "judgeCalls": 558,
+          "rotProbes": 0,
+          "searchNodes": 771,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 19,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 5,
+          "z": 5
+        },
+        "ms": 311.693,
+        "stats": {
+          "points": 424236,
+          "candidates": 198,
+          "judgeCalls": 594,
+          "rotProbes": 0,
+          "searchNodes": 653,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 20,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 2,
+          "z": 2
+        },
+        "ms": 297.638,
+        "stats": {
+          "points": 393159,
+          "candidates": 198,
+          "judgeCalls": 594,
+          "rotProbes": 0,
+          "searchNodes": 626,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 21,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 3,
+          "z": 5
+        },
+        "ms": 1396.985,
+        "stats": {
+          "points": 1994547,
+          "candidates": 202,
+          "judgeCalls": 606,
+          "rotProbes": 0,
+          "searchNodes": 564,
+          "vcfNodes": 462
+        }
+      },
+      {
+        "ply": 22,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 2,
+          "z": 5
+        },
+        "ms": 363.834,
+        "stats": {
+          "points": 413442,
+          "candidates": 204,
+          "judgeCalls": 612,
+          "rotProbes": 44,
+          "searchNodes": 624,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 23,
+        "player": 1,
+        "kind": "rotate",
+        "action": {
+          "axis": 2,
+          "layer": 2,
+          "turns": 3
+        },
+        "ms": 1529.887,
+        "stats": {
+          "points": 2104284,
+          "candidates": 208,
+          "judgeCalls": 624,
+          "rotProbes": 44,
+          "searchNodes": 693,
+          "vcfNodes": 448
+        }
+      },
+      {
+        "ply": 24,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 6,
+          "z": 6
+        },
+        "ms": 269.62,
+        "stats": {
+          "points": 347535,
+          "candidates": 218,
+          "judgeCalls": 654,
+          "rotProbes": 0,
+          "searchNodes": 506,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 25,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 2,
+          "z": 2
+        },
+        "ms": 264.883,
+        "stats": {
+          "points": 341058,
+          "candidates": 231,
+          "judgeCalls": 693,
+          "rotProbes": 0,
+          "searchNodes": 434,
+          "vcfNodes": 16
+        }
+      },
+      {
+        "ply": 26,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 4,
+          "y": 1,
+          "z": 1
+        },
+        "ms": 0.214,
+        "stats": {
+          "points": 690,
+          "candidates": 230,
+          "judgeCalls": 690,
+          "rotProbes": 0,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 27,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 3,
+          "z": 2
+        },
+        "ms": 297.929,
+        "stats": {
+          "points": 379125,
+          "candidates": 238,
+          "judgeCalls": 714,
+          "rotProbes": 0,
+          "searchNodes": 525,
+          "vcfNodes": 2
+        }
+      },
+      {
+        "ply": 28,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 4,
+          "z": 2
+        },
+        "ms": 234.805,
+        "stats": {
+          "points": 295647,
+          "candidates": 238,
+          "judgeCalls": 714,
+          "rotProbes": 0,
+          "searchNodes": 414,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 29,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 1,
+          "y": 3,
+          "z": 3
+        },
+        "ms": 370.908,
+        "stats": {
+          "points": 427479,
+          "candidates": 241,
+          "judgeCalls": 723,
+          "rotProbes": 44,
+          "searchNodes": 545,
+          "vcfNodes": 24
+        }
+      },
+      {
+        "ply": 30,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 2,
+          "y": 5,
+          "z": 2
+        },
+        "ms": 663.543,
+        "stats": {
+          "points": 789111,
+          "candidates": 242,
+          "judgeCalls": 726,
+          "rotProbes": 44,
+          "searchNodes": 1017,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 31,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 1,
+          "z": 1
+        },
+        "ms": 500.947,
+        "stats": {
+          "points": 616653,
+          "candidates": 241,
+          "judgeCalls": 723,
+          "rotProbes": 44,
+          "searchNodes": 777,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 32,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 0,
+          "y": 4,
+          "z": 4
+        },
+        "ms": 432,
+        "stats": {
+          "points": 525960,
+          "candidates": 245,
+          "judgeCalls": 735,
+          "rotProbes": 44,
+          "searchNodes": 668,
+          "vcfNodes": 4
+        }
+      },
+      {
+        "ply": 33,
+        "player": 1,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 0,
+          "z": 0
+        },
+        "ms": 738.734,
+        "stats": {
+          "points": 860319,
+          "candidates": 257,
+          "judgeCalls": 771,
+          "rotProbes": 44,
+          "searchNodes": 963,
+          "vcfNodes": 40
+        }
+      },
+      {
+        "ply": 34,
+        "player": 2,
+        "kind": "place",
+        "action": {
+          "x": 3,
+          "y": 8,
+          "z": 8
+        },
+        "ms": 1.537,
+        "stats": {
+          "points": 813,
+          "candidates": 271,
+          "judgeCalls": 813,
+          "rotProbes": 30,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      },
+      {
+        "ply": 35,
+        "player": 1,
+        "kind": "rotate",
+        "action": {
+          "axis": 2,
+          "layer": 4,
+          "turns": 3
+        },
+        "ms": 0.516,
+        "stats": {
+          "points": 849,
+          "candidates": 283,
+          "judgeCalls": 283,
+          "rotProbes": 21,
+          "searchNodes": 0,
+          "vcfNodes": 0
+        }
+      }
+    ],
+    "winner": 1,
+    "winnerColor": 1,
+    "aScore": 1,
+    "status": "Decided",
+    "endedReason": "decided",
+    "rotations": 3,
+    "swaps": 0,
+    "durationMs": 13877.34,
+    "runId": "fair-4d-default-10000",
+    "engine": "6203b1a07953",
+    "finishedAt": "2026-10-30T20:30:25.411Z"
+  }
+]

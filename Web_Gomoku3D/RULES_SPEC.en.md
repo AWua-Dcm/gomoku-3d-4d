@@ -299,9 +299,9 @@ well. The last level simply waits there once cleared — the row's Setup button 
 ## 11. Playing the computer
 
 - **The start screen has an "Opponent" row**: Human (two players, one device), or five computer
-  strengths **Low / Mid / High / Very high / Ultra**. **They differ in how far they look ahead,
+  strengths **Low / Mid / High / Extra high / Ultra**. **They differ in how far they look ahead,
   whether they prove forced wins, and how they decide whether to rotate in 4D**: Low sees one move;
-  Mid one reply; High three plies; Very high five. Ultra is five as well, but deepens further when it
+  Mid one reply; High three plies; Extra high five. Ultra is five as well, but deepens further when it
   can afford to (iterative deepening).
   Ultra also runs a **kill search** — forced-win sequences: runs of fours (where each of your replies
   is forced to a single square), and runs of open threes. The latter is far harder, because an open
@@ -309,12 +309,12 @@ well. The last level simply waits there once cleared — the row's Setup button 
   makes a four of your own**, and if it cannot get through them all it says "unknown" rather than
   claim a win that does not hold.
   In 4D all five tiers **value a rotation with the same cheap probe** (at most 6–14 candidates per
-  move, each one a single rotated layer plus one full-board scan). Letting Very high and Ultra value a
+  move, each one a single rotated layer plus one full-board scan). Letting Extra high and Ultra value a
   rotation with the same search they use for a move was tried and measured negative — much slower, no
   stronger — and has been reverted.
   **In 4D Mid and High look deeper** (one ply to three, three to five) — a rotation can move a whole
   formation, and at 3D depth the computer cannot see that its own last move has just been slid away.
-  Low does not search at all (that is what "Low" means), and Very high and Ultra are five plies to
+  Low does not search at all (that is what "Low" means), and Extra high and Ultra are five plies to
   begin with. So High and above walk away from positions where your next move would make an open four,
   while Low happily walks into them. All five stay deliberately on
   the weak side — an "easy" opponent that beats beginners every time is the usual failure of this
@@ -353,3 +353,55 @@ well. The last level simply waits there once cleared — the row's Setup button 
   Good enough as a sparring partner; for a serious game, use a dedicated engine.
 - **Rotations are not animated**; they land instantly, with only a brief highlight on the rotated layer.
 - **Rotations can only be made with the panel buttons**, not by dragging in the 3D view.
+
+## 13. Two-dimensional mode
+
+This mode uses its own flat board. **Black holes (H), floating stones (F), and fading stones (A)** may be enabled independently or in any combination. With all disabled, play classic 2D. There is no wrapping, cube rotation, or day/night phase in 2D.
+
+### 13.1 Classic 2D
+
+- Width and height each range from 10–30, default 15×15. Stones sit on **grid intersections**. Connect 5 in any of the 4 directions: horizontal, vertical, or either diagonal.
+- The first player always needs exactly 5; a line of 6 or more loses. The second player wins with 5 or more. If one move makes both five and an overline, the overline loss takes precedence. This restriction cannot be disabled in any 2D variant or combination.
+- With no playable intersection and no winner, the game is drawn. Empty points and gray stones break lines; stones never slide together or compress across a gap.
+
+### 13.2 Black holes (H)
+
+- The random hole count a ranges from 3 to floor(intersections/15), default 7 on 15×15. The seeded layout can be replayed. Random holes cannot be orthogonally adjacent; diagonal adjacency is allowed.
+- Before play, each player may place b additional holes, where b is 0–5 and equal for both players. Alternate from the first player, giving a total of a + 2b. Manually placed holes also cannot touch an existing hole orthogonally.
+- During setup, green points are legal and red points illegal. After both finish, the first player places the opening stone. A hole prevents placement; with foundations it blocks both layers.
+
+### 13.3 Floating stones (F)
+
+- **The first 8 placements may only build foundations** (counted by placements; swaps do not count). Top stones are allowed from the 9th placement onward; foundations may still be built later. Click an empty intersection on the lower board to build a foundation, then the upper board's shadow to place a top stone.
+- **A foundation belongs to the player who placed it.** A black/white ring on the lower board marks the owner. Only the owner can place a matching top stone without starting repulsion. If the opponent places on it, the foundation enters a repulsion countdown: initial life L (10–30 moves, default 20, adjustable in 2D settings), decreasing by 1 per action (placements and swaps both count). At 0 the foundation is destroyed, the top stone falls, and it becomes a new foundation of that stone's color with life reset to L.
+- The lower board shows the remaining life as a number (no dash or color text); the upper top stone carries a ring in the foundation owner's color. If the top is empty, matches the owner, or is gray, life stays at L (gray stones pause the timer); an opponent's top stone counts down as above.
+- **Only colored top stones count toward five.** Foundations never form a winning line. A top stone or hole prevents another placement. Landscape shows the boards side by side; portrait stacks them. Holes appear on the top board, with blocked marks below. Holes never swallow foundations.
+
+### 13.4 Fading stones (A)
+
+- Basic weathering: lifetime 5 turns, no gray period. Fading mode: lifetime 24–42 turns, default 30, with a gray period for the last 3 turns.
+- A new stone does not age on its own turn. Every later placement or swap advances aging, tracked in units of 1/4 turn. The ring shows remaining life.
+- Gray stones belong to neither color, still occupy their points, and break lines; only expiry removes them. **Judge the move before aging:** a completed winning five cannot be revoked by aging on that action.
+
+### 13.5 Combined rules
+
+| Combination | Foundations | Top stones and holes |
+|---|---|---|
+| H+F | Owned; can be destroyed by repulsion | Holes block both layers and swallow only destination top stones; moving away releases the base; the repulsion countdown still runs |
+| H+A | No foundations | Stones age, with slower time near holes |
+| F+A | Owned; can be destroyed by repulsion | After a top stone expires, its base can be reused; the repulsion countdown still runs |
+| H+F+A | Foundations age and repel; aging resolves first, then repulsion | Top stones have a gray period; both layers receive time dilation; holes still never swallow bases |
+
+### 13.6 Swapping hole rows or columns
+
+- Select two distinct rows or two distinct columns, at least one containing a hole. Before swapping, complete the required placements: default 5, adjustable from 3–10. This also applies to the first swap. Building a foundation counts as a placement.
+- Only holes swap; **stones and foundations never move**. Matching holes on both lines stay put. An arriving hole swallows the destination top stone but preserves the base. Hole count is conserved; adjacent holes are allowed after a swap.
+- Swapping uses the entire turn and advances aging using the new aura positions. Placement cooldown restarts afterward. Setup hole placement and swaps do not count toward it.
+- Select both lines, inspect the new-hole and swallowed-stone preview, then confirm. Cancel leaves the game unchanged. Removing a stone does not join lines across the empty point.
+
+### 13.7 Time dilation, undo, and replay
+
+- In H+A and H+F+A, the eight neighboring points at Chebyshev distance 1 age by only 0.25 turns per action; distance 2 ages by 0.5; farther points age by 1. Overlapping auras use the slowest rate without stacking.
+- Closer holes mean slower time. Swaps alter the aura environment; accumulated aging is not reset. Gray stones keep aging, as do foundations in H+F+A.
+- An expired gray stone leaves an empty point: **it does not merge separated lines**. Filling that point may create a consecutive five.
+- Undo restores holes, top stones, foundations, life, cooldown, and the active player. 2D records preserve the starting layout, setup holes, placements, and swaps for deterministic replay. Existing 3D/4D records remain readable.

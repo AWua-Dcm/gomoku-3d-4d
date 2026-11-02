@@ -362,3 +362,55 @@ ramène à l'écran de départ.
   bibliothèque d'ouvertures, ni joseki, ni recherche de quiescence.
 - **Les rotations n'ont pas d'animation** : elles se font instantanément, seule la couche tournée est brièvement mise en évidence.
 - **Les rotations ne se font qu'avec les boutons du panneau**, pas en glissant directement dans la vue 3D.
+
+## 13. Mode bidimensionnel
+
+Ce mode utilise un plateau plat indépendant. **Trous noirs (H), fondations communes (F) et pierres éphémères (A)** peuvent être activés séparément ou dans toute combinaison. Tout désactiver donne le jeu classique en 2D. Il n’y a ni bouclage des bords, ni rotation du cube, ni phase jour/nuit.
+
+### 13.1 Classique 2D
+
+- Largeur et hauteur vont chacune de 10 à 30, par défaut 15×15. Les pierres se placent aux **intersections**. Alignez 5 pierres dans l’une des 4 directions : horizontale, verticale ou diagonales.
+- Le premier joueur doit toujours faire exactement 5 ; une ligne de 6 ou plus lui fait perdre. Le second gagne avec 5 ou plus. Si un coup crée cinq et une ligne trop longue, la défaite pour surligne prime. Cette règle ne peut être désactivée dans aucun mode 2D ni aucune combinaison.
+- Sans point jouable ni gagnant, la partie est nulle. Les points vides et les pierres grises interrompent les lignes. Les pierres ne glissent pas automatiquement pour combler un espace.
+
+### 13.2 Trous noirs (H)
+
+- Le nombre de trous aléatoires a va de 3 à floor(intersections/15), par défaut 7 sur 15×15. La graine permet de reproduire la disposition. Les trous ne se touchent pas par un côté ; les diagonales sont autorisées.
+- Avant la partie, chacun peut ajouter le même nombre b de trous, de 0 à 5. Les joueurs alternent, premier joueur d’abord, pour un total de a + 2b. Les trous placés manuellement ne peuvent pas non plus toucher un trou par un côté.
+- Pendant la préparation, les points verts sont légaux, les rouges illégaux. Ensuite, le premier joueur pose la première pierre. Un trou interdit de jouer et bloque les deux étages lorsque les fondations sont actives.
+
+### 13.3 Pierres flottantes (F)
+
+- **Les 8 premières poses sont des fondations** (comptées en poses ; les échanges ne comptent pas). Les pierres du dessus sont autorisées à partir de la 9e pose ; on peut encore poser des fondations ensuite. Le bas construit une fondation, l’ombre en haut permet de poser une pierre.
+- **Une fondation appartient à celui qui l’a posée.** L’anneau noir/blanc en bas indique le propriétaire ; lui seul peut y poser une pierre de sa couleur sans déclencher la répulsion. Si l’adversaire y joue, la fondation entre en compte à rebours : vie initiale L (10–30 coups, 20 par défaut, réglable dans les réglages 2D), diminuée de 1 par action (pose et échange comptent). À 0, la fondation est détruite, la pierre du dessus tombe et devient une nouvelle fondation de sa couleur, vie remise à L.
+- En bas, on affiche le nombre de vie restante (pas de tiret ni de texte de couleur) ; la pierre du dessus porte un anneau de la couleur du propriétaire. Si le dessus est vide, de la même couleur ou gris, la vie reste L (les pierres grises suspendent le compte) ; elle ne diminue qu’avec une pierre adverse.
+- **Seules les pierres supérieures colorées comptent pour cinq.** Les fondations ne forment pas de ligne. Une pierre supérieure ou un trou empêche une pose. Paysage côte à côte, portrait superposé. Les trous sont dessinés en haut avec un marquage en bas ; ils n’absorbent jamais les fondations.
+
+### 13.4 Pierres éphémères (A)
+
+- Érosion simple : durée de 5 coups sans phase grise. Éphémère : 24–42 coups, par défaut 30, dont les 3 derniers en gris.
+- Une pierre neuve ne vieillit pas au coup où elle est posée. Chaque pose ou échange ultérieur avance le temps, calculé par unités de 1/4 de coup. L’anneau indique la durée restante.
+- Une pierre grise n’a plus de couleur, occupe son point et coupe les lignes ; elle ne disparaît qu’à expiration. **La victoire est jugée avant le vieillissement** : cinq déjà complétés ne sont pas annulés.
+
+### 13.5 Combinaisons
+
+| Combinaison | Fondations | Pierres supérieures et trous |
+|---|---|---|
+| H+F | Possédée, peut être détruite par répulsion | Le trou bloque les deux étages et n’absorbe que la pierre supérieure ; son départ libère la base ; le compte à rebours continue |
+| H+A | Aucune | Les pierres vieillissent, plus lentement près des trous |
+| F+A | Possédée, peut être détruite par répulsion | Après disparition d’une pierre, sa base est réutilisable ; le compte à rebours continue |
+| H+F+A | Les fondations vieillissent et subissent la répulsion ; le vieillissement est résolu d’abord | Les pierres supérieures ont une phase grise ; les deux étages subissent la dilatation ; les bases ne sont pas absorbées |
+
+### 13.6 Échange de lignes ou colonnes de trous
+
+- Choisissez deux lignes distinctes de même direction, dont au moins une contient un trou. Le délai demande des poses : 5 par défaut, réglable de 3 à 10. Il vaut aussi avant le premier échange. Poser une fondation compte.
+- Seuls les trous changent de place ; **les pierres et les bases ne bougent pas**. Deux trous aux points correspondants restent en place. Un trou arrivant absorbe la pierre supérieure mais garde la base. Le nombre de trous reste identique ; ils peuvent devenir voisins après échange.
+- L’échange consomme tout le tour et fait vieillir selon les nouvelles auras. Le délai de poses recommence ensuite. La préparation des trous et les échanges ne comptent pas comme poses de pierres.
+- Sélectionnez les deux lignes, vérifiez l’aperçu des nouveaux trous et des pierres absorbées, puis confirmez. Annuler ne modifie rien. Retirer une pierre ne relie pas deux lignes à travers le vide.
+
+### 13.7 Dilatation du temps, annulation et relecture
+
+- En H+A et H+F+A, les huit voisins à distance de Tchebychev 1 vieillissent de 0.25 coup par action ; à distance 2, de 0.5 ; plus loin, de 1. En cas de recouvrement, seul le rythme le plus lent prévaut.
+- Plus un trou est proche, plus le temps ralentit. Un échange déplace l’environnement temporel sans remettre l’âge à zéro. Les pierres grises et les bases de H+F+A continuent de vieillir.
+- Une pierre grise expirée laisse un point vide : **elle ne fusionne pas les lignes séparées**. Remplir le point peut créer cinq pierres consécutives.
+- Annuler restaure trous, pierres, bases, durée, délai d’échange et joueur actif. Les parties en 2D conservent disposition initiale, trous de préparation, poses et échanges pour une relecture déterministe. Les anciennes parties en 3D/4D restent lisibles.

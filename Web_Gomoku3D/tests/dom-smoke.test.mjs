@@ -361,7 +361,6 @@ let renderRulesMarkdown = null, escapeHtmlNS = null;
 let TEXT_EN = null, STATIC_EN = null, t = null;
 let clampPan2d = null, OrbitCameraNS = null, GESTURE = null;
 let sanitizeEmojiTextNS = null, emojiGraphemesNS = null;
-let NetNS = null;
 let CORE_TEXT = null, LANG_INFO = null, pluralFormNS = null, PLURAL_FORMS = null;
 let TEXT_ALL = null, STATIC_ALL = null, LANGS_LIST = null;
 let GameRecords = null, RECORDS_KEY = null, RECORD_LIMIT = 0;
@@ -379,7 +378,6 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   const runner = new Function(
     "document", "window", "requestAnimationFrame", "console", "Set", "Map",
     fullScript + "\nreturn { Game: (typeof Game !== 'undefined') ? Game : null," +
-      " Net: (typeof Net !== 'undefined') ? Net : null," +
       " Palette: Palette, FALLBACK_COLORS: FALLBACK_COLORS, cellSize: cellSize," +
       " BoardLimits: BoardLimits," +
       " renderRulesMarkdown: renderRulesMarkdown, escapeHtml: escapeHtml," +
@@ -429,7 +427,6 @@ step("script 能在 DOM 桩环境里加载并完成 Game.init()", () => {
   RendererNS = NS.Renderer;
   clampPan2d = NS.clampPan2d; OrbitCameraNS = NS.OrbitCamera; GESTURE = NS.GESTURE;
   sanitizeEmojiTextNS = NS.sanitizeEmojiText; emojiGraphemesNS = NS.emojiGraphemes;
-  NetNS = NS.Net;
   CORE_TEXT = NS.CORE_TEXT; LANG_INFO = NS.LANG_INFO; pluralFormNS = NS.pluralForm;
   TEXT_ALL = NS.TEXT_ALL; STATIC_ALL = NS.STATIC_ALL; LANGS_LIST = NS.LANGS_LIST;
   GameRecords = NS.GameRecords; RECORDS_KEY = NS.RECORDS_KEY; RECORD_LIMIT = NS.RECORD_LIMIT;
@@ -1025,144 +1022,11 @@ step("emoji：客户端只接受 1–3 个 emoji", () => {
   if (emojiGraphemesNS("😀😂👍").length !== 3) throw new Error("字素切分应得到 3 个");
 });
 
-step("每步限时：0 或 10–600，控件状态同步", () => {
-  // 公开版（build-public 剥掉 ONLINE）没有 Net；这一组只对联机版有意义。
-  if (!NetNS) return;
-  if (Game.clampMoveLimit(5) !== 10) throw new Error("小于 10 应夹到 10");
-  if (Game.clampMoveLimit(601) !== 600) throw new Error("大于 600 应夹到 600");
-  if (Game.clampMoveLimit(0) !== 0) throw new Error("0 应保持不限时");
-  if (Game.clampMoveLimit("60") !== 60) throw new Error("字符串秒数应可用");
-  NetNS.moveLimitSec = 60;
-  Game.settingsDraft = { moveLimitSec: 30 };
-  Game.syncMoveLimitControls();
-  if (!Game.el.onlineLimitCustom.classList.contains("sel")) throw new Error("大厅自定义键应选中");
-  if (Game.el.onlineLimitSec.value !== "60") throw new Error("大厅输入框应显示 60");
-  if (Game.el.onlineLimitSec.disabled) throw new Error("自定义时输入框应可编辑");
-  if (!Game.el.onlineSetLimitCustom.classList.contains("sel")) throw new Error("下一局自定义键应选中");
-  if (Game.el.onlineSetLimitSec.value !== "30") throw new Error("下一局输入框应显示 30");
-  NetNS.moveLimitSec = 0;
-  Game.settingsDraft = null;
-  Game.syncMoveLimitControls();
-  if (!Game.el.onlineLimitOff.classList.contains("sel")) throw new Error("不限时应选中");
-  if (!Game.el.onlineLimitSec.disabled) throw new Error("不限时时输入框应禁用");
-});
+// 无联机版不包含此联机专用用例。
 
-step("联机开局确认：发送失败不关弹窗，成功才改本地状态", () => {
-  // 公开版（build-public 剥掉 ONLINE）没有这些；联机版才有。
-  if (!NetNS || !Game.el.onlineStart) return;
-  const saved = {
-    online: NetNS.online, started: NetNS.started, awaitingPeer: NetNS.awaitingPeer,
-    myReady: NetNS.myReady, ready: NetNS.ready, declineStart: NetNS.declineStart,
-  };
-  try {
-    NetNS.online = true; NetNS.started = false; NetNS.awaitingPeer = false;
-    Game.el.onlineStart.classList.remove("off");
+// 无联机版不包含此联机专用用例。
 
-    // busy 时 send 返回 ok:false：不能把弹窗关掉，否则这一下「否」被吞了。
-    NetNS.declineStart = () => ({ ok: false, reason: "上一步还没发完" });
-    Game.answerOnlineStart(false);
-    if (Game.el.onlineStart.classList.contains("off"))
-      throw new Error("decline 发送失败时不该关闭弹窗");
-
-    let declined = 0;
-    NetNS.declineStart = () => { declined++; return { ok: true }; };
-    Game.answerOnlineStart(false);
-    if (!declined || !Game.el.onlineStart.classList.contains("off"))
-      throw new Error("decline 发送成功后应关闭弹窗");
-
-    NetNS.myReady = false;
-    NetNS.ready = () => ({ ok: false, reason: "上一步还没发完" });
-    Game.answerOnlineStart(true);
-    if (NetNS.myReady) throw new Error("ready 发送失败时不该把自己标成已确认");
-
-    NetNS.ready = () => ({ ok: true });
-    Game.answerOnlineStart(true);
-    if (!NetNS.myReady) throw new Error("ready 发送成功后应标为已确认");
-  } finally {
-    NetNS.online = saved.online; NetNS.started = saved.started;
-    NetNS.awaitingPeer = saved.awaitingPeer; NetNS.myReady = saved.myReady;
-    NetNS.ready = saved.ready; NetNS.declineStart = saved.declineStart;
-    Game.el.onlineStart.classList.add("off");
-    Game.syncOnlineStart();
-  }
-});
-
-step("联机退出记账：胜/负/中止三种记录都带原因", () => {
-  if (!NetNS || !Game.el.onlineStart) return;
-  const saved = { online: NetNS.online, seat: NetNS.seat, lang: Game.lang };
-  const savedLang = Game.lang;
-  const savedRecords = GameRecords.load();
-  Game.setLang("zh");
-  GameRecords.clear();
-  const setupOnlineGame = (withMove) => {
-    Game.setSetupAi("human");
-    Game.closeSetup();
-    Game.newGame(15, 1);
-    Game.isOnlineGame = true;
-    Game.gameTimed = true;
-    Game.recStart = Date.now() - 5000;
-    Game.clockStarted = true;
-    Game.recId = null;
-    Game.recSession = null;
-    if (withMove) Game.session.place(0, 0, 0);   // n=1；计时已在跑
-  };
-  try {
-    // 赢家：对方退出，记胜并注明原因；用时取服务器 elapsed。
-    NetNS.online = true; NetNS.seat = 1;
-    setupOnlineGame(true);
-    Game.onRoomClosed({ reason: "exit", by: 2, winner: 1, started: true,
-                        elapsed: 4567, moveCount: 1 });
-    let list = GameRecords.load();
-    if (list.length !== 1) throw new Error("对方退出后应记一条，实际 " + list.length);
-    const win = list[0];
-    if (win.er !== 1 || win.w !== 1 || win.dur !== 4567 || win.n !== 1)
-      throw new Error("胜方记录不对：" + JSON.stringify({ er: win.er, w: win.w, dur: win.dur, n: win.n }));
-    if (Game.recordRowText(win).indexOf("对方退出") < 0)
-      throw new Error("记录文字应注明「对方退出」：" + Game.recordRowText(win));
-
-    // 退出者：自己退出，记负；文字是「你退出」。
-    GameRecords.clear();
-    setupOnlineGame(true);
-    NetNS.seat = 2;
-    Game.onRoomClosed({ reason: "exit", by: 2, winner: 1, started: true,
-                        elapsed: 3210, moveCount: 1 });
-    list = GameRecords.load();
-    const lose = list[0];
-    if (!lose || lose.er !== 2 || lose.w !== 1 || lose.dur !== 3210 || lose.n !== 1)
-      throw new Error("负方记录不对：" + JSON.stringify(lose && { er: lose.er, w: lose.w, dur: lose.dur, n: lose.n }));
-    if (Game.recordRowText(lose).indexOf("你退出") < 0)
-      throw new Error("记录文字应注明「你退出」：" + Game.recordRowText(lose));
-
-    // 未开局退出：仍记一局，但标成中止、0 手、无用时。
-    GameRecords.clear();
-    Game.setSetupAi("human");
-    Game.closeSetup();
-    Game.newGame(15, 1);
-    Game.isOnlineGame = true;
-    Game.gameTimed = true;
-    Game.clockStarted = false;
-    Game.recId = null;
-    Game.recSession = null;
-    NetNS.seat = 1;
-    Game.onRoomClosed({ reason: "exit", by: 2, winner: 0, started: false,
-                        elapsed: 0, moveCount: 0 });
-    list = GameRecords.load();
-    const aborted = list[0];
-    if (!aborted || aborted.er !== 3 || aborted.w !== 0 || aborted.n !== 0 || aborted.dur !== 0)
-      throw new Error("中止记录不对：" + JSON.stringify(aborted && { er: aborted.er, w: aborted.w, n: aborted.n, dur: aborted.dur }));
-    const abortText = Game.recordRowText(aborted);
-    if (abortText.indexOf("中止") < 0 || abortText.indexOf("未开局退出") < 0)
-      throw new Error("中止记录文字不对：" + abortText);
-  } finally {
-    GameRecords.clear();
-    for (let i = savedRecords.length - 1; i >= 0; i--) GameRecords.add(savedRecords[i]);
-    Game.setLang(savedLang);
-    Game.isOnlineGame = false;
-    NetNS.online = saved.online; NetNS.seat = saved.seat;
-    Game.newGame(15, 1);
-    Game.openSetup();
-  }
-});
+// 无联机版不包含此联机专用用例。
 
 step("拓扑影子：内部子没有像，面上 1 个、棱上 3 个、角上 7 个", () => {
   const d = [10, 10, 10];
@@ -3633,57 +3497,45 @@ step("视图复位：只清缩放和平移，不动旋转（转到的角度是�
   Game.pan3d = keepPan3; Game.zoom2d = keepZoom; Game.pan2d = keepPan2;
 });
 
-step("点击判定：1 倍下立即落子，放大后先扣一个窗口，双击则复位且不落子", () => {
-  const keepTap = Game.lastTap, keepPinch = Game.pinchEndedAt;
-  Game.lastTap = { gl: null, layer: null };
-  Game.pinchEndedAt = -1e9;
-  Game.camera.homeDistance = Game.camera.distance;   // 1 倍
-  Game.pan3d = [0, 0];
-  Game.cancelPendingTap();
-  let placed = 0;
-  const place = () => { placed++; };
-  Game.handleTap("gl", 10, 10, place);
-  if (placed !== 1) throw new Error("1 倍下点一下应当场落子，实际落子 " + placed);
-  if (Game.pendingTap) throw new Error("1 倍下不该留下扣住的落子");
+step("二次确认：单击不落、同格双击落一次、超时和异格不确认，缩放不受双击影响", () => {
+  const keep = Game.confirmMove, clock = Game.nowMs, keepPinch = Game.pinchEndedAt;
+  let now = 10000, n = 0;
+  Game.nowMs = () => now; Game.pinchEndedAt = -1e9;
+  Game.cancelPendingTap(); Game.confirmMove = false;
+  Game.camera.distance = Game.camera.homeDistance * .5;
+  const distance = Game.camera.distance;
+  const tap = (x=2,y=2,key="gl") => Game.handleTap(key,100,100,()=>n++,{x,y});
+  tap();
+  if(n!==1||Game.pendingTap)throw Error("关闭确认时，放大后的单击也必须立即落子");
+  Game.confirmMove = true; n=0; Game.cancelPendingTap();
+  tap(); Game.flushPendingTap();
+  if(n!==0)throw Error("单击或离开操作不能自动补落");
+  tap(); now+=80; tap();
+  if(n!==1||Game.pendingTap)throw Error("同格双击只能落一颗");
+  if(Game.camera.distance!==distance)throw Error("双击不得恢复大小");
+  n=0;tap();now+=80;tap(3,2);
+  if(n!==0)throw Error("相同像素、不同格不能确认为双击");
+  now+=GESTURE.TAP_WINDOW_MS+1;tap(3,2);
+  if(n!==0)throw Error("超时后不能自动确认");
+  now+=80;tap(3,2,"layer");
+  if(n!==0)throw Error("不同棋盘不能互相确认");
+  Game.cancelPendingTap();tap();Game.activeLayer++;now+=80;tap();Game.activeLayer--;
+  if(n!==0)throw Error("换层后不能确认旧落点");
+  Game.cancelPendingTap();tap();Game.cancelPendingTap();now+=80;tap();
+  if(n!==0)throw Error("清理操作后不能使用上一次点击");
+  Game.pinchEndedAt=now;tap();
+  if(n!==0)throw Error("捏合后不能误落子");
+  Game.confirmMove=keep;Game.nowMs=clock;Game.pinchEndedAt=keepPinch;Game.cancelPendingTap();
+});
 
-  // 放大之后：第一下不落子，等窗口
-  Game.camera.distance = Game.camera.homeDistance * 0.5;
-  let n2 = 0;
-  const place2 = () => { n2++; };
-  Game.handleTap("gl", 100, 100, place2);
-  if (n2 !== 0) throw new Error("放大后第一下不该立刻落子，实际落了 " + n2);
-  if (!Game.pendingTap) throw new Error("放大后第一下应当被扣住");
-  // 手动"等过窗口"：把定时器那一支走一遍（flush 就是定时器到点干的事）
-  Game.flushPendingTap();
-  if (n2 !== 1) throw new Error("窗口过后那一子要补上，实际落子 " + n2);
-
-  // 双击：第二下不落子、走复位
-  const distZoomed = Game.camera.distance;
-  let n3 = 0;
-  Game.handleTap("gl", 200, 200, () => n3++);
-  Game.handleTap("gl", 201, 201, () => n3++);
-  if (n3 !== 0) throw new Error("双击不该落子，实际落了 " + n3);
-  if (Game.pendingTap) throw new Error("双击之后不该还扣着落子");
-  if (Math.abs(Game.camera.distance - Game.camera.homeDistance) > 1e-9)
-    throw new Error("双击应复位到 homeDistance，实际 " + Game.camera.distance + "（放大态是 " + distZoomed + "）");
-
-  // 落在【不同的格子】上快速连点两下：不算双击，两子都要落
-  Game.camera.distance = Game.camera.homeDistance * 0.5;
-  let n4 = 0;
-  Game.handleTap("gl", 300, 300, () => n4++);
-  Game.handleTap("gl", 500, 300, () => n4++);   // 隔了 200px
-  Game.flushPendingTap();
-  if (n4 !== 2) throw new Error("不同格子上的两次点击不该被当成双击（那是连下两手），实际落了 " + n4);
-
-  // 刚捏完那一拍：不吃成点击
-  Game.camera.distance = Game.camera.homeDistance;
-  Game.pinchEndedAt = Game.nowMs();
-  let n5 = 0;
-  Game.handleTap("gl", 400, 400, () => n5++);
-  if (n5 !== 0) throw new Error("两指捏完那一拍不该落子，实际落了 " + n5);
-  Game.pinchEndedAt = keepPinch;
-  Game.cancelPendingTap();
-  Game.lastTap = keepTap;
+step("二次确认按钮可切换，恢复大小按钮保留视角并清除待确认点击", () => {
+  const keep=Game.confirmMove;
+  Game.confirmMove=false;Game.syncMoveControls();
+  Game.toggleMoveConfirmation();
+  if(!Game.confirmMove||Game.el.confirmMoveBtn.getAttribute("aria-pressed")!=="true")throw Error("按钮未开启");
+  Game.toggleMoveConfirmation();
+  if(Game.confirmMove||Game.el.confirmMoveBtn.getAttribute("aria-pressed")!=="false")throw Error("再次点击未关闭");
+  Game.confirmMove=keep;Game.syncMoveControls();
 });
 
 step("起始界面上两指手势不生效，关掉之后恢复生效", () => {
@@ -4268,7 +4120,8 @@ step("v3.1.7：重开 / 悔棋要丢掉「双击窗口里扣着的那一子」",
   Game.setSetupSpin(false);
   Game.setSetupMode(false);
   Game.newGame([8, 8, 8], 1);
-  Game.camera.distance = Game.camera.homeDistance * 0.7;     // 让 handleTap 走"被扣住"那一支
+  const keepConfirm = Game.confirmMove; Game.confirmMove = true;
+  Game.camera.distance = Game.camera.homeDistance * 0.7;
   let fired = 0;
   Game.handleTap("gl", 400, 300, () => { fired++; }, { x: 5, y: 5 });
   if (!Game.pendingTap) throw new Error("前置：缩放之后这一下应当被扣进双击窗口");
@@ -4282,6 +4135,7 @@ step("v3.1.7：重开 / 悔棋要丢掉「双击窗口里扣着的那一子」",
   Game.undo();
   if (Game.pendingTap) throw new Error("悔棋之后 pendingTap 必须被丢掉");
   if (fired !== 0) throw new Error("被扣住的那两子都不该落地，实际落了 " + fired + " 颗");
+  Game.confirmMove = keepConfirm;
 });
 
 step("v3.1.7：教学关按「重开」是重开这一关，不是清空棋盘", () => {

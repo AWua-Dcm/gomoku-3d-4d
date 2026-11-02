@@ -25,3 +25,27 @@ _verify/.chrome-profile/
 
 # Obsidian 打开仓库根当 vault 时生成（工具配置不进库，同 .vscode/）
 .obsidian/
+
+# 公开版构建产物（_verify/build-public.mjs 生成；不要手工编辑或提交）
+dist-public/
+
+# 线上部署版构建产物（保留联机；不要手工编辑或提交）
+dist-online/
+
+# 备案审核版构建产物（保留联机、无打赏；不要手工编辑或提交）
+dist-online-review/
+
+# 无打赏的公开版（--no-tip 且不保留联机时生成的备用产物）
+dist-public-notip/
+
+# 内核模块产物（_verify/build-core.mjs 生成，给未来小程序/其它运行时用）
+dist-core/
+
+# GitHub Pages 构建产物（CI 里生成；本地跑构建时也不要提交）
+_site/
+
+# 宣传片只留本地（成片 / 工程 / 预览页都不进任何仓库）
+宣传片/
+
+# 本地验证结果
+_verify/results/
