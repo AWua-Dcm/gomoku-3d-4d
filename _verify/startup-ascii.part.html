@@ -17,6 +17,7 @@
   const chars = '@%#*+=:.';
   let width=0, height=0, layers=[], frame=0, stopped=false, last=0;
   const started=performance.now(), pointer={x:-1000,y:-1000};
+  let stroke=0;
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function resize() {
     if (stopped) return;
@@ -45,7 +46,7 @@
       const pixels=ink.getImageData(0,0,mask.width,mask.height).data, points=[];
       for(let y=row/2;y<height;y+=row)for(let x=step/2;x<width;x+=step){
         const alpha=pixels[(Math.floor(y)*mask.width+Math.floor(x))*4+3];
-        if(alpha>70)points.push({x,y,dx:0,dy:0,c:chars[(Math.floor(x/step)*7+Math.floor(y/row)*3)%chars.length],a:alpha/255});
+        if(alpha>70)points.push({x,y,index:(Math.floor(x/step)*7+Math.floor(y/row)*3)%chars.length,c:chars[(Math.floor(x/step)*7+Math.floor(y/row)*3)%chars.length],glyph:null,until:0,a:alpha/255});
       }
       return points;
     });
@@ -55,19 +56,11 @@
   }
   function draw(points,opacity,time) {
     if(opacity<=0)return;
-    const radius=width<700?65:110;
     for(const p of points){
-      const dx=p.x-pointer.x,dy=p.y-pointer.y,d=Math.hypot(dx,dy);
-      const power=!reduced&&d<radius?(1-d/radius)*25:0;
-      const tx=d?dx/d*power:0,ty=d?dy/d*power:0;
-      p.dx+=(tx-p.dx)*.18;p.dy+=(ty-p.dy)*.18;
-      // Low-amplitude waves keep the calligraphic silhouette readable at rest.
-      const amplitude=reduced?0:(width<700?.8:1.5);
-      const flowX=Math.sin(p.y*.022+time*.55)*amplitude;
-      const flowY=Math.sin(p.x*.014-time*.48)*amplitude;
+      // Keep every ASCII cell anchored; only its glyph and ink intensity change.
       const breath=reduced?1:.96+.04*Math.sin(time*.65+p.x*.006);
       ctx.fillStyle='rgba(52,44,34,'+(opacity*(.55+p.a*.45)*breath)+')';
-      ctx.fillText(p.c,p.x+p.dx+flowX,p.y+p.dy+flowY);
+      ctx.fillText(time*1000<p.until?p.glyph:p.c,p.x,p.y);
     }
   }
   function tick(now) {
@@ -81,7 +74,16 @@
     draw(layers[cycle]||[],mix,elapsed/1000);
     canvas.dataset.language=cycle?'en':'zh';
   }
-  function move(e){const r=canvas.getBoundingClientRect();pointer.x=e.clientX-r.left;pointer.y=e.clientY-r.top;}
+  function move(e){
+    const r=canvas.getBoundingClientRect();pointer.x=e.clientX-r.left;pointer.y=e.clientY-r.top;
+    const radius=width<700?26:44,until=performance.now()-started+700;
+    stroke=(stroke+1)%(chars.length-1);
+    for(const points of layers)for(const p of points){
+      if(Math.hypot(p.x-pointer.x,p.y-pointer.y)<radius){
+        p.glyph=chars[(p.index+1+stroke)%chars.length];p.until=until;
+      }
+    }
+  }
   function leave(){pointer.x=-1000;pointer.y=-1000;}
   function down(e){move(e);if(canvas.setPointerCapture)canvas.setPointerCapture(e.pointerId);}
   canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerdown',down);

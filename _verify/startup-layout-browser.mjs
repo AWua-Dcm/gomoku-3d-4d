@@ -58,6 +58,11 @@ try {
   await send('Runtime.enable');await send('Page.enable');
   await send('Emulation.setCPUThrottlingRate',{rate:4});
   await send('Emulation.setDeviceMetricsOverride',{width:393,height:852,deviceScaleFactor:1,mobile:true});
+  await send('Page.addScriptToEvaluateOnNewDocument',{source: `(()=>{
+    const clear=CanvasRenderingContext2D.prototype.clearRect,fill=CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.clearRect=function(...a){if(this.canvas.id==='bootAscii')window.__bootCalls=[];return clear.apply(this,a);};
+    CanvasRenderingContext2D.prototype.fillText=function(text,x,y,...a){if(this.canvas.id==='bootAscii')(window.__bootCalls||=[]).push([x,y,text]);return fill.call(this,text,x,y,...a);};
+  })()`});
   await send('Page.navigate',{url:'http://127.0.0.1:'+server.address().port+'/'});
   await until('!!document.getElementById("setup")');
   check(await ev('document.documentElement.classList.contains("app-loading") && getComputedStyle(document.getElementById("setup")).visibility === "hidden" && getComputedStyle(document.getElementById("bootStatus")).visibility === "visible"'),'incomplete download only shows startup screen');
@@ -68,11 +73,13 @@ try {
   check(await ev('document.getElementById("bootAscii").toDataURL()')!==resting,'title flows gently without pointer input');
   check(await ev('getComputedStyle(document.getElementById("bootStatus"),"::before").animationName === "bootPaperFlow" && getComputedStyle(document.getElementById("bootStatus"),"::after").animationName === "bootPaperFlow"'),'two broad background washes drift slowly');
   await shot('loading-mobile');
-  const initial=await ev('document.getElementById("bootAscii").toDataURL()');
+  const initial=await ev('window.__bootCalls');
   const point=await ev(`(()=>{const c=document.getElementById('bootAscii'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,r=c.getBoundingClientRect();for(let k=0;k<d.length;k+=4)if(d[k+3]>100)return {x:r.x+(k/4%c.width)*r.width/c.width,y:r.y+Math.floor(k/4/c.width)*r.height/c.height};})()`);
   check(!!point,'ASCII characters rendered before main script arrives');
   await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x,y:point.y});await sleep(350);
-  check(await ev('document.getElementById("bootAscii").toDataURL()')!==initial,'pointer displaces ASCII characters');
+  const hovered=await ev('window.__bootCalls');
+  check(JSON.stringify(initial.map(p=>p.slice(0,2)))===JSON.stringify(hovered.map(p=>p.slice(0,2))),'pointer leaves all ASCII positions unchanged');
+  check(initial.some((p,i)=>p[2]!==hovered[i][2]),'pointer changes characters along its path');
   await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
   await sleep(11500);
   check(await ev('document.getElementById("bootAscii").dataset.language === "en"'),'title switches to English after ten seconds');
