@@ -1,10 +1,18 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="app-loading">
 <head>
 <meta name="application-version" content="4.0.0">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>五子魔方</title>
+<!-- Keep the static, pre-initialization controls out of the first paint. -->
+<style id="startup-style">
+html { background: #efe8db; }
+html.app-loading body { visibility: hidden; }
+#bootStatus { position: fixed; inset: 0; z-index: 1000; display: grid; place-content: center; gap: 12px; text-align: center; color: #716657; background: #efe8db; font: 15px/1.6 system-ui, sans-serif; visibility: visible; }
+#bootStatus strong { font-size: 24px; font-weight: 500; letter-spacing: .15em; }
+</style>
+
 <!-- 图标内联成 data URI，守住"单文件"：32/16 是简化版（小尺寸也认得出），
      180 是 iOS「添加到主屏幕」用的 apple-touch-icon。图标本身是立体棋盘 +
      中心三颗棋子，背景取古风墨色，不写文字。 -->
@@ -2084,9 +2092,26 @@
 @media(max-width:600px){.two-d-hud{gap:6px;min-height:24px;font-size:11px}.two-d-toolbar{gap:4px;padding:4px;min-height:32px}.two-d-toolbar button,.two-d-toolbar select{padding:3px 6px;min-height:30px}.two-d-caption{font-size:10px}.two-d-toolbar .two-d-status{max-width:170px}}
 
 /* GOMOKU-2D-CSS-END */
+/* SETUP-PARAMETERS-BEGIN: one shared set of columns, regardless of hint length. */
+#setup.fourDSetup #dimsSlot { width: 100%; max-width: 580px; }
+#setup.fourDSetup #dimsRow4d, #setup.fourDSetup #coolRow, #setup.fourDSetup #phaseRow {
+  display: grid; grid-template-columns: minmax(90px, var(--paramLabelW, 90px)) 76px 12px minmax(0, 1fr);
+  column-gap: 10px; width: 100%; max-width: 580px; margin-inline: auto; height: auto; min-height: 38px;
+}
+#setup.fourDSetup #dimsRow4d > .rowLabel, #setup.fourDSetup #coolRow > .rowLabel, #setup.fourDSetup #phaseRow > .rowLabel { grid-column: 1; width: 100%; white-space: nowrap; }
+#setup.fourDSetup #dimsRow4d > .dimInput, #setup.fourDSetup #coolRow > .dimInput, #setup.fourDSetup #phaseRow > .dimInput { grid-column: 2; grid-row: 1; width: 100%; box-sizing: border-box; }
+#setup.fourDSetup #dimsRow4d > .dimTimes { grid-column: 3; grid-row: 1; }
+#setup.fourDSetup #dimsRow4d > .hint, #setup.fourDSetup #coolRow > .hint, #setup.fourDSetup #phaseRow > .hint { grid-column: 4; grid-row: 1; min-width: 0; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+@media (max-width: 400px) {
+  #setup.fourDSetup #dimsRow4d, #setup.fourDSetup #coolRow, #setup.fourDSetup #phaseRow { grid-template-columns: minmax(78px, var(--paramLabelW, 90px)) 54px 8px minmax(0, 1fr); column-gap: 6px; }
+}
+/* SETUP-PARAMETERS-END */
+
 </style>
 </head>
 <body class="paper">
+<div id="bootStatus" role="status" aria-live="polite"><strong>五子魔方</strong><span>正在准备棋盘…</span></div>
+<noscript><style>html.app-loading body { visibility: visible; } #bootStatus { display: none; }</style><p>请启用 JavaScript 后刷新页面。</p></noscript>
 
 <!-- RULES-EMBED-BEGIN -->
 <!-- 由 _verify/embed-rules.mjs 从 Web_Gomoku3D/RULES_SPEC.md 生成，不要手改。
@@ -17454,6 +17479,7 @@ const Game = {
     // 下面那四条 order 规则）。四维、以及三维没勾旋转时这个类不挂，逐像素与改动前相同。
     if (this.el.setup) {
       this.el.setup.classList.toggle("cool3d", !on && this.setupSpin);
+      this.el.setup.classList.toggle("fourDSetup", on);
     }
     if (this.el.phaseRow) this.el.phaseRow.style.display = on ? "" : "none";
     this.syncExtraRow(on);
@@ -17677,17 +17703,21 @@ const Game = {
   syncLabelWidth() {
     const setup = this.el.setup;
     if (!setup || !setup.style || typeof setup.style.setProperty !== "function") return;
-    const ids = ["rowLabelMode", "rowLabelFirst", "rowLabelAi", "rowLabelOrder",
-                 "rowLabelSize3d", "rowLabelSize4d", "rowLabelCool"];
+    const ids = ["rowLabelSize4d", "rowLabelCool", "rowLabelPhase"];
     let w = 0;
     for (const id of ids) {
-      const el = this.el[id];
+      const el = document.getElementById(id);
       if (!el || typeof el.getBoundingClientRect !== "function") continue;
-      const r = el.getBoundingClientRect();
+      let r = el.getBoundingClientRect();
+      // Measure the text, so a previous column width cannot prevent shrinking after a language change.
+      if (document.createRange) {
+        const range = document.createRange(); range.selectNodeContents(el);
+        r = range.getBoundingClientRect();
+      }
       if (r && isFinite(r.width) && r.width > w) w = r.width;
     }
     if (!(w > 0)) return;
-    setup.style.setProperty("--labelW", Math.ceil(w) + "px");
+    setup.style.setProperty("--paramLabelW", Math.ceil(w) + "px");
   },
 
   /**
@@ -20053,7 +20083,18 @@ if (typeof document !== "undefined") {
      start() 会安静地什么都不做，背景就永远是空的（而且不报错，很难查）。 */
 
 
-  const boot = function () { InkField.init(); Game.init(); Keymap.init(); };
+  const boot = function () {
+    try {
+      InkField.init(); Game.init(); Keymap.init();
+      const status = document.getElementById("bootStatus");
+      if (status) status.style.display = "none";
+      document.documentElement.classList.remove("app-loading");
+    } catch (error) {
+      const status = document.getElementById("bootStatus");
+      if (status) status.textContent = "启动失败，请刷新页面重试。";
+      throw error;
+    }
+  };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 }

@@ -36,7 +36,10 @@ function walk(dir, out = []) {
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
     if (ent.name.startsWith('.') || ent.name === 'node_modules') continue;
     const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) walk(p, out);
+    if (ent.isDirectory()) {
+      // An isolated release checkout is a separate vault, not a second copy of this vault.
+      if (!fs.existsSync(path.join(p, ".git"))) walk(p, out);
+    }
     else if (ent.isFile()) out.push(p);
   }
   return out;

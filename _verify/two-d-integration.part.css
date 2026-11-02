@@ -43,11 +43,11 @@
 #stage.twod:not(.preview) #twoDBoardHost { display:block; }
 /* 终局横幅和 #twoDBoardHost 同在 #view 里；棋盘层有 z-index:1，横幅默认 auto，
    二维下会被棋盘层盖住 —— 看得见、拖不动、关闭也点不到。抬到棋盘之上、底栏之下。 */
-#stage.twod:not(.preview) #banner { z-index: 3; }
+#stage.twod:not(.preview) #banner { z-index: 6; }
 #stage.twod:not(.preview) #gl, #stage.twod:not(.preview) #modebar, #stage.twod:not(.preview) #hintbox { display:none; }
 #stage.twod:not(.preview) #panel { position:absolute; left:0; right:0; bottom:0; height:auto; max-height:122px; padding:8px 16px; z-index:8; border-top:1px solid var(--border); border-left:0; overflow:visible; gap:3px; }
 #stage.twod:not(.preview) #panel > :not(#statusRow):not(#info):not(#buttons):not(#emojiSlot) { display:none !important; }
-#stage.twod:not(.preview) #statusRow { min-height:20px; margin:0; justify-content:center; font-size:15px; }
+#stage.twod:not(.preview) #statusRow { min-height:20px; margin:0; justify-content:center; font-size:15px; padding-right:88px; }
 #stage.twod:not(.preview) #info { margin:0; text-align:center; font-size:12px; min-height:18px; }
 #stage.twod:not(.preview) #buttons { width:min(660px,100%); margin:0 auto; flex-wrap:nowrap; }
 #stage.twod:not(.preview) #buttons button { min-width:0; font-size:13px; padding:8px 3px; }
