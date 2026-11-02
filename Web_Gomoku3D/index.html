@@ -13,6 +13,16 @@ html.app-loading body { visibility: hidden; }
 #bootAscii { display: block; width: 100vw; height: clamp(132px, 29vw, 480px); touch-action: none; cursor: crosshair; }
 #bootFallback { position: absolute; width: 94vw; text-align: center; font: 600 clamp(68px, 21vw, 360px)/1 "BrushSub", "STXingkai", "KaiTi", serif; }
 #bootLabel { font-size: 15px; letter-spacing: .12em; user-select: none; pointer-events: none; }
+
+/* Quiet, broad washes: no extra symbols or small particles behind the title. */
+#bootStatus { isolation: isolate; overflow: hidden; }
+#bootStatus::before, #bootStatus::after { content: ""; position: absolute; inset: -15%; z-index: -1; pointer-events: none; will-change: transform;
+  background: radial-gradient(ellipse at 22% 38%, rgba(126,143,136,.09), transparent 54%), radial-gradient(ellipse at 78% 67%, rgba(170,142,102,.09), transparent 57%);
+  animation: bootPaperFlow 28s ease-in-out infinite alternate;
+}
+#bootStatus::after { background: radial-gradient(ellipse at 62% 22%, rgba(255,253,243,.48), transparent 58%); animation-duration: 36s; animation-direction: alternate-reverse; }
+@keyframes bootPaperFlow { from { transform: translate3d(-3%, 1%, 0) scale(1); } to { transform: translate3d(4%, -3%, 0) scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { #bootStatus::before, #bootStatus::after { animation: none; will-change: auto; } }
 </style>
 
 <!-- 图标内联成 data URI，守住"单文件"：32/16 是简化版（小尺寸也认得出），
@@ -2167,7 +2177,7 @@ html.app-loading body { visibility: hidden; }
     ctx.textAlign='center';ctx.textBaseline='middle';
     document.getElementById('bootFallback').style.display='none';
   }
-  function draw(points,opacity) {
+  function draw(points,opacity,time) {
     if(opacity<=0)return;
     const radius=width<700?65:110;
     for(const p of points){
@@ -2175,8 +2185,13 @@ html.app-loading body { visibility: hidden; }
       const power=!reduced&&d<radius?(1-d/radius)*25:0;
       const tx=d?dx/d*power:0,ty=d?dy/d*power:0;
       p.dx+=(tx-p.dx)*.18;p.dy+=(ty-p.dy)*.18;
-      ctx.fillStyle='rgba(52,44,34,'+(opacity*(.55+p.a*.45))+')';
-      ctx.fillText(p.c,p.x+p.dx,p.y+p.dy);
+      // Low-amplitude waves keep the calligraphic silhouette readable at rest.
+      const amplitude=reduced?0:(width<700?.8:1.5);
+      const flowX=Math.sin(p.y*.022+time*.55)*amplitude;
+      const flowY=Math.sin(p.x*.014-time*.48)*amplitude;
+      const breath=reduced?1:.96+.04*Math.sin(time*.65+p.x*.006);
+      ctx.fillStyle='rgba(52,44,34,'+(opacity*(.55+p.a*.45)*breath)+')';
+      ctx.fillText(p.c,p.x+p.dx+flowX,p.y+p.dy+flowY);
     }
   }
   function tick(now) {
@@ -2186,8 +2201,8 @@ html.app-loading body { visibility: hidden; }
     const elapsed=now-started,cycle=Math.floor(elapsed/10000)%2;
     const mix=elapsed<10000?1:Math.min(1,(elapsed%10000)/1500);
     ctx.clearRect(0,0,width,height);
-    if(mix<1)draw(layers[1-cycle]||[],1-mix);
-    draw(layers[cycle]||[],mix);
+    if(mix<1)draw(layers[1-cycle]||[],1-mix,elapsed/1000);
+    draw(layers[cycle]||[],mix,elapsed/1000);
     canvas.dataset.language=cycle?'en':'zh';
   }
   function move(e){const r=canvas.getBoundingClientRect();pointer.x=e.clientX-r.left;pointer.y=e.clientY-r.top;}

@@ -64,6 +64,9 @@ try {
   await until('document.getElementById("bootAscii").dataset.language === "zh"');
   check(await ev('document.getElementById("bootAscii").getBoundingClientRect().width >= innerWidth * .94'),'ASCII title spans the viewport');
   check(await ev('document.getElementById("bootLabel").textContent === "加载中…" && getComputedStyle(document.getElementById("bootLabel")).pointerEvents === "none"'),'plain noninteractive loading label');
+  const resting=await ev('document.getElementById("bootAscii").toDataURL()');await sleep(500);
+  check(await ev('document.getElementById("bootAscii").toDataURL()')!==resting,'title flows gently without pointer input');
+  check(await ev('getComputedStyle(document.getElementById("bootStatus"),"::before").animationName === "bootPaperFlow" && getComputedStyle(document.getElementById("bootStatus"),"::after").animationName === "bootPaperFlow"'),'two broad background washes drift slowly');
   await shot('loading-mobile');
   const initial=await ev('document.getElementById("bootAscii").toDataURL()');
   const point=await ev(`(()=>{const c=document.getElementById('bootAscii'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,r=c.getBoundingClientRect();for(let k=0;k<d.length;k+=4)if(d[k+3]>100)return {x:r.x+(k/4%c.width)*r.width/c.width,y:r.y+Math.floor(k/4/c.width)*r.height/c.height};})()`);

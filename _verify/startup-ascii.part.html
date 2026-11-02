@@ -53,7 +53,7 @@
     ctx.textAlign='center';ctx.textBaseline='middle';
     document.getElementById('bootFallback').style.display='none';
   }
-  function draw(points,opacity) {
+  function draw(points,opacity,time) {
     if(opacity<=0)return;
     const radius=width<700?65:110;
     for(const p of points){
@@ -61,8 +61,13 @@
       const power=!reduced&&d<radius?(1-d/radius)*25:0;
       const tx=d?dx/d*power:0,ty=d?dy/d*power:0;
       p.dx+=(tx-p.dx)*.18;p.dy+=(ty-p.dy)*.18;
-      ctx.fillStyle='rgba(52,44,34,'+(opacity*(.55+p.a*.45))+')';
-      ctx.fillText(p.c,p.x+p.dx,p.y+p.dy);
+      // Low-amplitude waves keep the calligraphic silhouette readable at rest.
+      const amplitude=reduced?0:(width<700?.8:1.5);
+      const flowX=Math.sin(p.y*.022+time*.55)*amplitude;
+      const flowY=Math.sin(p.x*.014-time*.48)*amplitude;
+      const breath=reduced?1:.96+.04*Math.sin(time*.65+p.x*.006);
+      ctx.fillStyle='rgba(52,44,34,'+(opacity*(.55+p.a*.45)*breath)+')';
+      ctx.fillText(p.c,p.x+p.dx+flowX,p.y+p.dy+flowY);
     }
   }
   function tick(now) {
@@ -72,8 +77,8 @@
     const elapsed=now-started,cycle=Math.floor(elapsed/10000)%2;
     const mix=elapsed<10000?1:Math.min(1,(elapsed%10000)/1500);
     ctx.clearRect(0,0,width,height);
-    if(mix<1)draw(layers[1-cycle]||[],1-mix);
-    draw(layers[cycle]||[],mix);
+    if(mix<1)draw(layers[1-cycle]||[],1-mix,elapsed/1000);
+    draw(layers[cycle]||[],mix,elapsed/1000);
     canvas.dataset.language=cycle?'en':'zh';
   }
   function move(e){const r=canvas.getBoundingClientRect();pointer.x=e.clientX-r.left;pointer.y=e.clientY-r.top;}
