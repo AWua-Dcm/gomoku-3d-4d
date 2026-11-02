@@ -16,13 +16,13 @@ online demo (GitHub Pages) publishes the very same `Web_Gomoku3D/index.html` —
 step, so the deployed file and the one you double-click are identical; the root `index.html` is
 just a redirect. The full offline check is `node _verify/check-2d.mjs`.
 
-![Setup screen](_verify/shots/1-起始界面.png)
+![Setup screen](_verify/shots/start-v4.png)
 
 ---
 
 ## 🎯 What this is
 
-Gomoku (five-in-a-row) on an **N×M flat board** or on an **N×N×N board**. The 3D/4D board has
+Gomoku (five-in-a-row) on an **I×J flat board** or on an **I×J×K 3D board**. The 3D/4D board has
 **13 directions** (3 axes + 6 face diagonals + 4 body diagonals) — far more than the four on a
 flat board. Blocking the front is not enough: a line can cut diagonally, run straight up through
 the layers, or thread several layers at once.
@@ -31,9 +31,9 @@ A few things you don't see every day:
 
 | | |
 |---|---|
-| **2D mode** | A flat board from 10–30 per side; classic rules plus black holes / floating foundations / aging, in any combination — eight modes |
-| **4D mode** | A layer can be **rotated like a Rubik's cube**. Once every few moves you may rotate one layer, and every stone in it moves with it — a threat you set up two moves ago can be rotated right out from under you |
-| **Rectangular boards** | In 3D mode the three axes may have different lengths (say `8 × 12 × 30`). Each axis accepts `8 – 30` |
+| **2D mode** | An **I×J** flat board, 10–30 per side; classic rules plus black holes / floating foundations / aging — eight modes in any combination |
+| **3D mode** | An **I×J×K** board with each axis from 8–30, equal or different (say `8 × 12 × 30`); 13 directions make diagonal, vertical and cross-layer lines all possible |
+| **4D mode** | Adds Rubik rotation / space wrapping / day-night to the 3D board; the board must be a cube, and rotating a layer changes every position — a threat set up two moves ago can be rotated right out from under you |
 | **The first player is restricted** | 2D, 3D and 4D all require the first player to make **exactly five in a row**; six or more is an **overline loss**. The second player wins with five or more. On a 3D board the first player's advantage would otherwise be overwhelming — see the [full rules](Web_Gomoku3D/RULES_SPEC.en.md) |
 
 ---
@@ -49,6 +49,10 @@ To confirm nothing is broken: press `F12` → Console and look for red text.
 
 Pick **2D** on the setup screen, choose the board size, then **Start game**; classic defaults to 15×15.
 
+![2D: black-hole singularity](_verify/shots/2d-tutorial-holes.png)
+![2D: floating connect](_verify/shots/2d-tutorial-float.png)
+![2D: fleeting bloom](_verify/shots/2d-tutorial-age.png)
+
 - **Board**: a flat rectangle from 10–30 per side; stones sit on intersections; the first player must make **exactly five in a row** (six or more loses).
 - **Placing**: click an intersection; the arrow keys move the cursor, `Enter` places a stone, `0` restores the zoom.
 - **Modes**: the three extra mechanics are stacked checkboxes and can be combined freely; ticking one only toggles it — the centred **2D settings** button opens the parameter panel.
@@ -59,6 +63,9 @@ Pick **2D** on the setup screen, choose the board size, then **Start game**; cla
 ### 3D · Classic
 
 Pick **3D · Classic** on the setup screen and set each axis; each accepts `8 – 30`, equal or different.
+
+![3D: I×J×K board](_verify/shots/3d-game.png)
+![3D: space wrapping](_verify/shots/3d-tutorial-wrap.png)
 
 - **Board**: a 3D board with 13 directions (3 axes + 6 face diagonals + 4 body diagonals); tick **Rubik rotation** / **Space wrapping** to add mechanics.
 - **Placing**: click to place on the current layer; the right-hand panel steps through layers and places on an empty cell.
@@ -71,6 +78,10 @@ Pick **3D · Classic** on the setup screen and set each axis; each accepts `8 �
 ### 4D · Myriad
 
 Pick **4D · Myriad**; the board must be a cube, and Rubik rotation, space wrapping and day/night are all on.
+
+![4D: rotation preview](_verify/shots/4d-tutorial-rotation.png)
+![4D: space wrapping](_verify/shots/4d-tutorial-wrap.png)
+![4D: day and night](_verify/shots/4d-tutorial-phase.png)
 
 - **Board**: a cubic board using the same 13 directions and first-player rule as 3D.
 - **Rotating**: press **Rotate** to preview, then confirm; no placing during the preview. `T` rotates, `Y` restores this rotation.
