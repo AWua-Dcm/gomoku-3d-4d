@@ -1000,11 +1000,13 @@
   #ruleActions #timingBtn { position:static; transform:none; }
   #confirmMoveBtn { padding:3px 10px; font-size:12px; font-weight:600; border-radius:999px; white-space:nowrap; }
   #confirmMoveBtn[aria-pressed="true"] { background:rgba(47,111,103,.86); color:#fff; border-color:#386c62; box-shadow:0 0 0 2px rgba(47,111,103,.14); }
-  .restore-size { position:absolute; right:12px; bottom:12px; z-index:8; padding:7px 13px; min-height:32px; border-radius:999px; font:600 12px system-ui,sans-serif; color:var(--ink); background:rgba(247,242,230,.52); border:1px solid rgba(255,255,255,.65); box-shadow:0 2px 12px rgba(45,58,51,.13); backdrop-filter:blur(14px) saturate(140%); -webkit-backdrop-filter:blur(14px) saturate(140%); }
+  .restore-size { position:absolute; right:12px; top:12px; bottom:auto; z-index:8; padding:7px 13px; min-height:32px; border-radius:999px; font:600 12px system-ui,sans-serif; color:var(--ink); background:rgba(247,242,230,.52); border:1px solid rgba(255,255,255,.65); box-shadow:0 2px 12px rgba(45,58,51,.13); backdrop-filter:blur(14px) saturate(140%); -webkit-backdrop-filter:blur(14px) saturate(140%); opacity:0; pointer-events:none; transition:opacity .18s; }
+  .restore-size.on { opacity:1; pointer-events:auto; }
   .restore-size:hover { background:rgba(247,242,230,.75); }
   .restore-size:focus-visible, #confirmMoveBtn:focus-visible { outline:2px solid #386c62; outline-offset:3px; }
   #stage.preview .restore-size { display:none; }
-  #stage.twod:not(.preview) #restoreSizeGl { bottom:170px; right:24px; }
+  #navRow .restore-size { position:static; flex:0 0 auto; min-height:28px; padding:5px 9px; font-size:12px; }
+  #stage.twod:not(.preview) #restoreSizeGl { top:auto; bottom:170px; right:24px; }
   #boardWrap .restore-size { right:8px; bottom:8px; }
 
   /* 小浮窗。绝对定位、向上展开；不推任何行。 */
@@ -4895,7 +4897,6 @@ Ce mode utilise un plateau plat indépendant. **Trous noirs (H), fondations comm
     <div id="boardWrap">
       <canvas id="layerBase"></canvas>
       <canvas id="layerOverlay"></canvas>
-      <button id="restoreSizeLayer" class="restore-size" type="button">恢复大小</button>
     </div>
 
     <!-- v3.0.0「晨昏」的时间轴。**放在平面棋盘下方**，棋盘让它一部分位置 ——
@@ -4909,6 +4910,7 @@ Ce mode utilise un plateau plat indépendant. **Trous noirs (H), fondations comm
       <div id="layerLabel"></div>
       <button id="nextLayer" class="mini">＞</button>
       <button id="topLayer" class="mini" data-i18n="topLayer">顶层</button>
+      <button id="restoreSizeLayer" class="restore-size" type="button">恢复大小</button>
     </div>
 
     <div id="stripWrap"><canvas id="strip"></canvas></div>
@@ -15911,6 +15913,7 @@ const Game = {
     if (!(scale > 0) || !this.camera) return;
     this.camera.distance = Math.max(this.camera.minDistance,
       Math.min(this.camera.maxDistance, this.camera.distance / scale));
+    this.updateRestoreButtons();
   },
 
   /** 三维视图的平移量（CSS 像素）。夹在半个视口内 —— 至少留一半棋盘看得见。 */
@@ -15919,6 +15922,7 @@ const Game = {
     const limX = Math.max(0, r.width / 2), limY = Math.max(0, r.height / 2);
     this.pan3d = [Math.max(-limX, Math.min(limX, this.pan3d[0] + dx)),
                   Math.max(-limY, Math.min(limY, this.pan3d[1] + dy))];
+    this.updateRestoreButtons();
   },
 
   /** 单层棋盘的缩放。下限锁在 1：比"整盘刚好放进画布"还小没有任何意义。 */
@@ -15926,12 +15930,14 @@ const Game = {
     if (!(scale > 0)) return;
     this.zoom2d = Math.max(1, Math.min(ZOOM2D_MAX, (this.zoom2d || 1) * scale));
     this.clampPan2dNow();   // 缩小之后原来的平移可能已经越界（棋盘变小了）
+    this.updateRestoreButtons();
   },
 
   /** 单层棋盘的平移（CSS 像素）。手指拖多少就走多少，和三维那侧同一个手感。 */
   pan2dBy(dx, dy) {
     this.pan2d = [(this.pan2d || [0, 0])[0] + dx, (this.pan2d || [0, 0])[1] + dy];
     this.clampPan2dNow();
+    this.updateRestoreButtons();
   },
 
   /** 用【当前】缩放和画布尺寸把的单层平移夹回边界内。缩放或棋盘尺寸一变就要调一次。 */
@@ -15941,6 +15947,17 @@ const Game = {
     const dims = this.session.board.dims;
     const g = this.gridMetrics(c.clientWidth, c.clientHeight, dims[0], dims[1]);
     this.pan2d = clampPan2d(c.clientWidth, c.clientHeight, g.extX, g.extY, this.pan2d || [0, 0]);
+  },
+
+  /** 缩放/平移后更新「恢复大小」的显隐：和 toast 一样淡入淡出。 */
+  updateRestoreButtons() {
+    if (!this.el) return;
+    const twoD = !!(this.el.stage && this.el.stage.classList.contains("twod"));
+    const glMoved = twoD
+      ? (typeof TwoDUI !== "undefined" && TwoDUI && typeof TwoDUI.viewMoved === "function" ? TwoDUI.viewMoved() : false)
+      : this.viewMoved("gl");
+    if (this.el.restoreSizeGl) this.el.restoreSizeGl.classList.toggle("on", !!glMoved);
+    if (this.el.restoreSizeLayer) this.el.restoreSizeLayer.classList.toggle("on", this.viewMoved("layer"));
   },
 
   /** 视图是否缩放或平移，用于检查复位结果。 */
@@ -15972,6 +15989,7 @@ const Game = {
       this.drawLayerBase();
       this.drawLayerOverlay();
     }
+    this.updateRestoreButtons();
   },
 
   /** 这一下点击和上一次算不算"同一处的双击"：时间和距离两道门槛，缺一不可。 */
@@ -16119,6 +16137,7 @@ const Game = {
       const f = 1 + Math.max(-1, Math.min(1, e.deltaY * 0.0012)) * 0.9;
       this.camera.distance = Math.max(this.camera.minDistance,
         Math.min(this.camera.maxDistance, this.camera.distance * f));
+      this.updateRestoreButtons();
     }, { passive: false });
   },
 
@@ -18188,7 +18207,7 @@ const TwoDUI = (() => {
     state.toolbar.hidden=!h;state.swapBtn.hidden=!!state.swap;state.swapBtn.disabled=!s||s.status!=="Playing"||s.handsUntilSwap>0;for(const el of[state.axis,state.lineA,state.lineB,state.confirm,state.cancel])el.hidden=!state.swap;
     if(state.swap){state.axis.value=state.swap.axis;const d=dims(),count=state.swap.axis==="row"?d[1]:d[0];for(let n=0;n<2;n++){const el=n?state.lineB:state.lineA;el.replaceChildren();const blank=create("option","",el);blank.value="";blank.textContent=text(n?"second":"first",state.lang);for(let j=0;j<count;j++){const op=create("option","",el);op.value=String(j);op.textContent=String(j);}el.value=state.swap.lines[n]===undefined?"":String(state.swap.lines[n]);}state.confirm.disabled=state.swap.lines.length!==2||!s.canSwapLines(state.swap.axis,...state.swap.lines);state.swapStatus.textContent=text(state.swap.lines.length===2?"preview":"select",state.lang);}else state.swapStatus.textContent=s&&s.handsUntilSwap>0?text("cooldown",state.lang,{n:s.handsUntilSwap}):text("ready",state.lang);state.caption.textContent=text("zoom",state.lang);render();}
   function resize(){if(!state.canvas||!state.area)return;const r=state.area.getBoundingClientRect(),dpr=Math.min(3,window.devicePixelRatio||1);state.width=Math.max(1,r.width);state.height=Math.max(1,r.height);const w=Math.round(state.width*dpr),h=Math.round(state.height*dpr);if(state.canvas.width!==w||state.canvas.height!==h){state.canvas.width=w;state.canvas.height=h;}state.dpr=dpr;layout();state.needs=true;render();}
-  function layout(){const v=variant(),dual=!!(v.float&&v.float.on),w=state.width||1,h=state.height||1,gap=dual?12:0,horizontal=w>=h*1.25,boxes=dual?(horizontal?[{x:0,y:0,w:(w-gap)/2,h},{x:(w+gap)/2,y:0,w:(w-gap)/2,h}]:[{x:0,y:0,w,h:(h-gap)/2},{x:0,y:(h+gap)/2,w,h:(h-gap)/2}]):[{x:0,y:0,w,h}];const[nx,ny]=dims();state.surfaces=boxes.map((r,i)=>{const view=state.views[i]||(state.views[i]={scale:1,dx:0,dy:0}),pad=Math.min(30,Math.max(20,Math.min(r.w,r.h)*.09)),step=Math.max(1,Math.min((r.w-2*pad)/(nx-1),(r.h-2*pad-20)/(ny-1)))*view.scale,cx=r.x+r.w/2+view.dx,cy=r.y+r.h/2+10+view.dy;return {...r,i,layer:dual?(i===0?"base":"top"):"top",step,left:cx-(nx-1)*step/2,bottom:cy+(ny-1)*step/2};});}
+  function layout(){const v=variant(),dual=!!(v.float&&v.float.on),w=state.width||1,h=state.height||1,gap=dual?12:0,horizontal=w>=h*1.25,boxes=dual?(horizontal?[{x:0,y:0,w:(w-gap)/2,h},{x:(w+gap)/2,y:0,w:(w-gap)/2,h}]:[{x:0,y:0,w,h:(h-gap)/2},{x:0,y:(h+gap)/2,w,h:(h-gap)/2}]):[{x:0,y:0,w,h}];const[nx,ny]=dims();state.surfaces=boxes.map((r,i)=>{const view=state.views[i]||(state.views[i]={scale:1,dx:0,dy:0}),pad=Math.min(30,Math.max(20,Math.min(r.w,r.h)*.09)),step=Math.max(1,Math.min((r.w-2*pad)/(nx-1),(r.h-2*pad-20)/(ny-1)))*view.scale,cx=r.x+r.w/2+view.dx,cy=r.y+r.h/2+10+view.dy;return {...r,i,layer:dual?(i===0?"base":"top"):"top",step,left:cx-(nx-1)*step/2,bottom:cy+(ny-1)*step/2};});if(typeof Game!=="undefined"&&Game.updateRestoreButtons)Game.updateRestoreButtons();}
   function xy(r,x,y){return[r.left+x*r.step,r.bottom-y*r.step];}
   function circle(ctx,x,y,r,fill,stroke,width=1){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.stroke();}}
   function previewMoves(){const s=state.session,swap=state.swap;if(!s||!swap||swap.lines.length!==2)return[];const[a,b]=swap.lines,out=[],[w,h]=dims();for(let n=0;n<(swap.axis==="row"?w:h);n++){const p=swap.axis==="row"?[n,a]:[a,n],q=swap.axis==="row"?[n,b]:[b,n],pi=p[0]+p[1]*w,qi=q[0]+q[1]*w;if(!!s.hole[pi]!==!!s.hole[qi])out.push(s.hole[pi]?{from:p,to:q,k:qi}:{from:q,to:p,k:pi});}return out;}
@@ -18292,6 +18311,7 @@ const TwoDUI = (() => {
   function pointerCancel(e){cancelTap();state.pointers.delete(e.pointerId);state.pinch=null;}
   function clampView(i){const v=state.views[i],r=state.surfaces[i];if(!v||!r)return;v.dx=Math.max(-r.w*v.scale*.55,Math.min(r.w*v.scale*.55,v.dx));v.dy=Math.max(-r.h*v.scale*.55,Math.min(r.h*v.scale*.55,v.dy));}
   function wheel(e){e.preventDefault();cancelTap();const p=point(e),r=surfaceAt(p);if(!r)return;const v=state.views[r.i],old=v.scale;v.scale=Math.max(1,Math.min(5,old*Math.exp(-e.deltaY*.0015)));const factor=v.scale/old;v.dx=(v.dx-(p.x-r.x-r.w/2))*factor+(p.x-r.x-r.w/2);v.dy=(v.dy-(p.y-r.y-r.h/2))*factor+(p.y-r.y-r.h/2);clampView(r.i);layout();state.needs=true;}
+  function viewMoved(){return state.views.some(v=>v&&(v.scale>1.001||Math.abs(v.dx)>1||Math.abs(v.dy)>1));}
   function resetZoom(e){cancelTap();if(e){const r=surfaceAt(point(e));if(r)state.views[r.i]={scale:1,dx:0,dy:0};}else state.views=[];layout();state.needs=true;render();}
   function requestActivate(h,x=0,y=0){
     if(!h)return;
@@ -18381,7 +18401,7 @@ const TwoDUI = (() => {
     build:buildLesson,goal:goalLesson,allowed(index,action){return !swapLessons.has(index)||action.kind==='swap';},apply(index,s,action){if(!this.allowed(index,action))return false;if(action.kind==='swap')return s.swapLines(action.axis,action.i,action.j);if(action.kind==='placeHole')return s.placeHole(action.x,action.y);return s.place(action.x,action.y,action.layer);},immediateWins,openFours,fill:fillBackground
   };
 
-  const api={mount,destroy,setSession,setLanguage,setAppearance,resize,render,text,modeName,tutorial,beginSwap,cancelSwap,resetZoom,get session(){return state.session;},get surfaces(){return state.surfaces;},get swapPreview(){return state.swap;},get appearance(){return {gridColor:state.options.gridColor,gridAlpha:state.options.gridAlpha,gridVisible:state.options.gridVisible};}};return api;
+  const api={mount,destroy,setSession,setLanguage,setAppearance,resize,render,text,modeName,tutorial,beginSwap,cancelSwap,resetZoom,viewMoved,get session(){return state.session;},get surfaces(){return state.surfaces;},get swapPreview(){return state.swap;},get appearance(){return {gridColor:state.options.gridColor,gridAlpha:state.options.gridAlpha,gridVisible:state.options.gridVisible};}};return api;
 })();
 if(typeof window!=="undefined")window.TwoDUI=TwoDUI;
 /* GOMOKU-2D-UI-END */
@@ -20019,7 +20039,6 @@ const Keymap = (() => {
       if(e.preventDefault)e.preventDefault();e.stopImmediatePropagation();
       if(!e.isComposing&&!e.ctrlKey&&!e.metaKey&&!e.altKey){panel.querySelector('#keymapError').textContent=save(editing,e.key);}
     },true);
-    const hint=node('div','',Game.el.hintbox);hint.id='keymapHint';node('span','',hint);node('button','',hint).onclick=open;
     sync();
   }
   return {init,sync,rules,open,close,confirm,handle,action,key,save,display,get isOpen(){return panel&&!panel.classList.contains('off');}};

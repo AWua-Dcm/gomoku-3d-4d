@@ -89,7 +89,6 @@ const Keymap = (() => {
       if(e.preventDefault)e.preventDefault();e.stopImmediatePropagation();
       if(!e.isComposing&&!e.ctrlKey&&!e.metaKey&&!e.altKey){panel.querySelector('#keymapError').textContent=save(editing,e.key);}
     },true);
-    const hint=node('div','',Game.el.hintbox);hint.id='keymapHint';node('span','',hint);node('button','',hint).onclick=open;
     sync();
   }
   return {init,sync,rules,open,close,confirm,handle,action,key,save,display,get isOpen(){return panel&&!panel.classList.contains('off');}};
