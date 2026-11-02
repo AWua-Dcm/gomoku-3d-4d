@@ -1,61 +1,82 @@
-## v4.0.0 · 2026-11-02
-
-二维玩法、教学、AI、记录与手机适配更新。公开仓库发布离线版，联机服务单独部署。
-
 # gomoku-3d-4d
 
 [中文](README.md) | **English**
 
-**3D & 4D Gomoku** — one HTML file, double-click to play, zero dependencies.
-*三维与四维五子棋 —— 单文件网页版，双击即玩，零依赖。*
+**2D, 3D & 4D Gomoku** — Gomokube, one HTML file, double-click to play, zero dependencies.
+*二维、三维与四维五子棋 —— 五子魔方，单文件网页版，双击即玩，零依赖。*
 
-[![Play in browser](https://img.shields.io/badge/Play_in_browser-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
+[![Play online](https://img.shields.io/badge/Play_online-awua--dcm.github.io-2f6f4e?style=for-the-badge)](https://awua-dcm.github.io/gomoku-3d-4d/)
 [![Form](https://img.shields.io/badge/form-single_file_%C2%B7_zero_deps-8a6d3b?style=flat-square)](Web_Gomoku3D/index.html)
-[![Assertions](https://img.shields.io/badge/assertions-32152_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
+[![Assertions](https://img.shields.io/badge/assertions-260k%2B_passing-2f6f4e?style=flat-square)](_verify/run-all.sh)
 [![License](https://img.shields.io/badge/license-MIT-4c8bf5?style=flat-square)](LICENSE)
 
-The web demo serves the very same `index.html` that is in this repository, hosted on
-GitHub Pages — there is no build step, and the deployed file is the file you can double-click.
+This repository is the **public offline open-source build**: local play only; it does not include
+the online client, server or protocol tests. The online service is deployed separately. The
+online demo (GitHub Pages) publishes the very same `Web_Gomoku3D/index.html` — there is no build
+step, so the deployed file and the one you double-click are identical; the root `index.html` is
+just a redirect. The full offline check is `node _verify/check-2d.mjs`.
 
-The game's interface switches between six languages too — the button in the top-right corner
-opens the list. It starts in Chinese.
+![2D game](_verify/shots/2d-desktop.png)
 
-![Setup screen](_verify/shots/6-起始界面-英文.png)
+## 🧩 2D gameplay (new in v4.0.0)
 
-In a 4D game all three mechanics are visible at once: **the colour of the thin halo around every
-stone is its phase** (red = day, blue = night), and **the ring just outside the board holds the
-shadows drawn by wrapping** — you can see where an edge stone continues on the far side without
-having to imagine it.
+Pick **2D** on the setup screen to play on a flat board. Besides classic Gomoku, three
+mechanics can be enabled independently or in any combination — **eight modes in all**:
 
-![4D: three mechanics](_verify/shots/12-四维三种机制.png)
+| Mechanic | What it does |
+|---|---|
+| **Black-hole singularity (H)** | Players take turns placing holes before play; once enough moves have passed, swap two rows or two columns. Holes block placement; a swap swallows only the top stone and keeps the foundation |
+| **Floating connect (F)** | The first 8 stones build foundations; from the 9th move you may play on top. A foundation belongs to whoever placed it; an opponent's top stone starts a 10–30 move repulsion countdown, and when it reaches zero the foundation is destroyed and the top stone falls to become a new foundation |
+| **Fleeting bloom (A)** | A new stone does not age on its own move; every later action advances its life. Grey stones still occupy the point but no longer count for a line. Aging is 0.25 per move in the inner black-hole ring, 0.5 in the outer ring, and 1 elsewhere |
+
+- Boards are rectangles from 10–30 per side; classic defaults to 15×15. The first player must still make **exactly five in a row**; six or more is a loss.
+- With black holes and aging both on (H+A, H+F+A), stones near a black hole age more slowly.
+- The **2D settings** panel and **Tutorial** appear only when at least one extra mechanic is on; seven tutorial levels cover the three mechanics and four combinations.
+- Landscape shows the two boards side by side; portrait stacks them. Scroll or pinch to zoom, drag to pan, double-tap to reset.
+- 2D records store the opening layout, hole placements, and move/swap actions; replay them, or export a long image or victory poster. Old 3D/4D records remain readable.
+
+![2D settings](_verify/shots/2d-settings-combo.png)
+
+Authoritative rules and mechanic details: [section 13 of the full rules](Web_Gomoku3D/RULES_SPEC.en.md).
+This release's summary: [v4.0.0 release notes](RELEASE_NOTES_v4.0.0.md) (Chinese).
 
 ---
 
 ## 🎯 What this is
 
-Gomoku (five-in-a-row) played on an **N×N×N board**. The big difference from the flat game
-is that there are far more ways to line stones up — **13 directions** in all (3 axes +
-6 face diagonals + 4 body diagonals). Blocking the front is not enough: a line can cut
+Gomoku (five-in-a-row) on an **N×M flat board** or on an **N×N×N board**. The big difference
+from the flat game is that there are far more ways to line stones up — **13 directions** in all
+(3 axes + 6 face diagonals + 4 body diagonals). Blocking the front is not enough: a line can cut
 diagonally, run straight up through the layers, or thread several layers at once.
 
-Three things you don't see every day:
+A few things you don't see every day:
 
 | | |
 |---|---|
+| **2D mode** | A flat board from 10–30 per side; classic rules plus black holes / floating foundations / aging, in any combination — eight modes |
 | **4D mode** | A layer can be **rotated like a Rubik's cube**. Once every few moves you may rotate one layer, and every stone in it moves with it — a threat you set up two moves ago can be rotated right out from under you |
 | **Rectangular boards** | In 3D mode the three axes may have different lengths (say `8 × 12 × 30`). Each axis accepts `8 – 30` |
-| **The first player is restricted** | The first player must make **exactly five in a row**; six or more is an **overline loss**. The second player wins with five or more. The reason is that on a 3D board the first player's advantage is otherwise overwhelming — see the [full rules](Web_Gomoku3D/RULES_SPEC.en.md) |
+| **The first player is restricted** | 2D, 3D and 4D all require the first player to make **exactly five in a row**; six or more is an **overline loss**. The second player wins with five or more. On a 3D board the first player's advantage would otherwise be overwhelming — see the [full rules](Web_Gomoku3D/RULES_SPEC.en.md) |
 
 ---
 
 ## 🕹️ How to play
 
-**Double-click `Web_Gomoku3D/index.html`** and it opens in any modern browser.
+**Double-click `index.html` (or `Web_Gomoku3D/index.html`)** and it opens in any modern browser.
 
 No server, no network, nothing to install.
 To confirm nothing is broken: press `F12` → Console and look for red text.
 
-### ⌨️ Controls
+### 🧩 2D
+
+- Pick **2D** on the setup screen, choose the board size, then **Start game**; classic defaults to 15×15.
+- The three mechanic checkboxes are stacked and can be combined freely. Ticking one only toggles the mechanic; the centred **2D settings** button opens the parameter panel.
+- Landscape: two boards side by side; portrait: stacked. Scroll or pinch to zoom, drag to pan, double-tap to reset.
+- The bottom bar keeps Undo, Restart, Swap first player, Settings and Exit; clocks and per-move limits use the same entry points.
+- Keyboard: arrow keys move the cursor, `Enter` places a stone, `0` resets the zoom; keys can be changed under **Custom keybindings**.
+- After the game, open **History**, expand the move list and press **Replay** to step through it.
+
+### ⌨️ Controls (3D / 4D)
 
 | Action | What it does |
 |---|---|
@@ -74,7 +95,7 @@ To confirm nothing is broken: press `F12` → Console and look for red text.
 | Touch: pinch in / out | Zoom the board. **Works on both the 3D board and the single-layer board** (on a phone a cell of the layer board is only about 10px across, so zooming is the only way to aim) |
 | Touch: two-finger drag | Pan the board — it follows your fingers |
 | Language button, top-right | Opens a list of the six languages (中文 / English / 日本語 / 한국어 / Русский / Français); the current one is highlighted |
-| **History** button, top-right of the setup screen | The last 50 finished games: summary + full move list (coordinates / colour / time, rotations in 4D). **Hidden during play**; export a long image or a victory poster; **Clear** sits inside |
+| **History** button, top-right of the setup screen | The last 50 finished games: summary + full move list (coordinates / colour / time, rotations in 4D). **Hidden during play** — go back to the setup screen to open it; export a long image or a victory poster; **Clear** sits inside |
 | Touch: double-tap a board | Reset — the 3D board returns to its start framing, the layer board to 1×, pan cleared. **The angle you rotated to is left alone** |
 
 > While zoomed in, a single tap places its stone after a ~300ms double-tap window.
@@ -87,46 +108,47 @@ The **Full rules** button in the top-right corner opens the complete rule text.
 ## 🧪 Running the tests
 
 ```bash
-bash _verify/run-all.sh
+node _verify/check-2d.mjs
 ```
 
-**All you need is node** — no Unity, no .NET, no npm packages. Eight steps; expected result:
+`bash _verify/run-all.sh` is the same entry point. **All you need is node** — no Unity,
+no .NET, no npm packages. The script runs 22 steps: rebuild the 2D source parts, check the
+six rule languages, build the kernel and the public build, then run every 3D / 4D / 2D offline
+suite, real-browser checks, mobile-viewport checks, keybinding checks and five 2D fault
+injections. Logs and the summary land in `_verify/results/`.
 
-```
-11748 + 19449 + 98 + 230 + 150 + 477 = 32152 assertions, all green
-```
+Main steps:
 
-Step 8 (a real headless-browser check) is optional: if Chrome or Edge isn't installed it is
-skipped rather than failed. It also writes screenshots to `_verify/shots/`.
-
-To run one piece on its own:
-
-| Command | Count | What it covers |
-|---|---|---|
-| `node Web_Gomoku3D/tests/rules.test.mjs` | 11748 | 3D rule baseline (replays frozen vectors) + dawn/dusk phase clock |
-| `node Web_Gomoku3D/tests/rotation.test.mjs` | 19449 | 4D rotation consistency |
-| `node Web_Gomoku3D/tests/dims.test.mjs` | 98 | Rectangular boards + size constraints |
-| `node Web_Gomoku3D/tests/ai.test.mjs` | 230 | The computer opponent (both hard rules, the five tiers' relative strength, self-play fed to the engine move by move, 4D rotations happening only when they earn it, compute ceiling) |
-| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | 150 | UI against a DOM stub (includes the language switch, game records, local clock/limit, gesture and reset edge cases, drag-direction convention) |
-| `node _verify/browser-check.mjs` | 477 | Real browser (GLSL compilation, layout geometry, console errors, six-language screen sweep, synthesized multi-touch, a real-timer game against the computer, setup clock popover, game records, move list / poster / long image) |
-
-Two more scripts exist to prove the checks above actually fail when they should —
-each deliberately breaks the code and requires that the tests catch every case:
-
-| Command | What it does |
+| Command | What it covers |
 |---|---|
-| `python _verify/inject-rulenote.py` | Breaks the on-screen rule summary 3 ways; both suites must catch 3/3 |
-| `python _verify/inject-i18n.py` | Breaks the language handling 8 ways (a missing translation in each of the three tables, a broken switch-back to Chinese, an unhighlighted list, a plural form that never changes…) and names, per case, which suite has to catch it |
+| `node Web_Gomoku3D/tests/rules.test.mjs` | 3D rule baseline (replays frozen vectors) + dawn/dusk phase clock |
+| `node Web_Gomoku3D/tests/rotation.test.mjs` | 4D rotation consistency |
+| `node Web_Gomoku3D/tests/dims.test.mjs` | Rectangular boards + size constraints |
+| `node Web_Gomoku3D/tests/ai.test.mjs` | 3D / 4D computer opponent (five tiers, rotation timing, compute ceiling) |
+| `node Web_Gomoku3D/tests/dom-smoke.test.mjs` | DOM stub (six languages, game records, gesture and reset edges) |
+| `node Web_Gomoku3D/tests/two-d-rules.test.mjs` | 2D rules, eight combinations, 400-game fixed-seed property test |
+| `node Web_Gomoku3D/tests/two-d-ai.test.mjs` | 2D AI forced wins and blocks, eight-combination self-play, compute budget and VCF |
+| `node Web_Gomoku3D/tests/two-d-tutorial.test.mjs` | Seven tutorial solutions, undo and unique key swaps |
+| `node _verify/browser-check.mjs` | Real browser: GLSL, layout geometry, console errors, six-language sweep |
+| `node _verify/two-d-browser.mjs` | 2D in a real browser: placement, swaps, aging, record replay |
+| `node _verify/two-d-settings-browser.mjs` | 2D settings, stacked layout, cross-mode title and watermark positions |
+| `node _verify/mobile-audit-browser.mjs` | Mobile viewport: start buttons, horizontal overflow, touch cancel and right-click |
+| `node _verify/keybindings-browser.mjs` | Custom keybinding draft, confirm and back flow |
+| `node _verify/two-d-tutorial-browser.mjs` | Seven tutorial levels, six languages and portrait |
+| `node _verify/inject-2d.mjs` | Fault injection: proves the 2D checks can fail (5 cases) |
+| `node _verify/kb-links.mjs` | Knowledge-base link check |
 
-> These two temporarily break `index.html` and restore it in a `finally` block.
-> They run `browser-check` against a scratch directory, so the baseline PNGs in
-> `_verify/shots/` are never overwritten: screenshots are taken *before* the failures are
-> reported, so writing to the default directory would put captures of a deliberately broken
-> page into version control — after which `git status` can no longer tell "the image went
-> stale" from "the UI really changed".
+Browser checks need Chrome or Edge. `browser-check.mjs` skips when no browser is found;
+the 2D browser checks fail outright, because 2D placement, swaps and aging have to be
+verified in a real page. They also write screenshots to `_verify/shots/`.
 
-(One caveat: the assertion total above is hard-coded, so it always lags a little behind.
-The real total is whatever `bash _verify/run-all.sh` prints.)
+`inject-2d.mjs` temporarily breaks the 2D source and restores it in a `finally` block;
+`inject-rulenote.py` / `inject-i18n.py` still cover the rule summary and the language
+switch. They run `browser-check` against a scratch directory, so the baseline PNGs in
+`_verify/shots/` are never overwritten: screenshots are taken *before* the failures are
+reported, so writing to the default directory would put captures of a deliberately broken
+page into version control — after which `git status` can no longer tell "the image went
+stale" from "the UI really changed".
 
 ### 🔒 About the "frozen vectors"
 
@@ -135,11 +157,11 @@ that has since been deleted**. The export script and the C# source are both gone
 
 > **Those two files can never be regenerated.**
 
-Step 2 of `run-all.sh` pins them by md5. Editing them to make a test go green
+`_verify/check-public.mjs` pins them by md5. Editing them to make a test go green
 **is not fixing a bug, it is tampering with evidence**. What they mean today is
 "this implementation agrees move-for-move with the C# one as of 2026-09" — a **frozen
 historical baseline**, not a comparison against something still alive.
-See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
+See [`_verify/check-public.mjs`](_verify/check-public.mjs) for the full story.
 
 ---
 
@@ -148,23 +170,32 @@ See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
 ```
 .
 ├── README.md                   ← the Chinese README (this file is README.en.md)
+├── index.html                  ← redirects to Web_Gomoku3D/index.html
 ├── Web_Gomoku3D/
-│   ├── index.html              ← all the code. 3D/4D rendering + rule kernel + UI, one file, no dependencies
+│   ├── index.html              ← all the code. 2D/3D/4D rendering + rule kernel + UI, one file, no dependencies
 │   ├── README.md               ← engineering notes: architecture, evidence boundaries, known limits (Chinese only — much deeper than this file)
-│   ├── RULES_SPEC.md           ← full rules, for players (Chinese). This is what "Full rules" shows
+│   ├── RULES_SPEC.md           ← full rules, for players (Chinese; section 13 covers 2D)
 │   ├── RULES_SPEC.en.md        ← the rules in English / Japanese / Korean / Russian / French:
 │   ├── RULES_SPEC.ja.md        ←   picking a language shows that language's copy
 │   ├── RULES_SPEC.ko.md
 │   ├── RULES_SPEC.ru.md
 │   ├── RULES_SPEC.fr.md
-│   └── tests/                  ← offline tests + the two frozen vector files
+│   ├── ONLINE.md               ← networking placeholder (the open-source build has no online code)
+│   └── tests/                  ← 3D/4D/2D offline tests + the two frozen vector files
 ├── _verify/
-│   ├── run-all.sh              ← one command runs every offline check
-│   ├── browser-check.mjs       ← headless Chrome/Edge: GLSL, console, layout geometry, screenshots
+│   ├── check-2d.mjs            ← one command runs every offline check (run-all.sh is the same entry)
+│   ├── embed-2d.mjs            ← re-embeds the 2D source parts into index.html
 │   ├── embed-rules.mjs         ← generator that embeds all six RULES_SPEC files into index.html
-│   ├── inject-rulenote.py      ← injection check: proves the rule-summary assertions can fail
-│   ├── inject-i18n.py          ← injection check: proves the language-switch assertions can fail
-│   └── shots/                  ← screenshots written by browser-check
+│   ├── browser-check.mjs       ← headless Chrome/Edge: GLSL, console, layout geometry, screenshots
+│   ├── two-d-browser.mjs       ← 2D real-browser check
+│   ├── two-d-settings-browser.mjs ← 2D settings and stacked-layout check
+│   ├── two-d-tutorial-browser.mjs ← seven tutorial levels check
+│   ├── mobile-audit-browser.mjs ← mobile viewport and touch check
+│   ├── inject-2d.mjs           ← injection check: proves the 2D assertions can fail
+│   ├── two-d-*.part.*          ← 2D source parts (re-embed with embed-2d.mjs)
+│   └── shots/                  ← screenshots written by the browser checks
+├── RELEASE_NOTES_v4.0.0.md     ← v4.0.0 release summary (Chinese)
+├── 知识库/                     ← engineering knowledge base (open the repo root in Obsidian)
 ├── 打开流程.md                  ← setup walkthrough + acceptance checklist (Chinese only)
 └── LICENSE
 ```
@@ -173,12 +204,18 @@ See the header of [`_verify/run-all.sh`](_verify/run-all.sh) for the full story.
 
 The section of `index.html` between `/* GOMOKU-CORE-BEGIN */` and `/* GOMOKU-CORE-END */`
 is a **pure rule kernel** — it touches no DOM, no WebGL, no browser API. So the same source
-runs in two places:
+runs in three places:
 
 1. The browser (normal play)
 2. Node (`tests/rules.test.mjs` extracts it with `new Function` and replays the vectors)
+3. The private online server (as the referee)
 
-**One implementation**, so the web build and the tests cannot drift apart.
+**One implementation**, so there is no way for "the web build changed but the server didn't"
+to happen.
+
+The 2D part is additionally kept as source parts in `_verify/two-d-core.part.js`,
+`two-d-ui.part.js` and friends; after editing them, run `node _verify/embed-2d.mjs` to embed
+them back into the same `index.html`. The runtime artefact is still one file.
 
 ---
 
@@ -191,7 +228,8 @@ It **starts in Chinese** — it does not read `navigator.language`. That is swit
 The choice is remembered in `localStorage`.
 
 The full rule text exists in all six (`RULES_SPEC.md` / `.en` / `.ja` / `.ko` / `.ru` / `.fr`)
-and follows the language you pick.
+and follows the language you pick. The 2D UI, 2D settings and section 13 of the rules are
+translated into all six as well.
 
 Four things worth knowing:
 
@@ -200,9 +238,9 @@ Four things worth knowing:
   Chinese — the languages can't quietly drift apart
 - **The rule kernel carries six languages too.** The kernel was already building Chinese
   sentences (`黑`/`白`, status descriptions), and there was no way around translating it: it has
-  to be extractable verbatim by the tests, so it cannot reference an outside string table —
-  it keeps its own (`CORE_TEXT`). Called without `lang`, the output is byte-for-byte what it
-  always was
+  to be extractable verbatim by the private server build and three test files, so it cannot reference an
+  outside string table — it keeps its own (`CORE_TEXT`). Called without `lang`, the output is
+  byte-for-byte what it always was; the private networking protocol is therefore still Chinese
 - **Plurals are chosen per language.** Chinese, Japanese and Korean have none; English and
   French have two forms (French counts 0 as singular); Russian has three (1 / 2–4 / 5+, with
   11–19 falling into the third). The rule lives in exactly one place — inside the kernel,
@@ -212,7 +250,7 @@ Four things worth knowing:
   character run that is **not part of that language's own translations** in the Japanese or
   Korean UI, and any leaked key name — all of those fail the check
 
-> On translation quality: every string and all four new rule documents were checked
+> On translation quality: every string and all six rule documents were checked
 > string-by-string for placeholders, HTML tags and structure — but **"does it read naturally"
 > is not something an assertion can prove**. Where the six disagree, the Chinese is the source
 > of truth.
@@ -222,15 +260,14 @@ Four things worth knowing:
 The player-facing material is bilingual: this README, the full rules (`RULES_SPEC.en.md`),
 and the whole interface. The **deep engineering documentation is Chinese only** —
 `Web_Gomoku3D/README.md` (architecture, evidence boundaries, the reasoning behind each design
-decision) and `打开流程.md`. That is a real gap for English-speaking contributors, and it is
-stated here rather than papered over.
+decision), `打开流程.md`, and `ONLINE.md`. That is a real gap for English-speaking contributors,
+and it is stated here rather than papered over.
 
 ---
 
 ## ☕ Tip the author
 
-The game is free forever — no membership, no paywalled features. If it gave you a good time,
-you can leave a voluntary tip; everything works without it.
+The game is free forever — **no membership, no paywalled features** (the membership entry has been removed). If it gave you a good time, you can leave a voluntary tip; everything works without it. The Tip button sits top-right.
 
 You can also support on Afdian: [afdian.com/a/awuadcm666](https://afdian.com/a/awuadcm666)
 
@@ -247,15 +284,18 @@ You can also support on Afdian: [afdian.com/a/awuadcm666](https://afdian.com/a/a
 
 ## ⚠️ Known limitations
 
-- **The computer opponent is not an engine.** Five tiers (Low / Mid / High / Very high / Ultra) differ
+- **The computer opponent is not an engine.** Five tiers (Low / Mid / High / Extra high / Ultra) differ
   in how far they look, whether they run a **kill search** (forced-win search: runs of fours, and runs
   of open threes), and how they decide whether to rotate in 4D. Threat counting uses a sliding window,
   so **it does recognise gapped shapes and double threats**; but it has no opening book, no joseki and
   no quiescence search — good enough as a sparring partner; for a serious game, use a dedicated engine.
+- **2D combination strength is not accepted at tournament level.** Forced wins, forced blocks,
+  legal moves and the compute budget are verified; how strong the black-hole / floating / aging
+  combinations are in practice is still a matter of playtesting.
 - **No saved games.** There is a "Game records" list, now storing a summary plus the full move
-  list (coordinates / colour / time per move, rotations in 4D); you can expand it and export a
-  long image or a victory poster. **It still cannot bring a game back**: closing the page
-  mid-game ends it.
+  list (coordinates / colour / time per move, rotations in 4D and hole placements / swaps in 2D);
+  you can expand it and export a long image or a victory poster. **It still cannot bring a game
+  back**: closing the page mid-game ends it.
 - The 3D grid lines have **no sense of depth**: looking through the cube stacks n parallel
   grid lines at exactly the same screen position, and since they are alpha-blended the inside
   reads as a gray mesh. This is inherent to drawing coincident primitives — adjusting alpha only
@@ -278,6 +318,9 @@ You can also support on Afdian: [afdian.com/a/awuadcm666](https://afdian.com/a/a
   the rest. Letting the box grow to fit breaks the pinned invariant "switching 3D↔4D must not move
   the buttons by a single pixel" (measured: it moved them 4–34px), so it stays as is — fixing it
   properly means cutting copy or paying for the height elsewhere, which is a layout decision.
+- **Mobile validation uses desktop Chromium viewports and simulated touch events.** It has not
+  been verified on a physical iPhone Safari, an in-app WeChat browser or a weak network; real
+  feel still needs a phone.
 
 A more complete list (including which claims are verified and which are merely my belief)
 is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
@@ -288,17 +331,27 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
+### 2026.11.02
+
+- ✨ **v4.0.0** Added 2D gameplay: the setup screen now offers **2D**, with rectangular flat boards from 10–30 per side (classic defaults to 15×15), so players who find the 3D board hard to visualise can start here; 3D and 4D remain, and all three modes share game records, replay, long images and victory posters.
+- ✨ **v4.0.0** Added the three 2D mechanics: **black-hole singularity** (players take turns placing holes; after enough cooldown moves, swap two rows or two columns; only the top stone at the destination is swallowed, foundations stay), **floating connect** (the first 8 stones build foundations; from the 9th move you may play on top; a foundation belongs to its owner, and an opponent's top stone starts a 10–30 move repulsion countdown that destroys the foundation and drops the top stone into a new one), and **fleeting bloom** (a new stone does not age on its own move; every later action advances its life; grey stones still occupy the point but no longer count for a line).
+- ✨ **v4.0.0** The three mechanics can be enabled independently or in any combination — eight modes in all; with black holes and aging both on, stones near a black hole age more slowly; the 2D settings panel and tutorial appear only when an extra mechanic is on, and seven tutorial levels cover the three mechanics and four combinations.
+- ✨ **v4.0.0** 2D interface: two boards side by side in landscape and stacked in portrait, with scroll / pinch zoom, drag pan and double-tap reset; the settings panel shows only the selected mechanics' parameters with their ranges, and closes on outside click, `Esc` or **Close Esc**.
+- ✨ **v4.0.0** Added custom keybindings: placement, rotation and UI shortcuts can be changed, with independent draft / confirm / back validation.
+- 🔧 **v4.0.0** Fixed a batch of issues: hover movement without a pressed button being recorded as a second finger in 3D/4D, gestures surviving touch cancel and backgrounding, right-click placing a stone in 2D, the previous language's toast lingering after a language switch, and the 3D/4D placement area being too small in phone portrait.
+- 🧪 **v4.0.0** Verification extended: 2D rules and a 400-game fixed-seed property test, AI forced wins / blocks / budget, seven tutorial levels, six languages and mobile viewports, real-browser checks and five 2D fault injections; the existing 3D/4D suites remain green.
+
 ### 2026.10.26
 
 - 🔧 **v3.2.1** Fixed 4D day/night "Haste" losing its overflow time when only one cell was left in the phase: a full cycle is no longer one move longer (always 2 × period); 15 phase-clock regression assertions added.
 
 ### 2026.10.24
 
-- ✨ **v3.2.0** Game-screen and clock update: flat-shaded stones, five bottom keys with board-appearance settings, millisecond clocks (including the local clock option); fixed the preview pan.
+- ✨ **v3.2.0** Game-screen, clock and online update: flat-shaded stones, five bottom keys with board-appearance settings, millisecond clocks (local clock option / online per-move limit), online start confirmation and emoji; fixed the preview pan and LAN room-code copy.
 
 ### 2026.10.22
 
-- ✨ **v3.1.11** Choosing **Human** hides "thinking level / who plays first"; History stays on the setup screen; new full move record, victory poster and long-image export (both show the difficulty ladder; Ultra gets an exclusive badge), with a nickname dialog before export; the tip panel now shows Alipay/WeChat QR codes and the Afdian link; mobile export uses the share sheet so the image is easy to save.
+- ✨ **v3.1.11** Membership removed and entries reorganized (Human hides thinking level / who plays first; online builds put the Online button there; History/Membership/Online hidden in play); new full move record, victory poster and long-image export (both show the difficulty ladder; Ultra gets an exclusive badge), with a nickname dialog before export; the tip panel now shows Alipay/WeChat QR codes and the Afdian link; mobile export uses the share sheet so the image is easy to save.
 
 ### 2026.10.21
 
@@ -316,7 +369,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
   an unbanner that would not go away), an interaction deadlock, layout overflow on narrow and
   phone-landscape screens, English plurals and four copy statements that contradicted the
   implementation, three rules-kernel verdicts (overline scan order, wrap double-counting,
-  winning-line coordinates); details in the commits.
+  winning-line coordinates), and four robustness fixes in the online server; details in the commits.
 
 ### 2026.10.06
 
@@ -364,7 +417,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 - 🔧 **v2.10.15** Board size upper limit lowered from 50 to 30 (`8 – 30`)
 
 - ✨ **v2.10.14** Stronger computer opponent: fixed "its second stone wanders off to the player's
-  layer"; the leaf evaluation adds the two best threats; Very high goes to 5 plies and Ultra deepens
+  layer"; the leaf evaluation adds the two best threats; Extra high goes to 5 plies and Ultra deepens
   iteratively; the kill search stops missing one case
 
 ### 2026.09.28
@@ -383,7 +436,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 - 🎨 **v2.10.5** Start screen: the strength slider is centred; with "Human" selected it is now dimmed and non-interactive rather than hidden (the same treatment the rotation-cooldown buttons get in 3D mode)
 - 🎨 **v2.10.4** Start screen: the strength slider now sits on its own row below the Human / Computer switch, and the two buttons are centred
 - 🐛 **v2.10.3** The strength slider is now genuinely draggable (a native range input, square corners like every other button) and its fill deepens one step per level; the opponent row is now a Human / Computer switch, with the slider appearing only once you pick the computer; all six languages updated
-- ✨ **v2.10.2** The computer opponent is now a five-stop slider (Low / Mid / High / Very high / Ultra); replaced the evaluation (threat counting per direction, gapped shapes and double threats); the top tier adds a kill search (forced runs of fours)
+- ✨ **v2.10.2** The computer opponent is now a five-stop slider (Low / Mid / High / Extra high / Ultra); replaced the evaluation (threat counting per direction, gapped shapes and double threats); the top tier adds a kill search (forced runs of fours)
 
 - ✨ **v2.10.1** The medium and hard tiers now search: medium looks one reply ahead, hard four plies; fixed moves outside the hard tier's win/block path never being sorted (all three tiers played near-randomly on most turns)
 - ✨ **v2.10.0** Added a computer opponent: easy / medium / hard on the start screen; in 4D it rotates layers too
