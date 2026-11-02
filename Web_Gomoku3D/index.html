@@ -9,8 +9,10 @@
 <style id="startup-style">
 html { background: #efe8db; }
 html.app-loading body { visibility: hidden; }
-#bootStatus { position: fixed; inset: 0; z-index: 1000; display: grid; place-content: center; gap: 12px; text-align: center; color: #716657; background: #efe8db; font: 15px/1.6 system-ui, sans-serif; visibility: visible; }
-#bootStatus strong { font-size: 24px; font-weight: 500; letter-spacing: .15em; }
+#bootStatus { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(22px, 4vh, 48px); color: #716657; background: #efe8db; font: 15px/1.6 system-ui, sans-serif; visibility: visible; }
+#bootAscii { display: block; width: 100vw; height: clamp(132px, 29vw, 480px); touch-action: none; cursor: crosshair; }
+#bootFallback { position: absolute; width: 94vw; text-align: center; font: 600 clamp(68px, 21vw, 360px)/1 "BrushSub", "STXingkai", "KaiTi", serif; }
+#bootLabel { font-size: 15px; letter-spacing: .12em; user-select: none; pointer-events: none; }
 </style>
 
 <!-- 图标内联成 data URI，守住"单文件"：32/16 是简化版（小尺寸也认得出），
@@ -2110,7 +2112,99 @@ html.app-loading body { visibility: hidden; }
 </style>
 </head>
 <body class="paper">
-<div id="bootStatus" role="status" aria-live="polite"><strong>五子魔方</strong><span>正在准备棋盘…</span></div>
+<!-- STARTUP-ASCII-BEGIN -->
+<div id="bootStatus" role="status" aria-live="polite">
+  <canvas id="bootAscii" aria-label="五子魔方 / Gomokube"></canvas>
+  <strong id="bootFallback">五子魔方</strong>
+  <span id="bootLabel">加载中…</span>
+</div>
+<script id="startup-ascii-script">
+(function () {
+  const host = document.getElementById('bootStatus'), canvas = document.getElementById('bootAscii');
+  if (!host || !canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const mask = document.createElement('canvas'), ink = mask.getContext('2d', {willReadFrequently:true});
+  if (!ink) return;
+  const brush = '"BrushSub", "STXingkai", "华文行楷", "STKaiti", "华文楷体", "KaiTi", serif';
+  const latin = 'Georgia, "Times New Roman", serif';
+  const chars = '@%#*+=:.';
+  let width=0, height=0, layers=[], frame=0, stopped=false, last=0;
+  const started=performance.now(), pointer={x:-1000,y:-1000};
+  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function resize() {
+    if (stopped) return;
+    const box=canvas.getBoundingClientRect(); width=box.width; height=box.height;
+    if (!width || !height) return;
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=Math.round(width*dpr); canvas.height=Math.round(height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    mask.width=Math.round(width); mask.height=Math.round(height);
+    const step=Math.max(3.5,Math.min(6,width/190)), row=step*1.35;
+    layers=['五子魔方','Gomokube'].map((text,index)=>{
+      ink.clearRect(0,0,width,height);
+      const family=index ? latin : brush;
+      ink.font='600 100px '+family;
+      let size=Math.min(height*.90,width*.94/ink.measureText(text).width*100);
+      ink.font='600 '+size+'px '+family;
+      const metrics=ink.measureText(text);
+      const ascent=metrics.actualBoundingBoxAscent||size*.8, descent=metrics.actualBoundingBoxDescent||size*.15;
+      // Fit the ink itself rather than the font's side bearings.
+      const inkWidth=(metrics.actualBoundingBoxLeft||0)+(metrics.actualBoundingBoxRight||metrics.width);
+      const scale=Math.min(1,width*.94/inkWidth);
+      ink.font='600 '+(size*scale)+'px '+family;
+      const m=ink.measureText(text);
+      ink.fillStyle='#000'; ink.textAlign='left'; ink.textBaseline='alphabetic';
+      ink.fillText(text,(width-((m.actualBoundingBoxLeft||0)+(m.actualBoundingBoxRight||m.width)))/2+(m.actualBoundingBoxLeft||0),(height+(ascent-descent)*scale)/2);
+      const pixels=ink.getImageData(0,0,mask.width,mask.height).data, points=[];
+      for(let y=row/2;y<height;y+=row)for(let x=step/2;x<width;x+=step){
+        const alpha=pixels[(Math.floor(y)*mask.width+Math.floor(x))*4+3];
+        if(alpha>70)points.push({x,y,dx:0,dy:0,c:chars[(Math.floor(x/step)*7+Math.floor(y/row)*3)%chars.length],a:alpha/255});
+      }
+      return points;
+    });
+    ctx.font=Math.max(5,step*1.30)+'px Consolas, monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    document.getElementById('bootFallback').style.display='none';
+  }
+  function draw(points,opacity) {
+    if(opacity<=0)return;
+    const radius=width<700?65:110;
+    for(const p of points){
+      const dx=p.x-pointer.x,dy=p.y-pointer.y,d=Math.hypot(dx,dy);
+      const power=!reduced&&d<radius?(1-d/radius)*25:0;
+      const tx=d?dx/d*power:0,ty=d?dy/d*power:0;
+      p.dx+=(tx-p.dx)*.18;p.dy+=(ty-p.dy)*.18;
+      ctx.fillStyle='rgba(52,44,34,'+(opacity*(.55+p.a*.45))+')';
+      ctx.fillText(p.c,p.x+p.dx,p.y+p.dy);
+    }
+  }
+  function tick(now) {
+    if(stopped)return;
+    frame=requestAnimationFrame(tick);
+    if(now-last<32)return;last=now;
+    const elapsed=now-started,cycle=Math.floor(elapsed/10000)%2;
+    const mix=elapsed<10000?1:Math.min(1,(elapsed%10000)/1500);
+    ctx.clearRect(0,0,width,height);
+    if(mix<1)draw(layers[1-cycle]||[],1-mix);
+    draw(layers[cycle]||[],mix);
+    canvas.dataset.language=cycle?'en':'zh';
+  }
+  function move(e){const r=canvas.getBoundingClientRect();pointer.x=e.clientX-r.left;pointer.y=e.clientY-r.top;}
+  function leave(){pointer.x=-1000;pointer.y=-1000;}
+  function down(e){move(e);if(canvas.setPointerCapture)canvas.setPointerCapture(e.pointerId);}
+  canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerdown',down);
+  canvas.addEventListener('pointerleave',leave);canvas.addEventListener('pointerup',leave);canvas.addEventListener('pointercancel',leave);
+  window.addEventListener('resize',resize);
+  window.GomokuLoading={stop(){stopped=true;cancelAnimationFrame(frame);window.removeEventListener('resize',resize);
+    canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerdown',down);
+    canvas.removeEventListener('pointerleave',leave);canvas.removeEventListener('pointerup',leave);canvas.removeEventListener('pointercancel',leave);
+  }};
+  resize();frame=requestAnimationFrame(tick);
+  if(document.fonts)document.fonts.load('600 100px "BrushSub"','五子魔方').then(resize).catch(()=>{});
+})();
+</script>
+<!-- STARTUP-ASCII-END -->
 <noscript><style>html.app-loading body { visibility: visible; } #bootStatus { display: none; }</style><p>请启用 JavaScript 后刷新页面。</p></noscript>
 
 <!-- RULES-EMBED-BEGIN -->
@@ -20086,11 +20180,13 @@ if (typeof document !== "undefined") {
   const boot = function () {
     try {
       InkField.init(); Game.init(); Keymap.init();
+      if (window.GomokuLoading) window.GomokuLoading.stop();
       const status = document.getElementById("bootStatus");
       if (status) status.style.display = "none";
       document.documentElement.classList.remove("app-loading");
     } catch (error) {
       const status = document.getElementById("bootStatus");
+      if (window.GomokuLoading) window.GomokuLoading.stop();
       if (status) status.textContent = "启动失败，请刷新页面重试。";
       throw error;
     }

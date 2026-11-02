@@ -61,7 +61,22 @@ try {
   await send('Page.navigate',{url:'http://127.0.0.1:'+server.address().port+'/'});
   await until('!!document.getElementById("setup")');
   check(await ev('document.documentElement.classList.contains("app-loading") && getComputedStyle(document.getElementById("setup")).visibility === "hidden" && getComputedStyle(document.getElementById("bootStatus")).visibility === "visible"'),'incomplete download only shows startup screen');
+  await until('document.getElementById("bootAscii").dataset.language === "zh"');
+  check(await ev('document.getElementById("bootAscii").getBoundingClientRect().width >= innerWidth * .94'),'ASCII title spans the viewport');
+  check(await ev('document.getElementById("bootLabel").textContent === "加载中…" && getComputedStyle(document.getElementById("bootLabel")).pointerEvents === "none"'),'plain noninteractive loading label');
   await shot('loading-mobile');
+  const initial=await ev('document.getElementById("bootAscii").toDataURL()');
+  const point=await ev(`(()=>{const c=document.getElementById('bootAscii'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,r=c.getBoundingClientRect();for(let k=0;k<d.length;k+=4)if(d[k+3]>100)return {x:r.x+(k/4%c.width)*r.width/c.width,y:r.y+Math.floor(k/4/c.width)*r.height/c.height};})()`);
+  check(!!point,'ASCII characters rendered before main script arrives');
+  await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x,y:point.y});await sleep(350);
+  check(await ev('document.getElementById("bootAscii").toDataURL()')!==initial,'pointer displaces ASCII characters');
+  await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
+  await sleep(11500);
+  check(await ev('document.getElementById("bootAscii").dataset.language === "en"'),'title switches to English after ten seconds');
+  await shot('loading-english-mobile');
+  await sleep(10000);
+  check(await ev('document.getElementById("bootAscii").dataset.language === "zh"'),'title returns to Chinese after twenty seconds');
+  await send('Emulation.setDeviceMetricsOverride',{width:1600,height:900,deviceScaleFactor:1,mobile:false});await sleep(200);await shot('loading-desktop');
   release();
   await until('!document.documentElement.classList.contains("app-loading")');
   check(await ev('getComputedStyle(document.getElementById("bootStatus")).display === "none" && !!document.getElementById("mode2d") && !!Game.session'),'completed startup reveals initialized controls');
@@ -81,6 +96,7 @@ try {
       if(lang==='zh'&&(width===1600||width===393))await shot('four-d-'+width);
     }
   }
+  check(await ev('!!window.GomokuLoading && getComputedStyle(document.getElementById("bootStatus")).display === "none"'),'loader retired after initialization');
   check(errors.length===0,'no runtime exceptions: '+errors.join(','));
   console.log(`${passed} startup and layout checks passed`);
 } finally {
