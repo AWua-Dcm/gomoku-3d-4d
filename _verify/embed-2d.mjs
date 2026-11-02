@@ -16,5 +16,6 @@ block('/* GOMOKU-2D-CSS-BEGIN */','/* GOMOKU-2D-CSS-END */',css,'</style>');
 block('<!-- GOMOKU-2D-DIALOGS-BEGIN -->','<!-- GOMOKU-2D-DIALOGS-END -->',read('two-d-integration.part.html'),'<script>\n"use strict";');
 const js=(fs.existsSync(path.join(here,'two-d-ui.part.js'))?read('two-d-ui.part.js')+'\n':'')+read('two-d-integration.part.js');
 block('/* GOMOKU-2D-INTEGRATION-BEGIN */','/* GOMOKU-2D-INTEGRATION-END */',js,'const GameExport =');
+if(fs.existsSync(path.join(here,'keybindings.part.js'))){const a=html.indexOf('/* KEYMAP-BEGIN */'),b=html.indexOf('/* KEYMAP-END */');if(a<0||b<a)throw Error('Missing keybinding anchors');html=html.slice(0,a)+read('keybindings.part.js').trim()+html.slice(b+'/* KEYMAP-END */'.length);}
 fs.writeFileSync(file,html,'utf8');
 console.log('Embedded 2D core, interface, offline interface and dialogs.');
