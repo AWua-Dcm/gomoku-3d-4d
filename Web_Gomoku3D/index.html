@@ -311,7 +311,7 @@
      cursor: move 是"这块能拖"的提示；里面的按钮靠 button{cursor:pointer} 覆盖回去
      （cursor 是继承属性，但直接命中的规则永远赢过继承）。 */
   #banner {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 6;
     background: rgba(252,249,241,.97); border: 1px solid var(--border); border-radius: 8px;
     padding: 26px 34px; text-align: center; display: none;
     cursor: move; touch-action: none;
@@ -1006,7 +1006,7 @@
   .restore-size:focus-visible, #confirmMoveBtn:focus-visible { outline:2px solid #386c62; outline-offset:3px; }
   #stage.preview .restore-size { display:none; }
   #navRow .restore-size { position:static; flex:0 0 auto; min-height:28px; padding:5px 9px; font-size:12px; }
-  #stage.twod:not(.preview) #restoreSizeGl { top:auto; bottom:170px; right:24px; }
+  #stage.twod:not(.preview) #restoreSizeGl { top:auto; bottom:64px; right:12px; z-index:9; }
   #boardWrap .restore-size { right:8px; bottom:8px; }
 
   /* 小浮窗。绝对定位、向上展开；不推任何行。 */
@@ -2040,11 +2040,11 @@
 #stage.twod:not(.preview) #twoDBoardHost { display:block; }
 /* 终局横幅和 #twoDBoardHost 同在 #view 里；棋盘层有 z-index:1，横幅默认 auto，
    二维下会被棋盘层盖住 —— 看得见、拖不动、关闭也点不到。抬到棋盘之上、底栏之下。 */
-#stage.twod:not(.preview) #banner { z-index: 3; }
+#stage.twod:not(.preview) #banner { z-index: 6; }
 #stage.twod:not(.preview) #gl, #stage.twod:not(.preview) #modebar, #stage.twod:not(.preview) #hintbox { display:none; }
 #stage.twod:not(.preview) #panel { position:absolute; left:0; right:0; bottom:0; height:auto; max-height:122px; padding:8px 16px; z-index:8; border-top:1px solid var(--border); border-left:0; overflow:visible; gap:3px; }
 #stage.twod:not(.preview) #panel > :not(#statusRow):not(#info):not(#buttons):not(#emojiSlot) { display:none !important; }
-#stage.twod:not(.preview) #statusRow { min-height:20px; margin:0; justify-content:center; font-size:15px; }
+#stage.twod:not(.preview) #statusRow { min-height:20px; margin:0; justify-content:center; font-size:15px; padding-right:88px; }
 #stage.twod:not(.preview) #info { margin:0; text-align:center; font-size:12px; min-height:18px; }
 #stage.twod:not(.preview) #buttons { width:min(660px,100%); margin:0 auto; flex-wrap:nowrap; }
 #stage.twod:not(.preview) #buttons button { min-width:0; font-size:13px; padding:8px 3px; }
