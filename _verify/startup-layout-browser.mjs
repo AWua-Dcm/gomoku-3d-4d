@@ -69,6 +69,15 @@ try {
   await until('document.getElementById("bootAscii").dataset.language === "zh"');
   check(await ev('document.getElementById("bootAscii").getBoundingClientRect().width >= innerWidth * .94'),'ASCII title spans the viewport');
   check(await ev('document.getElementById("bootLabel").textContent === "加载中…" && getComputedStyle(document.getElementById("bootLabel")).pointerEvents === "none"'),'plain noninteractive loading label');
+  check(await ev('document.getElementById("bootLabelEn").textContent === "Loading…" && document.getElementById("bootLabelEn").getBoundingClientRect().top > document.getElementById("bootLabel").getBoundingClientRect().bottom'),'Chinese loading label above English');
+  for(const width of [320,393,1600]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height:852,deviceScaleFactor:1,mobile:width<700});await sleep(100);
+    const footer=await ev(`(()=>{const rect=id=>{const r=document.getElementById(id).getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};const links=[...document.querySelectorAll('#bootLinks a')];return {icp:rect('bootIcp'),links:rect('bootLinks'),hrefs:links.map(a=>a.href),tops:links.map(a=>a.getBoundingClientRect().top),icpHref:document.querySelector('#bootIcp a').href,icpText:document.getElementById('bootIcp').textContent,scroll:document.documentElement.scrollWidth};})()`);
+    check(footer.icpText.includes('苏ICP备2026082082号-1') && footer.icpHref==='https://beian.miit.gov.cn/','existing ICP visible in loader');
+    check(footer.hrefs.join('|')==='https://www.gomokucube.com/|https://github.com/AWua-Dcm/gomoku-3d-4d' && footer.tops[0]<footer.tops[1],'domain above GitHub link');
+    check(footer.icp.left>=0 && footer.links.right<=width && footer.icp.right<footer.links.left && footer.scroll<=width,width+': bottom links fit without overlap');
+  }
+  await send('Emulation.setDeviceMetricsOverride',{width:393,height:852,deviceScaleFactor:1,mobile:true});await sleep(100);
   const resting=await ev('document.getElementById("bootAscii").toDataURL()');await sleep(500);
   check(await ev('document.getElementById("bootAscii").toDataURL()')!==resting,'title flows gently without pointer input');
   check(await ev('getComputedStyle(document.getElementById("bootStatus"),"::before").animationName === "bootPaperFlow" && getComputedStyle(document.getElementById("bootStatus"),"::after").animationName === "bootPaperFlow"'),'two broad background washes drift slowly');

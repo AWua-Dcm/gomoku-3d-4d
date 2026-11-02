@@ -23,6 +23,14 @@ html.app-loading body { visibility: hidden; }
 #bootStatus::after { background: radial-gradient(ellipse at 62% 22%, rgba(255,253,243,.48), transparent 58%); animation-duration: 36s; animation-direction: alternate-reverse; }
 @keyframes bootPaperFlow { from { transform: translate3d(-3%, 1%, 0) scale(1); } to { transform: translate3d(4%, -3%, 0) scale(1.08); } }
 @media (prefers-reduced-motion: reduce) { #bootStatus::before, #bootStatus::after { animation: none; will-change: auto; } }
+
+#bootLabels { display: grid; gap: 4px; text-align: center; pointer-events: none; user-select: none; }
+#bootLabelEn { font-size: 13px; letter-spacing: .08em; }
+#bootFooter { position: absolute; left: max(14px, env(safe-area-inset-left)); right: max(14px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; font: 11px/1.6 system-ui, sans-serif; color: #827769; }
+#bootIcp { min-width: 0; max-width: 42%; overflow-wrap: anywhere; }
+#bootLinks { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 0; max-width: 54%; text-align: right; overflow-wrap: anywhere; }
+#bootFooter a { color: inherit; text-decoration: none; }
+#bootFooter a:hover, #bootFooter a:focus-visible { color: #493f34; text-decoration: underline; }
 </style>
 
 <!-- 图标内联成 data URI，守住"单文件"：32/16 是简化版（小尺寸也认得出），
@@ -2126,7 +2134,14 @@ html.app-loading body { visibility: hidden; }
 <div id="bootStatus" role="status" aria-live="polite">
   <canvas id="bootAscii" aria-label="五子魔方 / Gomokube"></canvas>
   <strong id="bootFallback">五子魔方</strong>
-  <span id="bootLabel">加载中…</span>
+  <div id="bootLabels"><span id="bootLabel" lang="zh-CN">加载中…</span><span id="bootLabelEn" lang="en">Loading…</span></div>
+  <footer id="bootFooter">
+    <div id="bootIcp">弈棋爱好 · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">苏ICP备2026082082号-1</a></div>
+    <nav id="bootLinks" aria-label="网站与源码 / Website and source">
+      <a href="https://www.gomokucube.com/" target="_blank" rel="noopener noreferrer">gomokucube.com</a>
+      <a href="https://github.com/AWua-Dcm/gomoku-3d-4d" target="_blank" rel="noopener noreferrer">github.com/AWua-Dcm/gomoku-3d-4d</a>
+    </nav>
+  </footer>
 </div>
 <script id="startup-ascii-script">
 (function () {
