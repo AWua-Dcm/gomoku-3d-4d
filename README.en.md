@@ -16,6 +16,8 @@ online demo (GitHub Pages) publishes the very same `Web_Gomoku3D/index.html` —
 step, so the deployed file and the one you double-click are identical; the root `index.html` is
 just a redirect. The full offline check is `node _verify/check-2d.mjs`.
 
+![Multidimensional Entry introduction](_verify/shots/intro-v4.1.png)
+
 ![Setup screen](_verify/shots/start-v4.png)
 
 ---
@@ -190,7 +192,7 @@ See [`_verify/check-public.mjs`](_verify/check-public.mjs) for the full story.
 │   ├── inject-2d.mjs           ← injection check: proves the 2D assertions can fail
 │   ├── two-d-*.part.*          ← 2D source parts (re-embed with embed-2d.mjs)
 │   └── shots/                  ← screenshots written by the browser checks
-├── RELEASE_NOTES_v4.0.0.md     ← v4.0.0 release summary (Chinese)
+├── RELEASE_NOTES_v4.1.0.md     ← v4.1.0 release summary (Chinese)
 ├── 知识库/                     ← engineering knowledge base (open the repo root in Obsidian)
 ├── 打开流程.md                  ← setup walkthrough + acceptance checklist (Chinese only)
 └── LICENSE
@@ -326,6 +328,10 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 ## 📝 Changelog
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
+
+### 2026.11.08
+
+- ✨ **v4.1.0** Added the **Multidimensional Entry** introduction: first-time visitors start on a native scrolling long-form page that unfolds the board, then walks through 2D black holes, floating stones and aging; 3D spatial lines, layer rotation and wrap-around connections; and 4D day/night, slow/haste tempo and the timeline, ending with a dimension choice that leads into the existing setup screen. It includes interactive demos, concept/rule popovers, drag-to-orbit, reduced-motion support, a return-visit skip preference and a **Game introduction** entry at the top-left of the setup screen. Buttons are unified to flat paper-and-indigo styling, replacing the old bamboo-scroll gradients and inner highlights. The introduction is isolated from real games and never writes to game, AI or multiplayer state; GSAP and ScrollTrigger are embedded in the single file, with no CDN or npm dependency.
 
 ### 2026.11.02
 
