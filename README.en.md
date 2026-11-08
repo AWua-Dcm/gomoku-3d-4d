@@ -18,6 +18,10 @@ just a redirect. The full offline check is `node _verify/check-2d.mjs`.
 
 ![Multidimensional Entry introduction](_verify/shots/intro-v4.1.png)
 
+![Knowledge panels with a second-level explanation](_verify/shots/knowledge-v4.1.1.png)
+
+![Second-level knowledge panel](_verify/shots/knowledge-deep-v4.1.1.png)
+
 ![Setup screen](_verify/shots/start-v4.png)
 
 ---
@@ -192,7 +196,7 @@ See [`_verify/check-public.mjs`](_verify/check-public.mjs) for the full story.
 │   ├── inject-2d.mjs           ← injection check: proves the 2D assertions can fail
 │   ├── two-d-*.part.*          ← 2D source parts (re-embed with embed-2d.mjs)
 │   └── shots/                  ← screenshots written by the browser checks
-├── RELEASE_NOTES_v4.1.0.md     ← v4.1.0 release summary (Chinese)
+├── RELEASE_NOTES_v4.1.1.md     ← v4.1.1 release summary (Chinese)
 ├── 知识库/                     ← engineering knowledge base (open the repo root in Obsidian)
 ├── 打开流程.md                  ← setup walkthrough + acceptance checklist (Chinese only)
 └── LICENSE
@@ -331,6 +335,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.11.08
 
+- ✨ **v4.1.1** Expanded the knowledge panels: each mechanic now links to deeper scientific concepts — event horizon, spacetime curvature and accretion disks for black holes; foundations, loads and maglev for floating stones; Epiphyllum and half-life for aging; crystallographic direction families for the thirteen directions; 4D rotation for layer turns; torus topology for connected edges; plus phase, Chebyshev distance and gravitational time dilation. Underlined terms open a second-level panel; X or Esc returns level by level, restoring the parent's scroll position and focus, while **Back to the demo** exits all at once. Every entry separates the scientific concept from the game rule and never treats a visual analogy as a rule.
 - ✨ **v4.1.0** Added the **Multidimensional Entry** introduction: first-time visitors start on a native scrolling long-form page that unfolds the board, then walks through 2D black holes, floating stones and aging; 3D spatial lines, layer rotation and wrap-around connections; and 4D day/night, slow/haste tempo and the timeline, ending with a dimension choice that leads into the existing setup screen. It includes interactive demos, concept/rule popovers, drag-to-orbit, reduced-motion support, a return-visit skip preference and a **Game introduction** entry at the top-left of the setup screen. Buttons are unified to flat paper-and-indigo styling, replacing the old bamboo-scroll gradients and inner highlights. The introduction is isolated from real games and never writes to game, AI or multiplayer state; GSAP and ScrollTrigger are embedded in the single file, with no CDN or npm dependency.
 
 ### 2026.11.02

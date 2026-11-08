@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN" class="app-loading">
 <head>
-<meta name="application-version" content="4.1.0">
+<meta name="application-version" content="4.1.1">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>五子魔方</title>
@@ -2425,6 +2425,15 @@ body button.sel:hover, #setup .row button.sel:hover, #setup #startBtn:hover { ba
 #journeyKnowledgeBody h3 { font-size: 15px; font-weight: 600; margin: 24px 0 9px; }
 #journeyKnowledgeBody p { font-size: 14px; line-height: 1.95; color: #625a4c; margin: 0 0 14px; }
 #journeyKnowledgeBody a { font-size: 12px; color: #2f5d7c; text-underline-offset: 4px; }
+#journeyKnowledgeBody .journey-knowledge-inline { display: inline; margin: 0; padding: 0; border: 0; border-radius: 2px; background: none; color: #2f5d7c; font: inherit; line-height: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: pointer; }
+#journeyKnowledgeBody .journey-knowledge-inline:hover { color: #1f455f; }
+#journeyKnowledgeBody .journey-knowledge-inline:focus-visible { outline: 2px solid #2f5d7c; outline-offset: 3px; }
+#journeyKnowledgeBody .journey-knowledge-hint { margin-top: 18px !important; font-size: 12px !important; color: #8a7f6b !important; }
+.journey-knowledge-tools { display: flex; align-items: center; gap: 2px; }
+#introScreen #journeyKnowledgeBack { display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; color: #2f5d7c; font-size: 12px; }
+#introScreen #journeyKnowledgeBack[hidden] { display: none; }
+#introScreen #journeyKnowledgeBack:hover { background: #e8e0d1; }
+#journeyKnowledgeBack svg { width: 15px; height: 15px; }
 #introScreen #journeyKnowledgeDone { margin-top: 14px; }
 @media (max-width:760px) { #journeyKnowledge { padding: 22px; }#introScreen #journeyKnowledge h2 { font-size: 26px; } }
 @media (min-width:1800px) { #introScreen { padding: 0; } }
@@ -2584,7 +2593,7 @@ body button.sel:hover, #setup .row button.sel:hover, #setup #startBtn:hover { ba
   <p class="journey-lead" data-j="endLead">选择一个维度，在初始界面设置你的棋局。</p>
   <div class="journey-dimension-links"><button type="button" data-pick-dim="2d"><span class="journey-dim-title" data-j="nav2">二维</span><span data-j="end2">黑洞 · 浮空 · 寿命</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button><button type="button" data-pick-dim="3d"><span class="journey-dim-title" data-j="nav3">三维</span><span data-j="end3">空间五连 · 层旋转 · 贯通</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button><button type="button" data-pick-dim="4d"><span class="journey-dim-title" data-j="nav4">四维</span><span data-j="end4">棋局变化 · 黎明永夜</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button></div>
 </div></section>
-<dialog id="journeyKnowledge" aria-labelledby="journeyKnowledgeTitle"><div class="journey-knowledge-header"><span data-j="knowledge">知识讲解</span><button type="button" id="journeyKnowledgeClose" aria-label="关闭知识讲解"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><h2 id="journeyKnowledgeTitle"></h2><div id="journeyKnowledgeBody"></div><button id="journeyKnowledgeDone" class="journey-action" type="button" data-j="backDemo">返回演示</button></dialog>
+<dialog id="journeyKnowledge" aria-labelledby="journeyKnowledgeTitle"><div class="journey-knowledge-header"><span data-j="knowledge">知识讲解</span><div class="journey-knowledge-tools"><button type="button" id="journeyKnowledgeBack" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg><span data-j="back">上一页</span></button><button type="button" id="journeyKnowledgeClose" aria-label="关闭知识讲解"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div><h2 id="journeyKnowledgeTitle"></h2><div id="journeyKnowledgeBody"></div><button id="journeyKnowledgeDone" class="journey-action" type="button" data-j="backDemo">返回演示</button></dialog>
 
   <footer class="intro-footer">
     <div class="intro-footer-left"><label class="intro-skip"><input id="introSkip" type="checkbox"><span data-intro="skip">下次直接进入初始界面</span></label><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="intro-icp">苏ICP备2026082082号-1</a></div>
@@ -3010,13 +3019,13 @@ body button.sel:hover, #setup .row button.sel:hover, #setup #startBtn:hover { ba
   const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
   const ease=x=>{x=clamp(x);return x*x*(3-2*x);};
   const mix=(a,b,t)=>a+(b-a)*t;
-  const ZH={nav0:'入局',nav2:'二维',nav3:'三维',nav4:'四维',scroll:'继续滚动，棋局不止于此',twoTitle1:'熟悉的棋盘。',twoTitle2:'全新的变数。',twoLead:'黑洞改变落点，地基托起棋子，时间改变局势。二维，也可以步步意外。',hole:'黑洞奇点',float:'浮空连珠',age:'刹那昙花',localDemo:'局部规则演示',comboTitle:'组合起来，再多一点可能。',comboDesc:'黑洞、浮空与寿命可以任意组合。黑洞与寿命同时开启时，靠近黑洞，棋子老化得更慢。',choose2:'选择二维玩法',threeTitle1:'看见纵深。',threeTitle2:'也看见更多棋路。',threeLead:'沿着十三个方向寻找五连。还可以转动一层棋盘，或者把相对的边界接起来。',spaceLine:'十三向连五',spin:'魔方旋转',wrap:'空间贯通',orbitHint:'拖动旋转 · 方向键调整',fourTitle1:'棋局的下一维，',fourTitle2:'是时间。',fourLead:'四维延续立体棋盘，将旋转、贯通与黎明永夜结合。坐标仍是三轴，但棋局会随行动改变。',phaseTitle:'同一盘棋，两种时刻。',phaseDesc:'棋子保留落下时的相位。异相位的棋子仍然占位，只有当前相位的连线参与结算。',timeDrag:'拖动时间轴，切换相位',dawn:'黎明',night:'永夜',tempoTitle:'落子，也能改变节奏。',normal:'正常',slow:'缓',fast:'催',showMove:'演示一手',phaseNote:'相位切换不会自动判胜。成五仍须由落子或转动触发；异相位棋子不会凭空消失。',endTitle1:'下一步，',endTitle2:'由你落下。',endLead:'选择一个维度，在初始界面设置你的棋局。',end2:'黑洞 · 浮空 · 寿命',end3:'空间五连 · 层旋转 · 贯通',end4:'棋局变化 · 黎明永夜',learn2:'什么是黑洞？',learn3:'打开空间讲解',learn4:'这里的“四维”是什么？',knowledge:'知识讲解',backDemo:'返回演示',reset:'重置演示',close:'关闭知识讲解',phasePrefix:'当前相位 · ',period:'示意周期：8格，非正式默认参数。'};
-  const EN={nav0:'Begin',nav2:'2D',nav3:'3D',nav4:'4D',scroll:'Keep scrolling. There is more to this board.',twoTitle1:'A familiar board.',twoTitle2:'Unexpected possibilities.',twoLead:'Black holes change the terrain. Foundations support stones. Time changes the position. Discover another side of 2D.',hole:'Black holes',float:'Floating stones',age:'Fading stones',localDemo:'Illustrative rule demo',comboTitle:'Combine them. Discover more.',comboDesc:'Combine black holes, foundations and lifetimes. With black holes and lifetimes enabled, stones near a hole age more slowly.',choose2:'Choose 2D',threeTitle1:'See the depth.',threeTitle2:'Find another line.',threeLead:'Find five in thirteen directions. Rotate a layer, or connect opposite boundaries to open new paths.',spaceLine:'Thirteen directions',spin:'Layer rotation',wrap:'Connected edges',orbitHint:'Drag to orbit · Arrow keys to adjust',fourTitle1:'The next dimension',fourTitle2:'is time.',fourLead:'4D combines rotation, connected boundaries and dawn/night phases on a spatial board. There are still three coordinate axes; actions change the game over time.',phaseTitle:'One board. Two phases.',phaseDesc:'Each stone keeps the phase in which it was placed. Other-phase stones still occupy their positions. Only the current phase is eligible for line evaluation.',timeDrag:'Move the timeline to explore phases',dawn:'Dawn',night:'Night',tempoTitle:'A move can change the rhythm.',normal:'Normal',slow:'Delay',fast:'Hasten',showMove:'Demonstrate a move',phaseNote:'A phase change never wins by itself. A placing or rotating action must complete the line. Other-phase stones remain on the board.',endTitle1:'Your next move.',endTitle2:'Your dimension.',endLead:'Choose a dimension, then configure your game in setup.',end2:'Black holes · Foundations · Lifetimes',end3:'Spatial lines · Rotation · Connected edges',end4:'Changing positions · Dawn and night',learn2:'What is a black hole?',learn3:'Explore the spatial concept',learn4:'What does “4D” mean here?',knowledge:'Behind the idea',backDemo:'Back to the demo',reset:'Reset demo',close:'Close explanation',phasePrefix:'Current phase · ',period:'Illustrative cycle: 8 steps, not the game default.'};
+  const ZH={nav0:'入局',nav2:'二维',nav3:'三维',nav4:'四维',scroll:'继续滚动，棋局不止于此',twoTitle1:'熟悉的棋盘。',twoTitle2:'全新的变数。',twoLead:'黑洞改变落点，地基托起棋子，时间改变局势。二维，也可以步步意外。',hole:'黑洞奇点',float:'浮空连珠',age:'刹那昙花',localDemo:'局部规则演示',comboTitle:'组合起来，再多一点可能。',comboDesc:'黑洞、浮空与寿命可以任意组合。黑洞与寿命同时开启时，靠近黑洞，棋子老化得更慢。',choose2:'选择二维玩法',threeTitle1:'看见纵深。',threeTitle2:'也看见更多棋路。',threeLead:'沿着十三个方向寻找五连。还可以转动一层棋盘，或者把相对的边界接起来。',spaceLine:'十三向连五',spin:'魔方旋转',wrap:'空间贯通',orbitHint:'拖动旋转 · 方向键调整',fourTitle1:'棋局的下一维，',fourTitle2:'是时间。',fourLead:'四维延续立体棋盘，将旋转、贯通与黎明永夜结合。坐标仍是三轴，但棋局会随行动改变。',phaseTitle:'同一盘棋，两种时刻。',phaseDesc:'棋子保留落下时的相位。异相位的棋子仍然占位，只有当前相位的连线参与结算。',timeDrag:'拖动时间轴，切换相位',dawn:'黎明',night:'永夜',tempoTitle:'落子，也能改变节奏。',normal:'正常',slow:'缓',fast:'催',showMove:'演示一手',phaseNote:'相位切换不会自动判胜。成五仍须由落子或转动触发；异相位棋子不会凭空消失。',endTitle1:'下一步，',endTitle2:'由你落下。',endLead:'选择一个维度，在初始界面设置你的棋局。',end2:'黑洞 · 浮空 · 寿命',end3:'空间五连 · 层旋转 · 贯通',end4:'棋局变化 · 黎明永夜',learn2:'什么是黑洞？',learn3:'打开空间讲解',learn4:'这里的“四维”是什么？',knowledge:'知识讲解',back:'上一页',backDemo:'返回演示',reset:'重置演示',close:'关闭知识讲解',phasePrefix:'当前相位 · ',period:'示意周期：8格，非正式默认参数。'};
+  const EN={nav0:'Begin',nav2:'2D',nav3:'3D',nav4:'4D',scroll:'Keep scrolling. There is more to this board.',twoTitle1:'A familiar board.',twoTitle2:'Unexpected possibilities.',twoLead:'Black holes change the terrain. Foundations support stones. Time changes the position. Discover another side of 2D.',hole:'Black holes',float:'Floating stones',age:'Fading stones',localDemo:'Illustrative rule demo',comboTitle:'Combine them. Discover more.',comboDesc:'Combine black holes, foundations and lifetimes. With black holes and lifetimes enabled, stones near a hole age more slowly.',choose2:'Choose 2D',threeTitle1:'See the depth.',threeTitle2:'Find another line.',threeLead:'Find five in thirteen directions. Rotate a layer, or connect opposite boundaries to open new paths.',spaceLine:'Thirteen directions',spin:'Layer rotation',wrap:'Connected edges',orbitHint:'Drag to orbit · Arrow keys to adjust',fourTitle1:'The next dimension',fourTitle2:'is time.',fourLead:'4D combines rotation, connected boundaries and dawn/night phases on a spatial board. There are still three coordinate axes; actions change the game over time.',phaseTitle:'One board. Two phases.',phaseDesc:'Each stone keeps the phase in which it was placed. Other-phase stones still occupy their positions. Only the current phase is eligible for line evaluation.',timeDrag:'Move the timeline to explore phases',dawn:'Dawn',night:'Night',tempoTitle:'A move can change the rhythm.',normal:'Normal',slow:'Delay',fast:'Hasten',showMove:'Demonstrate a move',phaseNote:'A phase change never wins by itself. A placing or rotating action must complete the line. Other-phase stones remain on the board.',endTitle1:'Your next move.',endTitle2:'Your dimension.',endLead:'Choose a dimension, then configure your game in setup.',end2:'Black holes · Foundations · Lifetimes',end3:'Spatial lines · Rotation · Connected edges',end4:'Changing positions · Dawn and night',learn2:'What is a black hole?',learn3:'Explore the spatial concept',learn4:'What does “4D” mean here?',knowledge:'Behind the idea',back:'Back',backDemo:'Back to the demo',reset:'Reset demo',close:'Close explanation',phasePrefix:'Current phase · ',period:'Illustrative cycle: 8 steps, not the game default.'};
   const localized={
-    ja:{nav0:'はじめに',nav2:'二次元',nav3:'三次元',nav4:'四次元',twoTitle1:'なじみの盤面。',twoTitle2:'新たな可能性。',hole:'ブラックホール',float:'浮遊する石',age:'石の寿命',threeTitle1:'奥行きを見て、',threeTitle2:'新しい棋路を探す。',spaceLine:'十三方向の五連',spin:'層の回転',wrap:'境界の接続',fourTitle1:'次の次元は、',fourTitle2:'時間。',dawn:'黎明',night:'永夜',normal:'通常',slow:'遅延',fast:'加速',knowledge:'概念を知る',backDemo:'デモに戻る',reset:'リセット',endTitle1:'次の一手は、',endTitle2:'あなたから。'},
-    ko:{nav0:'시작',nav2:'2차원',nav3:'3차원',nav4:'4차원',twoTitle1:'익숙한 판.',twoTitle2:'새로운 가능성.',hole:'블랙홀',float:'공중의 돌',age:'돌의 수명',threeTitle1:'깊이를 보고,',threeTitle2:'새로운 길을 찾다.',spaceLine:'13방향 오목',spin:'층 회전',wrap:'경계 연결',fourTitle1:'다음 차원은',fourTitle2:'시간입니다.',dawn:'새벽',night:'밤',normal:'보통',slow:'지연',fast:'촉진',knowledge:'개념 알아보기',backDemo:'시연으로 돌아가기',reset:'초기화',endTitle1:'다음 한 수는,',endTitle2:'당신의 선택.'},
-    fr:{nav0:'Début',nav2:'2D',nav3:'3D',nav4:'4D',twoTitle1:'Un plateau familier.',twoTitle2:'De nouvelles possibilités.',hole:'Trous noirs',float:'Pierres flottantes',age:'Durée des pierres',threeTitle1:'Voyez la profondeur.',threeTitle2:'Trouvez une autre ligne.',spaceLine:'Treize directions',spin:'Rotation',wrap:'Bords connectés',fourTitle1:'La dimension suivante,',fourTitle2:'c’est le temps.',dawn:'Aube',night:'Nuit',normal:'Normal',slow:'Retarder',fast:'Accélérer',knowledge:'Comprendre le concept',backDemo:'Retour à la démo',reset:'Réinitialiser',endTitle1:'Le prochain coup,',endTitle2:'c’est le vôtre.'},
-    ru:{nav0:'Начало',nav2:'2D',nav3:'3D',nav4:'4D',twoTitle1:'Знакомая доска.',twoTitle2:'Новые возможности.',hole:'Чёрные дыры',float:'Парящие камни',age:'Срок жизни',threeTitle1:'Увидеть глубину.',threeTitle2:'Найти другую линию.',spaceLine:'Тринадцать направлений',spin:'Вращение слоя',wrap:'Связанные грани',fourTitle1:'Следующее измерение —',fourTitle2:'это время.',dawn:'Рассвет',night:'Ночь',normal:'Обычно',slow:'Задержать',fast:'Ускорить',knowledge:'Объяснение',backDemo:'К демонстрации',reset:'Сбросить',endTitle1:'Ваш следующий ход.',endTitle2:'Ваше измерение.'}
+    ja:{nav0:'はじめに',nav2:'二次元',nav3:'三次元',nav4:'四次元',twoTitle1:'なじみの盤面。',twoTitle2:'新たな可能性。',hole:'ブラックホール',float:'浮遊する石',age:'石の寿命',threeTitle1:'奥行きを見て、',threeTitle2:'新しい棋路を探す。',spaceLine:'十三方向の五連',spin:'層の回転',wrap:'境界の接続',fourTitle1:'次の次元は、',fourTitle2:'時間。',dawn:'黎明',night:'永夜',normal:'通常',slow:'遅延',fast:'加速',knowledge:'概念を知る',back:'前のページ',backDemo:'デモに戻る',reset:'リセット',endTitle1:'次の一手は、',endTitle2:'あなたから。'},
+    ko:{nav0:'시작',nav2:'2차원',nav3:'3차원',nav4:'4차원',twoTitle1:'익숙한 판.',twoTitle2:'새로운 가능성.',hole:'블랙홀',float:'공중의 돌',age:'돌의 수명',threeTitle1:'깊이를 보고,',threeTitle2:'새로운 길을 찾다.',spaceLine:'13방향 오목',spin:'층 회전',wrap:'경계 연결',fourTitle1:'다음 차원은',fourTitle2:'시간입니다.',dawn:'새벽',night:'밤',normal:'보통',slow:'지연',fast:'촉진',knowledge:'개념 알아보기',back:'이전 페이지',backDemo:'시연으로 돌아가기',reset:'초기화',endTitle1:'다음 한 수는,',endTitle2:'당신의 선택.'},
+    fr:{nav0:'Début',nav2:'2D',nav3:'3D',nav4:'4D',twoTitle1:'Un plateau familier.',twoTitle2:'De nouvelles possibilités.',hole:'Trous noirs',float:'Pierres flottantes',age:'Durée des pierres',threeTitle1:'Voyez la profondeur.',threeTitle2:'Trouvez une autre ligne.',spaceLine:'Treize directions',spin:'Rotation',wrap:'Bords connectés',fourTitle1:'La dimension suivante,',fourTitle2:'c’est le temps.',dawn:'Aube',night:'Nuit',normal:'Normal',slow:'Retarder',fast:'Accélérer',knowledge:'Comprendre le concept',back:'Page précédente',backDemo:'Retour à la démo',reset:'Réinitialiser',endTitle1:'Le prochain coup,',endTitle2:'c’est le vôtre.'},
+    ru:{nav0:'Начало',nav2:'2D',nav3:'3D',nav4:'4D',twoTitle1:'Знакомая доска.',twoTitle2:'Новые возможности.',hole:'Чёрные дыры',float:'Парящие камни',age:'Срок жизни',threeTitle1:'Увидеть глубину.',threeTitle2:'Найти другую линию.',spaceLine:'Тринадцать направлений',spin:'Вращение слоя',wrap:'Связанные грани',fourTitle1:'Следующее измерение —',fourTitle2:'это время.',dawn:'Рассвет',night:'Ночь',normal:'Обычно',slow:'Задержать',fast:'Ускорить',knowledge:'Объяснение',back:'Назад',backDemo:'К демонстрации',reset:'Сбросить',endTitle1:'Ваш следующий ход.',endTitle2:'Ваше измерение.'}
   };
   let lang='zh', words=ZH, live=false, raf=0, triggers=[], resizeFrame=0;
   const scenes=[{id:'journey2Canvas',mode:'hole',step:0,motion:0,depth:1,visible:false,dirty:true,hover:null}, {id:'journey3Canvas',mode:'line',motion:0,angle:0,yaw:0,pitch:0,scrollYaw:0,manualCamera:false,visible:false,dirty:true,drag:null}, {id:'journey4Canvas',motion:0,time:25,phaseLength:4,tempo:'normal',done:false,touched:false,yaw:0,pitch:0,visible:false,dirty:true}];
@@ -3240,35 +3249,210 @@ body button.sel:hover, #setup .row button.sel:hover, #setup #startBtn:hover { ba
   $('journey4Canvas').addEventListener('pointermove',e=>{if(!drag4)return;s4.yaw+=(e.clientX-drag4.x)*.007;s4.pitch=clamp(s4.pitch+(e.clientY-drag4.y)*.006,-.8,.7);drag4={x:e.clientX,y:e.clientY};invalidate(s4);});
   for(const type of ['pointerup','pointercancel','lostpointercapture'])$('journey4Canvas').addEventListener(type,()=>drag4=null);
   $('journeyTimeRange').addEventListener('pointerdown',()=>{s4.touched=true;gsap.killTweensOf(s4);});
+  // Deeper explanations opened from underlined terms inside a knowledge panel.
+  // A small stack keeps the parent panel; closing a child restores the parent.
+  const DEEP={
+    zh:{
+      'event-horizon':{title:'事件视界：光也回不来的边界',sections:[
+        ['它是什么','事件视界不是一层实体表面，而是一条因果边界：在它以内，任何物体（包括光）都无法再逃到远处。对不旋转的黑洞，边界半径是史瓦西半径 rₛ = 2GM/c²；质量越大，边界越大。'],
+        ['为什么叫“视界”','远处的观察者看不到视界内部发出的光；越靠近视界，时钟看起来越慢、光越红。跨越视界本身对掉进去的人没有“撞墙”感（对大黑洞而言），但他已无法返回。']
+      ],reading:{href:'https://science.nasa.gov/universe/black-holes/',label:'延伸阅读：NASA · 黑洞'}},
+      'spacetime-curvature':{title:'时空曲率：引力是几何',sections:[
+        ['广义相对论的图像','质量与能量会弯曲时空；自由下落的物体沿着弯曲时空中的“测地线”运动。我们感到的引力，在这个图像里是时空几何的结果，而不是一只看不见的手在拉。'],
+        ['网格漏斗只是比喻','教科书常用一张被重物压弯的网格表示引力井；它省掉了时间维度，也不是黑洞表面的真实形状。本页的漏斗同样只是视觉类比，不参与棋局计算。']
+      ],reading:{href:'https://science.nasa.gov/universe/black-holes/',label:'延伸阅读：NASA · 黑洞'}},
+      'accretion-disk':{title:'吸积盘：黑洞周围为什么会发亮',sections:[
+        ['落进去之前','黑洞本身不发光，但周围的气体在落入前会形成高速旋转的吸积盘，因摩擦与压缩被加热到数百万度，发出 X 射线等辐射。人类拍到的黑洞照片，主要来自吸积盘的辐射。'],
+        ['棋局没有模拟吸积','棋盘上的黑洞只作为不可落子与交换位置的特殊点，不产生能量、不吞掉整条线，也没有吸积盘。网格漏斗与时间光环是视觉类比。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Accretion_disk',label:'延伸阅读：维基百科 · 吸积盘'}},
+      'epiphyllum':{title:'昙花：只开一夜的仙人掌花',sections:[
+        ['植物学里的昙花','昙花（Epiphyllum oxypetalum）是仙人掌科昙花属植物，原产墨西哥与中美洲。它的花在夜间开放，单朵花通常只维持数小时，天亮前后凋谢；夜间活动的蝙蝠与天蛾是它的传粉者。'],
+        ['“昙花一现”','汉语用“昙花一现”形容美好而短暂的事物。棋局里的“刹那昙花”借这个意象表示棋子寿命有限：新子当手不老，之后每个动作推进寿命，最后三手变灰，耗尽才消失。它不是植物学模拟。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Epiphyllum_oxypetalum',label:'延伸阅读：维基百科 · 昙花'}},
+      'half-life':{title:'半衰期：一半样本衰变的时间',sections:[
+        ['物理中的半衰期','放射性元素的半衰期，是样本中一半原子核发生衰变所需的时间。单个原子核何时衰变是概率性的，但大量样本的统计规律遵循指数衰减。'],
+        ['棋局里的“寿命”不是半衰期','本游戏的寿命按“动作次数”确定性地推进：每个动作固定老化若干手，最后三手变灰，到零消失。它借用了“倒计时”的直觉，但没有随机衰变，也不是指数曲线。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Half-life',label:'延伸阅读：维基百科 · 半衰期'}},
+      'chebyshev':{title:'切比雪夫距离：棋盘上的“王步”',sections:[
+        ['数学定义','在平面上，两点 (x₁,y₁) 与 (x₂,y₂) 的切比雪夫距离是 max(|x₁−x₂|, |y₁−y₂|)，也就是两个坐标差中较大的那个。国际象棋的国王每步可以向八个方向走一格，所以它也叫“王步距离”。'],
+        ['为什么光环是方形','到某点切比雪夫距离为 1 的所有格子，正好是周围的八邻域；距离为 2 是外一圈 5×5 的方环。因而“时间光环”在棋盘上呈方形而不是圆形。距离越近，老化越慢；重叠时取最慢的一档。'],
+        ['与另外两种距离','曼哈顿距离只能横竖走，欧氏距离量直线，切比雪夫距离允许斜走。同一张棋盘上，三者的“半径一圈”分别是菱形、圆和方形。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Chebyshev_distance',label:'延伸阅读：维基百科 · 切比雪夫距离'}},
+      'gravitational-time-dilation':{title:'引力时间膨胀：越靠近大质量，钟越慢',sections:[
+        ['广义相对论怎么说','在广义相对论中，处在更深引力势（更靠近大质量天体）的时钟，比远处的时钟走得慢。对不旋转的黑洞，远处观察者看到的时钟速率按 √(1−rₛ/r) 变慢，越接近事件视界越慢。GPS 卫星每天要修正约 38 微秒的相对论钟差，就是同一类效应。'],
+        ['棋局只借了“变慢”这个意象','本页把靠近黑洞的棋子画成寿命推进更慢，用来表达“强引力附近时间流逝不同”。真正的引力时间膨胀需要质量、半径和观察者位置，本游戏不求解这些物理量；光环的 0.25/0.5/1 倍率是规则设定。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Gravitational_time_dilation',label:'延伸阅读：维基百科 · 引力时间膨胀'}},
+      'phase':{title:'相位：周期里的位置',sections:[
+        ['物理中的相位','对一个周期性过程（波、振动、交流电），相位描述它处在周期的哪一点，常用角度或 0–1 的比例表示。两个波可以同相，也可以相差半个周期而反相。'],
+        ['棋局里的相位是离散状态','本游戏的相位只有“黎明/永夜”两种棋盘状态，棋子记住落下时的相位；只有当前相位的棋子参与连线结算。它不是连续波形，也不能靠“反相”抵消棋子。相位轮转本身不判胜。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Phase_(waves)',label:'延伸阅读：维基百科 · 相位'}},
+      'torus':{title:'环面：把对边粘起来',sections:[
+        ['拓扑学的环面','把一张正方形的左右两边认同、上下两边也认同，就得到一个环面（甜甜圈表面）。在这个面上一直朝一个方向走，会从对面回来；经典游戏《吃豆人》的左右穿越就是这种周期边界。'],
+        ['棋局里的“贯通”','本游戏的贯通规则让跨出边界的棋路从相对的面继续，方向不变。它是一条离散的规则，不是把棋盘真的弯成曲面；五连仍须同方向、连续交点，并遵守原有胜负规则。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Torus',label:'延伸阅读：维基百科 · 环面'}},
+      'four-dimensional-rotation':{title:'四维旋转：转的是平面，不是轴',sections:[
+        ['三维与四维的差别','在三维空间里，旋转通常绕着一根轴；在四维空间里，旋转可以固定一个平面，并同时转动与它垂直的另一个平面。四维旋转因此比三维多一个独立的旋转方向。'],
+        ['本页展示的是三维层旋转','游戏里的“魔方旋转”把三维棋盘的一层整体转到新坐标，是三维操作；它借用了四维旋转“位置关系会变”的直觉，但不是真正的四维空间旋转，也不会改变棋盘的维度。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Rotations_in_4-dimensional_Euclidean_space',label:'延伸阅读：维基百科 · 四维旋转'}},
+      'crystallography':{title:'晶体学方向族：为什么是十三类',sections:[
+        ['立方格点的方向','在立方晶格中，方向可以按对称性归族：三个轴向 ⟨100⟩、六个面对角 ⟨110⟩、四个体对角 ⟨111⟩，共十三类。晶体学用密勒指数描述这些方向；反向看同一条线不重复计数。'],
+        ['棋盘上的十三向','三维棋盘的成线方向与这套计数一致：三轴、六面对角、四体对角。棋子可以分布在不同层，只要沿同一方向连续。这里的“方向族”是几何计数，不是材料科学模拟。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Miller_index',label:'延伸阅读：维基百科 · 密勒指数'}},
+      'maglev':{title:'磁悬浮：让物体不接触地托起来',sections:[
+        ['真实的磁悬浮','磁悬浮列车利用电磁力（吸引或排斥）把车体托离轨道，减少摩擦。稳定的悬浮需要主动控制或特殊材料，不是两块磁铁简单一放了事。'],
+        ['棋局里的“浮空”不是磁悬浮','浮空连珠用“地基/顶子”两层规则表示托举与坠落：前八手铺地基，第九手起可放顶子；对方顶子触发排斥倒计时，到期地基摧毁、顶子坠落成新地基。它是规则抽象，不计算磁场或浮力。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Maglev',label:'延伸阅读：维基百科 · 磁悬浮'}},
+      'load-path':{title:'地基与荷载：建筑里的“托底”',sections:[
+        ['工程中的地基','建筑物把自重与使用荷载通过基础传到地基；桩基、筏板等做法让荷载分散到更深的土层或岩层。地基失效会导致不均匀沉降，所以“托底”必须可靠。'],
+        ['棋局里的地基是规则层','浮空连珠的前八手是地基，只有顶层有色棋子参与五连；地基被排斥倒计时摧毁后，顶子坠落成为新的地基。这里借用了“承托/传递”的直觉，不做结构受力计算。']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Foundation_(engineering)',label:'延伸阅读：维基百科 · 地基'}}
+    },
+    en:{
+      'event-horizon':{title:'The event horizon: the boundary light cannot cross',sections:[
+        ['What it is','The event horizon is not a solid surface but a causal boundary: inside it, nothing — not even light — can escape to the outside. For a non-rotating black hole the boundary radius is the Schwarzschild radius, rₛ = 2GM/c²; more mass means a larger horizon.'],
+        ['Why “horizon”','Distant observers cannot see light from inside the horizon. Closer to it, clocks appear to run slower and light is redshifted. For a large black hole, crossing the horizon feels like nothing special locally, but the traveller can no longer return.']
+      ],reading:{href:'https://science.nasa.gov/universe/black-holes/',label:'Further reading: NASA · Black holes'}},
+      'spacetime-curvature':{title:'Spacetime curvature: gravity as geometry',sections:[
+        ['The general-relativistic picture','Mass and energy curve spacetime, and freely falling objects follow geodesics in that curved geometry. What we experience as gravity is, in this picture, a consequence of geometry rather than an invisible pull.'],
+        ['The funnel is only an analogy','Textbooks often draw a stretched grid bent by a heavy weight to represent a gravity well. It omits time and is not the literal shape of a black hole. The funnel on this page is the same kind of visual analogy and never changes game coordinates.']
+      ],reading:{href:'https://science.nasa.gov/universe/black-holes/',label:'Further reading: NASA · Black holes'}},
+      'accretion-disk':{title:'Accretion disks: why black holes shine',sections:[
+        ['Before anything falls in','A black hole itself emits no light, but infalling gas can form a rapidly rotating accretion disk. Friction and compression heat it to millions of degrees, producing X-rays and other radiation. The black-hole images people have seen come mainly from that disk.'],
+        ['The game does not model accretion','On the board a black hole is only a blocked point that can move during a swap. It emits no energy, does not swallow whole lines, and has no disk. The funnel and time halo are visual analogies.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Accretion_disk',label:'Further reading: Wikipedia · Accretion disk'}},
+      'epiphyllum':{title:'Epiphyllum: a cactus flower that opens for one night',sections:[
+        ['The plant','Epiphyllum oxypetalum is a cactus native to Mexico and Central America. Its flowers open at night, each bloom lasting only a few hours before wilting near dawn; bats and hawkmoths are its pollinators.'],
+        ['“A fleeting bloom”','The Chinese idiom 昙花一现 describes something beautiful and short-lived. The game’s “fleeting bloom” borrows that image for a stone with a limited lifetime: a new stone does not age on its own move, later actions advance its life, the final three turns turn it gray, and it disappears at zero. It is not a botanical simulation.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Epiphyllum_oxypetalum',label:'Further reading: Wikipedia · Epiphyllum'}},
+      'half-life':{title:'Half-life: the time for half a sample to decay',sections:[
+        ['In physics','The half-life of a radioactive sample is the time needed for half of its nuclei to decay. When an individual nucleus decays is probabilistic, but a large sample follows an exponential decay law.'],
+        ['The game’s lifetime is not a half-life','Lifetime here advances deterministically by action count: each action ages a stone by a fixed amount, the last three turns are gray, and it vanishes at zero. It borrows the intuition of a countdown, but there is no random decay and no exponential curve.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Half-life',label:'Further reading: Wikipedia · Half-life'}},
+      'chebyshev':{title:'Chebyshev distance: the king’s move',sections:[
+        ['The definition','In the plane, the Chebyshev distance between (x₁,y₁) and (x₂,y₂) is max(|x₁−x₂|, |y₁−y₂|) — the larger of the two coordinate differences. A chess king can step to any of eight neighbours, so it is also called king-move distance.'],
+        ['Why the halo is square','All cells at Chebyshev distance 1 form the eight-neighbour ring; distance 2 is the next 5×5 square ring. That is why the time halo is square rather than circular on the board. Closer stones age more slowly; overlapping halos use the slowest rate.'],
+        ['Compared with other metrics','Manhattan distance allows only horizontal and vertical steps, Euclidean distance measures a straight line, and Chebyshev distance allows diagonal steps. On the same board their “rings” are a diamond, a circle and a square.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Chebyshev_distance',label:'Further reading: Wikipedia · Chebyshev distance'}},
+      'gravitational-time-dilation':{title:'Gravitational time dilation: clocks run slower deeper in gravity',sections:[
+        ['What general relativity says','In general relativity, a clock deeper in a gravitational potential (closer to a massive body) ticks more slowly than a distant clock. For a non-rotating black hole, a distant observer sees the rate slow as √(1−rₛ/r), diverging at the event horizon. GPS satellites need a relativistic correction of about 38 microseconds per day — the same family of effect.'],
+        ['The game borrows only the image','Stones near a black hole are shown aging more slowly to express “time passes differently in strong gravity”. Real time dilation needs mass, radius and observer position; the game solves none of those. The 0.25/0.5/1 multipliers are rule settings, not a physical calculation.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Gravitational_time_dilation',label:'Further reading: Wikipedia · Gravitational time dilation'}},
+      'phase':{title:'Phase: where a cycle is',sections:[
+        ['In physics','For a periodic process (a wave, an oscillation, alternating current), phase describes where in the cycle it sits, often as an angle or a fraction from 0 to 1. Two waves can be in phase or half a cycle out of phase.'],
+        ['Board phase is discrete','In this game, phase is only the dawn/night state of the board. A stone remembers the phase in which it was placed, and only current-phase stones count for a line. It is not a continuous waveform, and stones cannot cancel by being “out of phase”. A phase turn never wins by itself.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Phase_(waves)',label:'Further reading: Wikipedia · Phase'}},
+      'torus':{title:'The torus: glue opposite edges',sections:[
+        ['In topology','Identify the left and right edges of a square, and the top and bottom edges as well, and you get a torus — the surface of a doughnut. Walking in one direction eventually returns from the opposite side; Pac-Man’s left-right wrap is the same periodic boundary.'],
+        ['“Connected edges” on the board','The wrap rule lets a line leave one edge and continue from the opposite face in the same direction. It is a discrete rule, not a claim that the board is physically curved. Five still requires the same direction, consecutive intersections and the usual win rules.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Torus',label:'Further reading: Wikipedia · Torus'}},
+      'four-dimensional-rotation':{title:'Rotation in 4D: a plane turns, not an axis',sections:[
+        ['3D versus 4D','In three dimensions a rotation usually fixes an axis. In four dimensions a rotation can fix a plane and turn the perpendicular plane at the same time, so 4D has an extra independent rotation direction.'],
+        ['This page shows a 3D layer turn','The “cube rotation” here moves one layer of a 3D board to new coordinates. It borrows the intuition that a rotation changes relationships, but it is not a true 4D spatial rotation and does not add a dimension to the board.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Rotations_in_4-dimensional_Euclidean_space',label:'Further reading: Wikipedia · Rotations in 4D'}},
+      'crystallography':{title:'Crystallographic direction families: why thirteen',sections:[
+        ['Directions in a cubic lattice','In a cubic lattice, directions group by symmetry: three axis directions ⟨100⟩, six face diagonals ⟨110⟩, and four body diagonals ⟨111⟩ — thirteen families. Crystallography uses Miller indices, and viewing a line from the other end does not create a new direction.'],
+        ['Thirteen on the board','The 3D board uses the same count: three axes, six face diagonals and four body diagonals. Stones may sit on different layers as long as they are consecutive along one direction. The “direction family” is a geometric count, not a materials-science simulation.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Miller_index',label:'Further reading: Wikipedia · Miller index'}},
+      'maglev':{title:'Maglev: holding an object up without contact',sections:[
+        ['The real thing','Maglev trains use electromagnetic attraction or repulsion to lift the car off the track and reduce friction. Stable levitation needs active control or special materials; it is not just two magnets placed near each other.'],
+        ['“Floating stones” are not maglev','Floating connect uses a two-layer foundation/top-stone rule: the first eight moves build foundations, top stones become available from the ninth, and an opposing top stone starts a repulsion countdown. When it reaches zero the foundation is destroyed and the top stone falls to become a new foundation. It is a rule abstraction, not a magnetic or buoyancy calculation.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Maglev',label:'Further reading: Wikipedia · Maglev'}},
+      'load-path':{title:'Foundations and loads: the engineering idea of support',sections:[
+        ['In engineering','A building transfers its own weight and live loads through its foundation into the ground. Piles, rafts and other foundation types spread the load into deeper soil or rock. Foundation failure causes uneven settlement, so the support path has to be reliable.'],
+        ['The board’s foundation is a rule layer','In floating connect the first eight moves are foundations, and only coloured top stones count toward five. When a repulsion countdown destroys a foundation, the top stone falls and becomes a new foundation. The game borrows the intuition of support and transfer; it does not compute structural forces.']
+      ],reading:{href:'https://en.wikipedia.org/wiki/Foundation_(engineering)',label:'Further reading: Wikipedia · Foundation'}}
+    }
+  };
+  const knowledgeStack=[];
+  let knowledgeTrigger=null;
+  const backButton=$('journeyKnowledgeBack');
+  function renderRich(parent,text){
+    const re=/\[\[([a-z0-9-]+)\|([^\]]+)\]\]/g;
+    let linked=false,last=0,m;
+    while((m=re.exec(text))){
+      if(m.index>last)parent.appendChild(document.createTextNode(text.slice(last,m.index)));
+      const deepKey=m[1],label=m[2];
+      const button=document.createElement('button');
+      button.type='button';button.className='journey-knowledge-inline';button.dataset.deepKey=deepKey;button.textContent=label;
+      button.addEventListener('click',()=>openDeep(deepKey));
+      parent.appendChild(button);last=m.index+m[0].length;linked=true;
+    }
+    if(last<text.length)parent.appendChild(document.createTextNode(text.slice(last)));
+    return linked;
+  }
+  function renderEntry(record){
+    const entry=record.entry,body=$('journeyKnowledgeBody');
+    $('journeyKnowledgeTitle').textContent=entry.title;
+    body.replaceChildren();body.lang=cn()?'zh-CN':'en';
+    let linked=false;
+    for(const [heading,text] of entry.sections){
+      const h=document.createElement('h3');h.textContent=heading;body.appendChild(h);
+      const p=document.createElement('p');linked=renderRich(p,text)||linked;body.appendChild(p);
+    }
+    if(entry.reading){
+      const a=document.createElement('a');a.href=entry.reading.href;a.target='_blank';a.rel='noopener noreferrer';a.textContent=entry.reading.label;body.appendChild(a);
+    }
+    if(linked){const hint=document.createElement('p');hint.className='journey-knowledge-hint';hint.textContent=cn()?'带下划线的词可以点开细讲。':'Underlined terms open a deeper explanation.';body.appendChild(hint);}
+    backButton.hidden=knowledgeStack.length<2;
+    $('journeyKnowledgeClose').setAttribute('aria-label',knowledgeStack.length>1?words.back:words.close);
+    knowledge.scrollTop=record.scroll||0;
+  }
+  function openDeep(key){
+    if(knowledgeStack.some(record=>record.key===key))return;
+    const entry=(DEEP[cn()?'zh':'en']||DEEP.zh)[key];if(!entry)return;
+    const current=knowledgeStack[knowledgeStack.length-1];
+    current.scroll=knowledge.scrollTop;current.focusKey=key;
+    knowledgeStack.push({key,entry,scroll:0});
+    renderEntry(knowledgeStack[knowledgeStack.length-1]);
+    $('journeyKnowledgeClose').focus({preventScroll:true});
+  }
+  function closeDeep(){
+    if(knowledgeStack.length<2)return false;
+    knowledgeStack.pop();
+    const record=knowledgeStack[knowledgeStack.length-1];
+    renderEntry(record);
+    if(record.focusKey){const target=$('journeyKnowledgeBody').querySelector('[data-deep-key="'+record.focusKey+'"]');if(target)target.focus({preventScroll:true});}
+    return true;
+  }
   function openKnowledge(kind){
     const is2=kind==='two',key=is2?s2.mode:kind==='three'?s3.mode:'time';
     const data=cn()?{
-      hole:['黑洞：从引力井，到棋盘上的变数。','物理中的概念','黑洞是引力极强的天体区域。事件视界以内，连光也无法逃离。教科书常用弯曲的网格比喻时空曲率。这里的漏斗只是可视化类比，不是黑洞真实表面的形状。','游戏中的规则','棋盘上的黑洞是不可落子的位置。交换两行或两列时，只移动黑洞；移入黑洞的顶子被吞，其余棋子不移动。正式交换还受冷却限制。网格不会真的因“重力”改变棋子坐标。'],
-      float:['浮空连珠：谁托起了这一颗子？','地基与顶子','前八次落子先铺地基，第九次起可以放顶子。只有顶层有色棋子参与五连。','归属与排斥','同色顶子与地基相安无事；对方的顶子触发排斥倒计时。倒计时归零时，旧地基被摧毁，顶子坠落成为新的同色地基。这里用抬升与坠落来解释两层关系。'],
-      age:['刹那昙花：占位，不一定能成线。','灰期是什么','昙花棋子在寿命最后三手进入灰期。灰子没有黑白归属，不参与五连，但仍占据原来的交点并打断连线。','消失之后','寿命耗尽才消失，留下空交点。两段棋子不会跨过空点自动接成五连。正式对局中先判落子胜负，再推进老化。'],
-      line:['十三向：空间里有哪些直线？','三个方向家族','立体格点中，有三个轴向、六个面对角方向和四个体对角方向，共十三类成线方向。反向观察同一条线不重复计数。','如何观察','拖动棋盘，让被遮住的棋子分开。五颗共线棋子可以位于不同层。展示用的是局部示意，不等同于完整实战棋谱。'],
-      spin:['旋转的是棋盘层，不只是视角。','视角与规则不同','拖动查看只改变你看棋盘的角度。魔方旋转则会把一层上的棋子搬到新坐标，实际改变局面。','正式操作','先选择轴和层，预览九十度转动，再确认。实际对局还会检查冷却、转动限制与成线结果。本页按钮仅展示层内棋子如何一起移动。'],
-      wrap:['空间贯通：边缘不是终点。','相对的面相连','沿一个方向跨出棋盘边界，会从相对的面继续。方向不变，这是一种周期边界的连接方式。','游戏里的五连','看似分布在左右两端的棋子，可以通过边界组成连续五连。不是随意把相隔的点连起来，仍须遵守同方向、连续交点和已有胜负规则。'],
-      time:['这里的“四维”，是棋局里的时间。','仍然是三轴棋盘','本游戏的“四维”不是四个独立空间坐标。它保留三维棋盘，加入会随回合变化的旋转、贯通与黎明永夜机制。','相位不会替你赢棋','棋子记住落下时的相位。异相位棋子仍占位；只有当前相位的连线参与结算。相位轮转本身不会自动判胜，最后一手仍须通过落子或转动完成。缓与催只能借还时间，不能凭空增加完整周期。']
+      hole:['黑洞：从引力井，到棋盘上的变数。','物理中的概念','黑洞是引力极强的天体区域。[[event-horizon|事件视界]]以内，连光也无法逃离。教科书常用弯曲的网格比喻[[spacetime-curvature|时空曲率]]。黑洞本身不发光，周围落入的气体可能形成[[accretion-disk|吸积盘]]。这里的漏斗只是可视化类比，不是黑洞真实表面的形状。','游戏中的规则','棋盘上的黑洞是不可落子的位置。交换两行或两列时，只移动黑洞；移入黑洞的顶子被吞，其余棋子不移动。正式交换还受冷却限制。网格不会真的因“重力”改变棋子坐标。'],
+      float:['浮空连珠：谁托起了这一颗子？','地基与顶子','前八次落子先铺[[load-path|地基]]，第九次起可以放顶子。只有顶层有色棋子参与五连。','归属与排斥','同色顶子与地基相安无事；对方的顶子触发排斥倒计时。倒计时归零时，旧地基被摧毁，顶子坠落成为新的同色地基。这种托举与坠落常被拿来和[[maglev|磁悬浮]]比较，但棋局里只是两层规则。'],
+      age:['刹那昙花：占位，不一定能成线。','灰期是什么','[[epiphyllum|昙花]]棋子在寿命最后三手进入灰期。灰子没有黑白归属，不参与五连，但仍占据原来的交点并打断连线。','消失之后','寿命耗尽才消失，留下空交点。两段棋子不会跨过空点自动接成五连。正式对局中先判落子胜负，再推进老化；寿命按动作次数推进，不是物理上的[[half-life|半衰期]]。'],
+      line:['十三向：空间里有哪些直线？','三个方向家族','立体格点中，有三个轴向、六个面对角方向和四个体对角方向，共[[crystallography|十三类成线方向]]。反向观察同一条线不重复计数。','如何观察','拖动棋盘，让被遮住的棋子分开。五颗共线棋子可以位于不同层。展示用的是局部示意，不等同于完整实战棋谱。'],
+      spin:['旋转的是棋盘层，不只是视角。','视角与规则不同','拖动查看只改变你看棋盘的角度。[[four-dimensional-rotation|魔方旋转]]则会把一层上的棋子搬到新坐标，实际改变局面。','正式操作','先选择轴和层，预览九十度转动，再确认。实际对局还会检查冷却、转动限制与成线结果。本页按钮仅展示层内棋子如何一起移动。'],
+      wrap:['空间贯通：边缘不是终点。','相对的面相连','沿一个方向跨出棋盘边界，会从相对的面继续。方向不变，这是一种[[torus|周期边界]]的连接方式。','游戏里的五连','看似分布在左右两端的棋子，可以通过边界组成连续五连。不是随意把相隔的点连起来，仍须遵守同方向、连续交点和已有胜负规则。'],
+      time:['这里的“四维”，是棋局里的时间。','仍然是三轴棋盘','本游戏的“四维”不是四个独立空间坐标。它保留三维棋盘，加入会随回合变化的旋转、贯通与黎明永夜机制。','相位不会替你赢棋','棋子记住落下时的[[phase|相位]]。异相位棋子仍占位；只有当前相位的连线参与结算。相位轮转本身不会自动判胜，最后一手仍须通过落子或转动完成。缓与催只能借还时间，不能凭空增加完整周期。']
     }:{
-      hole:['Black holes: from gravity to game design.','The physical concept','Inside a black hole’s event horizon, even light cannot escape. A curved grid is a textbook analogy for spacetime curvature, not a literal surface of a black hole.','The game rule','Black holes are blocked positions. Swapping rows or columns moves only the holes; a hole consumes a top stone at its destination. Other stones stay put. Real swaps require cooldown. The illustrated gravity well does not alter game coordinates.'],
-      float:['Floating stones and foundations.','Two layers','The first eight placing moves build foundations. Top stones become available from the ninth. Only colored top stones count toward five.','Ownership and repulsion','An opposing top stone starts a countdown. At zero the old foundation is destroyed and the top stone falls to become a new foundation of its color.'],
-      age:['A gray stone still occupies its point.','The gray period','In the final three lifetime moves, a stone becomes gray. It has no side, does not contribute to a winning line, and still blocks its intersection.','After disappearance','At zero it leaves an empty intersection. Separated lines never join across it. A placed move is evaluated before aging advances.'],
-      line:['Thirteen spatial directions.','Three direction families','Three axes, six face diagonals and four body diagonals give thirteen line directions. Viewing a line from its other end does not add another direction.','Finding the line','Orbit the scene to separate occluded stones. A straight winning line may cross several layers. This is an illustrative position, not a complete game record.'],
-      spin:['Rotating a layer changes the position.','View versus action','Orbiting the camera changes only your view. A layer rotation moves stones to new coordinates and changes the board itself.','In a real game','Choose an axis and layer, preview a ninety-degree rotation, then confirm. Cooldown, legality and resulting lines are checked in the game. This scene only demonstrates the movement.'],
-      wrap:['The edge is not the end.','Connected opposite faces','A path crossing one face continues from the opposite face in the same direction. This is a periodic boundary connection.','Five across the boundary','Stones at opposite edges may form one continuous line. Arbitrary distant points are not connected: direction, consecutive positions and winning restrictions still apply.'],
-      time:['“4D” here means time in the game.','Still three spatial axes','This game does not simulate four independent spatial coordinates. It adds changing layers, connected boundaries and dawn/night phases to a three-dimensional board.','A phase change is not a winning action','Stones keep their placing phase and always occupy their positions. Only the current phase is eligible for line evaluation. Placing or rotating must complete the line. Delaying and hastening redistribute time without creating extra cycle length.']
+      hole:['Black holes: from gravity to game design.','The physical concept','Inside a black hole’s [[event-horizon|event horizon]], even light cannot escape. A curved grid is a textbook analogy for [[spacetime-curvature|spacetime curvature]], not a literal surface of a black hole. The hole itself emits no light, but infalling gas can form an [[accretion-disk|accretion disk]].','The game rule','Black holes are blocked positions. Swapping rows or columns moves only the holes; a hole consumes a top stone at its destination. Other stones stay put. Real swaps require cooldown. The illustrated gravity well does not alter game coordinates.'],
+      float:['Floating stones and foundations.','Two layers','The first eight placing moves build [[load-path|foundations]]. Top stones become available from the ninth. Only colored top stones count toward five.','Ownership and repulsion','An opposing top stone starts a countdown. At zero the old foundation is destroyed and the top stone falls to become a new foundation of its color. This lifting and falling is often compared with [[maglev|maglev]], but on the board it is only a two-layer rule.'],
+      age:['A gray stone still occupies its point.','The gray period','In the final three lifetime moves, a [[epiphyllum|fleeting-bloom]] stone becomes gray. It has no side, does not contribute to a winning line, and still blocks its intersection.','After disappearance','At zero it leaves an empty intersection. Separated lines never join across it. A placed move is evaluated before aging advances. Lifetime advances by action count, not by a physical [[half-life|half-life]].'],
+      line:['Thirteen spatial directions.','Three direction families','Three axes, six face diagonals and four body diagonals give [[crystallography|thirteen line-direction families]]. Viewing a line from its other end does not add another direction.','Finding the line','Orbit the scene to separate occluded stones. A straight winning line may cross several layers. This is an illustrative position, not a complete game record.'],
+      spin:['Rotating a layer changes the position.','View versus action','Orbiting the camera changes only your view. A [[four-dimensional-rotation|layer rotation]] moves stones to new coordinates and changes the board itself.','In a real game','Choose an axis and layer, preview a ninety-degree rotation, then confirm. Cooldown, legality and resulting lines are checked in the game. This scene only demonstrates the movement.'],
+      wrap:['The edge is not the end.','Connected opposite faces','A path crossing one face continues from the opposite face in the same direction. This is a [[torus|periodic boundary]].','Five across the boundary','Stones at opposite edges may form one continuous line. Arbitrary distant points are not connected: direction, consecutive positions and winning restrictions still apply.'],
+      time:['“4D” here means time in the game.','Still three spatial axes','This game does not simulate four independent spatial coordinates. It adds changing layers, connected boundaries and dawn/night phases to a three-dimensional board.','A phase change is not a winning action','Stones keep their placing [[phase|phase]] and always occupy their positions. Only the current phase is eligible for line evaluation. Placing or rotating must complete the line. Delaying and hastening redistribute time without creating extra cycle length.']
     };
-    data.combo=cn()?['黑洞与昙花：时间光环。','概念中的含义','强引力环境中的时间流逝可以与远处不同。本页用不同速度的寿命条表达这种意象，不进行真实引力计算。','游戏中的规则','同时开启黑洞与昙花后，以切比雪夫距离计算光环：距离1的八邻域每个动作老化0.25手，距离2老化0.5手，更远处老化1手。重叠光环取最慢速度，不相加。黑洞移动不重置已经消耗的寿命，灰子也继续老化。']:['Black holes and lifetimes: the time halo.','The concept','Time in a strong gravitational environment can pass differently from time far away. The lifetime bars are a visual analogy, not a gravity simulation.','The game rule','With both features enabled, Chebyshev distance 1 ages by 0.25 moves per action; distance 2 ages by 0.5; farther away by 1. Overlapping halos use the slowest rate. Moving a hole does not reset aging; gray stones keep aging.'];
+    data.combo=cn()?['黑洞与昙花：时间光环。','概念中的含义','强引力环境中的时间流逝可以与远处不同，广义相对论称这种效应为[[gravitational-time-dilation|引力时间膨胀]]。本页用不同速度的寿命条表达这种意象，不进行真实引力计算。','游戏中的规则','同时开启黑洞与昙花后，以[[chebyshev|切比雪夫距离]]计算光环：距离1的八邻域每个动作老化0.25手，距离2老化0.5手，更远处老化1手。重叠光环取最慢速度，不相加。黑洞移动不重置已经消耗的寿命，灰子也继续老化。']:['Black holes and lifetimes: the time halo.','The concept','Time in a strong gravitational environment can pass differently from time far away; general relativity calls this [[gravitational-time-dilation|gravitational time dilation]]. The lifetime bars are a visual analogy, not a gravity simulation.','The game rule','With both features enabled, [[chebyshev|Chebyshev distance]] 1 ages by 0.25 moves per action; distance 2 ages by 0.5; farther away by 1. Overlapping halos use the slowest rate. Moving a hole does not reset aging; gray stones keep aging.'];
     const d=data[key];if(key!=='hole'){d[1]=cn()?'概念中的含义':'The concept';d[3]=cn()?'游戏中的规则':'The game rule';}
-    $('journeyKnowledgeTitle').textContent=d[0];const body=$('journeyKnowledgeBody');body.replaceChildren();body.lang=cn()?'zh-CN':'en';
-    for(let i=1;i<d.length;i++){const el=document.createElement(i%2?'h3':'p');el.textContent=d[i];body.appendChild(el);}
-    if(key==='hole'){const a=document.createElement('a');a.href='https://science.nasa.gov/universe/black-holes/';a.target='_blank';a.rel='noopener noreferrer';a.textContent=cn()?'延伸阅读：NASA · 黑洞':'Further reading: NASA · Black holes';body.appendChild(a);}
+    const entry={title:d[0],sections:[[d[1],d[2]],[d[3],d[4]]],reading:key==='hole'?{href:'https://science.nasa.gov/universe/black-holes/',label:cn()?'延伸阅读：NASA · 黑洞':'Further reading: NASA · Black holes'}:null};
+    knowledgeTrigger=document.activeElement;
+    knowledgeStack.length=0;knowledgeStack.push({key,entry,scroll:0});
+    renderEntry(knowledgeStack[0]);
     knowledge.showModal();
+    knowledge.scrollTop=0;
   }
   for(const b of root.querySelectorAll('[data-knowledge]'))b.onclick=()=>openKnowledge(b.dataset.knowledge);
-  $('journeyKnowledgeClose').onclick=() =>knowledge.close();$('journeyKnowledgeDone').onclick=()=>knowledge.close();
-  knowledge.addEventListener('click',e=>{const r=knowledge.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)knowledge.close();});
+  backButton.onclick=()=>{closeDeep();};
+  $('journeyKnowledgeClose').onclick=()=>{if(!closeDeep())knowledge.close();};
+  $('journeyKnowledgeDone').onclick=()=>knowledge.close();
+  knowledge.addEventListener('keydown',event=>{if(event.key!=='Escape')return;event.preventDefault();event.stopPropagation();if(!closeDeep())knowledge.close();});
+  knowledge.addEventListener('close',()=>{
+    knowledgeStack.length=0;backButton.hidden=true;
+    const trigger=knowledgeTrigger;knowledgeTrigger=null;
+    if(trigger&&trigger.focus)try{trigger.focus({preventScroll:true});}catch(_){}
+  });
+  knowledge.addEventListener('click',e=>{if(e.target!==knowledge)return;const r=knowledge.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom){if(!closeDeep())knowledge.close();}});
   for(const b of root.querySelectorAll('[data-pick-dim]'))b.onclick=()=>api.chooseDimension(b.dataset.pickDim);
   function headerHeight(){return parseFloat(getComputedStyle(root).getPropertyValue('--journey-header'))||78;}
   function heroLength(){return Math.max(1,$('introHeroRun').offsetHeight-(root.clientHeight-headerHeight()));}
@@ -3326,6 +3510,10 @@ body button.sel:hover, #setup .row button.sel:hover, #setup #startBtn:hover { ba
 
 </script>
 <!-- INTRO-SURFACE-END -->
+
+
+
+
 
 
 
