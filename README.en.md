@@ -335,6 +335,7 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 ### 2026.11.09
 
+- ✨ **v4.2.1** Six-language account and friends panels (including sign-in / registration, with short button labels); records show wins and losses only; new accounts start with a letter, digits optional, no underscores (online version).
 - ✨ **v4.2.0** Added social features: accounts, friends and friendly matches, cloud records and privacy settings (online version).
 
 ### 2026.11.08
