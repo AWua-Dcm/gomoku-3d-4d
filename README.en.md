@@ -333,6 +333,10 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
+### 2026.11.09
+
+- ✨ **v4.2.0** Added social features: accounts, friends and friendly matches, cloud records and privacy settings (online version).
+
 ### 2026.11.08
 
 - ✨ **v4.1.1** Expanded the knowledge panels with scientific concepts for black holes, floating stones, aging, the thirteen directions, layer rotation and connected edges (event horizon, Epiphyllum, Chebyshev distance, gravitational time dilation and more); underlined terms open a second-level panel, with X / Esc returning level by level.

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN" class="app-loading">
 <head>
-<meta name="application-version" content="4.1.1">
+<meta name="application-version" content="4.2.0">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>五子魔方</title>
@@ -1087,7 +1087,6 @@ html.app-loading body { visibility: hidden; }
     border: 1px solid var(--border); border-radius: 4px;
     box-shadow: 0 1px 6px rgba(90,72,44,.12);
   }
-  /* TIP-BEGIN */
   /* 打赏键：和规则/记录同一套砖头样式；备案审核构建会整块剥掉。 */
   #tipBtn {
     font-size: 13px; padding: 7px 13px;
@@ -1095,7 +1094,6 @@ html.app-loading body { visibility: hidden; }
     border: 1px solid var(--border); border-radius: 4px;
     box-shadow: 0 1px 6px rgba(90,72,44,.12);
   }
-  /* TIP-END */
   /* 记录只在起始界面可见：游玩界面右上角只留语言/规则（完整版另有赞助键）。
      记录面板本身不变，从起始界面的「记录」或对局里的「设置」都能打开。
      用 display:none 而不是 visibility:hidden —— 顶上这一行是按实测宽度
@@ -1285,7 +1283,6 @@ html.app-loading body { visibility: hidden; }
   #quitYes { background: var(--danger); color: #fdfaf2; border-color: var(--danger); font-weight: 600; }
   #quitYes:hover { background: #b03d30; }
 
-  /* TIP-BEGIN */
   /* 打赏浮层。和规则/记录同一套遮罩 + 卡片，只是宽度按内容定。
      纯赞助，不绑定任何权益；二维码内联成 data URI，爱发电是静态链接。 */
   #tipPanel {
@@ -1317,7 +1314,6 @@ html.app-loading body { visibility: hidden; }
                color: var(--text); text-decoration: none; font-size: 14px; }
   #tipNote { margin-top: 12px; font-size: 12.5px; color: var(--dim); line-height: 1.7; }
   @media (max-width: 560px) { #tipQrs img { width: 150px; } }
-  /* TIP-END */
 
   /* 导出图片的小弹窗。z-index 比规则/记录/联机高一层：
      从记录面板打开时它盖在记录列表上，取消后记录列表还在。 */
@@ -6290,10 +6286,8 @@ Ce mode utilise un plateau plat indépendant. **Trous noirs (H), fondations comm
        #langList 的 left:0 锚的就是第一个孩子，插到前面会让语言列表对着别处展开。
        点开是一个浮层（与规则浮层互斥），里面是最近 50 局的一句话摘要。 -->
   <button id="historyBtn" data-i18n="historyBtn">记录</button>
-  <!-- TIP-BEGIN -->
   <!-- 打赏。纯赞助，不绑定任何权益；和规则/记录同一套砖头样式。 -->
   <button id="tipBtn" data-i18n="tipBtn">打赏</button>
-  <!-- TIP-END -->
 </div>
 
 <!-- 规则浮层。内容由 openRules() 从 #rulesSrc 现场渲染 —— 页面上没有第二份规则文本。 -->
@@ -6387,7 +6381,6 @@ Ce mode utilise un plateau plat indépendant. **Trous noirs (H), fondations comm
   </div>
 </div>
 
-<!-- TIP-BEGIN -->
 <!-- 打赏：支付宝/微信二维码 + 爱发电链接。二维码内联成 data URI，保持单文件、离线可显示。 -->
 <div id="tipPanel" class="off">
   <div id="tipCard">
@@ -6413,7 +6406,6 @@ Ce mode utilise un plateau plat indépendant. **Trous noirs (H), fondations comm
     </div>
   </div>
 </div>
-<!-- TIP-END -->
 
 <!-- 导出图片。先让用户改昵称，再生成/下载；昵称只存本机。
      标题/按钮走 data-i18n；#exportKind 是动态文案（长图/海报），由 openExport 写。 -->
@@ -6427,8 +6419,8 @@ Ce mode utilise un plateau plat indépendant. **Trous noirs (H), fondations comm
     <div id="exportBody">
       <div id="exportKind"></div>
       <label id="exportNameLabel" for="exportName" data-i18n="exportNameLabel">昵称</label>
-      <input id="exportName" maxlength="20" autocomplete="nickname">
-      <div id="exportHint" data-i18n="exportHint">昵称会印在图片上，只保存在本机。</div>
+      <input id="exportName" autocomplete="nickname">
+      <div id="exportHint" data-i18n="exportHint">可自定义图片昵称，只保存在本机，不修改账号昵称。</div>
       <div id="exportError" class="off"></div>
       <div id="exportActions">
         <button id="exportCancel" data-i18n="exportCancel">取消</button>
@@ -6437,6 +6429,7 @@ Ce mode utilise un plateau plat indépendant. **Trous noirs (H), fondations comm
     </div>
   </div>
 </div>
+
 
 
 <aside id="panel">
@@ -6831,6 +6824,7 @@ Ce mode utilise un plateau plat indépendant. **Trous noirs (H), fondations comm
           <input id="timingRangeInput" class="dimInput" type="number" min="10" max="600"
                  step="1" value="60" inputmode="numeric">
           <span id="timingRangeUnit" data-i18n="timingRangeUnit">秒</span>
+          <span class="hint" id="timingRangeHint">可填 10–600</span>
         </div>
       </div>
     </div>
@@ -11832,7 +11826,7 @@ const TEXT = { en: {
   "export.kindPoster": "Export victory poster",
   "export.kindLong": "Export game long image",
   "export.defaultName": "Player",
-  "export.playerLine": "Player: {name}",
+  "export.playerLine": "Nickname: {name}",
   "export.duration": "Duration {time}",
   "export.sides": "Black {black} · White {white}",
   "rec.times": "Total {total} · Black {black} · White {white}",
@@ -11997,7 +11991,7 @@ TEXT.ja = {
   "export.kindPoster": "勝利ポスターを書き出す",
   "export.kindLong": "対局の長図を書き出す",
   "export.defaultName": "プレイヤー",
-  "export.playerLine": "プレイヤー：{name}",
+  "export.playerLine": "ニックネーム：{name}",
   "export.duration": "所要時間 {time}",
   "export.sides": "黒 {black} · 白 {white}",
   "rec.times": "合計 {total} · 黒 {black} · 白 {white}",
@@ -12231,7 +12225,7 @@ TEXT.ko = {
   "export.kindPoster": "승리 포스터 내보내기",
   "export.kindLong": "대국 긴 이미지 내보내기",
   "export.defaultName": "플레이어",
-  "export.playerLine": "플레이어: {name}",
+  "export.playerLine": "닉네임: {name}",
   "export.duration": "소요 시간 {time}",
   "export.sides": "흑 {black} · 백 {white}",
   "rec.times": "총 {total} · 흑 {black} · 백 {white}",
@@ -12472,7 +12466,7 @@ TEXT.ru = {
   "export.kindPoster": "Экспорт постера победы",
   "export.kindLong": "Экспорт длинного изображения партии",
   "export.defaultName": "Игрок",
-  "export.playerLine": "Игрок: {name}",
+  "export.playerLine": "Никнейм: {name}",
   "export.duration": "Длительность {time}",
   "export.sides": "Чёрные {black} · Белые {white}",
   "rec.times": "Всего {total} · чёрные {black} · белые {white}",
@@ -12720,7 +12714,7 @@ TEXT.fr = {
   "export.kindPoster": "Exporter l'affiche de victoire",
   "export.kindLong": "Exporter l'image longue de la partie",
   "export.defaultName": "Joueur",
-  "export.playerLine": "Joueur : {name}",
+  "export.playerLine": "Pseudo : {name}",
   "export.duration": "Durée {time}",
   "export.sides": "Noirs {black} · Blancs {white}",
   "rec.times": "Total {total} · noirs {black} · blancs {white}",
@@ -13692,6 +13686,10 @@ function sanitizeEmojiText(raw) {
    -------------------------------------------------------------------------- */
 /** 导出图片用的昵称。只存本机；上次填过就预填，不跟联机昵称联动。 */
 const EXPORT_NAME_KEY = "gomoku.nickname.v1";
+function validDisplayNickname(name) {
+  return typeof name === 'string' && /^[\p{L}\p{M}\p{N}_]+$/u.test(name) && /[\p{L}\p{N}_]/u.test(name) &&
+    [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(name)].length <= 42;
+}
 
 /** 三维静态格线的外观偏好（颜色 + 透明度）。**跨会话记住** —— 它是玩家对
  *  "我的棋盘长什么样"的选择，不是一次性的视图状态（对比 gridVisible/ghostMode）。
@@ -13917,7 +13915,7 @@ const Game = {
       "topLayer","layerLabel","stripWrap","strip","undoBtn","restartBtn","swapBtn","setupBtn","quitBtn",
       "setup","firstBlack","firstWhite","sizeSummary","startBtn","tutorialBtn","view","stage","previewTag",
       "confirmMoveBtn","restoreSizeGl","restoreSizeLayer","timingBtn","timingPanel","timingClose","timingOnRow","timingOff","timingOn",
-      "timingLimitRow","timingNoLimit","timingLimit","timingRangeRow","timingRangeInput",
+      "timingLimitRow","timingNoLimit","timingLimit","timingRangeRow","timingRangeInput","timingRangeHint",
       "inscription",
       "aiHuman","aiCpu","aiLevelRow","aiLevel","aiRange","aiLevelName","aiHint","orderRow","orderMe","orderCpu",
       "phaseChip","modeBtn","placeModeRow",
@@ -13926,9 +13924,7 @@ const Game = {
       "gridPanel","gridClose","gridColorInput","gridOpacityInput","gridOpacityVal",
       "gridSw1","gridSw2","gridSw3","gridSw4","gridSw5","gridSw6",
       "quitPanel","quitYes","quitNo",
-      /* TIP-BEGIN */
       "tipBtn","tipPanel","tipClose","tipAfdian","tipWechat","tipAlipay",
-      /* TIP-END */
       "exportPanel","exportCard","exportTitle","exportClose","exportKind",
       "exportNameLabel","exportName","exportHint","exportError",
       "exportCancel","exportConfirm",
@@ -14196,7 +14192,17 @@ const Game = {
     if (!box || !row || typeof box.getBoundingClientRect !== "function") return;
     let w = 0;
     try { w = box.getBoundingClientRect().width || 0; } catch (e) { w = 0; }
-    if (w > 0) row.style.paddingRight = Math.ceil(w + 20) + "px";
+    if (w > 0) {
+      row.style.paddingTop = '';
+      const nav = box.getBoundingClientRect(), status = row.getBoundingClientRect();
+      const overlaps = nav.top < status.bottom && nav.bottom > status.top;
+      const occupied = Math.max(0,status.right - nav.left + 12);
+      if (!overlaps) row.style.paddingRight = '0px';
+      else if (status.width - occupied < 160) {
+        row.style.paddingRight = '0px';
+        row.style.paddingTop = Math.ceil(nav.bottom - status.top + 10) + 'px';
+      } else row.style.paddingRight = Math.ceil(occupied) + 'px';
+    }
   },
 
   // ------------------------------------------------------------------ 一局棋
@@ -15363,13 +15369,10 @@ const Game = {
     if (this.el.rulesPanel !== except) this.closeRules();
     if (this.el.historyPanel !== except) this.closeHistory();
     if (this.el.gridPanel !== except) this.closeGridSettings();
-    /* TIP-BEGIN */
     if (this.el.tipPanel !== except) this.closeTip();
-    /* TIP-END */
     if (this.el.exportPanel !== except) this.closeExport();
   },
 
-  /* TIP-BEGIN */
   /** 打赏浮层。二维码内联在 HTML 里，爱发电是静态链接；没有运行时配置。 */
   get tipOpen() {
     return !!(this.el.tipPanel && this.el.tipPanel.classList &&
@@ -15385,7 +15388,6 @@ const Game = {
     if (this.el.tipPanel) this.el.tipPanel.classList.add("off");
   },
   toggleTip() { if (this.tipOpen) this.closeTip(); else this.openTip(); },
-  /* TIP-END */
 
   /** 导出图片弹窗开着没有。和其它浮层同一套：从 DOM 派生。 */
   get exportOpen() {
@@ -15428,6 +15430,9 @@ const Game = {
     this.exportKind = "";
   },
 
+  exportAccountName() {
+    return '';
+  },
   exportDefaultName() { return say(() => "玩家", "export.defaultName"); },
 
   syncExportText() {
@@ -15461,8 +15466,13 @@ const Game = {
     if (!rec || !this.isReplayableRecord(rec)) { this.showExportError("export.failOld"); return; }
     let name = this.el.exportName ? String(this.el.exportName.value || "").trim() : "";
     if (!name) name = this.exportDefaultName();
-    name = Array.from(name).slice(0, 20).join("");
-    storeSet(EXPORT_NAME_KEY, name);
+    name = name.normalize('NFC');
+    if (!validDisplayNickname(name)) {
+      if (this.el.exportError) { this.el.exportError.textContent = '昵称须为 1–42 个字，可用各语言文字、数字和下划线。'; this.el.exportError.classList.remove('off'); }
+      return;
+    }
+    let nicknameKey = EXPORT_NAME_KEY;
+    storeSet(nicknameKey, name);
     this._lastExportName = name;   // 测试钩子：生成图里用的昵称
     const sess = this.replayRecord(rec);
     if (!sess) { this.showExportError("export.failReplay"); return; }
@@ -16696,6 +16706,7 @@ const Game = {
     const nx = dims[0], ny = dims[1], nz = dims[2];
     const board = this.session.board;
     const drawStones = board.stoneCount <= 4000;
+
     const lastZ = this.lastMoveLayerZ();
     if (this.el.stripWrap) this.el.stripWrap.dataset.lastLayer = String(lastZ);
 
@@ -17012,7 +17023,6 @@ const Game = {
         if (rec) this.openExport(rec, btn.getAttribute("data-export"));
       });
     }
-    /* TIP-BEGIN */
     // 打赏：浮层互斥由 closePanels 统一处理；点空白处关闭同规则浮层。
     on("tipBtn", () => this.openTip());
     on("tipClose", () => this.closeTip());
@@ -17021,7 +17031,6 @@ const Game = {
         if (e.target === this.el.tipPanel) this.closeTip();
       });
     }
-    /* TIP-END */
     // 导出图片：昵称弹窗 + 横幅里的两个入口。
     on("posterBtn", () => this.openExport(this.currentRecord(), "poster"));
     on("longImageBtn", () => this.openExport(this.currentRecord(), "long"));
@@ -17193,9 +17202,7 @@ const Game = {
       if (e.key === "Escape" && this.gridSettingsOpen) { this.closeGridSettings(); return; }
       // 起始界面的计时小浮窗（绝对定位，压在任何别的东西上面）。
       if (e.key === "Escape" && this.timingOpen) { this.closeTimingPanel(); return; }
-      /* TIP-BEGIN */
       if (e.key === "Escape" && this.tipOpen) { this.closeTip(); return; }
-      /* TIP-END */
       if (e.key === "Escape" && this.rulesOpen) { this.closeRules(); return; }
       // 记录浮层和规则浮层互斥（开一个关另一个），所以这里谁先判都一样。
       if (e.key === "Escape" && this.historyOpen) { this.closeHistory(); return; }
@@ -17212,20 +17219,12 @@ const Game = {
       // 调格线时按 R/Z 会在浮窗背后改棋局；退出确认同理（那是一问一答的阻断层）。
       if (this.gridSettingsOpen) return;
       if (this.quitConfirmOpen) return;
-      /* TIP-BEGIN */
       if (this.tipOpen) return;
-      /* TIP-END */
       if (this.exportOpen) return;
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
       if (this.setupOpen) return;
       if (e.target && (e.target.isContentEditable || e.target.tagName === "SELECT")) return;
       if (Keymap.isOpen) return;
-      /* ONLINE-BEGIN */
-      if (this.el.onlineChatHistory && !this.el.onlineChatHistory.classList.contains("off")) {
-        if (Keymap.action(e) === "chat") Keymap.handle(e);
-        return;
-      }
-      /* ONLINE-END */
       Keymap.handle(e);
     });
   },
@@ -20443,6 +20442,7 @@ function sessionFingerprint(s) { return isSession2(s) ? fingerprint2(s) : finger
   };
 })();
 
+
 /* GOMOKU-2D-INTEGRATION-END */
 const GameExport = (function () {
   "use strict";
@@ -20627,7 +20627,7 @@ const GameExport = (function () {
   }
 
   function playerLine(game, name) {
-    return say(() => "玩家：" + name, "export.playerLine", { name: name });
+    return say(() => "昵称：" + name, "export.playerLine", { name });
   }
 
   /**
@@ -20749,7 +20749,7 @@ const GameExport = (function () {
     ctx.fillStyle = hex("--accent");
     ctx.font = "600 " + ps + "px " + bf;
     ctx.textAlign = "center";
-    ctx.fillText(pl, W / 2, 1030);
+    ctx.fillText(pl, W / 2, game.exportAccountName() ? 1015 : 1030, 920);
 
     const lv = game.aiLevelNameText(rec.ai);
     const beat = say(() => "我战胜了人机 · " + lv, "poster.beatCpu", { level: lv });
@@ -20812,7 +20812,8 @@ const GameExport = (function () {
     let colGap = cols === 1 ? 0 : 24;
     let colW = (innerW - colGap * (cols - 1)) / cols;
     // 有电脑对手时多一行难度梯度；棋谱起点跟着下移，其他记录保持原布局。
-    const rowsY = hasAi ? 1382 : 1345;
+    const accountExtra = game.exportAccountName() ? 32 : 0;
+    const rowsY = (hasAi ? 1382 : 1345) + accountExtra;
     const fixed = rowsY + 110;
     let total = fixed + Math.ceil(acts.length / cols) * rowH;
     if (total > 15000 && cols < 3) {
@@ -20872,7 +20873,7 @@ const GameExport = (function () {
     const ps = fitSize(ctx, pl, innerW - 40, (s) => "600 " + s + "px " + bf, 30, 18);
     ctx.fillStyle = hex("--accent");
     ctx.font = "600 " + ps + "px " + bf;
-    ctx.fillText(pl, margin, sumY + 72);
+    ctx.fillText(pl, margin, sumY + 72, innerW - 40);
 
     if (timedRec) {
       const dur = say(() => "时长 " + game.fmtElapsed(rec.dur), "export.duration",
@@ -20883,11 +20884,11 @@ const GameExport = (function () {
                                             white: game.fmtElapsed(tstat.white) });
       ctx.fillStyle = hex("--dim");
       ctx.font = "22px " + bf;
-      ctx.fillText(dur + " · " + sides, margin, sumY + 112);
+      ctx.fillText(dur + " · " + sides, margin, sumY + 112 + accountExtra);
     }
 
     // 分隔线 + 棋谱标题
-    const divY = sumY + 144;
+    const divY = sumY + 144 + accountExtra;
     ctx.strokeStyle = hex("--border");
     ctx.globalAlpha = 0.6;
     ctx.beginPath(); ctx.moveTo(margin, divY); ctx.lineTo(W - margin, divY); ctx.stroke();
