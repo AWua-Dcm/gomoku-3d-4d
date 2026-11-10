@@ -333,6 +333,10 @@ is in [Web_Gomoku3D/README.md](Web_Gomoku3D/README.md) — in Chinese.
 
 > Newest first. One line per version, starting with a verb; the implementation details live in the commit message, not here.
 
+### 2026.11.11
+
+- ✨ **v4.2.2** The online version adds copy-invite links (auto-join after sign-in) and a quick-rematch return flow; the public build is offline-only and only carries the version bump.
+
 ### 2026.11.09
 
 - ✨ **v4.2.1** Six-language account and friends panels (including sign-in / registration, with short button labels); records show wins and losses only; new accounts start with a letter, digits optional, no underscores (online version).
